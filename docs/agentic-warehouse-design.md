@@ -134,8 +134,8 @@ docker ps | grep airflow  # Should show containers
 
 **Step 3: Config Loaded**
 ```bash
-psql $DRM__PIPELINE_CONFIG_SQLALCHEMY_URI -c \
-  "SELECT COUNT(*) FROM registra_pipeline_blueprints WHERE workspace='your_workspace';"
+psql $DATABASE_URL -c \
+  "SELECT COUNT(*) FROM pipeline_configs WHERE workspace='your_workspace';"
 # Should return > 0
 ```
 
@@ -143,8 +143,8 @@ psql $DRM__PIPELINE_CONFIG_SQLALCHEMY_URI -c \
 ```
 
 **Key difference:**
-- **Proactive (`Read:`)**: Agent loads immediately because it affects every file (type annotations)
-- **Reactive (`See:`)**: Agent loads only when encountering the specific problem (DAG parsing failure)
+- **Proactive (`Read:`)**: Agent must load immediately—affects every file they touch
+- **Reactive (`See:`)**: Agent loads only when encountering the specific problem
 
 ---
 
@@ -301,7 +301,7 @@ knowledge/
         └── lessons/
 ```
 
-**Three-tier knowledge scope:**
+**Knowledge organization by scope:**
 
 **Global knowledge** (`knowledge/global/`)
 - Imported by `AGENTS.global.md` (required for all projects)
