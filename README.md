@@ -98,6 +98,52 @@ When creating from template, name it without the `-template` suffix:
 
 ## 🏗️ What Goes Where?
 
+### Understanding the Two-Tier Structure: Context + Knowledge
+
+This template uses a **two-tier approach** to manage agent information efficiently:
+
+**Tier 1: Contexts** (Boot context - loaded immediately)
+- Lightweight AGENTS.md files that agents see on session start
+- Contains **summaries and pointers**, not full details
+- Think: "What does the agent need to know exists?"
+- Kept minimal to reduce token consumption
+
+**Tier 2: Knowledge** (Deep context - loaded on demand)
+- Detailed explanations, rationale, examples
+- Referenced by contexts via pointer system
+- Think: "What are the full details when needed?"
+- Agents pull this when they need deeper understanding
+
+**Why both?**
+
+Without this separation, AGENTS.md files become bloated with details agents rarely need, wasting tokens and making it hard to scan. The two-tier approach enables:
+- **Fast scanning:** Agents quickly find relevant topics in contexts
+- **Progressive disclosure:** Agents dive deep only when needed
+- **Token efficiency:** Don't load detailed rationale for every rule on every session
+- **Maintainability:** Update detailed docs without cluttering boot context
+
+**Example:**
+
+```markdown
+# In AGENTS.python.md (Tier 1: Context)
+## Type Annotations
+
+**Rule:** Only quote type annotations for forward references.
+
+**Read:** [Common mistakes](~/.agentic-context/knowledge/languages/python/lessons/quoted-type-annotations.md)
+```
+
+```markdown
+# In knowledge/languages/python/lessons/quoted-type-annotations.md (Tier 2: Knowledge)
+## Lesson: Agents Often Over-Quote Type Annotations
+
+**Agent Failure Mode:** [Full explanation with code examples...]
+**Correct Pattern:** [Detailed examples...]
+**Guardrail:** [Step-by-step decision criteria...]
+```
+
+---
+
 ### Contexts (`contexts/`)
 - **Global** (`AGENTS.global.md`): Universal practices for all projects
 - **Language** (`AGENTS.python.md`): Language-specific standards
