@@ -1,10 +1,10 @@
-# Agentic Engineering Market Template
+# Agentic Engineering Warehouse Template
 
 A template repository for teams to establish standardized agentic coding practices with centralized context, knowledge, and skills management.
 
 ## 🎯 Purpose
 
-This template provides a "supermarket" structure where teams can:
+This template provides a "warehouse" structure where teams can:
 - **Store** reusable agent contexts, knowledge, and skills
 - **Share** proven patterns across projects and teams
 - **Maintain** consistency in how AI agents collaborate with developers
@@ -13,7 +13,7 @@ This template provides a "supermarket" structure where teams can:
 ## 📁 Repository Structure
 
 ```
-agentic-engineering-market-template/
+agentic-engineering-warehouse-template/
 ├── contexts/              # AGENTS.md files (global, language, domain)
 │   ├── AGENTS.global.md
 │   ├── AGENTS.python.md
@@ -42,16 +42,43 @@ agentic-engineering-market-template/
 
 ## 🚀 Getting Started
 
+### How to Use This Template
+
+**Step 1: Create Your Organization's Warehouse**
+
+Click the **"Use this template"** button on GitHub to create your organization's central repository:
+
+```bash
+# Template repository (what you're looking at):
+agentic-engineering-warehouse-template
+
+# Your organization's warehouse (created from template):
+your-org-agentic-engineering-warehouse
+```
+
+**Step 2: Name Your Warehouse**
+
+When creating from template, name it without the `-template` suffix:
+- ✅ Good: `acme-agentic-warehouse`, `mycompany-engineering-standards`
+- ❌ Bad: `acme-agentic-warehouse-template` (confusing - template is just the starting point)
+
+**Step 3: Customize for Your Organization**
+
+1. Update contexts with your organization's practices
+2. Add your technology stack's knowledge files
+3. Create skills for your workflows
+4. Set up CLI tooling for distribution (optional)
+
 ### For Organizations
 
-1. **Use this template** to create your organization's central repository
+1. **Use this template** to create your organization's central warehouse repository
 2. **Customize** contexts, knowledge, and skills for your teams
 3. **Set up CLI tooling** for installation and updates (see Implementation Guide)
 4. **Establish contribution workflow** for teams to give back improvements
 
 ### For Teams
 
-1. **Browse** available contexts, knowledge, and skills in this repository
+1. **Browse** available contexts, knowledge, and skills in your organization's warehouse
 2. **Install** relevant components to your project using CLI tools
 3. **Reference** the [Agentic Engineering Guide](./docs/agentic-engineering-guide.md) for usage patterns
 4. **Contribute** improvements back via pull requests
