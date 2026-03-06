@@ -140,7 +140,6 @@ psql $DATABASE_URL -c \
 ```
 
 [... detailed troubleshooting steps continue ...]
-```
 
 **Key difference:**
 - **Proactive (`Read:`)**: Agent must load immediately—affects every file they touch
