@@ -6,6 +6,40 @@ A high-level design guide for centralized context, knowledge, and skills managem
 
 ---
 
+## Table of Contents
+
+1. [Why Centralized Management?](#why-centralized-management)
+2. [Central Repository Model](#central-repository-model)
+   - [Understanding the Two-Tier Structure: Context + Knowledge](#understanding-the-two-tier-structure-context--knowledge)
+3. [Component 1: Contexts (AGENTS.md Organization)](#component-1-contexts-agentsmd-organization)
+   - [What Are Contexts?](#what-are-contexts)
+   - [Multi-Tier Context Model](#multi-tier-context-model)
+   - [Progressive Disclosure Pattern](#progressive-disclosure-pattern)
+   - [What Goes Where?](#what-goes-where)
+   - [Collaboration Benefits](#collaboration-benefits)
+4. [Component 2: Stateless Knowledge](#component-2-stateless-knowledge)
+   - [What is Stateless Knowledge?](#what-is-stateless-knowledge)
+   - [Organization Structure](#organization-structure)
+   - [Discovery: Proactive vs Reactive Pointers](#discovery-proactive-vs-reactive-pointers)
+   - [Example: Lesson File Structure](#example-lesson-file-structure)
+   - [Storage Strategy](#storage-strategy)
+5. [Component 3: Skills Organization](#component-3-skills-organization)
+   - [What Are Skills?](#what-are-skills)
+   - [Skills vs Knowledge](#skills-vs-knowledge)
+   - [Organization Structure](#organization-structure-1)
+   - [Discovery](#discovery)
+   - [Skill Invocation](#skill-invocation)
+   - [Testing and Contribution](#testing-and-contribution)
+6. [Workflow: Setup → Use → Update → Contribute](#workflow-setup--use--update--contribute)
+   - [1. Setup (One-time per project)](#1-setup-one-time-per-project)
+   - [2. Use (Daily development)](#2-use-daily-development)
+   - [3. Update (Periodic sync)](#3-update-periodic-sync)
+   - [4. Contribute (Give back improvements)](#4-contribute-give-back-improvements)
+   - [Technical Notes](#technical-notes)
+7. [Spec-Driven Development](#spec-driven-development)
+
+---
+
 ## Why Centralized Management?
 
 **The agentic engineering landscape is rapidly evolving.** Vibe coding practices, AI agent capabilities, and collaboration paradigms shift weekly. In this fluid environment, rigid methodologies quickly become outdated. Instead of prescribing how teams should work with AI agents, this guide provides a **minimal, flexible structure** for centralizing reusable knowledge.
