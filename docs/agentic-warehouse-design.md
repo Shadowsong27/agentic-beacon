@@ -69,7 +69,9 @@ Without this separation, AGENTS.md files become bloated with details agents rare
 - **Token efficiency:** Don't load detailed rationale for every rule on every session
 - **Maintainability:** Update detailed docs without cluttering boot context
 
-**Example:**
+**Examples:**
+
+**Example 1: Proactive Pointer (Agent must read immediately)**
 
 ```markdown
 # In AGENTS.python.md (Tier 1: Context)
@@ -84,10 +86,65 @@ Without this separation, AGENTS.md files become bloated with details agents rare
 # In knowledge/languages/python/lessons/quoted-type-annotations.md (Tier 2: Knowledge)
 ## Lesson: Agents Often Over-Quote Type Annotations
 
-**Agent Failure Mode:** [Full explanation with code examples...]
-**Correct Pattern:** [Detailed examples...]
-**Guardrail:** [Step-by-step decision criteria...]
+**Agent Failure Mode:** Agents quote all type annotations unnecessarily:
+
+# Incorrect - unnecessary quotes
+def process(data: "list[Document]") -> "ProcessedResult":
+    return result
+
+**Correct Pattern:** Only quote for forward references or circular imports:
+
+# Correct - no quotes for available types
+def process(data: list[Document]) -> ProcessedResult:
+    return result
+
+**Guardrail:** Before quoting a type annotation, ask:
+1. Is this a forward reference (type defined later in file)?
+2. Is this avoiding a circular import?
+3. If neither, remove the quotes.
 ```
+
+**Example 2: Reactive Pointer (Agent reads when needed)**
+
+```markdown
+# In AGENTS.data-platform.md (Tier 1: Context)
+## Troubleshooting
+
+If DAG parsing fails, consult the debugging checklist.
+
+**See:** [Airflow debugging checklist](~/.agentic-context/knowledge/domains/data-platform/lessons/airflow-debugging-checklist.md)
+```
+
+```markdown
+# In knowledge/domains/data-platform/lessons/airflow-debugging-checklist.md (Tier 2: Knowledge)
+## Lesson: Pre-Flight Checklist for Airflow Debugging
+
+Run this checklist BEFORE debugging anything. 60% of issues are caught here.
+
+**Step 1: Environment Variables**
+```bash
+echo $DOT_PROJECT_PATH  # Should be set
+echo $AIRFLOW_HOME      # Should be set
+```
+
+**Step 2: Services Running**
+```bash
+docker ps | grep airflow  # Should show containers
+```
+
+**Step 3: Config Loaded**
+```bash
+psql $DRM__PIPELINE_CONFIG_SQLALCHEMY_URI -c \
+  "SELECT COUNT(*) FROM registra_pipeline_blueprints WHERE workspace='your_workspace';"
+# Should return > 0
+```
+
+[... detailed troubleshooting steps continue ...]
+```
+
+**Key difference:**
+- **Proactive (`Read:`)**: Agent loads immediately because it affects every file (type annotations)
+- **Reactive (`See:`)**: Agent loads only when encountering the specific problem (DAG parsing failure)
 
 ---
 
