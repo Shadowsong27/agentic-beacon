@@ -4,6 +4,8 @@ A template repository for teams to establish standardized agentic coding practic
 
 > **Note:** This is an **opinionated and simple take** on agentic engineering. The landscape is rapidly evolving, and this template provides one possible approach focused on DRY principles and centralized collaboration. Adapt it to your team's needs.
 
+> **Built for OpenCode:** This design was developed with [OpenCode](https://opencode.ai) usage in mind. While we keep patterns as generic as possible, the experience with other AI coding agents may differ. The core concepts (centralized context, progressive disclosure, DRY) remain applicable across tools.
+
 ## 🎯 Purpose
 
 **Agentic engineering is rapidly evolving.** Vibe coding practices, AI agent capabilities, and collaboration paradigms shift weekly. Rather than prescribing rigid methodologies that quickly become outdated, this template provides a **minimal, flexible structure** for teams to collaborate effectively.
@@ -96,6 +98,8 @@ When creating from template, name it without the `-template` suffix:
 ## 📚 Documentation
 
 - **[Agentic Warehouse Design](./docs/agentic-warehouse-design.md)** - High-level design and architecture
+- **[Spec-Driven Development](./docs/spec-driven-development.md)** - Structured approach to feature planning and implementation
+- **[Warehouse Contribution Guide](./docs/warehouse-contribution-guide.md)** - How to contribute to your organization's warehouse
 - **[Implementation Guide](./docs/implementation-guide.md)** - How to build CLI tools and workflows _(coming soon)_
 
 ## 🏗️ What Goes Where?
@@ -123,18 +127,14 @@ This template uses a **two-tier approach** (contexts + knowledge) to manage agen
 
 ## 🔄 Workflow
 
-1. **Setup**: Install contexts and skills into project
+Once you've created your organization's warehouse from this template:
+
+1. **Setup**: Teams install contexts and skills into their projects
 2. **Use**: Agents load contexts automatically on session start
-3. **Update**: Sync latest changes from central repository
-4. **Contribute**: Submit improvements via pull requests
+3. **Update**: Teams sync latest changes from warehouse
+4. **Contribute**: Teams submit improvements back via pull requests
 
-## 🤝 Contributing
-
-1. **Test locally** in your project
-2. **Create pull request** with changes
-3. **Document** what changed and why
-4. **CI validates** (if testing infrastructure exists)
-5. **Merge** makes available to all teams
+See the [Warehouse Contribution Guide](./docs/warehouse-contribution-guide.md) for details.
 
 ## 📖 Examples
 

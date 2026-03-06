@@ -4,6 +4,8 @@ A high-level design guide for centralized context, knowledge, and skills managem
 
 **Last Updated:** 2026-03-06
 
+> **Built for OpenCode:** This design was developed with [OpenCode](https://opencode.ai) usage in mind. While we keep patterns as generic as possible, the experience with other AI coding agents may differ. The core concepts (centralized context, progressive disclosure, DRY) remain applicable across tools.
+
 ---
 
 ## Table of Contents
@@ -36,7 +38,6 @@ A high-level design guide for centralized context, knowledge, and skills managem
    - [3. Update (Periodic sync)](#3-update-periodic-sync)
    - [4. Contribute (Give back improvements)](#4-contribute-give-back-improvements)
    - [Technical Notes](#technical-notes)
-7. [Spec-Driven Development](#spec-driven-development)
 
 ---
 
@@ -612,11 +613,5 @@ When you improve a skill or discover a pattern worth sharing:
 - **OpenCode native support:** The `instructions` field in `opencode.json` loads multiple files automatically
 - **Glob patterns supported:** Can reference `docs/**/*.md` for dynamic inclusion
 - **Load order matters:** Project AGENTS.md loads last, so it can override global patterns
-
----
-
-## Spec-Driven Development
-
-_TODO: Move to separate document - when and how to use spec-driven development for different scenarios_
 
 ---
