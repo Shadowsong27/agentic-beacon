@@ -1,6 +1,6 @@
-# Agentic Engineering Guide
+# Agentic Warehouse Design
 
-A high-level guide for teams doing collaborative software development with AI coding agents and spec-driven development practices.
+A high-level design guide for centralized context, knowledge, and skills management in agentic engineering.
 
 **Last Updated:** 2026-03-06
 
@@ -43,7 +43,51 @@ agentic-engineering-central/
 - **Discoverable:** CLI provides interactive selection
 - **Testable:** Skills include test harnesses for validation
 
-The repository acts as a "supermarket" where projects select what they need, install locally, and stay synchronized with organizational standards.
+The repository acts as a "warehouse" where projects select what they need, install locally, and stay synchronized with organizational standards.
+
+### Understanding the Two-Tier Structure: Context + Knowledge
+
+This design uses a **two-tier approach** to manage agent information efficiently:
+
+**Tier 1: Contexts** (Boot context - loaded immediately)
+- Lightweight AGENTS.md files that agents see on session start
+- Contains **summaries and pointers**, not full details
+- Think: "What does the agent need to know exists?"
+- Kept minimal to reduce token consumption
+
+**Tier 2: Knowledge** (Deep context - loaded on demand)
+- Detailed explanations, rationale, examples
+- Referenced by contexts via pointer system
+- Think: "What are the full details when needed?"
+- Agents pull this when they need deeper understanding
+
+**Why both?**
+
+Without this separation, AGENTS.md files become bloated with details agents rarely need, wasting tokens and making it hard to scan. The two-tier approach enables:
+- **Fast scanning:** Agents quickly find relevant topics in contexts
+- **Progressive disclosure:** Agents dive deep only when needed
+- **Token efficiency:** Don't load detailed rationale for every rule on every session
+- **Maintainability:** Update detailed docs without cluttering boot context
+
+**Example:**
+
+```markdown
+# In AGENTS.python.md (Tier 1: Context)
+## Type Annotations
+
+**Rule:** Only quote type annotations for forward references.
+
+**Read:** [Common mistakes](~/.agentic-context/knowledge/languages/python/lessons/quoted-type-annotations.md)
+```
+
+```markdown
+# In knowledge/languages/python/lessons/quoted-type-annotations.md (Tier 2: Knowledge)
+## Lesson: Agents Often Over-Quote Type Annotations
+
+**Agent Failure Mode:** [Full explanation with code examples...]
+**Correct Pattern:** [Detailed examples...]
+**Guardrail:** [Step-by-step decision criteria...]
+```
 
 ---
 

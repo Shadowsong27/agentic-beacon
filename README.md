@@ -2,6 +2,8 @@
 
 A template repository for teams to establish standardized agentic coding practices with centralized context, knowledge, and skills management.
 
+> **Note:** This is an **opinionated and simple take** on agentic engineering. The landscape is rapidly evolving, and this template provides one possible approach focused on DRY principles and centralized collaboration. Adapt it to your team's needs.
+
 ## 🎯 Purpose
 
 **Agentic engineering is rapidly evolving.** Vibe coding practices, AI agent capabilities, and collaboration paradigms shift weekly. Rather than prescribing rigid methodologies that quickly become outdated, this template provides a **minimal, flexible structure** for teams to collaborate effectively.
@@ -88,61 +90,17 @@ When creating from template, name it without the `-template` suffix:
 
 1. **Browse** available contexts, knowledge, and skills in your organization's warehouse
 2. **Install** relevant components to your project using CLI tools
-3. **Reference** the [Agentic Engineering Guide](./docs/agentic-engineering-guide.md) for usage patterns
+3. **Reference** the [design guide](./docs/agentic-warehouse-design.md) for usage patterns
 4. **Contribute** improvements back via pull requests
 
 ## 📚 Documentation
 
-- **[Agentic Engineering Guide](./docs/agentic-engineering-guide.md)** - Complete guide to using this system
+- **[Agentic Warehouse Design](./docs/agentic-warehouse-design.md)** - High-level design and architecture
 - **[Implementation Guide](./docs/implementation-guide.md)** - How to build CLI tools and workflows _(coming soon)_
 
 ## 🏗️ What Goes Where?
 
-### Understanding the Two-Tier Structure: Context + Knowledge
-
-This template uses a **two-tier approach** to manage agent information efficiently:
-
-**Tier 1: Contexts** (Boot context - loaded immediately)
-- Lightweight AGENTS.md files that agents see on session start
-- Contains **summaries and pointers**, not full details
-- Think: "What does the agent need to know exists?"
-- Kept minimal to reduce token consumption
-
-**Tier 2: Knowledge** (Deep context - loaded on demand)
-- Detailed explanations, rationale, examples
-- Referenced by contexts via pointer system
-- Think: "What are the full details when needed?"
-- Agents pull this when they need deeper understanding
-
-**Why both?**
-
-Without this separation, AGENTS.md files become bloated with details agents rarely need, wasting tokens and making it hard to scan. The two-tier approach enables:
-- **Fast scanning:** Agents quickly find relevant topics in contexts
-- **Progressive disclosure:** Agents dive deep only when needed
-- **Token efficiency:** Don't load detailed rationale for every rule on every session
-- **Maintainability:** Update detailed docs without cluttering boot context
-
-**Example:**
-
-```markdown
-# In AGENTS.python.md (Tier 1: Context)
-## Type Annotations
-
-**Rule:** Only quote type annotations for forward references.
-
-**Read:** [Common mistakes](~/.agentic-context/knowledge/languages/python/lessons/quoted-type-annotations.md)
-```
-
-```markdown
-# In knowledge/languages/python/lessons/quoted-type-annotations.md (Tier 2: Knowledge)
-## Lesson: Agents Often Over-Quote Type Annotations
-
-**Agent Failure Mode:** [Full explanation with code examples...]
-**Correct Pattern:** [Detailed examples...]
-**Guardrail:** [Step-by-step decision criteria...]
-```
-
----
+This template uses a **two-tier approach** (contexts + knowledge) to manage agent information efficiently. See the [design guide](./docs/agentic-warehouse-design.md#understanding-the-two-tier-structure-context--knowledge) for full explanation.
 
 ### Contexts (`contexts/`)
 - **Global** (`AGENTS.global.md`): Universal practices for all projects
