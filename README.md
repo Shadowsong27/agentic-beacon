@@ -16,8 +16,8 @@ This template provides a "warehouse" structure where teams can:
 agentic-engineering-warehouse-template/
 ├── contexts/              # AGENTS.md files (global, language, domain)
 │   ├── AGENTS.global.md
-│   ├── AGENTS.python.md
-│   └── AGENTS.data-platform.md
+│   ├── AGENTS.python.md         # Example: Replace with your languages
+│   └── AGENTS.data-platform.md  # Example: Replace with your domains
 │
 ├── knowledge/            # Atomic knowledge (facts, decisions, lessons)
 │   ├── global/          # Universal knowledge (all projects)
@@ -25,20 +25,22 @@ agentic-engineering-warehouse-template/
 │   │   ├── lessons/
 │   │   └── facts/
 │   ├── languages/       # Language-specific knowledge
-│   │   └── python/
+│   │   └── python/      # Example: Replace with your languages
 │   │       ├── decisions/
 │   │       └── lessons/
 │   └── domains/         # Domain-specific knowledge
-│       └── data-platform/
+│       └── data-platform/  # Example: Replace with your domains
 │           ├── decisions/
 │           ├── lessons/
 │           └── facts/
 │
 └── skills/              # Reusable workflows and procedures
     ├── README.md        # Skills catalog (agent-maintained)
-    └── example-skill/
+    └── example-skill/   # Example: Replace with your skills
         └── SKILL.md
 ```
+
+**Note:** `python`, `data-platform`, and `example-skill` are examples only. Replace with your organization's actual languages, domains, and skills.
 
 ## 🚀 Getting Started
 
