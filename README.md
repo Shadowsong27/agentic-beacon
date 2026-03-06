@@ -4,11 +4,17 @@ A template repository for teams to establish standardized agentic coding practic
 
 ## 🎯 Purpose
 
-This template provides a "warehouse" structure where teams can:
-- **Store** reusable agent contexts, knowledge, and skills
-- **Share** proven patterns across projects and teams
-- **Maintain** consistency in how AI agents collaborate with developers
-- **Evolve** practices together through versioned changes
+**Agentic engineering is rapidly evolving.** Vibe coding practices, AI agent capabilities, and collaboration paradigms shift weekly. Rather than prescribing rigid methodologies that quickly become outdated, this template provides a **minimal, flexible structure** for teams to collaborate effectively.
+
+**The core principle: Don't Repeat Yourself (DRY) for agentic knowledge.**
+
+Instead of duplicating agent instructions, coding standards, and learned patterns across multiple projects, centralize them in a warehouse where:
+- **One update propagates everywhere** - Fix a pattern once, all projects benefit
+- **Teams learn collectively** - Capture lessons from one project, share with all
+- **Onboarding is instant** - New developers and agents inherit organizational knowledge automatically
+- **Evolution is natural** - Adapt the structure as practices evolve, without rewriting every project
+
+This template provides just enough structure to enable collaboration without constraining how your team works with AI agents.
 
 ## 📁 Repository Structure
 

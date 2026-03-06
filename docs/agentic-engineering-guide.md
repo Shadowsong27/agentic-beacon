@@ -8,9 +8,21 @@ A high-level guide for teams doing collaborative software development with AI co
 
 ## Why Centralized Management?
 
+**The agentic engineering landscape is rapidly evolving.** Vibe coding practices, AI agent capabilities, and collaboration paradigms shift weekly. In this fluid environment, rigid methodologies quickly become outdated. Instead of prescribing how teams should work with AI agents, this guide provides a **minimal, flexible structure** for centralizing reusable knowledge.
+
+**The problem without centralization:**
+
 As teams adopt AI coding agents, inconsistent practices emerge: each project develops its own conventions, agents receive different instructions, and valuable patterns remain siloed. This fragmentation slows onboarding, creates quality variations, and wastes collective learning.
 
-A centralized approach solves this by establishing **standardized agentic coding practices** across the organization. Teams share proven patterns, maintain consistency in how agents collaborate with developers, and evolve practices together. New team members inherit accumulated knowledge automatically, and improvements in one project benefit all others.
+**The solution: Apply DRY (Don't Repeat Yourself) to agentic knowledge.**
+
+Rather than duplicating agent instructions, coding standards, and learned patterns across projects, centralize them in a warehouse where:
+- **One update propagates everywhere** - Fix a pattern once, all projects benefit
+- **Teams learn collectively** - Capture lessons from one project, share with all
+- **Onboarding is instant** - New developers and agents inherit organizational knowledge automatically
+- **Evolution is natural** - Adapt as practices shift without rewriting every project
+
+This approach establishes **standardized collaboration patterns** while remaining flexible enough to evolve with the rapidly changing agentic engineering landscape.
 
 ---
 
