@@ -1,0 +1,29 @@
+# Editor and IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.bak
+.session-handoff.md
+
+# Build outputs
+dist/
+build/
+*.pyc
+__pycache__/
+
+# Logs
+*.log
+logs/
+
+# Environment
+.env
+.env.local
