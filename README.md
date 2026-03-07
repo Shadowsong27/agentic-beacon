@@ -88,14 +88,34 @@ agentic-engineering-warehouse-template/
 
 ## 🚀 Getting Started
 
+### Installation
+
+**Recommended: Install with uv (if you have uv installed)**
+```bash
+# Install once, use anywhere
+uv tool install agentic-beacon
+
+# Verify installation
+abc --help
+```
+
+**Alternative methods:**
+```bash
+# Using pipx (isolated environment)
+pipx install agentic-beacon
+
+# Using pip (global Python environment)
+pip install agentic-beacon
+
+# One-off execution without installation (using uvx)
+uvx --from agentic-beacon abc init my-warehouse
+```
+
 ### Quick Start with ABC Init
 
 The **fastest way** to create your organization's warehouse is using `abc init`:
 
 ```bash
-# Install agentic-beacon
-pip install agentic-beacon
-
 # Initialize your warehouse
 abc init my-org-warehouse \
   --org "Acme Corp" \

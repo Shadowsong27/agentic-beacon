@@ -1,4 +1,4 @@
-# Agentic Warehouse CLI
+# Agentic Beacon CLI
 
 CLI tool for distributing agentic engineering contexts, knowledge, and skills from a warehouse repository to project `.opencode` directories.
 
@@ -13,48 +13,59 @@ This tool enables the **DRY (Don't Repeat Yourself)** principle for agentic know
 
 ## Installation
 
-### From Warehouse Repository
+### Recommended: Install with uv (if you have uv installed)
 
-When using your organization's warehouse:
+The best way to install `abc` is using `uv tool install`, which installs it in an isolated environment:
 
 ```bash
-# Clone your organization's warehouse
-git clone https://github.com/your-org/agentic-warehouse.git
-cd agentic-warehouse
-
-# Install the CLI tool
-pip install -e libs/agentic_warehouse_cli
+# Install once, use anywhere
+uv tool install agentic-beacon
 
 # Verify installation
-agentic --help
+abc --help
+
+# Update to latest version
+uv tool upgrade agentic-beacon
+
+# Uninstall
+uv tool uninstall agentic-beacon
 ```
 
-### As a Standalone Package
+### Alternative Installation Methods
 
 ```bash
-pip install agentic-warehouse-cli
+# Using pipx (similar to uv tool, isolated environment)
+pipx install agentic-beacon
+
+# Using pip (global Python environment)
+pip install agentic-beacon
+
+# One-off execution without installation
+uvx --from agentic-beacon abc init my-warehouse
 ```
 
 ## Usage
+
+All examples below use the `abc` command directly (after installation).
 
 ### 1. List Available Content
 
 ```bash
 # List all available contexts, knowledge, and skills
-agentic list
+abc list
 
 # From a specific warehouse location
-agentic list --warehouse /path/to/warehouse
+abc list --warehouse /path/to/warehouse
 ```
 
 ### 2. Setup (First Time)
 
 ```bash
 # Interactive mode (recommended for first time)
-agentic setup --interactive
+abc setup --interactive
 
 # Install specific content
-agentic setup \
+abc setup \
   --context global \
   --context python \
   --knowledge global \
@@ -62,10 +73,10 @@ agentic setup \
   --skill example-skill
 
 # Install everything
-agentic setup --all
+abc setup --all
 
 # Specify warehouse and project locations
-agentic setup --all \
+abc setup --all \
   --warehouse /path/to/warehouse \
   --project /path/to/project
 ```
