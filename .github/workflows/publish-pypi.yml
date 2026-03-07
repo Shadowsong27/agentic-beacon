@@ -1,9 +1,9 @@
 name: Publish to PyPI
 
 on:
-  release:
-    types: [published]
-  workflow_call:
+  push:
+    branches:
+      - 'release/v*.*.*'
   workflow_dispatch:
     inputs:
       environment:
@@ -53,14 +53,16 @@ jobs:
       - name: Determine PyPI target
         id: pypi_target
         run: |
-          if [[ "${{ github.event_name }}" == "release" ]] || [[ "${{ inputs.environment }}" == "production" ]]; then
-            echo "target=production" >> $GITHUB_OUTPUT
-            echo "url=https://pypi.org/project/agentic-beacon/" >> $GITHUB_OUTPUT
-            echo "publish_url=https://upload.pypi.org/legacy/" >> $GITHUB_OUTPUT
-          else
+          # Default to production for release branches
+          # Only use test when explicitly requested via workflow_dispatch
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]] && [[ "${{ inputs.environment }}" == "test" ]]; then
             echo "target=test" >> $GITHUB_OUTPUT
             echo "url=https://test.pypi.org/project/agentic-beacon/" >> $GITHUB_OUTPUT
             echo "publish_url=https://test.pypi.org/legacy/" >> $GITHUB_OUTPUT
+          else
+            echo "target=production" >> $GITHUB_OUTPUT
+            echo "url=https://pypi.org/project/agentic-beacon/" >> $GITHUB_OUTPUT
+            echo "publish_url=https://upload.pypi.org/legacy/" >> $GITHUB_OUTPUT
           fi
 
       - name: Publish to PyPI (with API token)
@@ -130,7 +132,7 @@ jobs:
           fi
 
       - name: Create release comment
-        if: github.event_name == 'release' && job.status == 'success'
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/') && job.status == 'success'
         uses: actions/github-script@v7
         with:
           script: |
@@ -156,9 +158,26 @@ jobs:
             - [Documentation](https://github.com/Shadowsong27/agentic-beacon)
             `;
 
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
+            // Find the latest release PR
+            const prs = await github.rest.pulls.list({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: body
+              state: 'closed',
+              sort: 'updated',
+              direction: 'desc',
+              per_page: 10
             });
+            
+            const releasePR = prs.data.find(pr => 
+              pr.title.includes('release agentic-beacon') && 
+              pr.merged_at
+            );
+            
+            if (releasePR) {
+              github.rest.issues.createComment({
+                issue_number: releasePR.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: body
+              });
+            }

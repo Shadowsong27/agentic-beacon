@@ -105,13 +105,11 @@ jobs:
           echo "**Version**: ${{ steps.release_step.outputs['libs/beacon--version'] }}" >> $GITHUB_STEP_SUMMARY
           echo "**Tag**: ${{ steps.release_step.outputs['libs/beacon--tag_name'] }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "PyPI publish workflow will be triggered automatically." >> $GITHUB_STEP_SUMMARY
-
-  # Trigger PyPI publish when release is created
-  trigger-pypi-publish:
-    needs: release-please
-    if: needs.release-please.outputs.release_created == 'true'
-    permissions:
-      contents: read
-      id-token: write
-    uses: ./.github/workflows/publish-pypi.yml
+          echo "### 📋 Next Steps" >> $GITHUB_STEP_SUMMARY
+          echo "To publish to PyPI, create a release branch:" >> $GITHUB_STEP_SUMMARY
+          echo '```bash' >> $GITHUB_STEP_SUMMARY
+          echo "git checkout main" >> $GITHUB_STEP_SUMMARY
+          echo "git pull" >> $GITHUB_STEP_SUMMARY
+          echo "git checkout -b release/v${{ steps.release_step.outputs['libs/beacon--version'] }}" >> $GITHUB_STEP_SUMMARY
+          echo "git push -u origin release/v${{ steps.release_step.outputs['libs/beacon--version'] }}" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
