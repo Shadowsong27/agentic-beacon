@@ -1,15 +1,15 @@
-# Beacon Quick Start
+# Agentic Beacon Quick Start
 
-## Installation (Homelab)
+## Installation
 
 ```bash
-pip install beacon --index-url https://your-homelab-pypi.local/simple/
+pip install agentic-beacon
 ```
 
 ## Verify Installation
 
 ```bash
-beacon --help
+abc --help
 ```
 
 ## Basic Usage
@@ -19,7 +19,7 @@ beacon --help
 ```bash
 # From warehouse directory
 cd ~/your-warehouse
-beacon list
+abc list
 ```
 
 Output shows available contexts, knowledge, and skills.
@@ -31,10 +31,10 @@ Output shows available contexts, knowledge, and skills.
 cd ~/my-project
 
 # Install all content
-beacon setup --warehouse ~/your-warehouse --all
+abc setup --warehouse ~/your-warehouse --all
 
 # Or selective install
-beacon setup --warehouse ~/your-warehouse \
+abc setup --warehouse ~/your-warehouse \
   -c global \
   -c python \
   -k global \
@@ -44,7 +44,7 @@ beacon setup --warehouse ~/your-warehouse \
 ### 3. Check Status
 
 ```bash
-beacon status
+abc status
 ```
 
 Shows what's currently installed in `.opencode/`.
@@ -52,7 +52,7 @@ Shows what's currently installed in `.opencode/`.
 ### 4. Compare with Warehouse (Delta)
 
 ```bash
-beacon delta --warehouse ~/your-warehouse
+abc delta --warehouse ~/your-warehouse
 ```
 
 Shows:
@@ -63,7 +63,7 @@ Shows:
 ### 5. Update from Warehouse
 
 ```bash
-beacon update --warehouse ~/your-warehouse
+abc update --warehouse ~/your-warehouse
 ```
 
 Syncs latest changes from warehouse to your project.
@@ -71,7 +71,7 @@ Syncs latest changes from warehouse to your project.
 ### 6. Clean Installation
 
 ```bash
-beacon clean
+abc clean
 ```
 
 Removes `.opencode/` directory.
@@ -82,17 +82,17 @@ Removes `.opencode/` directory.
 
 ```bash
 cd ~/new-project
-beacon setup --warehouse ~/warehouse --all
+abc setup --warehouse ~/warehouse --all
 echo ".opencode/" >> .gitignore
 git add .gitignore
-git commit -m "chore: add beacon setup"
+git commit -m "chore: add abc setup"
 ```
 
 ### Workflow 2: Check for Changes
 
 ```bash
 # After working on your project
-beacon delta
+abc delta
 
 # If you have new patterns, contribute back to warehouse
 # Copy files from .opencode/ to warehouse and submit PR
@@ -104,7 +104,7 @@ beacon delta
 # When warehouse is updated
 cd ~/warehouse && git pull
 cd ~/my-project
-beacon update
+abc update
 ```
 
 ## File Structure
@@ -125,7 +125,7 @@ your-project/
 ## Tips
 
 1. **Always gitignore `.opencode/`** - This is distributed content, not source code
-2. **Use `beacon delta` regularly** - Catch local customizations that should be shared
+2. **Use `abc delta` regularly** - Catch local customizations that should be shared
 3. **Update frequently** - Stay in sync with warehouse improvements
 4. **Contribute back** - If you create useful patterns, add them to the warehouse
 
@@ -135,7 +135,7 @@ your-project/
 
 ```bash
 # Always specify --warehouse explicitly
-beacon setup --warehouse ~/path/to/warehouse --all
+abc setup --warehouse ~/path/to/warehouse --all
 ```
 
 ### .opencode/ committed by mistake
@@ -149,27 +149,27 @@ git commit -m "chore: remove .opencode from git"
 ### Want to re-install
 
 ```bash
-beacon clean
-beacon setup --warehouse ~/warehouse --all
+abc clean
+abc setup --warehouse ~/warehouse --all
 ```
 
 ## Commands Reference
 
 | Command | What it does |
 |---------|-------------|
-| `beacon list` | Show available warehouse content |
-| `beacon setup` | Install content to `.opencode/` |
-| `beacon status` | Show installed content |
-| `beacon delta` | Compare with warehouse |
-| `beacon update` | Sync from warehouse |
-| `beacon clean` | Remove `.opencode/` |
+| `abc list` | Show available warehouse content |
+| `abc setup` | Install content to `.opencode/` |
+| `abc status` | Show installed content |
+| `abc delta` | Compare with warehouse |
+| `abc update` | Sync from warehouse |
+| `abc clean` | Remove `.opencode/` |
 
 ## Get Help
 
 ```bash
 beacon --help
-beacon setup --help
-beacon delta --help
+abc setup --help
+abc delta --help
 ```
 
 ---

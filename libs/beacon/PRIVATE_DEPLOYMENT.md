@@ -1,10 +1,19 @@
-# Publishing Beacon to Homelab PyPI
+# Private Deployment Guide (Optional)
+
+**Note:** Agentic Beacon is publicly available on PyPI. This guide is for organizations that want to host it on their own private PyPI server.
+
+## When to Use Private Deployment
+
+- Your organization has security requirements for dependency management
+- You want to control package versions internally
+- You need to host in air-gapped environments
+- You want to add organization-specific customizations
 
 ## Prerequisites
 
-1. **uv installed** - Ensure you have uv installed in your homelab environment
-2. **Python 3.12+** - Required for building and using beacon
-3. **Homelab PyPI server** - Your private PyPI server should be running
+1. **Private PyPI server** - Running (devpi, PyPI server, Artifactory, etc.)
+2. **uv or twine** - For publishing packages
+3. **Python 3.12+** - Required for building and using agentic-beacon
 
 ## Build the Package
 
@@ -15,26 +24,26 @@ cd libs/beacon
 uv build
 
 # This creates:
-# - dist/beacon-0.1.0-py3-none-any.whl
-# - dist/beacon-0.1.0.tar.gz
+# - dist/agentic-beacon-0.2.0-py3-none-any.whl
+# - dist/agentic-beacon-0.2.0.tar.gz
 ```
 
-## Publish to Homelab PyPI
+## Publish to Private PyPI
 
 ### Option 1: Using uv publish (Recommended)
 
 ```bash
 cd libs/beacon
 
-# Publish to your homelab PyPI
+# Publish to your private PyPI
 uv publish \
-  --publish-url https://your-homelab-pypi.local/simple/ \
+  --publish-url https://your-private-pypi.local/simple/ \
   --username your-username \
   --password your-password
 
 # Or with token authentication:
 uv publish \
-  --publish-url https://your-homelab-pypi.local/simple/ \
+  --publish-url https://your-private-pypi.local/simple/ \
   --token your-api-token
 ```
 
@@ -49,7 +58,7 @@ index-servers =
     homelab
 
 [homelab]
-repository = https://your-homelab-pypi.local/simple/
+repository = https://your-private-pypi.local/simple/
 username = your-username
 password = your-password
 ```
@@ -69,24 +78,24 @@ cd libs/beacon
 # Install twine in dev environment
 uv pip install twine
 
-# Upload to homelab PyPI
-twine upload --repository-url https://your-homelab-pypi.local/simple/ dist/*
+# Upload to private PyPI
+twine upload --repository-url https://your-private-pypi.local/simple/ dist/*
 ```
 
 ## Install from Homelab PyPI
 
-Once published, users can install beacon from your homelab PyPI:
+Once published, users can install beacon from your private PyPI:
 
 ```bash
-# Install from homelab PyPI
-pip install beacon --index-url https://your-homelab-pypi.local/simple/
+# Install from private PyPI
+pip install beacon --index-url https://your-private-pypi.local/simple/
 
 # Or with uv:
-uv pip install beacon --index-url https://your-homelab-pypi.local/simple/
+uv pip install beacon --index-url https://your-private-pypi.local/simple/
 
 # Or add to requirements:
 echo "beacon" >> requirements.txt
-pip install -r requirements.txt --index-url https://your-homelab-pypi.local/simple/
+pip install -r requirements.txt --index-url https://your-private-pypi.local/simple/
 ```
 
 ## Verify Installation
@@ -118,7 +127,7 @@ When you release a new version:
 Users upgrade with:
 
 ```bash
-pip install --upgrade beacon --index-url https://your-homelab-pypi.local/simple/
+pip install --upgrade beacon --index-url https://your-private-pypi.local/simple/
 ```
 
 ## Troubleshooting
@@ -139,10 +148,10 @@ Check your credentials:
 
 ```bash
 # Test connection
-curl -u username:password https://your-homelab-pypi.local/simple/
+curl -u username:password https://your-private-pypi.local/simple/
 
 # Or use token
-curl -H "Authorization: Bearer your-token" https://your-homelab-pypi.local/simple/
+curl -H "Authorization: Bearer your-token" https://your-private-pypi.local/simple/
 ```
 
 ### SSL certificate issues
@@ -179,7 +188,7 @@ After testing in homelab:
 
 **Installation:**
 ```bash
-pip install beacon --index-url https://your-homelab-pypi.local/simple/
+pip install beacon --index-url https://your-private-pypi.local/simple/
 ```
 
 **Usage:**

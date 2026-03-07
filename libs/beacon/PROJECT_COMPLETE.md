@@ -118,7 +118,7 @@ uv publish \
 ### Install from Homelab
 
 ```bash
-pip install beacon --index-url https://your-homelab-pypi.local/simple/
+pip install beacon 
 ```
 
 ### Test Installation
@@ -140,12 +140,12 @@ beacon delta
 
 1. **Fork template:** Create your organization's warehouse from this template
 2. **Customize:** Add your contexts, knowledge, and skills
-3. **Publish beacon:** Deploy to homelab PyPI using `uv publish`
-4. **Distribute:** Team installs `beacon` from homelab PyPI
+3. **Publish beacon:** Deploy to PyPI (or private PyPI) using `uv publish`
+4. **Distribute:** Team installs `beacon` from PyPI (or private PyPI)
 
 ### For Project Developers
 
-1. **Install beacon:** `pip install beacon --index-url https://your-homelab-pypi.local/simple/`
+1. **Install beacon:** `pip install beacon `
 2. **Setup project:** `beacon setup --warehouse ~/warehouse --all`
 3. **Work normally:** `.opencode/` contains distributed content (gitignored)
 4. **Check changes:** `beacon delta` to see local modifications
@@ -280,7 +280,7 @@ $ beacon delta
 
 1. **Build:** `cd libs/beacon && uv build`
 2. **Publish:** `uv publish --publish-url https://your-homelab-pypi.local/simple/ ...`
-3. **Install:** `pip install beacon --index-url https://your-homelab-pypi.local/simple/`
+3. **Install:** `pip install beacon `
 4. **Test:** Run all commands and gather feedback
 
 ### Improvements Before Public PyPI
@@ -311,7 +311,7 @@ uv publish  # Publishes to PyPI.org by default
 - ✅ Delta command for change detection
 - ✅ Complete deployment documentation
 - ✅ MIT licensed and open source
-- ✅ Ready for `uv publish` to homelab PyPI
+- ✅ Ready for `uv publish` to PyPI (or private PyPI)
 
 **Deployment command:**
 ```bash
@@ -322,7 +322,7 @@ uv publish --publish-url https://your-homelab-pypi.local/simple/ --token your-to
 
 **Installation:**
 ```bash
-pip install beacon --index-url https://your-homelab-pypi.local/simple/
+pip install beacon 
 ```
 
 **Usage:**

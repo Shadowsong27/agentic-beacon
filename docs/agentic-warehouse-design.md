@@ -133,10 +133,17 @@ The repository acts as a "warehouse" where projects select what they need, insta
 This design uses a **two-tier approach** to manage agent information efficiently:
 
 **Tier 1: Contexts** (Boot context - loaded immediately)
-- Lightweight AGENTS.md files that agents see on session start
+- Lightweight context files that agents see on session start
 - Contains **summaries and pointers**, not full details
 - Think: "What does the agent need to know exists?"
 - Kept minimal to reduce token consumption
+
+**Naming conventions:**
+- **Warehouse level:** Simple filenames (e.g., `global.md`, `python.md`, `data-platform.md`)
+- **Project level:** Single `AGENTS.md` file (at `<project>/.opencode/AGENTS.md`)
+- **User level:** Single `AGENTS.md` file (at `~/.config/opencode/AGENTS.md`)
+
+The warehouse uses flexible naming because files are loaded via `opencode.json` configuration. Project and user levels use `AGENTS.md` as a convention for easy identification.
 
 **Tier 2: Knowledge** (Deep context - loaded on demand)
 - Detailed explanations, rationale, examples
@@ -157,7 +164,7 @@ Without this separation, AGENTS.md files become bloated with details agents rare
 **Example 1: Proactive Pointer (Agent must read immediately)**
 
 ```markdown
-# In AGENTS.python.md (Tier 1: Context)
+# In python.md (Tier 1: Context)
 ## Type Annotations
 
 **Rule:** Only quote type annotations for forward references.
@@ -190,7 +197,7 @@ def process(data: list[Document]) -> ProcessedResult:
 **Example 2: Reactive Pointer (Agent reads when needed)**
 
 ```markdown
-# In AGENTS.data-platform.md (Tier 1: Context)
+# In data-platform.md (Tier 1: Context)
 ## Troubleshooting
 
 If DAG parsing fails, consult the debugging checklist.
@@ -230,11 +237,16 @@ psql $DATABASE_URL -c \
 
 ---
 
-## Component 1: Contexts (AGENTS.md Organization)
+## Component 1: Contexts (Boot Context Organization)
 
 ### What Are Contexts?
 
-AGENTS.md files serve as **boot context** - the knowledge agents see immediately on session start. They provide instructions, standards, and pointers to deeper knowledge.
+Context files serve as **boot context** - the knowledge agents see immediately on session start. They provide instructions, standards, and pointers to deeper knowledge.
+
+**Naming conventions:**
+- **Warehouse:** Simple filenames like `global.md`, `python.md`, `data-platform.md`
+- **Project:** Single `AGENTS.md` at `<project>/.opencode/AGENTS.md`
+- **User:** Single `AGENTS.md` at `~/.config/opencode/AGENTS.md`
 
 ### Multi-Tier Context Model
 
@@ -262,9 +274,9 @@ Context is organized into three tiers:
 
 ### Progressive Disclosure Pattern
 
-AGENTS.md should be a **pointer system**, not an encyclopedia. 
+Context files should be a **pointer system**, not an encyclopedia. 
 
-**In AGENTS.md:**
+**In context files:**
 - 1-2 sentence summary of the pattern or rule
 - Reference to detailed knowledge elsewhere
 
@@ -280,7 +292,7 @@ AGENTS.md should be a **pointer system**, not an encyclopedia.
 ```
 
 **Benefits:**
-- Keeps AGENTS.md scannable (agents can quickly find what they need)
+- Keeps context files scannable (agents can quickly find what they need)
 - Detailed knowledge lives in searchable, versioned files
 - Agents pull deeper context only when needed
 
@@ -290,15 +302,15 @@ AGENTS.md should be a **pointer system**, not an encyclopedia.
 
 | Question | Yes → | No → |
 |----------|-------|------|
-| Does this apply to all projects org-wide? | **Global context** (required) | ↓ |
-| Does this apply to all projects using this language? | **Language context** (optional) | ↓ |
-| Does this apply to multiple teams in the same domain? | **Domain context** (optional) | ↓ |
+| Does this apply to all projects org-wide? | **Global context** (`global.md`) | ↓ |
+| Does this apply to all projects using this language? | **Language context** (e.g., `python.md`) | ↓ |
+| Does this apply to multiple teams in the same domain? | **Domain context** (e.g., `data-platform.md`) | ↓ |
 | Is this unique to this project? | **Project AGENTS.md** | ↓ |
-| Is this a detailed explanation? | **Knowledge file** (reference from AGENTS.md) | |
+| Is this a detailed explanation? | **Knowledge file** (reference from context) | |
 
 **Anti-patterns to avoid:**
-- ❌ Copying the same pattern into multiple project AGENTS.md files → Promote to global or optional context
-- ❌ Putting implementation details in AGENTS.md → Extract to knowledge file
+- ❌ Copying the same pattern into multiple project `AGENTS.md` files → Promote to warehouse context
+- ❌ Putting implementation details in context files → Extract to knowledge file
 - ❌ Creating language-specific patterns used by only one team → Consider if it's truly language-wide or just domain-specific
 
 ### Collaboration Benefits
@@ -313,7 +325,7 @@ AGENTS.md should be a **pointer system**, not an encyclopedia.
 - **Minimal setup:** Install once, works everywhere
 - **Stay current:** Update command pulls latest standards
 - **Contribute easily:** Proven patterns flow back to central repo
-- **Override when needed:** Project AGENTS.md can override global patterns for special cases
+- **Override when needed:** Project `AGENTS.md` can override warehouse contexts for special cases
 
 ---
 
@@ -386,26 +398,26 @@ knowledge/
 **Knowledge organization by scope:**
 
 **Global knowledge** (`knowledge/global/`)
-- Imported by `AGENTS.global.md` (required for all projects)
+- Referenced by `global.md` (required for all projects)
 - Universal practices: commit conventions, session handoffs, spec-driven development
 
 **Language knowledge** (`knowledge/languages/*/`)
-- Imported by language-specific contexts (`AGENTS.python.md`, `AGENTS.typescript.md`)
+- Referenced by language-specific contexts (e.g., `python.md`, `typescript.md`)
 - Language-specific patterns and anti-patterns
 
 **Domain knowledge** (`knowledge/domains/*/`)
-- Imported by domain-specific contexts (`AGENTS.data-platform.md`, `AGENTS.web-app.md`)
+- Referenced by domain-specific contexts (e.g., `data-platform.md`, `web-app.md`)
 - Domain-specific infrastructure, tools, and practices
 
 **Selective installation:** When teams run setup and select contexts, the CLI only copies relevant knowledge directories to `~/.agentic-context/`. A project using Python + Data Platform gets `global/`, `languages/python/`, and `domains/data-platform/` knowledge, but not `web-app/` or `typescript/` knowledge.
 
 ### Discovery: Proactive vs Reactive Pointers
 
-Agents discover knowledge through **pointer systems** in AGENTS.md with two modes:
+Agents discover knowledge through **pointer systems** in context files with two modes:
 
 **Proactive Pointers (Agent must read immediately)**
 
-Example in `AGENTS.global.md`:
+Example in `global.md`:
 ```markdown
 ## Commit Conventions
 
@@ -414,7 +426,7 @@ Example in `AGENTS.global.md`:
 **Read:** [Conventional commits guide](~/.agentic-context/knowledge/global/decisions/conventional-commits.md)
 ```
 
-Example in `AGENTS.data-platform.md`:
+Example in `data-platform.md`:
 ```markdown
 ## Development Workflow
 
@@ -430,7 +442,7 @@ Use proactive pointers for:
 
 **Reactive Pointers (Agent reads when needed)**
 
-Example in `AGENTS.data-platform.md`:
+Example in `data-platform.md`:
 ```markdown
 ## Troubleshooting
 
@@ -480,7 +492,7 @@ def create_node(self) -> "TreeNode":
 
 **Minimize AGENTS.md, maximize knowledge files:**
 
-**In AGENTS.md (minimal):**
+**In context file (minimal):**
 ```markdown
 ## Type Annotations
 
@@ -496,7 +508,7 @@ Use primitive types when available (`list` not `List`).
 - Guardrails and decision criteria
 
 **Benefits:**
-- AGENTS.md stays scannable
+- Context files stay scannable
 - Knowledge is searchable and versioned
 - Multiple contexts can reference the same knowledge
 - Teams can update knowledge without touching all contexts

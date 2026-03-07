@@ -54,10 +54,10 @@ When you need RAG (we don't): Semantic search across massive, rapidly-changing c
 
 ```
 agentic-engineering-warehouse-template/
-├── contexts/              # AGENTS.md files (global, language, domain)
-│   ├── AGENTS.global.md
-│   ├── AGENTS.python.md         # Example: Replace with your languages
-│   └── AGENTS.data-platform.md  # Example: Replace with your domains
+├── contexts/              # Boot context files (loaded via opencode.json)
+│   ├── global.md          # Required: Universal standards for all projects
+│   ├── python.md          # Optional: Python-specific standards
+│   └── data-platform.md   # Optional: Domain-specific patterns
 │
 ├── knowledge/            # Atomic knowledge (facts, decisions, lessons)
 │   ├── global/          # Universal knowledge (all projects)
@@ -80,20 +80,21 @@ agentic-engineering-warehouse-template/
         └── SKILL.md
 ```
 
+**Naming convention:**
+- **Warehouse contexts:** Simple filenames (e.g., `global.md`, `python.md`). Names are flexible - what matters is the `opencode.json` configuration.
+- **Project/User level:** Single `AGENTS.md` file by convention (`<project>/.opencode/AGENTS.md` or `~/.config/opencode/AGENTS.md`)
+
 **Note:** `python`, `data-platform`, and `example-skill` are examples only. Replace with your organization's actual languages, domains, and skills.
 
 ## 🚀 Getting Started
 
-### Quick Start with Beacon Init
+### Quick Start with ABC Init
 
 The **fastest way** to create your organization's warehouse is using `abc init`:
 
 ```bash
-# Install beacon
-pip install agentic-beacon --index-url https://your-homelab-pypi.local/simple/
-
-# Or for public PyPI (when available):
-# pip install agentic-beacon
+# Install agentic-beacon
+pip install agentic-beacon
 
 # Initialize your warehouse
 abc init my-org-warehouse \
@@ -130,12 +131,12 @@ You can also fork this repository if you prefer, though `abc init` is the recomm
 
 1. **Initialize warehouse**: Run `abc init` to create warehouse structure
 2. **Customize**: Add your organization's contexts, knowledge, and skills
-3. **Deploy Beacon**: Publish to your homelab PyPI (see [deployment guide](./libs/beacon/HOMELAB_PUBLISH.md))
-4. **Distribute**: Teams install Beacon and use `abc setup` in projects
+3. **Share**: Teams install `agentic-beacon` and use `abc setup` in projects
+4. **Optional**: Host internally on private PyPI (see [private deployment guide](./libs/beacon/PRIVATE_DEPLOYMENT.md))
 
 ### For Teams
 
-1. **Install Beacon**: `pip install agentic-beacon --index-url https://your-pypi.local/simple/`
+1. **Install**: `pip install agentic-beacon`
 2. **Setup projects**: `abc setup --warehouse ~/warehouse --all`
 3. **Stay in sync**: `abc update` to get latest changes
 4. **Contribute**: Use `abc delta` to find new patterns to share
@@ -159,10 +160,13 @@ You can also fork this repository if you prefer, though `abc init` is the recomm
 This template uses a **two-tier approach** (contexts + knowledge) to manage agent information efficiently. See the [design guide](./docs/agentic-warehouse-design.md#understanding-the-two-tier-structure-context--knowledge) for full explanation.
 
 ### Contexts (`contexts/`)
-- **Global** (`AGENTS.global.md`): Universal practices for all projects
-- **Language** (`AGENTS.python.md`): Language-specific standards
-- **Domain** (`AGENTS.data-platform.md`): Team/domain-specific patterns
-- **Project** (not stored here): Project-specific context lives in each project
+- **Global** (`global.md`): Universal practices for all projects
+- **Language** (`python.md`, `typescript.md`, etc.): Language-specific standards
+- **Domain** (`data-platform.md`, `web-app.md`, etc.): Team/domain-specific patterns
+- **Project** (not stored in warehouse): Single `AGENTS.md` file in project `.opencode/` directory
+- **User** (not stored in warehouse): Single `AGENTS.md` file in `~/.config/opencode/`
+
+**Naming note:** Warehouse context files use simple names. The `opencode.json` configuration determines which files are loaded. Project and user levels use the convention `AGENTS.md` for easy identification.
 
 ### Knowledge (`knowledge/`)
 - **Decisions**: Technical choices and their rationale
@@ -204,18 +208,17 @@ This repository includes **Agentic Beacon CLI**, a Python tool for distributing 
 
 ### Installation
 
-#### Option 1: From Homelab PyPI (Recommended)
-
 ```bash
-# Install from your organization's private PyPI
-pip install agentic-beacon --index-url https://your-homelab-pypi.local/simple/
+# Install from PyPI
+pip install agentic-beacon
 ```
 
-#### Option 2: From Source (Development)
+**For development:**
 
 ```bash
-# From your forked warehouse repository
-cd your-org-warehouse/libs/beacon
+# From source
+git clone https://github.com/Shadowsong27/agentic-beacon.git
+cd agentic-beacon/libs/beacon
 pip install -e .
 ```
 
@@ -315,32 +318,21 @@ abc delta --warehouse ~/warehouse
 
 ### Deployment
 
-**For Warehouse Maintainers:**
+**Published on PyPI:**
 
 ```bash
-# Build the package
-cd libs/beacon
-uv build
-
-# Publish to your homelab PyPI
-uv publish \
-  --publish-url https://your-homelab-pypi.local/simple/ \
-  --token your-api-token
+pip install agentic-beacon
 ```
 
-**For Public PyPI (when ready):**
+**For Organizations (Optional Private Deployment):**
 
-```bash
-cd libs/beacon
-uv build
-uv publish  # Publishes to PyPI.org
-```
+If you want to host internally, see [Private Deployment Guide](./libs/beacon/PRIVATE_DEPLOYMENT.md) for instructions on publishing to your own PyPI server.
 
 ### Documentation
 
 - **[Quick Start Guide](./libs/beacon/QUICKSTART.md)** - Get started in 5 minutes
-- **[Homelab Deployment](./libs/beacon/HOMELAB_PUBLISH.md)** - Deploy to private PyPI
 - **[Complete README](./libs/beacon/README.md)** - Full CLI documentation
+- **[Private Deployment](./libs/beacon/PRIVATE_DEPLOYMENT.md)** - Deploy to private PyPI (optional)
 - **[Project Status](./libs/beacon/PROJECT_COMPLETE.md)** - Implementation details
 
 ### Technical Details
@@ -354,16 +346,15 @@ uv publish  # Publishes to PyPI.org
 ### Workflow Example
 
 ```bash
-# 1. Organization deploys beacon to homelab PyPI
-cd warehouse/libs/beacon
-uv build && uv publish --publish-url https://pypi.homelab.local/simple/ --token xxx
+# 1. Install agentic-beacon
+pip install agentic-beacon
 
-# 2. Developers install beacon
-pip install agentic-beacon --index-url https://pypi.homelab.local/simple/
+# 2. Initialize warehouse
+abc init my-org-warehouse --org "Acme Corp"
 
 # 3. Developers use in projects
 cd ~/my-project
-abc setup --warehouse ~/warehouse --all
+abc setup --warehouse ~/my-org-warehouse --all
 echo ".opencode/" >> .gitignore
 
 # 4. Check for contributions
