@@ -1,8 +1,6 @@
 {
-  "contexts": [
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": [
     "AGENTS.md"
-  ],
-  "skills": [
-    "skills/record-knowledge"
   ]
 }
