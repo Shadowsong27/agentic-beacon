@@ -1,0 +1,8 @@
+{
+  "contexts": [
+    "AGENTS.md"
+  ],
+  "skills": [
+    "skills/record-knowledge"
+  ]
+}

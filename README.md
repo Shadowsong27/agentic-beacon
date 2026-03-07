@@ -1,16 +1,44 @@
 # Agentic Beacon
 
-**Agentic Beacon CLI (abc)** - A tool for distributing knowledge contexts, skills, and standards across AI-assisted development teams.
+**An opinionated framework for standardizing and distributing agentic engineering artifacts across teams.**
 
-> **Note:** This is an **opinionated and simple take** on agentic engineering. The landscape is rapidly evolving, and this approach provides one possible solution focused on DRY principles and centralized collaboration. Adapt it to your team's needs.
+Agentic Beacon provides:
+1. **A methodology** for managing contexts, knowledge, and skills - the core agentic engineering artifacts worthy of standardization and team-wide distribution
+2. **CLI tooling (`abc`)** for initializing warehouses, managing connections, and distributing artifacts across projects
+
+> **⚠️ Opinionated Framework:** Agentic Beacon takes a **specific stance** on how to organize and distribute agentic artifacts. This is not a universal standard - it's an opinionated approach based on DRY principles, file-based simplicity, and centralized collaboration. The agentic engineering landscape is rapidly evolving, and this framework provides one possible solution. Evaluate whether this approach fits your team's needs and adapt accordingly.
 
 > **Built for OpenCode:** This design was developed with [OpenCode](https://opencode.ai) usage in mind. While we keep patterns as generic as possible, the experience with other AI coding agents may differ. The core concepts (centralized context, progressive disclosure, DRY) remain applicable across tools.
 
-## 🎯 Purpose
+## 🎯 What is Agentic Beacon?
 
-**Agentic engineering is rapidly evolving.** Vibe coding practices, AI agent capabilities, and collaboration paradigms shift weekly. Rather than prescribing rigid methodologies that quickly become outdated, this template provides a **minimal, flexible structure** for teams to collaborate effectively.
+Agentic Beacon is a **framework** for collaborative AI-assisted development that solves a fundamental problem: **how to share and evolve agentic engineering practices across teams.**
 
-**The core principle: Don't Repeat Yourself (DRY) for agentic knowledge.**
+### The Framework Components
+
+**1. Methodology - Artifact Standardization**
+
+Defines three core artifact types that should be centralized and distributed:
+
+- **Contexts** - Boot instructions and coding standards loaded on agent session start
+- **Knowledge** - Atomic decisions, lessons, and facts organized by scope (global/language/domain)
+- **Skills** - Reusable workflows, procedures, and specialized instructions
+
+These artifacts form a **warehouse** - a single source of truth for your organization's agentic practices.
+
+**2. CLI Tooling - Warehouse Operations**
+
+The `abc` CLI provides practical tools for:
+
+- **Initialization** - Create new warehouses with proper structure (`abc init`)
+- **Connection** - Link projects to warehouses (`abc setup`)
+- **Distribution** - Install and update artifacts across projects (`abc update`)
+- **Discovery** - Find local changes that could benefit other teams (`abc delta`)
+- **Management** - Track installed content and maintain sync (`abc status`, `abc clean`)
+
+### Core Principle: Don't Repeat Yourself (DRY)
+
+**DRY for agentic knowledge** - the fundamental philosophy behind this framework.
 
 Instead of duplicating agent instructions, coding standards, and learned patterns across multiple projects, centralize them in a warehouse where:
 - **One update propagates everywhere** - Fix a pattern once, all projects benefit
@@ -18,42 +46,31 @@ Instead of duplicating agent instructions, coding standards, and learned pattern
 - **Onboarding is instant** - New developers and agents inherit organizational knowledge automatically
 - **Evolution is natural** - Adapt the structure as practices evolve, without rewriting every project
 
-This template provides just enough structure to enable collaboration without constraining how your team works with AI agents.
+## 🏗️ Framework Architecture
 
-### Why Simple File-Based Distribution?
+### Artifact Types
 
-**Agentic coding doesn't need RAG complexity.** Unlike production systems requiring millisecond context retrieval, agents in development environments can afford simple file reads. Our approach:
+**Contexts** - Instructions loaded at agent boot time
+- Global standards applicable to all projects
+- Language-specific conventions (Python, TypeScript, etc.)
+- Domain-specific patterns (data platforms, web services, etc.)
 
-**Simple and adoptable:**
-- Plain markdown files (no vector databases)
-- Standard file operations (no embedding pipelines)
-- Git-based versioning (familiar workflow)
-- Zero infrastructure overhead
+**Knowledge** - Atomic information units organized hierarchically
+- Decisions: Technical choices and rationale
+- Lessons: Learnings from agent failures and successes
+- Facts: Established configurations and references
 
-**Fast enough for the use case:**
-- Boot context loads in milliseconds (AGENTS.md files)
-- Knowledge files accessed on-demand via pointers
-- Progressive disclosure reduces cognitive load
-- Agents already spend time reading code - context files add negligible overhead
+**Skills** - Reusable procedures and workflows
+- Multi-step processes agents follow
+- Specialized instructions for specific tasks
+- Templates and automation with usage guides
 
-**Right-sized for organizational standards:**
-- Warehouse stores curated knowledge (~100s of KB, not GBs)
-- Content is explicitly structured, not semantically searched
-- Updates are infrequent (standards evolve slowly)
-- Human-readable for review and contribution
+### Warehouse Structure
 
-**RAG would be overkill** for this use case:
-- Complex setup (vector DB, embeddings, indexing)
-- Higher maintenance burden
-- Adoption barrier for teams
-- Unnecessary for small, curated content sets
-
-When you need RAG (we don't): Semantic search across massive, rapidly-changing content where explicit pointers don't scale. For organizational standards distribution, simple beats complex.
-
-## 📁 Repository Structure
+The framework defines a standardized repository structure that is created by `abc init`:
 
 ```
-agentic-engineering-warehouse-template/
+my-warehouse/              # Created by: abc init my-warehouse
 ├── contexts/              # Boot context files (loaded via opencode.json)
 │   ├── global.md          # Required: Universal standards for all projects
 │   ├── python.md          # Optional: Python-specific standards
@@ -65,26 +82,30 @@ agentic-engineering-warehouse-template/
 │   │   ├── lessons/
 │   │   └── facts/
 │   ├── languages/       # Language-specific knowledge
-│   │   └── python/      # Example: Replace with your languages
+│   │   └── python/      # Configured via --languages flag
 │   │       ├── decisions/
 │   │       └── lessons/
 │   └── domains/         # Domain-specific knowledge
-│       └── data-platform/  # Example: Replace with your domains
+│       └── data-platform/  # Configured via --domains flag
 │           ├── decisions/
 │           ├── lessons/
 │           └── facts/
 │
 └── skills/              # Reusable workflows and procedures
-    ├── README.md        # Skills catalog (agent-maintained)
-    └── example-skill/   # Example: Replace with your skills
-        └── SKILL.md
+    └── README.md        # Skills catalog
+```
+
+**Create this structure with:**
+```bash
+abc init my-warehouse \
+  --org "Your Organization" \
+  --languages python,typescript \
+  --domains data-platform
 ```
 
 **Naming convention:**
-- **Warehouse contexts:** Simple filenames (e.g., `global.md`, `python.md`). Names are flexible - what matters is the `opencode.json` configuration.
-- **Project/User level:** Single `AGENTS.md` file by convention (`<project>/.opencode/AGENTS.md` or `~/.config/opencode/AGENTS.md`)
-
-**Note:** `python`, `data-platform`, and `example-skill` are examples only. Replace with your organization's actual languages, domains, and skills.
+- **Warehouse contexts:** Simple filenames (e.g., `global.md`, `python.md`)
+- **Project/User level:** Single `AGENTS.md` file by convention
 
 ## 🚀 Getting Started
 
@@ -138,14 +159,42 @@ This creates:
 3. `git remote add origin <your-repo-url>`
 4. `git push -u origin main`
 
-### Alternative: Use This Repository as Reference
+### What This Repository Contains
 
-This repository serves as:
-- **Reference documentation** - Examples of warehouse structure
-- **Beacon source code** - The CLI tool itself (`libs/beacon/`)
-- **Design guides** - Architecture and contribution patterns
+This repository is the **framework source**, containing:
 
-You can also fork this repository if you prefer, though `abc init` is the recommended approach.
+```
+agentic-beacon/
+├── .github/workflows/    # CI/CD automation
+├── docs/                 # Design documentation
+├── examples/             # Sample warehouse from abc init
+│   └── sample-warehouse/
+├── guides/               # User guides
+├── knowledge/            # Project-specific knowledge (this project only)
+│   ├── decisions/        # Technical decisions for framework development
+│   ├── lessons/          # Lessons learned building the framework
+│   └── facts/            # Framework development facts
+├── libs/beacon/          # CLI source code
+├── skills/               # Project-specific skills
+│   └── record-knowledge/ # Skill to capture new knowledge
+├── AGENTS.md             # Project context (uses progressive disclosure)
+├── opencode.json         # Context loading configuration
+└── README.md             # This file
+```
+
+**Key Components:**
+- **CLI source code** - The `abc` tool itself (`libs/beacon/`)
+- **Design documentation** - Architecture and methodology guides (`docs/`)
+- **Usage guides** - Practical instructions for teams (`guides/`)
+- **Examples** - Sample warehouse generated by `abc init` (`examples/`)
+- **Project knowledge** - Development decisions, lessons, and facts (`knowledge/`)
+- **Project skills** - Development workflows like `record-knowledge` (`skills/`)
+
+**Note on `knowledge/` folder:** This folder contains knowledge specific to developing the Agentic Beacon framework itself. It is NOT a warehouse and NOT meant to be distributed. This project, being the creator of the framework, cannot follow its own distribution model, so we store project-specific knowledge here for agent context.
+
+**Note on `skills/` folder:** Contains project-specific skills for framework development (e.g., `/record-knowledge` to capture new insights). These are NOT example skills for warehouses.
+
+**To create your own warehouse:** Use `abc init` - see `examples/sample-warehouse/` for what it generates.
 
 ### For Organizations
 
@@ -175,49 +224,43 @@ You can also fork this repository if you prefer, though `abc init` is the recomm
 - **[CLI Quick Start](./guides/cli-quick-start.md)** - Installation and usage guide
 - **[Warehouse Contribution Guide](./guides/warehouse-contribution-guide.md)** - How to contribute to your organization's warehouse
 
-## 🏗️ What Goes Where?
+### Examples (examples/)
+- **[Sample Warehouse](./examples/sample-warehouse/)** - Example output from `abc init` showing the complete warehouse structure with placeholders
 
-This template uses a **two-tier approach** (contexts + knowledge) to manage agent information efficiently. See the [design guide](./docs/agentic-warehouse-design.md#understanding-the-two-tier-structure-context--knowledge) for full explanation.
+## 🏗️ Organizing Your Warehouse
 
-### Contexts (`contexts/`)
+Once you create a warehouse with `abc init`, organize content using a **two-tier approach** (contexts + knowledge). See the [design guide](./docs/agentic-warehouse-design.md#understanding-the-two-tier-structure-context--knowledge) for full explanation.
+
+### Contexts Directory
 - **Global** (`global.md`): Universal practices for all projects
 - **Language** (`python.md`, `typescript.md`, etc.): Language-specific standards
 - **Domain** (`data-platform.md`, `web-app.md`, etc.): Team/domain-specific patterns
-- **Project** (not stored in warehouse): Single `AGENTS.md` file in project `.opencode/` directory
-- **User** (not stored in warehouse): Single `AGENTS.md` file in `~/.config/opencode/`
 
-**Naming note:** Warehouse context files use simple names. The `opencode.json` configuration determines which files are loaded. Project and user levels use the convention `AGENTS.md` for easy identification.
+**Naming note:** Warehouse context files use simple names. The `opencode.json` configuration determines which files are loaded.
 
-### Knowledge (`knowledge/`)
+### Knowledge Directory
 - **Decisions**: Technical choices and their rationale
 - **Lessons**: Common agent failure modes and guardrails
 - **Facts**: Established technical information and configurations
 
 **Organization:** Knowledge mirrors context structure (global/, languages/, domains/) for selective import.
 
-### Skills (`skills/`)
+### Skills Directory
 - **Procedural workflows**: Multi-step processes agents follow
 - **Context injections**: Specialized instructions for specific tasks
 - **Templates**: Structured documents or code patterns
 - **Tools**: Scripts and automation with usage guides
 
-## 🔄 Workflow
+## 🔄 Typical Workflow
 
-Once you've created your organization's warehouse from this template:
+Once you've created your organization's warehouse:
 
-1. **Setup**: Teams install contexts and skills into their projects
+1. **Setup**: Teams install contexts and skills into their projects using `abc setup`
 2. **Use**: Agents load contexts automatically on session start
-3. **Update**: Teams sync latest changes from warehouse
+3. **Update**: Teams sync latest changes from warehouse using `abc update`
 4. **Contribute**: Teams submit improvements back via pull requests
 
-See the [Warehouse Contribution Guide](./docs/warehouse-contribution-guide.md) for details.
-
-## 📖 Examples
-
-See the `examples/` directory for:
-- Sample context files
-- Example knowledge files
-- Reference skill structures
+See the [Warehouse Contribution Guide](./guides/warehouse-contribution-guide.md) for details.
 
 ## 🛠️ CLI Tooling - Agentic Beacon (abc)
 
