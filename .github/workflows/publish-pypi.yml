@@ -1,0 +1,163 @@
+name: Publish to PyPI
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - test
+
+env:
+  UV_VERSION: "0.5.18"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write  # For trusted publishing
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: "libs/beacon/pyproject.toml"
+
+      - name: Install the project
+        run: uv sync --directory libs/beacon
+
+      - name: Build package
+        working-directory: libs/beacon
+        run: |
+          echo "Building agentic-beacon..."
+          uv build --out-dir dist
+          echo "Build complete!"
+          ls -lh dist/
+
+      - name: Determine PyPI target
+        id: pypi_target
+        run: |
+          if [[ "${{ github.event_name }}" == "release" ]] || [[ "${{ inputs.environment }}" == "production" ]]; then
+            echo "target=production" >> $GITHUB_OUTPUT
+            echo "url=https://pypi.org/project/agentic-beacon/" >> $GITHUB_OUTPUT
+            echo "publish_url=https://upload.pypi.org/legacy/" >> $GITHUB_OUTPUT
+          else
+            echo "target=test" >> $GITHUB_OUTPUT
+            echo "url=https://test.pypi.org/project/agentic-beacon/" >> $GITHUB_OUTPUT
+            echo "publish_url=https://test.pypi.org/legacy/" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Publish to PyPI (with API token)
+        if: steps.pypi_target.outputs.target == 'production'
+        working-directory: libs/beacon
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          echo "Publishing to PyPI..."
+          uv publish --token "$UV_PUBLISH_TOKEN"
+          echo "✓ Published to PyPI!"
+
+      - name: Publish to TestPyPI (with API token)
+        if: steps.pypi_target.outputs.target == 'test'
+        working-directory: libs/beacon
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.TEST_PYPI_API_TOKEN }}
+          UV_PUBLISH_URL: ${{ steps.pypi_target.outputs.publish_url }}
+        run: |
+          echo "Publishing to TestPyPI..."
+          uv publish --publish-url "$UV_PUBLISH_URL" --token "$UV_PUBLISH_TOKEN"
+          echo "✓ Published to TestPyPI!"
+
+      - name: Get package version
+        id: version
+        working-directory: libs/beacon
+        run: |
+          VERSION=$(uv run python -c "import tomli; print(tomli.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Publish summary
+        if: always()
+        run: |
+          echo "## 📦 Agentic Beacon Publication" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Package**: agentic-beacon" >> $GITHUB_STEP_SUMMARY
+          echo "**Version**: ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Target**: ${{ steps.pypi_target.outputs.target }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "${{ job.status }}" == "success" ]]; then
+            echo "### ✅ Publication Successful!" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**PyPI URL**: ${{ steps.pypi_target.outputs.url }}" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### 📥 Installation" >> $GITHUB_STEP_SUMMARY
+            echo '```bash' >> $GITHUB_STEP_SUMMARY
+            
+            if [[ "${{ steps.pypi_target.outputs.target }}" == "test" ]]; then
+              echo "pip install --index-url https://test.pypi.org/simple/ agentic-beacon" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "pip install agentic-beacon" >> $GITHUB_STEP_SUMMARY
+            fi
+            
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### 🚀 Quick Start" >> $GITHUB_STEP_SUMMARY
+            echo '```bash' >> $GITHUB_STEP_SUMMARY
+            echo "abc init my-warehouse" >> $GITHUB_STEP_SUMMARY
+            echo "abc setup --all" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ Publication Failed" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Check the logs above for details." >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Create release comment
+        if: github.event_name == 'release' && job.status == 'success'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const version = '${{ steps.version.outputs.version }}';
+            const body = `## 🎉 Package Published to PyPI
+
+            **agentic-beacon v${version}** is now available on PyPI!
+
+            ### Installation
+            \`\`\`bash
+            pip install agentic-beacon
+            \`\`\`
+
+            ### Quick Start
+            \`\`\`bash
+            abc init my-warehouse
+            abc setup --all
+            abc status
+            \`\`\`
+
+            ### Links
+            - [PyPI Package](https://pypi.org/project/agentic-beacon/${version}/)
+            - [Documentation](https://github.com/Shadowsong27/agentic-beacon)
+            `;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });

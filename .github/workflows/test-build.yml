@@ -1,0 +1,86 @@
+name: Test Build
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'libs/beacon/**'
+      - '.github/workflows/test-build.yml'
+  pull_request:
+    paths:
+      - 'libs/beacon/**'
+      - '.github/workflows/test-build.yml'
+
+env:
+  UV_VERSION: "0.5.18"
+
+jobs:
+  test-build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: "libs/beacon/pyproject.toml"
+
+      - name: Install the project
+        run: uv sync --directory libs/beacon
+
+      - name: Build package
+        working-directory: libs/beacon
+        run: |
+          echo "Building agentic-beacon..."
+          uv build --out-dir dist
+          echo "✓ Build successful!"
+          ls -lh dist/
+
+      - name: Verify package metadata
+        working-directory: libs/beacon
+        run: |
+          echo "Checking package contents..."
+          tar -tzf dist/*.tar.gz | head -20
+          
+          echo ""
+          echo "Checking wheel contents..."
+          unzip -l dist/*.whl | head -20
+
+      - name: Test CLI installation
+        working-directory: libs/beacon
+        run: |
+          echo "Installing package..."
+          uv pip install dist/*.whl
+          
+          echo "Testing CLI..."
+          abc --version
+          abc --help
+          
+          echo "✓ CLI works!"
+
+      - name: Publish summary
+        if: always()
+        run: |
+          echo "## 🔨 Build Test Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Package**: agentic-beacon" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "${{ job.status }}" == "success" ]]; then
+            echo "### ✅ Build Successful!" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Package builds correctly and CLI is functional." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "### ❌ Build Failed" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Check the logs above for details." >> $GITHUB_STEP_SUMMARY
+          fi
