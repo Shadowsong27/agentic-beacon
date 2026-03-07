@@ -59,6 +59,54 @@ Rather than duplicating agent instructions, coding standards, and learned patter
 
 This approach establishes **standardized collaboration patterns** while remaining flexible enough to evolve with the rapidly changing agentic engineering landscape.
 
+### Why Simple File-Based Distribution Over RAG?
+
+**Design decision: Keep it simple.** This warehouse uses plain files and Git instead of RAG (Retrieval-Augmented Generation) systems. Here's why:
+
+**The use case doesn't require RAG complexity:**
+
+Agentic coding operates in a fundamentally different context than production systems:
+- **Speed requirements:** Agents already spend seconds reading code and searching files. Adding milliseconds for file reads is negligible. We don't need microsecond vector search.
+- **Content scale:** Warehouse stores curated organizational standards (~100s of KB), not massive documentation (GBs). RAG is designed for scale we don't have.
+- **Access patterns:** Explicit pointers (e.g., "Read: knowledge/python/lessons/type-annotations.md") work better than semantic search for structured standards.
+- **Update frequency:** Standards evolve slowly (weeks/months), not constantly. No need for continuous reindexing.
+
+**Simple file-based approach advantages:**
+
+| Aspect | File-Based (Our Choice) | RAG-Based |
+|--------|------------------------|-----------|
+| **Setup** | Copy markdown files | Vector DB + embedding pipeline + maintenance |
+| **Dependencies** | Git, filesystem | Chroma/Pinecone/Weaviate, embedding models, vector DB |
+| **Adoption barrier** | Very low (everyone knows Git) | High (requires ML/infrastructure expertise) |
+| **Maintenance** | Standard Git workflow | DB maintenance, reindexing, embedding updates |
+| **Speed** | 1-5ms file reads | Sub-millisecond vector search (unnecessary here) |
+| **Versioning** | Native Git history | Custom versioning layer |
+| **Human readability** | Direct markdown editing | Requires retrieval interface |
+| **Contribution** | Standard PR workflow | More complex (embeddings must be regenerated) |
+
+**Progressive disclosure without RAG:**
+
+Our two-tier model provides memory management naturally:
+- **Tier 1 (Boot context):** AGENTS.md files load immediately - kept minimal, scanned quickly
+- **Tier 2 (Knowledge files):** Accessed on-demand via explicit pointers - agents know exactly where to look
+
+This achieves the same goal as RAG (avoiding context overload) with simpler mechanisms.
+
+**When you WOULD need RAG:**
+- Semantic search across thousands of unstructured documents
+- Finding similar code patterns across millions of lines
+- Content that changes constantly (hourly/daily)
+- Users who don't know what they're looking for (exploratory search)
+
+**Why warehouse doesn't need RAG:**
+- Content is curated and structured (not unstructured documents)
+- Small scale (organizational standards, not documentation websites)
+- Explicit discovery (pointers tell agents exactly where to look)
+- Infrequent updates (standards evolve deliberately)
+- Human review is critical (markdown files are easier to review than embeddings)
+
+**Bottom line:** RAG adds complexity without proportional benefit for this use case. Simple, git-based file distribution is faster to adopt, easier to maintain, and sufficient for organizational knowledge management in agentic coding.
+
 ---
 
 ## Central Repository Model

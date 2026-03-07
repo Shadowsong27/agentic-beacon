@@ -58,7 +58,7 @@ def find_project_root() -> Path:
 @click.group()
 @click.option("--verbose", is_flag=True, help="Enable verbose logging")
 def main(*, verbose: bool) -> None:
-    """Beacon - Guide your agents with distributed knowledge."""
+    """Agentic Beacon CLI (abc) - Guide your agents with distributed knowledge."""
     if verbose:
         logger.remove()
         logger.add(sys.stderr, level="DEBUG")
@@ -115,8 +115,8 @@ def init(
     Creates a complete warehouse structure with contexts, knowledge, and skills.
     
     Example:
-        beacon init my-warehouse
-        beacon init my-warehouse --org "Acme Corp" --languages python,typescript
+        abc init my-warehouse
+        abc init my-warehouse --org "Acme Corp" --languages python,typescript
     """
     # Determine warehouse path
     warehouse_path = (path or Path.cwd()) / name
@@ -187,7 +187,7 @@ def init(
         console.print("  3. git remote add origin <your-repo-url>")
         console.print("  4. git push -u origin main")
         console.print("\n[bold]Usage:[/bold]")
-        console.print(f"  beacon setup --warehouse {warehouse_path} --all")
+        console.print(f"  abc setup --warehouse {warehouse_path} --all")
         
     except ValueError as e:
         console.print(f"[red]Error:[/red] {e}")
@@ -480,7 +480,7 @@ def status(*, project: Optional[Path]) -> None:
 
     if not opencode_dir.exists():
         console.print(f"[yellow]No warehouse content installed at {project_root}[/yellow]")
-        console.print("Run 'beacon setup' to install.")
+        console.print("Run 'abc setup' to install.")
         sys.exit(0)
 
     console.print(f"[blue]Installation:[/blue] {opencode_dir}")
@@ -551,7 +551,7 @@ def delta(*, project: Optional[Path], warehouse: Optional[Path]) -> None:
         console.print(
             f"[red]Error:[/red] No .opencode directory found at {project_root}"
         )
-        console.print("Run 'beacon setup' first.")
+        console.print("Run 'abc setup' first.")
         sys.exit(1)
 
     console.print(f"[blue]Comparing:[/blue] {opencode_dir}")
@@ -599,7 +599,7 @@ def delta(*, project: Optional[Path], warehouse: Optional[Path]) -> None:
             console.print(table)
             console.print()
             console.print(
-                "[dim]ℹ️  Run 'beacon update' to sync with warehouse[/dim]"
+                "[dim]ℹ️  Run 'abc update' to sync with warehouse[/dim]"
             )
             console.print()
 

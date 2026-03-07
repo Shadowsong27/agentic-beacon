@@ -1,14 +1,14 @@
 [project]
-name = "beacon"
+name = "agentic-beacon"
 version = "0.2.0"
-description = "Distribute knowledge contexts and skills for AI-assisted development teams"
+description = "Agentic Beacon CLI - Distribute knowledge contexts and skills for AI-assisted development teams"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [
-    { name = "Beacon Contributors" }
+    { name = "Agentic Beacon Contributors" }
 ]
-keywords = ["ai", "agents", "context", "knowledge-management", "developer-tools"]
+keywords = ["ai", "agents", "agentic", "context", "knowledge-management", "developer-tools", "beacon"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -28,13 +28,13 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/Shadowsong27/agentic-engineering-warehouse-template"
-Documentation = "https://github.com/Shadowsong27/agentic-engineering-warehouse-template/tree/main/libs/beacon"
-Repository = "https://github.com/Shadowsong27/agentic-engineering-warehouse-template"
-Issues = "https://github.com/Shadowsong27/agentic-engineering-warehouse-template/issues"
+Homepage = "https://github.com/Shadowsong27/agentic-beacon"
+Documentation = "https://github.com/Shadowsong27/agentic-beacon/tree/main/libs/beacon"
+Repository = "https://github.com/Shadowsong27/agentic-beacon"
+Issues = "https://github.com/Shadowsong27/agentic-beacon/issues"
 
 [project.scripts]
-beacon = "beacon.cli:main"
+abc = "beacon.cli:main"
 
 [project.optional-dependencies]
 dev = [

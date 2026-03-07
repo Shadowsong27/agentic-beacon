@@ -170,7 +170,7 @@ contexts/
 Teams select which contexts to install in their projects:
 
 ```bash
-beacon setup --context global --context python --context data-platform
+abc setup --context global --context python --context data-platform
 ```
 
 Selected context files are copied to `.opencode/contexts/` in the project.
@@ -361,7 +361,7 @@ Established technical information and configurations.
 When projects select contexts during setup, only relevant knowledge is copied:
 
 ```bash
-beacon setup --context python --knowledge global --knowledge languages/python
+abc setup --context python --knowledge global --knowledge languages/python
 ```
 
 This copies only global and Python-specific knowledge to the project.
@@ -432,7 +432,7 @@ Guide agents through safe production deployment.
 Teams install skills to their projects:
 
 ```bash
-beacon setup --skill deploy-production
+abc setup --skill deploy-production
 ```
 """
         (self.warehouse_path / "skills" / "README.md").write_text(skills_readme)
@@ -474,7 +474,7 @@ pip install beacon --index-url https://your-pypi.local/simple/
 
 # Setup in project
 cd ~/my-project
-beacon setup --warehouse ~/warehouse --all
+abc setup --warehouse ~/warehouse --all
 
 # Content is copied to .opencode/ (gitignored)
 ```
@@ -484,7 +484,7 @@ beacon setup --warehouse ~/warehouse --all
 1. Make changes in warehouse repository
 2. Test with Beacon CLI
 3. Submit pull request
-4. After merge, teams run `beacon update` to sync
+4. After merge, teams run `abc update` to sync
 
 ## Maintenance
 
@@ -516,7 +516,7 @@ beacon setup --warehouse ~/warehouse --all
 ```bash
 # Test distribution
 cd ~/test-project
-beacon setup --warehouse ~/warehouse --all
+abc setup --warehouse ~/warehouse --all
 beacon status
 ```
 
@@ -557,7 +557,7 @@ pip install beacon --index-url https://your-pypi.local/simple/
 
 # Setup in your project
 cd ~/my-project
-beacon setup --warehouse ~/path/to/this/repo --all
+abc setup --warehouse ~/path/to/this/repo --all
 
 # Content is distributed to .opencode/ (gitignored)
 ```
@@ -587,10 +587,10 @@ git clone <this-repo-url>
 | Command | Description |
 |---------|-------------|
 | `beacon list` | Show available content |
-| `beacon setup` | Install content to project |
+| `abc setup` | Install content to project |
 | `beacon status` | Show what's installed |
 | `beacon delta` | Compare project with warehouse |
-| `beacon update` | Sync from warehouse |
+| `abc update` | Sync from warehouse |
 
 ## Documentation
 

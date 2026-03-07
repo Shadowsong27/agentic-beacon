@@ -1,8 +1,8 @@
-# Agentic Engineering Warehouse Template
+# Agentic Beacon
 
-A template repository for teams to establish standardized agentic coding practices with centralized context, knowledge, and skills management.
+**Agentic Beacon CLI (abc)** - A tool for distributing knowledge contexts, skills, and standards across AI-assisted development teams.
 
-> **Note:** This is an **opinionated and simple take** on agentic engineering. The landscape is rapidly evolving, and this template provides one possible approach focused on DRY principles and centralized collaboration. Adapt it to your team's needs.
+> **Note:** This is an **opinionated and simple take** on agentic engineering. The landscape is rapidly evolving, and this approach provides one possible solution focused on DRY principles and centralized collaboration. Adapt it to your team's needs.
 
 > **Built for OpenCode:** This design was developed with [OpenCode](https://opencode.ai) usage in mind. While we keep patterns as generic as possible, the experience with other AI coding agents may differ. The core concepts (centralized context, progressive disclosure, DRY) remain applicable across tools.
 
@@ -19,6 +19,36 @@ Instead of duplicating agent instructions, coding standards, and learned pattern
 - **Evolution is natural** - Adapt the structure as practices evolve, without rewriting every project
 
 This template provides just enough structure to enable collaboration without constraining how your team works with AI agents.
+
+### Why Simple File-Based Distribution?
+
+**Agentic coding doesn't need RAG complexity.** Unlike production systems requiring millisecond context retrieval, agents in development environments can afford simple file reads. Our approach:
+
+**Simple and adoptable:**
+- Plain markdown files (no vector databases)
+- Standard file operations (no embedding pipelines)
+- Git-based versioning (familiar workflow)
+- Zero infrastructure overhead
+
+**Fast enough for the use case:**
+- Boot context loads in milliseconds (AGENTS.md files)
+- Knowledge files accessed on-demand via pointers
+- Progressive disclosure reduces cognitive load
+- Agents already spend time reading code - context files add negligible overhead
+
+**Right-sized for organizational standards:**
+- Warehouse stores curated knowledge (~100s of KB, not GBs)
+- Content is explicitly structured, not semantically searched
+- Updates are infrequent (standards evolve slowly)
+- Human-readable for review and contribution
+
+**RAG would be overkill** for this use case:
+- Complex setup (vector DB, embeddings, indexing)
+- Higher maintenance burden
+- Adoption barrier for teams
+- Unnecessary for small, curated content sets
+
+When you need RAG (we don't): Semantic search across massive, rapidly-changing content where explicit pointers don't scale. For organizational standards distribution, simple beats complex.
 
 ## 📁 Repository Structure
 
@@ -56,17 +86,17 @@ agentic-engineering-warehouse-template/
 
 ### Quick Start with Beacon Init
 
-The **fastest way** to create your organization's warehouse is using `beacon init`:
+The **fastest way** to create your organization's warehouse is using `abc init`:
 
 ```bash
 # Install beacon
-pip install beacon --index-url https://your-homelab-pypi.local/simple/
+pip install agentic-beacon --index-url https://your-homelab-pypi.local/simple/
 
 # Or for public PyPI (when available):
-# pip install beacon
+# pip install agentic-beacon
 
 # Initialize your warehouse
-beacon init my-org-warehouse \
+abc init my-org-warehouse \
   --org "Acme Corp" \
   --languages python,typescript \
   --domains data-platform,web-services
@@ -94,28 +124,35 @@ This repository serves as:
 - **Beacon source code** - The CLI tool itself (`libs/beacon/`)
 - **Design guides** - Architecture and contribution patterns
 
-You can also fork this repository if you prefer, though `beacon init` is the recommended approach.
+You can also fork this repository if you prefer, though `abc init` is the recommended approach.
 
 ### For Organizations
 
-1. **Initialize warehouse**: Run `beacon init` to create warehouse structure
+1. **Initialize warehouse**: Run `abc init` to create warehouse structure
 2. **Customize**: Add your organization's contexts, knowledge, and skills
 3. **Deploy Beacon**: Publish to your homelab PyPI (see [deployment guide](./libs/beacon/HOMELAB_PUBLISH.md))
-4. **Distribute**: Teams install Beacon and use `beacon setup` in projects
+4. **Distribute**: Teams install Beacon and use `abc setup` in projects
 
 ### For Teams
 
-1. **Install Beacon**: `pip install beacon --index-url https://your-pypi.local/simple/`
-2. **Setup projects**: `beacon setup --warehouse ~/warehouse --all`
-3. **Stay in sync**: `beacon update` to get latest changes
-4. **Contribute**: Use `beacon delta` to find new patterns to share
+1. **Install Beacon**: `pip install agentic-beacon --index-url https://your-pypi.local/simple/`
+2. **Setup projects**: `abc setup --warehouse ~/warehouse --all`
+3. **Stay in sync**: `abc update` to get latest changes
+4. **Contribute**: Use `abc delta` to find new patterns to share
 
 ## 📚 Documentation
 
+### Conceptual Design (docs/)
 - **[Agentic Warehouse Design](./docs/agentic-warehouse-design.md)** - High-level design and architecture
+- **[Boot Context Design](./docs/boot-context-design/)** - AGENTS.md architecture and patterns
+  - [Three-Tier Context Model](./docs/boot-context-design/agents-md-architecture.md)
+  - [Project-Level AGENTS.md Design](./docs/boot-context-design/project-level-agents-design.md)
 - **[Spec-Driven Development](./docs/spec-driven-development.md)** - Structured approach to feature planning and implementation
-- **[Warehouse Contribution Guide](./docs/warehouse-contribution-guide.md)** - How to contribute to your organization's warehouse
-- **[Implementation Guide](./docs/implementation-guide.md)** - How to build CLI tools and workflows _(coming soon)_
+- **[CLI Implementation Summary](./docs/cli-implementation-summary.md)** - CLI design and architecture
+
+### Practical Guides (guides/)
+- **[CLI Quick Start](./guides/cli-quick-start.md)** - Installation and usage guide
+- **[Warehouse Contribution Guide](./guides/warehouse-contribution-guide.md)** - How to contribute to your organization's warehouse
 
 ## 🏗️ What Goes Where?
 
@@ -158,10 +195,11 @@ See the `examples/` directory for:
 - Example knowledge files
 - Reference skill structures
 
-## 🛠️ CLI Tooling - Beacon
+## 🛠️ CLI Tooling - Agentic Beacon (abc)
 
-This template includes **Beacon**, a Python CLI tool for distributing contexts, knowledge, and skills to projects.
+This repository includes **Agentic Beacon CLI**, a Python tool for distributing contexts, knowledge, and skills to projects.
 
+**Command:** `abc` (short for "Agentic Beacon CLI")  
 **Brand:** "Guide your agents with distributed knowledge"
 
 ### Installation
@@ -170,7 +208,7 @@ This template includes **Beacon**, a Python CLI tool for distributing contexts, 
 
 ```bash
 # Install from your organization's private PyPI
-pip install beacon --index-url https://your-homelab-pypi.local/simple/
+pip install agentic-beacon --index-url https://your-homelab-pypi.local/simple/
 ```
 
 #### Option 2: From Source (Development)
@@ -185,58 +223,58 @@ pip install -e .
 
 ```bash
 # List available content in warehouse
-beacon list
+abc list
 
 ### Quick Start
 
 ```bash
 # Initialize a new warehouse
-beacon init my-warehouse \
+abc init my-warehouse \
   --org "Your Organization" \
   --languages python,typescript \
   --domains data-platform
 
 # List available content in warehouse
-beacon list
+abc list
 
 # Setup in your project (interactive mode)
 cd ~/your-project
-beacon setup --warehouse ~/your-warehouse --interactive
+abc setup --warehouse ~/your-warehouse --interactive
 
 # Or install everything
-beacon setup --warehouse ~/your-warehouse --all
+abc setup --warehouse ~/your-warehouse --all
 
 # Check what's installed
-beacon status
+abc status
 
 # Compare with warehouse (find local changes)
-beacon delta --warehouse ~/your-warehouse
+abc delta --warehouse ~/your-warehouse
 
 # Update from warehouse
-beacon update --warehouse ~/your-warehouse
+abc update --warehouse ~/your-warehouse
 
 # Remove installation
-beacon clean
+abc clean
 ```
 
 ### Commands
 
 | Command | Description |
 |---------|-------------|
-| `beacon init` | **NEW** - Initialize a new warehouse repository |
-| `beacon list` | List all available warehouse content |
-| `beacon setup` | Install contexts/knowledge/skills to `.opencode/` |
-| `beacon status` | Show currently installed content |
-| `beacon delta` | Compare target with warehouse to find differences |
-| `beacon update` | Sync latest changes from warehouse |
-| `beacon clean` | Remove `.opencode/` directory |
+| `abc init` | **NEW** - Initialize a new warehouse repository |
+| `abc list` | List all available warehouse content |
+| `abc setup` | Install contexts/knowledge/skills to `.opencode/` |
+| `abc status` | Show currently installed content |
+| `abc delta` | Compare target with warehouse to find differences |
+| `abc update` | Sync latest changes from warehouse |
+| `abc clean` | Remove `.opencode/` directory |
 
 ### Init Command (New!)
 
-The `beacon init` command creates a complete warehouse structure:
+The `abc init` command creates a complete warehouse structure:
 
 ```bash
-beacon init my-warehouse --org "Acme Corp" --languages python,typescript --domains data-platform
+abc init my-warehouse --org "Acme Corp" --languages python,typescript --domains data-platform
 ```
 
 **Creates:**
@@ -249,7 +287,7 @@ beacon init my-warehouse --org "Acme Corp" --languages python,typescript --domai
 
 **Interactive mode:**
 ```bash
-beacon init my-warehouse
+abc init my-warehouse
 ? Organization name: Acme Corp
 ? Primary languages (comma-separated): python, typescript
 ? Primary domains (comma-separated): data-platform, web-services
@@ -259,10 +297,10 @@ beacon init my-warehouse
 
 ### Delta Command
 
-The `beacon delta` command helps you track changes and contributions:
+The `abc delta` command helps you track changes and contributions:
 
 ```bash
-beacon delta --warehouse ~/warehouse
+abc delta --warehouse ~/warehouse
 ```
 
 **Shows:**
@@ -307,8 +345,8 @@ uv publish  # Publishes to PyPI.org
 
 ### Technical Details
 
-- **Package Name:** `beacon`
-- **CLI Command:** `beacon`
+- **Package Name:** `agentic-beacon`
+- **CLI Command:** `abc`
 - **Python Required:** `>=3.12`
 - **License:** MIT
 - **Dependencies:** click, rich, pyyaml, loguru
@@ -321,19 +359,19 @@ cd warehouse/libs/beacon
 uv build && uv publish --publish-url https://pypi.homelab.local/simple/ --token xxx
 
 # 2. Developers install beacon
-pip install beacon --index-url https://pypi.homelab.local/simple/
+pip install agentic-beacon --index-url https://pypi.homelab.local/simple/
 
 # 3. Developers use in projects
 cd ~/my-project
-beacon setup --warehouse ~/warehouse --all
+abc setup --warehouse ~/warehouse --all
 echo ".opencode/" >> .gitignore
 
 # 4. Check for contributions
-beacon delta
+abc delta
 # Shows new files that could be contributed back
 
 # 5. Stay in sync
-beacon update
+abc update
 ```
 
 ## 📋 License
