@@ -218,7 +218,6 @@ agentic-beacon/
   - [Three-Tier Context Model](./docs/boot-context-design/agents-md-architecture.md)
   - [Project-Level AGENTS.md Design](./docs/boot-context-design/project-level-agents-design.md)
 - **[Spec-Driven Development](./docs/spec-driven-development.md)** - Structured approach to feature planning and implementation
-- **[CLI Implementation Summary](./docs/cli-implementation-summary.md)** - CLI design and architecture
 
 ### Practical Guides (guides/)
 - **[CLI Quick Start](./guides/cli-quick-start.md)** - Installation and usage guide
