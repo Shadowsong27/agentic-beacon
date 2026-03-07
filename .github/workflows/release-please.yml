@@ -1,0 +1,117 @@
+name: Release Please
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Release type'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+      custom_version:
+        description: 'Custom version (optional, e.g. 1.2.3)'
+        required: false
+        type: string
+      reason:
+        description: 'Reason for release (optional)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release_step.outputs['libs/beacon--release_created'] }}
+      tag_name: ${{ steps.release_step.outputs['libs/beacon--tag_name'] }}
+      version: ${{ steps.release_step.outputs['libs/beacon--version'] }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Manual force bump
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          set -euo pipefail
+          echo "Preparing manual release bump"
+
+          TARGET_PATH="libs/beacon"
+
+          # Choose commit type based on release_type
+          case "${{ inputs.release_type }}" in
+            major)
+              COMMIT_PREFIX="feat!"
+              ;;
+            minor)
+              COMMIT_PREFIX="feat"
+              ;;
+            patch)
+              COMMIT_PREFIX="fix"
+              ;;
+            *)
+              COMMIT_PREFIX="chore"
+              ;;
+          esac
+
+          # Create release trigger file
+          mkdir -p "$TARGET_PATH"
+          echo "manual-release-trigger: $(date -u +%FT%TZ)" > "$TARGET_PATH/.release-trigger"
+
+          # Configure git
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          COMMIT_MESSAGE="$COMMIT_PREFIX: force release for agentic-beacon"
+
+          if [ -n "${{ inputs.reason }}" ]; then
+            COMMIT_MESSAGE="$COMMIT_MESSAGE"$'\n\n'"Reason: ${{ inputs.reason }}"
+          fi
+
+          # Add Release-As footer if custom version specified
+          if [ -n "${{ inputs.custom_version }}" ]; then
+            COMMIT_MESSAGE="$COMMIT_MESSAGE"$'\n\n'"Release-As: ${{ inputs.custom_version }}"
+          fi
+
+          git add "$TARGET_PATH/.release-trigger"
+          git commit -m "$COMMIT_MESSAGE"
+          git push origin main
+
+          echo "Pushed manual force bump commit"
+
+      - uses: googleapis/release-please-action@v4
+        id: release_step
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+      - name: Output release info
+        if: steps.release_step.outputs.releases_created == 'true'
+        run: |
+          echo "## 🎉 Release Created" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Package**: agentic-beacon" >> $GITHUB_STEP_SUMMARY
+          echo "**Version**: ${{ steps.release_step.outputs['libs/beacon--version'] }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Tag**: ${{ steps.release_step.outputs['libs/beacon--tag_name'] }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "PyPI publish workflow will be triggered automatically." >> $GITHUB_STEP_SUMMARY
+
+  # Trigger PyPI publish when release is created
+  trigger-pypi-publish:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/publish-pypi.yml

@@ -1,0 +1,34 @@
+{
+  "include-component-in-tag": true,
+  "include-v-in-tag": true,
+  "tag-separator": "@",
+  "separate-pull-requests": true,
+  "bump-minor-pre-major": false,
+  "bump-patch-for-minor-pre-major": false,
+  "release-type": "python",
+  "packages": {
+    "libs/beacon": {
+      "package-name": "agentic-beacon",
+      "path": "libs/beacon",
+      "extra-files": [
+        "src/beacon/__init__.py"
+      ]
+    }
+  },
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "changelog-sections": [
+    { "type": "feat", "section": "Features", "bump": "minor" },
+    { "type": "fix", "section": "Bug Fixes", "bump": "patch" },
+    { "type": "feat!", "section": "Features", "bump": "major" },
+    { "type": "fix!", "section": "Bug Fixes", "bump": "major" },
+    { "type": "docs", "section": "Documentation", "bump": "none" },
+    { "type": "style", "section": "Style", "bump": "none" },
+    { "type": "refactor", "section": "Code Refactoring", "bump": "patch" },
+    { "type": "test", "section": "Tests", "bump": "none" },
+    { "type": "chore", "section": "Miscellaneous Chores", "bump": "none" },
+    { "type": "ci", "section": "CI/CD", "bump": "none" },
+    { "type": "perf", "section": "Performance", "bump": "patch" },
+    { "type": "deps", "section": "Dependencies", "bump": "none" },
+    { "type": "revert", "section": "Reverts", "bump": "patch" }
+  ]
+}
