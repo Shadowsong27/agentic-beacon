@@ -143,15 +143,144 @@ See the `examples/` directory for:
 - Example knowledge files
 - Reference skill structures
 
-## 🛠️ CLI Tooling
+## 🛠️ CLI Tooling - Beacon
 
-This template assumes you will build CLI tooling for:
-- **Installation**: `agentic-setup` to select and install contexts/skills
-- **Discovery**: `agentic-list skills` to browse available components
-- **Updates**: `agentic-update` to sync latest changes
-- **Contribution**: `agentic-contribute` to prepare pull requests
+This template includes **Beacon**, a Python CLI tool for distributing contexts, knowledge, and skills to projects.
 
-Reference implementation coming soon.
+**Brand:** "Guide your agents with distributed knowledge"
+
+### Installation
+
+#### Option 1: From Homelab PyPI (Recommended)
+
+```bash
+# Install from your organization's private PyPI
+pip install beacon --index-url https://your-homelab-pypi.local/simple/
+```
+
+#### Option 2: From Source (Development)
+
+```bash
+# From your forked warehouse repository
+cd your-org-warehouse/libs/beacon
+pip install -e .
+```
+
+### Quick Start
+
+```bash
+# List available content in warehouse
+beacon list
+
+# Setup in your project (interactive mode)
+cd ~/your-project
+beacon setup --warehouse ~/your-warehouse --interactive
+
+# Or install everything
+beacon setup --warehouse ~/your-warehouse --all
+
+# Check what's installed
+beacon status
+
+# Compare with warehouse (find local changes)
+beacon delta --warehouse ~/your-warehouse
+
+# Update from warehouse
+beacon update --warehouse ~/your-warehouse
+
+# Remove installation
+beacon clean
+```
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `beacon list` | List all available warehouse content |
+| `beacon setup` | Install contexts/knowledge/skills to `.opencode/` |
+| `beacon status` | Show currently installed content |
+| `beacon delta` | **NEW** - Compare target with warehouse to find differences |
+| `beacon update` | Sync latest changes from warehouse |
+| `beacon clean` | Remove `.opencode/` directory |
+
+### Delta Command (New!)
+
+The `beacon delta` command helps you track changes and contributions:
+
+```bash
+beacon delta --warehouse ~/warehouse
+```
+
+**Shows:**
+- ✅ **New files** in your project (potential contributions back to warehouse)
+- ⚠️  **Modified files** in your project (local customizations)
+- ℹ️  **Missing files** in your project (available in warehouse but not installed)
+
+**Use cases:**
+- Before contributing: See what new patterns you've created
+- After customizing: Understand your local changes
+- Regular audits: Keep your project in sync with warehouse
+
+### Deployment
+
+**For Warehouse Maintainers:**
+
+```bash
+# Build the package
+cd libs/beacon
+uv build
+
+# Publish to your homelab PyPI
+uv publish \
+  --publish-url https://your-homelab-pypi.local/simple/ \
+  --token your-api-token
+```
+
+**For Public PyPI (when ready):**
+
+```bash
+cd libs/beacon
+uv build
+uv publish  # Publishes to PyPI.org
+```
+
+### Documentation
+
+- **[Quick Start Guide](./libs/beacon/QUICKSTART.md)** - Get started in 5 minutes
+- **[Homelab Deployment](./libs/beacon/HOMELAB_PUBLISH.md)** - Deploy to private PyPI
+- **[Complete README](./libs/beacon/README.md)** - Full CLI documentation
+- **[Project Status](./libs/beacon/PROJECT_COMPLETE.md)** - Implementation details
+
+### Technical Details
+
+- **Package Name:** `beacon`
+- **CLI Command:** `beacon`
+- **Python Required:** `>=3.12`
+- **License:** MIT
+- **Dependencies:** click, rich, pyyaml, loguru
+
+### Workflow Example
+
+```bash
+# 1. Organization deploys beacon to homelab PyPI
+cd warehouse/libs/beacon
+uv build && uv publish --publish-url https://pypi.homelab.local/simple/ --token xxx
+
+# 2. Developers install beacon
+pip install beacon --index-url https://pypi.homelab.local/simple/
+
+# 3. Developers use in projects
+cd ~/my-project
+beacon setup --warehouse ~/warehouse --all
+echo ".opencode/" >> .gitignore
+
+# 4. Check for contributions
+beacon delta
+# Shows new files that could be contributed back
+
+# 5. Stay in sync
+beacon update
+```
 
 ## 📋 License
 
@@ -160,4 +289,4 @@ Reference implementation coming soon.
 ---
 
 **Template Version:** 1.0.0  
-**Last Updated:** 2026-03-06
+**Last Updated:** 2026-03-07

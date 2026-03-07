@@ -19,6 +19,8 @@ dist/
 build/
 *.pyc
 __pycache__/
+.venv/
+*.egg-info/
 
 # Logs
 *.log
@@ -27,3 +29,6 @@ logs/
 # Environment
 .env
 .env.local
+
+# Distributed warehouse content (project-specific)
+.opencode/

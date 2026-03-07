@@ -1,58 +1,69 @@
-# Global Context
+# Global Context - PLACEHOLDER
 
-Universal practices applicable to all projects using agentic coding.
-
-**Last Updated:** 2026-03-06
+**This is a template file. Replace with your organization's actual global context when forking.**
 
 ---
 
-## Spec-Driven Development
+## What Goes Here
 
-When implementing complex features, follow the two-phase approach:
+Universal practices and standards that apply to ALL projects in your organization:
 
-**Phase 1: Technical Planning** - Create detailed spec with acceptance criteria  
-**Phase 2: Task Breakdown** - Decompose into granular implementation tasks
-
-**Read:** [Spec-driven development guide](~/.agentic-context/knowledge/global/decisions/spec-driven-development.md)
+- Commit conventions
+- Code review requirements  
+- Testing standards
+- Security policies
+- Documentation requirements
+- Session handoff patterns
+- Progressive disclosure guidelines
 
 ---
 
+## Instructions for Customization
+
+1. **Replace this file** with your organization's actual standards
+2. **Keep it concise** - Use progressive disclosure (brief summary + link to detailed knowledge)
+3. **Link to knowledge files** in `knowledge/global/` for details
+4. **Update regularly** - Keep this file current as practices evolve
+
+---
+
+## Example Structure
+
+```markdown
 ## Commit Conventions
 
-Use Conventional Commits format for all commits.
+**Brief:** Use Conventional Commits format for all commits.
 
 **Format:** `<type>(<scope>): <description>`
 
-**Common types:** feat, fix, refactor, docs, test, chore
-
-**Read:** [Conventional commits guide](~/.agentic-context/knowledge/global/decisions/conventional-commits.md)
+**Read:** [Full guide](knowledge/global/decisions/conventional-commits.md)
 
 ---
 
-## Session Handoffs
+## Code Review Process
 
-When token consumption is high or context is too large for one session:
+**Brief:** All changes require PR review from at least one team member.
 
-1. Create checkpoint with current state
-2. Document what's complete and what's next
-3. New session picks up from checkpoint
-
-**See:** [Session handoff patterns](~/.agentic-context/knowledge/global/lessons/session-handoff-patterns.md)
+**Read:** [Review guidelines](knowledge/global/lessons/code-review-patterns.md)
 
 ---
 
-## Progressive Disclosure
+## Testing Standards
 
-Keep context files minimal with pointers to detailed knowledge:
+**Brief:** Write tests for all new features and bug fixes.
 
-- **In context files:** 1-2 sentence summary + pointer
-- **In knowledge files:** Full explanation with examples
-
-**Example:**
-```markdown
-## Rule Name
-
-**Rule:** Brief statement of the rule.
-
-**Read:** [Detailed explanation](~/.agentic-context/knowledge/.../file.md)
+**Read:** [Testing guide](knowledge/global/decisions/testing-strategy.md)
 ```
+
+---
+
+## Next Steps
+
+1. Fork this template repository
+2. Replace this placeholder with your organization's content
+3. Add corresponding knowledge files in `knowledge/global/`
+4. Distribute to your team using the CLI: `agentic setup --all`
+
+---
+
+**Last Updated:** [Your Date]
