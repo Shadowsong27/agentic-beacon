@@ -54,46 +54,61 @@ agentic-engineering-warehouse-template/
 
 ## 🚀 Getting Started
 
-### How to Use This Template
+### Quick Start with Beacon Init
 
-**Step 1: Create Your Organization's Warehouse**
-
-Click the **"Use this template"** button on GitHub to create your organization's central repository:
+The **fastest way** to create your organization's warehouse is using `beacon init`:
 
 ```bash
-# Template repository (what you're looking at):
-agentic-engineering-warehouse-template
+# Install beacon
+pip install beacon --index-url https://your-homelab-pypi.local/simple/
 
-# Your organization's warehouse (created from template):
-your-org-agentic-engineering-warehouse
+# Or for public PyPI (when available):
+# pip install beacon
+
+# Initialize your warehouse
+beacon init my-org-warehouse \
+  --org "Acme Corp" \
+  --languages python,typescript \
+  --domains data-platform,web-services
+
+# Result: Complete warehouse structure created instantly!
 ```
 
-**Step 2: Name Your Warehouse**
+This creates:
+- ✅ Complete directory structure (contexts, knowledge, skills, docs)
+- ✅ Placeholder files with instructions
+- ✅ Language and domain-specific directories
+- ✅ Git repository with initial commit
+- ✅ README and documentation
 
-When creating from template, name it without the `-template` suffix:
-- ✅ Good: `acme-agentic-warehouse`, `mycompany-engineering-standards`
-- ❌ Bad: `acme-agentic-warehouse-template` (confusing - template is just the starting point)
+**Next steps:**
+1. `cd my-org-warehouse`
+2. Customize contexts and knowledge
+3. `git remote add origin <your-repo-url>`
+4. `git push -u origin main`
 
-**Step 3: Customize for Your Organization**
+### Alternative: Use This Repository as Reference
 
-1. Update contexts with your organization's practices
-2. Add your technology stack's knowledge files
-3. Create skills for your workflows
-4. Set up CLI tooling for distribution (optional)
+This repository serves as:
+- **Reference documentation** - Examples of warehouse structure
+- **Beacon source code** - The CLI tool itself (`libs/beacon/`)
+- **Design guides** - Architecture and contribution patterns
+
+You can also fork this repository if you prefer, though `beacon init` is the recommended approach.
 
 ### For Organizations
 
-1. **Use this template** to create your organization's central warehouse repository
-2. **Customize** contexts, knowledge, and skills for your teams
-3. **Set up CLI tooling** for installation and updates (see Implementation Guide)
-4. **Establish contribution workflow** for teams to give back improvements
+1. **Initialize warehouse**: Run `beacon init` to create warehouse structure
+2. **Customize**: Add your organization's contexts, knowledge, and skills
+3. **Deploy Beacon**: Publish to your homelab PyPI (see [deployment guide](./libs/beacon/HOMELAB_PUBLISH.md))
+4. **Distribute**: Teams install Beacon and use `beacon setup` in projects
 
 ### For Teams
 
-1. **Browse** available contexts, knowledge, and skills in your organization's warehouse
-2. **Install** relevant components to your project using CLI tools
-3. **Reference** the [design guide](./docs/agentic-warehouse-design.md) for usage patterns
-4. **Contribute** improvements back via pull requests
+1. **Install Beacon**: `pip install beacon --index-url https://your-pypi.local/simple/`
+2. **Setup projects**: `beacon setup --warehouse ~/warehouse --all`
+3. **Stay in sync**: `beacon update` to get latest changes
+4. **Contribute**: Use `beacon delta` to find new patterns to share
 
 ## 📚 Documentation
 
@@ -172,6 +187,18 @@ pip install -e .
 # List available content in warehouse
 beacon list
 
+### Quick Start
+
+```bash
+# Initialize a new warehouse
+beacon init my-warehouse \
+  --org "Your Organization" \
+  --languages python,typescript \
+  --domains data-platform
+
+# List available content in warehouse
+beacon list
+
 # Setup in your project (interactive mode)
 cd ~/your-project
 beacon setup --warehouse ~/your-warehouse --interactive
@@ -196,14 +223,41 @@ beacon clean
 
 | Command | Description |
 |---------|-------------|
+| `beacon init` | **NEW** - Initialize a new warehouse repository |
 | `beacon list` | List all available warehouse content |
 | `beacon setup` | Install contexts/knowledge/skills to `.opencode/` |
 | `beacon status` | Show currently installed content |
-| `beacon delta` | **NEW** - Compare target with warehouse to find differences |
+| `beacon delta` | Compare target with warehouse to find differences |
 | `beacon update` | Sync latest changes from warehouse |
 | `beacon clean` | Remove `.opencode/` directory |
 
-### Delta Command (New!)
+### Init Command (New!)
+
+The `beacon init` command creates a complete warehouse structure:
+
+```bash
+beacon init my-warehouse --org "Acme Corp" --languages python,typescript --domains data-platform
+```
+
+**Creates:**
+- ✅ Complete directory structure (contexts/, knowledge/, skills/, docs/)
+- ✅ Placeholder files with detailed instructions
+- ✅ Language-specific directories (e.g., knowledge/languages/python/)
+- ✅ Domain-specific directories (e.g., knowledge/domains/data-platform/)
+- ✅ Git repository with initial commit
+- ✅ README and documentation
+
+**Interactive mode:**
+```bash
+beacon init my-warehouse
+? Organization name: Acme Corp
+? Primary languages (comma-separated): python, typescript
+? Primary domains (comma-separated): data-platform, web-services
+? Initialize git repository? [Y/n]: y
+✓ Warehouse initialized successfully!
+```
+
+### Delta Command
 
 The `beacon delta` command helps you track changes and contributions:
 

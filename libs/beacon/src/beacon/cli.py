@@ -2,6 +2,7 @@
 
 import sys
 from pathlib import Path
+from typing import List, Optional
 
 import click
 from loguru import logger
@@ -9,11 +10,12 @@ from rich.console import Console
 from rich.table import Table
 
 from .distributor import WarehouseDistributor
+from .initializer import WarehouseInitializer
 
 console = Console()
 
 
-def find_warehouse_root() -> Path | None:
+def find_warehouse_root() -> Optional[Path]:
     """
     Find warehouse root by looking for warehouse markers.
 
@@ -66,6 +68,137 @@ def main(*, verbose: bool) -> None:
 
 
 @main.command()
+@click.argument("name", type=str)
+@click.option(
+    "--path",
+    type=click.Path(path_type=Path),
+    help="Path where warehouse will be created (default: current directory)",
+)
+@click.option(
+    "--org",
+    type=str,
+    help="Organization name (e.g., 'Acme Corp')",
+)
+@click.option(
+    "--languages",
+    type=str,
+    help="Primary languages, comma-separated (e.g., 'python,typescript')",
+)
+@click.option(
+    "--domains",
+    type=str,
+    help="Primary domains, comma-separated (e.g., 'data-platform,web-services')",
+)
+@click.option(
+    "--no-git",
+    is_flag=True,
+    help="Skip git initialization",
+)
+@click.option(
+    "--no-interactive",
+    is_flag=True,
+    help="Skip interactive prompts (use defaults or provided options)",
+)
+def init(
+    *,
+    name: str,
+    path: Optional[Path],
+    org: Optional[str],
+    languages: Optional[str],
+    domains: Optional[str],
+    no_git: bool,
+    no_interactive: bool,
+) -> None:
+    """
+    Initialize a new warehouse repository.
+    
+    Creates a complete warehouse structure with contexts, knowledge, and skills.
+    
+    Example:
+        beacon init my-warehouse
+        beacon init my-warehouse --org "Acme Corp" --languages python,typescript
+    """
+    # Determine warehouse path
+    warehouse_path = (path or Path.cwd()) / name
+    
+    # Interactive prompts if not disabled
+    if not no_interactive:
+        console.print("\n[bold]Initialize New Warehouse[/bold]")
+        console.print(f"[dim]Creating warehouse at: {warehouse_path}[/dim]\n")
+        
+        if not org:
+            org = click.prompt(
+                "Organization name",
+                default="Your Organization",
+                type=str,
+            )
+        
+        if not languages:
+            languages = click.prompt(
+                "Primary languages (comma-separated)",
+                default="python",
+                type=str,
+            )
+        
+        if not domains:
+            domains = click.prompt(
+                "Primary domains (comma-separated)",
+                default="",
+                type=str,
+            )
+        
+        if not no_git:
+            init_git = click.confirm("Initialize git repository?", default=True)
+            no_git = not init_git
+    
+    # Set defaults
+    org = org or "Your Organization"
+    languages_list = [lang.strip() for lang in (languages or "").split(",") if lang.strip()]
+    domains_list = [domain.strip() for domain in (domains or "").split(",") if domain.strip()]
+    
+    # Create initializer and init warehouse
+    try:
+        initializer = WarehouseInitializer(warehouse_path=warehouse_path)
+        result = initializer.init(
+            org_name=org,
+            languages=languages_list if languages_list else None,
+            domains=domains_list if domains_list else None,
+            init_git=not no_git,
+        )
+        
+        # Display results
+        console.print("\n[bold green]✓ Warehouse initialized successfully![/bold green]\n")
+        console.print(f"  [blue]Location:[/blue] {result['warehouse_path']}")
+        console.print(f"  [blue]Organization:[/blue] {org}")
+        
+        if languages_list:
+            console.print(f"  [blue]Languages:[/blue] {', '.join(languages_list)}")
+        
+        if domains_list:
+            console.print(f"  [blue]Domains:[/blue] {', '.join(domains_list)}")
+        
+        if result['git_initialized']:
+            console.print(f"  [blue]Git:[/blue] Initialized with initial commit")
+        
+        # Next steps
+        console.print("\n[bold]Next Steps:[/bold]")
+        console.print(f"  1. cd {warehouse_path}")
+        console.print("  2. Customize contexts, knowledge, and skills")
+        console.print("  3. git remote add origin <your-repo-url>")
+        console.print("  4. git push -u origin main")
+        console.print("\n[bold]Usage:[/bold]")
+        console.print(f"  beacon setup --warehouse {warehouse_path} --all")
+        
+    except ValueError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
+    except Exception as e:
+        console.print(f"[red]Error:[/red] Failed to initialize warehouse: {e}")
+        logger.exception("Initialization failed")
+        sys.exit(1)
+
+
+@main.command()
 @click.option(
     "--warehouse",
     type=click.Path(exists=True, file_okay=False, path_type=Path),
@@ -111,8 +244,8 @@ def main(*, verbose: bool) -> None:
 )
 def setup(
     *,
-    warehouse: Path | None,
-    project: Path | None,
+    warehouse: Optional[Path],
+    project: Optional[Path],
     contexts: tuple[str, ...],
     knowledge_scopes: tuple[str, ...],
     skills: tuple[str, ...],
@@ -220,7 +353,7 @@ def setup(
     type=click.Path(exists=True, file_okay=False, path_type=Path),
     help="Path to warehouse repository (auto-detected if not provided)",
 )
-def update(*, project: Path | None, warehouse: Path | None) -> None:
+def update(*, project: Optional[Path], warehouse: Optional[Path]) -> None:
     """Update existing .opencode content from warehouse."""
     warehouse_root = warehouse or find_warehouse_root()
     if not warehouse_root:
@@ -264,7 +397,7 @@ def update(*, project: Path | None, warehouse: Path | None) -> None:
     type=click.Path(exists=True, file_okay=False, path_type=Path),
     help="Path to warehouse repository (auto-detected if not provided)",
 )
-def list(*, warehouse: Path | None) -> None:
+def list(*, warehouse: Optional[Path]) -> None:
     """List available warehouse content."""
     warehouse_root = warehouse or find_warehouse_root()
     if not warehouse_root:
@@ -312,7 +445,7 @@ def list(*, warehouse: Path | None) -> None:
     help="Path to project root (auto-detected if not provided)",
 )
 @click.confirmation_option(prompt="Are you sure you want to remove .opencode?")
-def clean(*, project: Path | None) -> None:
+def clean(*, project: Optional[Path]) -> None:
     """Remove .opencode directory from project."""
     project_root = project or find_project_root()
     warehouse_root = find_warehouse_root()
@@ -340,7 +473,7 @@ def clean(*, project: Path | None) -> None:
     type=click.Path(exists=True, file_okay=False, path_type=Path),
     help="Path to project root (auto-detected if not provided)",
 )
-def status(*, project: Path | None) -> None:
+def status(*, project: Optional[Path]) -> None:
     """Show current warehouse installation status."""
     project_root = project or find_project_root()
     opencode_dir = project_root / ".opencode"
@@ -395,7 +528,7 @@ def status(*, project: Path | None) -> None:
     type=click.Path(exists=True, file_okay=False, path_type=Path),
     help="Path to warehouse repository (auto-detected if not provided)",
 )
-def delta(*, project: Path | None, warehouse: Path | None) -> None:
+def delta(*, project: Optional[Path], warehouse: Optional[Path]) -> None:
     """
     Compare target installation with warehouse to find differences.
     
@@ -486,8 +619,8 @@ def delta(*, project: Path | None, warehouse: Path | None) -> None:
 
 
 def _interactive_select(
-    prompt: str, options: list[str], *, default_all: bool = False
-) -> list[str]:
+    prompt: str, options: List[str], *, default_all: bool = False
+) -> List[str]:
     """Interactive selection of options."""
     if not options:
         return []
