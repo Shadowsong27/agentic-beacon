@@ -90,7 +90,7 @@ jobs:
         id: version
         working-directory: libs/beacon
         run: |
-          VERSION=$(uv run python -c "import tomli; print(tomli.load(open('pyproject.toml', 'rb'))['project']['version'])")
+          VERSION=$(grep '^version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Publish summary
