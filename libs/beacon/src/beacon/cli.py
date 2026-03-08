@@ -9,8 +9,10 @@ from loguru import logger
 from rich.console import Console
 from rich.table import Table
 
+from .core.settings import WarehouseSettings, validate_beacon_directory
 from .distributor import WarehouseDistributor
 from .initializer import WarehouseInitializer
+from .warehouse import WarehouseValidator
 
 console = Console()
 
@@ -67,7 +69,13 @@ def main(*, verbose: bool) -> None:
         logger.add(sys.stderr, level="INFO")
 
 
-@main.command()
+@main.group()
+def warehouse() -> None:
+    """Warehouse management commands."""
+    pass
+
+
+@warehouse.command()
 @click.argument("name", type=str)
 @click.option(
     "--path",
@@ -115,8 +123,8 @@ def init(
     Creates a complete warehouse structure with contexts, knowledge, and skills.
     
     Example:
-        abc init my-warehouse
-        abc init my-warehouse --org "Acme Corp" --languages python,typescript
+        abc warehouse init my-warehouse
+        abc warehouse init my-warehouse --org "Acme Corp" --languages python,typescript
     """
     # Determine warehouse path
     warehouse_path = (path or Path.cwd()) / name
@@ -198,147 +206,299 @@ def init(
         sys.exit(1)
 
 
+@warehouse.command()
+@click.option(
+    "--path",
+    type=click.Path(path_type=Path),
+    help="Path to local warehouse directory",
+)
+def connect(*, path: Optional[Path]) -> None:
+    """
+    Connect project to a local warehouse.
+    
+    Creates .agentic-beacon/config.toml with warehouse connection.
+    The warehouse is validated before accepting the connection.
+    
+    Example:
+        abc warehouse connect --path ~/org-warehouse
+        abc warehouse connect  # Interactive mode
+    """
+    # Interactive prompt if path not provided
+    if not path:
+        console.print("\n[bold]Connect to Warehouse[/bold]")
+        console.print("[dim]Enter the path to your local warehouse directory[/dim]\n")
+        
+        path_str = click.prompt(
+            "Warehouse path",
+            type=str,
+        )
+        path = Path(path_str)
+    
+    # Expand and resolve path
+    warehouse_path = path.expanduser().resolve()
+    
+    console.print(f"\n[blue]Validating:[/blue] {warehouse_path}")
+    
+    # Validate warehouse structure
+    validator = WarehouseValidator()
+    validation_result = validator.validate(str(warehouse_path))
+    
+    if not validation_result.valid:
+        console.print("\n[red bold]✗ Invalid warehouse structure[/red bold]\n")
+        for error in validation_result.errors:
+            console.print(f"  [red]✗[/red] {error}")
+        console.print("\n[dim]See examples/sample-warehouse for a valid warehouse structure[/dim]")
+        sys.exit(1)
+    
+    console.print("[green]✓[/green] Warehouse structure validated")
+    
+    # Create .agentic-beacon directory if it doesn't exist
+    beacon_dir = Path.cwd() / ".agentic-beacon"
+    beacon_dir.mkdir(exist_ok=True)
+    
+    # Save connection configuration
+    try:
+        settings = WarehouseSettings.from_path(warehouse_path)
+        console.print("[green]✓[/green] Connection saved")
+        
+        # Success message
+        console.print(f"\n[bold green]✓ Connected to warehouse[/bold green]")
+        console.print(f"  [blue]Location:[/blue] {warehouse_path}")
+        
+        # Next steps
+        console.print("\n[bold]Next Steps:[/bold]")
+        console.print("  1. Run 'abc setup' to configure artifacts")
+        console.print("  2. Run 'abc sync' to download artifacts")
+        
+    except Exception as e:
+        console.print(f"\n[red]Error:[/red] Failed to save connection: {e}")
+        logger.exception("Connection failed")
+        sys.exit(1)
+
+
 @main.command()
 @click.option(
-    "--warehouse",
-    type=click.Path(exists=True, file_okay=False, path_type=Path),
-    help="Path to warehouse repository (auto-detected if not provided)",
-)
-@click.option(
-    "--project",
-    type=click.Path(exists=True, file_okay=False, path_type=Path),
-    help="Path to project root (auto-detected if not provided)",
-)
-@click.option(
-    "--context",
-    "-c",
-    "contexts",
-    multiple=True,
-    help="Context to install (e.g., 'global', 'python'). Can be specified multiple times.",
-)
-@click.option(
-    "--knowledge",
-    "-k",
-    "knowledge_scopes",
-    multiple=True,
-    help="Knowledge scope to install (e.g., 'global', 'languages/python'). Can be specified multiple times.",
-)
-@click.option(
-    "--skill",
-    "-s",
-    "skills",
-    multiple=True,
-    help="Skill to install (e.g., 'example-skill'). Can be specified multiple times.",
-)
-@click.option(
-    "--all",
-    "install_all",
+    "--manual",
     is_flag=True,
-    help="Install all available contexts, knowledge, and skills",
+    help="Create empty beacon.yaml template without interactive prompts",
 )
 @click.option(
-    "--interactive",
-    "-i",
+    "--agent-assisted",
     is_flag=True,
-    help="Interactive mode to select content",
+    help="Install project-setup skill for agent-assisted configuration",
 )
-def setup(
-    *,
-    warehouse: Optional[Path],
-    project: Optional[Path],
-    contexts: tuple[str, ...],
-    knowledge_scopes: tuple[str, ...],
-    skills: tuple[str, ...],
-    install_all: bool,
-    interactive: bool,
-) -> None:
-    """Setup warehouse content in project .opencode directory."""
-    # Find warehouse and project roots
-    warehouse_root = warehouse or find_warehouse_root()
-    if not warehouse_root:
-        console.print(
-            "[red]Error:[/red] Could not find warehouse root. "
-            "Specify --warehouse or run from warehouse directory."
-        )
+def setup(*, manual: bool, agent_assisted: bool) -> None:
+    """
+    Initialize project artifact configuration.
+    
+    Creates beacon.yaml file that declares which artifacts this project uses.
+    Supports three workflows: agent-assisted, manual, or skip.
+    
+    Example:
+        abc setup --manual  # Create empty template
+        abc setup           # Interactive mode
+    """
+    # Validate mutually exclusive flags
+    if manual and agent_assisted:
+        console.print("[red]Error:[/red] --manual and --agent-assisted are mutually exclusive")
         sys.exit(1)
-
-    project_root = project or find_project_root()
-
-    console.print(f"[blue]Warehouse:[/blue] {warehouse_root}")
-    console.print(f"[blue]Project:[/blue] {project_root}")
-    console.print()
-
-    # Create distributor
-    distributor = WarehouseDistributor(
-        warehouse_root=warehouse_root, target_root=project_root
-    )
-
-    # Get available content
-    available = distributor.list_available()
-
-    # Determine what to install
-    if interactive:
-        contexts_list = _interactive_select(
-            "Select contexts:", available["contexts"], default_all=True
-        )
-        knowledge_list = _interactive_select(
-            "Select knowledge scopes:", available["knowledge"], default_all=True
-        )
-        skills_list = _interactive_select(
-            "Select skills:", available["skills"], default_all=False
-        )
-    elif install_all:
-        contexts_list = available["contexts"]
-        knowledge_list = available["knowledge"]
-        skills_list = available["skills"]
+    
+    # Check for .agentic-beacon directory
+    beacon_dir = Path.cwd() / ".agentic-beacon"
+    if not beacon_dir.exists():
+        console.print("[red]Error:[/red] No warehouse connected.")
+        console.print("Run 'abc warehouse connect' first to connect to a warehouse.")
+        sys.exit(1)
+    
+    # Check for config.toml (warehouse connection)
+    config_file = beacon_dir / "config.toml"
+    if not config_file.exists():
+        console.print("[red]Error:[/red] No warehouse connected.")
+        console.print("Run 'abc warehouse connect --path <warehouse>' first.")
+        sys.exit(1)
+    
+    beacon_yaml = beacon_dir / "beacon.yaml"
+    
+    # Check if beacon.yaml already exists
+    if beacon_yaml.exists():
+        console.print("[yellow]Note:[/yellow] beacon.yaml already exists")
+        if not click.confirm("Overwrite existing configuration?", default=False):
+            console.print("Setup cancelled.")
+            sys.exit(0)
+    
+    # Determine workflow
+    workflow = None
+    if manual:
+        workflow = "manual"
+    elif agent_assisted:
+        workflow = "agent-assisted"
     else:
-        contexts_list = list(contexts)
-        knowledge_list = list(knowledge_scopes)
-        skills_list = list(skills)
-
-    # Validate selections
-    if not contexts_list and not knowledge_list and not skills_list:
-        console.print(
-            "[yellow]Warning:[/yellow] No content selected. Use --all, --interactive, "
-            "or specify content with --context, --knowledge, --skill"
+        # Interactive mode
+        console.print("\n[bold]Setup Project Configuration[/bold]")
+        console.print("[dim]Choose how to configure artifacts for this project:[/dim]\n")
+        console.print("  1. [cyan]Agent-assisted[/cyan] - Install project-setup skill for AI agent")
+        console.print("  2. [green]Manual[/green] - Create empty template to edit yourself")
+        console.print("  3. [yellow]Skip[/yellow] - Configure later\n")
+        
+        choice = click.prompt(
+            "Select workflow",
+            type=click.Choice(["1", "2", "3"], case_sensitive=False),
+            default="2",
         )
+        
+        if choice == "1":
+            workflow = "agent-assisted"
+        elif choice == "2":
+            workflow = "manual"
+        else:  # choice == "3"
+            console.print("Skipped setup. Run 'abc setup' again when ready.")
+            sys.exit(0)
+    
+    # Execute workflow
+    if workflow == "manual":
+        _create_beacon_template(beacon_yaml)
+        console.print("\n[bold green]✓ Created beacon.yaml template[/bold green]")
+        console.print(f"  [blue]Location:[/blue] {beacon_yaml}")
+        console.print("\n[bold]Next Steps:[/bold]")
+        console.print("  1. Edit .agentic-beacon/beacon.yaml to specify artifacts")
+        console.print("  2. Run 'abc sync' to download artifacts from warehouse")
+        
+    elif workflow == "agent-assisted":
+        # TODO: Implement skill installation (Phase 5)
+        _create_beacon_template(beacon_yaml)
+        console.print("\n[bold green]✓ Created beacon.yaml template[/bold green]")
+        console.print("[yellow]Note:[/yellow] Agent-assisted workflow (skill installation) not yet implemented")
+        console.print(f"  [blue]Location:[/blue] {beacon_yaml}")
+
+
+def _create_beacon_template(path: Path) -> None:
+    """Create empty beacon.yaml template with commented examples."""
+    template = """artifacts:
+  knowledge: []
+    # Examples:
+    # - languages/python/**/*.md
+    # - infrastructure/docker-standards.md
+    
+  skills: []
+    # Examples:
+    # - code-review
+    # - generate-unit-tests
+    
+  contexts: []
+    # Examples:
+    # - backend-microservice
+    # - data-platform
+"""
+    path.write_text(template)
+
+
+@main.command()
+def sync() -> None:
+    """
+    Sync artifacts from warehouse to project.
+    
+    Reads .agentic-beacon/beacon.yaml and copies specified artifacts
+    from the connected warehouse to .agentic-beacon/artifacts/ directory.
+    
+    Example:
+        abc sync  # Sync all artifacts in beacon.yaml
+    """
+    # Check for .agentic-beacon directory
+    beacon_dir = Path.cwd() / ".agentic-beacon"
+    if not beacon_dir.exists():
+        console.print("[red]Error:[/red] No .agentic-beacon directory found.")
+        console.print("Run 'abc warehouse connect' to connect to a warehouse.")
         sys.exit(1)
-
-    # Display what will be installed
-    console.print("[bold]Installing:[/bold]")
-    if contexts_list:
-        console.print(f"  [green]Contexts:[/green] {', '.join(contexts_list)}")
-    if knowledge_list:
-        console.print(f"  [green]Knowledge:[/green] {', '.join(knowledge_list)}")
-    if skills_list:
-        console.print(f"  [green]Skills:[/green] {', '.join(skills_list)}")
-    console.print()
-
-    # Perform distribution
+    
+    # Check for config.toml (warehouse connection)
+    config_file = beacon_dir / "config.toml"
+    if not config_file.exists():
+        console.print("[red]Error:[/red] No warehouse connected.")
+        console.print("Run 'abc warehouse connect --path <warehouse>' first.")
+        sys.exit(1)
+    
+    # Check for beacon.yaml
+    beacon_yaml = beacon_dir / "beacon.yaml"
+    if not beacon_yaml.exists():
+        console.print("[red]Error:[/red] No beacon.yaml found.")
+        console.print("Run 'abc setup' to create artifact configuration.")
+        sys.exit(1)
+    
+    # Load warehouse settings
     try:
-        result = distributor.setup(
-            contexts=contexts_list,
-            knowledge_scopes=knowledge_list,
-            skills=skills_list,
+        from .core.settings import WarehouseSettings, BeaconSettings
+        from .core.sync import SyncEngine
+        
+        warehouse_settings = WarehouseSettings()
+        warehouse_path = Path(warehouse_settings.warehouse.local_path)
+        
+        # Load beacon.yaml
+        beacon_settings = BeaconSettings.from_yaml(beacon_yaml)
+        
+        # Check if there are any artifacts to sync
+        total_artifacts = (
+            len(beacon_settings.artifacts.knowledge) +
+            len(beacon_settings.artifacts.skills) +
+            len(beacon_settings.artifacts.contexts)
         )
-
-        # Save configuration
-        distributor._save_config(
-            contexts=contexts_list,
-            knowledge_scopes=knowledge_list,
-            skills=skills_list,
+        
+        if total_artifacts == 0:
+            console.print("[yellow]No artifacts configured in beacon.yaml.[/yellow]")
+            console.print("Nothing to sync.")
+            sys.exit(0)
+        
+        # Create artifacts directory
+        artifacts_dir = beacon_dir / "artifacts"
+        artifacts_dir.mkdir(exist_ok=True)
+        
+        # Initialize sync engine
+        sync_engine = SyncEngine(
+            warehouse_path=warehouse_path,
+            artifacts_path=artifacts_dir
         )
-
-        # Display results
-        console.print("[bold green]✓ Setup complete![/bold green]")
-        console.print(f"  [blue]Target:[/blue] {result['target_dir']}")
-        console.print(f"  [blue]Contexts:[/blue] {result['contexts']} files")
-        console.print(f"  [blue]Knowledge:[/blue] {result['knowledge']} files")
-        console.print(f"  [blue]Skills:[/blue] {result['skills']} directories")
-
+        
+        # Collect all artifact paths (expanding globs)
+        artifact_paths = []
+        console.print(f"\n[blue]Syncing artifacts from warehouse...[/blue]\n")
+        
+        for artifact_type in ["knowledge", "skills", "contexts"]:
+            artifacts_list = getattr(beacon_settings.artifacts, artifact_type)
+            for pattern in artifacts_list:
+                # Check if pattern contains glob characters
+                if "*" in pattern or "?" in pattern or "[" in pattern:
+                    # Expand glob
+                    matches = sync_engine.expand_glob(pattern)
+                    artifact_paths.extend(matches)
+                else:
+                    # Direct path
+                    artifact_paths.append(pattern)
+        
+        # Sync all artifacts
+        copied_count = 0
+        skipped_count = 0
+        error_count = 0
+        
+        for artifact_path in artifact_paths:
+            result = sync_engine.copy_file(artifact_path)
+            
+            if result.action == "copied":
+                copied_count += 1
+            elif result.action == "skipped":
+                skipped_count += 1
+            elif result.action == "error":
+                error_count += 1
+                console.print(f"  [red]✗[/red] {artifact_path}: {result.error_message}")
+        
+        # Display summary
+        console.print(f"\n[bold green]✓ Sync complete[/bold green]")
+        console.print(f"  [blue]Copied:[/blue] {copied_count} files")
+        console.print(f"  [blue]Unchanged:[/blue] {skipped_count} files")
+        if error_count > 0:
+            console.print(f"  [red]Errors:[/red] {error_count} files")
+        
     except Exception as e:
-        console.print(f"[red]Error:[/red] {e}")
-        logger.exception("Setup failed")
+        console.print(f"\n[red]Error:[/red] Sync failed: {e}")
+        logger.exception("Sync failed")
         sys.exit(1)
 
 
