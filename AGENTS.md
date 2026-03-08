@@ -60,6 +60,16 @@ abc init test-warehouse              # Test command
 
 **Read:** [CLI Development Workflow](knowledge/facts/cli-development-workflow.md)
 
+### Unit Testing Workflow
+
+**Brief:** Standard workflow for running unit tests: activate venv → uv sync --extra dev → run pytest
+
+**Read:** [Fact: Unit Testing Workflow](knowledge/facts/unit-testing-workflow.md)
+
+**Rule:** ALL tests must be resolved before marking tasks complete - either fixed, removed with justification, or skipped with documented reason.
+
+**Read:** [Lesson: Complete Test Resolution Before Marking Tasks Done](knowledge/lessons/complete-test-resolution.md)
+
 ### Release Process
 
 **Workflow:** Conventional commits → Release-Please PR → Merge → Create release branch → Auto-publish to PyPI

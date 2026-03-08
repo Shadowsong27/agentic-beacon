@@ -227,6 +227,11 @@ class WarehouseSettings(BaseSettings):
     
     Uses Pydantic Settings with TOML file support for type-safe configuration.
     This class acts as both the settings container and the reader.
+    
+    Note: The warehouse field is loaded automatically from config.toml via
+    Pydantic Settings. When instantiating without arguments, the TOML file
+    is read and the field is populated. Type checkers may show a warning
+    about missing required field, but this is expected behavior for BaseSettings.
     """
 
     model_config = SettingsConfigDict(
@@ -234,7 +239,7 @@ class WarehouseSettings(BaseSettings):
         extra="ignore",
     )
 
-    warehouse: WarehouseConfig
+    warehouse: WarehouseConfig  # Populated automatically from TOML file
 
     @classmethod
     def settings_customise_sources(
@@ -283,7 +288,7 @@ local_path = "{config.local_path}"
             f.write(toml_content)
         
         # Now load via BaseSettings
-        return cls()
+        return cls()  # type: ignore[call-arg]  # warehouse populated from TOML file
 
 
     def to_toml(self, path: str | Path) -> None:
