@@ -70,6 +70,10 @@ abc init test-warehouse              # Test command
 
 **Read:** [Lesson: Complete Test Resolution Before Marking Tasks Done](knowledge/lessons/complete-test-resolution.md)
 
+**Rule:** After unit tests pass, verify happy path functionality with real-world usage to ensure the feature actually works.
+
+**Read:** [Lesson: Verify Both Unit Tests and Happy Path Functionality](knowledge/lessons/verify-unit-tests-and-happy-path.md)
+
 ### Release Process
 
 **Workflow:** Conventional commits → Release-Please PR → Merge → Create release branch → Auto-publish to PyPI
