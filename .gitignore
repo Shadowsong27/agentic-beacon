@@ -32,3 +32,4 @@ logs/
 
 # Distributed warehouse content (project-specific)
 .opencode/
+libs/beacon/uv.lock
