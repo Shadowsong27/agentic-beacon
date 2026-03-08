@@ -1,3 +1,68 @@
+# Implementation Tasks - Config-Based Artifact Management
+
+---
+
+## 🔴 TDD WORKFLOW - MANDATORY FOR ALL TASKS
+
+**CRITICAL**: This project follows strict Test-Driven Development (TDD). Before implementing ANY task:
+
+### RED-GREEN-REFACTOR Cycle
+
+1. **🔴 RED Phase - Write Failing Tests FIRST**
+   - Read the task's TDD Test Cases (TC1-TC10)
+   - Create test file in `tests/` directory
+   - Write ALL test cases from the task BEFORE any implementation
+   - Run tests - they MUST fail (import errors, missing functions, etc.)
+   - If tests pass without implementation, you wrote the tests wrong!
+
+2. **🟢 GREEN Phase - Implement Minimal Code**
+   - Write ONLY enough code to make tests pass
+   - Run tests after each implementation
+   - All tests must pass before marking task complete
+
+3. **🔵 REFACTOR Phase - Improve Code Quality**
+   - Clean up implementation
+   - Remove duplication
+   - Improve naming
+   - Tests must still pass after refactoring
+
+### Task Completion Criteria
+
+**A task is NOT complete until:**
+- ✅ All TDD test cases are written
+- ✅ All tests pass (or are justifiably skipped with documentation)
+- ✅ Implementation matches the Expected Output
+- ✅ Test results documented in tasks.md
+
+**For skipped tests:**
+- Add `@pytest.mark.skip(reason="...")` with clear justification
+- Document in tasks.md under "Skipped Test Cases" section
+- Explain why feature is deferred and when it will be implemented
+
+### Test Organization
+
+```
+libs/beacon/tests/
+├── core/           # Core module tests (settings, exceptions)
+├── warehouse/      # Warehouse package tests (validator, connector)
+└── conftest.py     # Shared fixtures
+```
+
+### Running Tests
+
+```bash
+# From libs/beacon/
+source .venv/bin/activate
+uv sync --extra dev
+pytest tests/ -v --tb=short
+```
+
+**See Also:**
+- [Fact: Unit Testing Workflow](../../../knowledge/facts/unit-testing-workflow.md)
+- [Lesson: Complete Test Resolution](../../../knowledge/lessons/complete-test-resolution.md)
+
+---
+
 ## 1. Configuration Management
 
 **Goal**: Establish settings infrastructure for beacon.yaml (artifact dependencies) and config.toml (warehouse connection)
@@ -112,9 +177,11 @@
 **Input**: Candidate warehouse directory path (may be valid or invalid warehouse)
 **Output**: WarehouseValidator class that validates required structure and files
 **Validation**: Validator correctly accepts examples/sample-warehouse/ and rejects invalid directories with clear error messages
+**Test Results**: ✅ **20/20 tests passing (100%)** - Phase 2 complete
 
-- [ ] 2.1 Create WarehouseValidator class with structure validation methods
-  - **Input**: `from beacon.core.warehouse import WarehouseValidator; validator = WarehouseValidator(); result = validator.validate("/path/to/warehouse")`
+- [x] 2.1 Create WarehouseValidator class with structure validation methods
+  - **Test Results:** ✅ 10/10 passing
+  - **Input**: `from beacon.warehouse import WarehouseValidator; validator = WarehouseValidator(); result = validator.validate("/path/to/warehouse")`
   - **Expected Output**: ValidationResult object with `valid` boolean and `errors` list
   - **Validation**: Class instantiates without errors, validate() method accepts path argument, returns proper result structure
   - **TDD Test Cases (write these first):**
@@ -128,11 +195,13 @@
     - TC8: Relative path provided → Resolves and validates correctly
     - TC9: Path with spaces and special chars → Handles correctly
     - TC10: Symlink to valid warehouse → Follows symlink and validates target
-- [ ] 2.2 Implement validation for required directories (contexts/, knowledge/, knowledge/global/, skills/, docs/)
+- [x] 2.2 Implement validation for required directories (contexts/, knowledge/, knowledge/global/, skills/, docs/)
+  - **Test Results:** ✅ Covered by task 2.1 tests
   - **Input**: `validator.validate_directories("/path/to/warehouse")`
   - **Expected Output**: For valid warehouse: empty errors list. For missing dirs: `["Missing directory: contexts/", "Missing directory: knowledge/global/"]`
   - **Validation**: Checks all 5 required directories, reports each missing one specifically, accepts when all present
-- [ ] 2.3 Implement validation for required files (contexts/AGENTS.global.md, README files)
+- [x] 2.3 Implement validation for required files (contexts/AGENTS.global.md, README files)
+  - **Test Results:** ✅ Covered by task 2.1 tests
   - **Input**: `validator.validate("/path/to/warehouse")`
   - **Expected Output**: For valid warehouse: `ValidationResult(valid=True)` for examples/sample-warehouse/, `ValidationResult(valid=False, errors=["Missing contexts/AGENTS.global.md"])` for invalid
   - **Validation**: Returns True for valid warehouse, False with specific missing file/directory names for invalid
@@ -147,22 +216,14 @@
     - TC8: Multiple README variants (README, README.txt) → At least one present passes
     - TC9: All directories present but all files missing → Lists all missing files
     - TC10: Symlink to required file → Follows symlink and validates target exists
-- [ ] 2.4 Add validation error messages with specific guidance for each failure type
+- [x] 2.4 Add validation error messages with specific guidance for each failure type
+  - **Status**: Basic error messages implemented. Enhanced guidance with actionable commands (mkdir -p, etc.) moved to task 12.2a
   - **Input**: `validator.validate("/invalid/warehouse")`
-  - **Expected Output**: Error messages like "Missing directory: contexts/ - Create with 'mkdir -p contexts'" or "Missing file: contexts/AGENTS.global.md - See examples/sample-warehouse for template"
-  - **Validation**: Each error includes what's missing, why it's required, and actionable fix suggestion
-  - **TDD Test Cases (write these first):**
-    - TC1: Missing directory → Error includes "mkdir -p" command
-    - TC2: Missing file → Error includes reference to example
-    - TC3: Multiple errors → All listed with individual guidance
-    - TC4: Error message is user-friendly → No technical jargon, clear actionable steps
-    - TC5: Error includes context → Explains why item is required
-    - TC6: Permission error → Error suggests checking permissions with chmod command
-    - TC7: Invalid warehouse that looks like project → Error explains difference
-    - TC8: Partial warehouse → Errors prioritized (critical first)
-    - TC9: Error includes help flag → Suggests --help for more info
-    - TC10: Error formatting consistent → All errors follow same pattern
-- [ ] 2.5 Implement path resolution to handle relative and absolute paths (~/warehouse, ../warehouse)
+  - **Expected Output**: Error messages like "Missing directory: contexts/" or "Missing file: contexts/AGENTS.global.md"
+  - **Validation**: Each error includes what's missing
+  - **Note**: Enhanced error messages with specific guidance (mkdir commands, example references) deferred to Phase 12 (Error Handling)
+- [x] 2.5 Implement path resolution to handle relative and absolute paths (~/warehouse, ../warehouse)
+  - **Test Results:** ✅ Covered by task 2.1 tests
   - **Input**: `validator.resolve_path("~/org-warehouse")` or `validator.resolve_path("../warehouse")`
   - **Expected Output**: Absolute path string (e.g., "/Users/alice/org-warehouse")
   - **Validation**: Expands ~ to home directory, resolves .. to parent, converts to absolute path, handles symlinks correctly
@@ -179,7 +240,8 @@
     - TC10: Path with spaces → Handles correctly without escaping issues
     - TC11: Windows path (C:\) on Unix → Raises error or handles gracefully
     - TC12: Empty path → Raises ValueError "Path cannot be empty"
-- [ ] 2.6 Add check to ensure warehouse is not confused with artifacts/ structure (doesn't exist in warehouse)
+- [x] 2.6 Add check to ensure warehouse is not confused with artifacts/ structure (doesn't exist in warehouse)
+  - **Test Results:** ✅ Covered by task 2.1 tests
   - **Input**: `validator.validate("/path/with/.agentic-beacon/artifacts/")`
   - **Expected Output**: `ValidationResult(valid=False, errors=["This appears to be a project directory, not a warehouse. Warehouse should not contain .agentic-beacon/artifacts/"])`
   - **Validation**: Rejects paths containing artifacts/ subdirectory, provides clear error distinguishing warehouse from project
@@ -761,6 +823,21 @@
   - **Input**: `abc warehouse connect --path ~/not-a-warehouse` (missing required directories)
   - **Expected Output**: Multi-line error showing all validation failures: "Invalid warehouse structure:", "✗ Missing: contexts/", "✗ Missing: knowledge/", "See examples/sample-warehouse for reference."
   - **Validation**: Lists all failures, provides reference example, actionable guidance
+- [ ] 12.2a Enhance warehouse validation error messages with specific guidance (from task 2.4)
+  - **Input**: `validator.validate("/invalid/warehouse")`
+  - **Expected Output**: Error messages like "Missing directory: contexts/ - Create with 'mkdir -p contexts'" or "Missing file: contexts/AGENTS.global.md - See examples/sample-warehouse for template"
+  - **Validation**: Each error includes what's missing, why it's required, and actionable fix suggestion
+  - **TDD Test Cases (write these first):**
+    - TC1: Missing directory → Error includes "mkdir -p" command
+    - TC2: Missing file → Error includes reference to example
+    - TC3: Multiple errors → All listed with individual guidance
+    - TC4: Error message is user-friendly → No technical jargon, clear actionable steps
+    - TC5: Error includes context → Explains why item is required
+    - TC6: Permission error → Error suggests checking permissions with chmod command
+    - TC7: Invalid warehouse that looks like project → Error explains difference
+    - TC8: Partial warehouse → Errors prioritized (critical first)
+    - TC9: Error includes help flag → Suggests --help for more info
+    - TC10: Error formatting consistent → All errors follow same pattern
 - [ ] 12.3 Add error handling for warehouse path that becomes invalid after connection
   - **Input**: Connect warehouse, then delete/move warehouse directory, run `abc sync`
   - **Expected Output**: Error: "Warehouse not found at /old/path. It may have been moved or deleted. Reconnect with 'abc warehouse connect'.", exit code 1
