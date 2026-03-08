@@ -22,6 +22,23 @@ Project-level instructions for AI agents working on the Agentic Beacon framework
 
 ## Development Guidelines
 
+### Configuration Management Patterns
+
+**Decision:** Use Pydantic Settings patterns with consistent terminology
+
+- Module name: `settings.py` (not `config.py`)
+- Class names: `WarehouseSettings`, `BeaconSettings`, `SettingsReader`, `SettingsWriter`
+- Terminology: Use "settings" consistently throughout (not "config" or "configuration")
+- Exceptions: Separate into `exceptions.py` module
+- Pattern: Pydantic BaseSettings with TOML support
+- Custom structures: Manual parsing with Pydantic validation (beacon.yaml)
+
+**Read:**
+- [Decision: Settings Module Structure](knowledge/decisions/settings-module-structure.md)
+- [Decision: Pydantic Settings Patterns](knowledge/decisions/pydantic-settings-patterns.md)
+
+## Development Guidelines
+
 ### Temporary Documentation Pattern
 
 **Rule:** Do NOT commit temporary handoff documentation created during agentic coding sessions.

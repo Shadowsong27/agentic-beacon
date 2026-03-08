@@ -1,18 +1,18 @@
 ## 1. Configuration Management
 
-**Goal**: Establish configuration infrastructure for beacon.yaml (artifact dependencies) and config.toml (warehouse connection)
+**Goal**: Establish settings infrastructure for beacon.yaml (artifact dependencies) and config.toml (warehouse connection)
 **Input**: Empty project with no .agentic-beacon directory
-**Output**: Parsers, validators, and readers/writers for both config files
+**Output**: Settings models using Pydantic that read/write themselves, with separate exceptions module
 **Validation**: Successfully parse and validate example beacon.yaml and config.toml files; write and read back with identical content
 
-- [ ] 1.1 Create beacon.yaml schema and parser for artifact dependencies
-  - **Input**: `from beacon.core.config import BeaconYamlParser; parser = BeaconYamlParser(); config = parser.parse("path/to/beacon.yaml")`
-  - **Expected Output**: Python object with `artifacts` dict containing keys: knowledge, skills, contexts (each with list of paths/globs)
+- [x] 1.1 Create beacon.yaml schema and parser for artifact dependencies
+  - **Input**: `from beacon.core.settings import BeaconSettings; settings = BeaconSettings.from_yaml("path/to/beacon.yaml")`
+  - **Expected Output**: BeaconSettings object with `artifacts` containing knowledge, skills, contexts lists
   - **Validation**: Parser loads valid YAML, returns structured object, handles missing sections gracefully, rejects invalid YAML with clear error
   - **TDD Test Cases (write these first):**
-    - TC1: Valid complete beacon.yaml → Returns BeaconConfig with all artifact types populated
-    - TC2: Valid partial beacon.yaml (only knowledge) → Returns BeaconConfig with empty lists for skills/contexts
-    - TC3: Empty artifacts section → Returns BeaconConfig with all types as empty lists
+    - TC1: Valid complete beacon.yaml → Returns BeaconSettings with all artifact types populated
+    - TC2: Valid partial beacon.yaml (only knowledge) → Returns BeaconSettings with empty lists for skills/contexts
+    - TC3: Empty artifacts section → Returns BeaconSettings with all types as empty lists
     - TC4: Invalid YAML syntax → Raises YAMLParseError with syntax message
     - TC5: Missing artifacts root key → Raises ValidationError "Missing required 'artifacts' section"
     - TC6: Artifact type not a list (string) → Raises ValidationError "Artifact types must be lists"
@@ -20,53 +20,53 @@
     - TC8: File not found → Raises FileNotFoundError with helpful message
     - TC9: File is directory not file → Raises IsADirectoryError
     - TC10: Permission denied reading file → Raises PermissionError with clear message
-- [ ] 1.2 Create config.toml schema and parser for warehouse connection
-  - **Input**: `from beacon.core.config import ConfigTomlParser; parser = ConfigTomlParser(); config = parser.parse("path/to/config.toml")`
-  - **Expected Output**: Python object with `warehouse.local_path` attribute containing absolute path string
-  - **Validation**: Parser loads valid TOML, returns structured object with warehouse section, handles missing file gracefully
+- [x] 1.2 Create config.toml schema and settings model for warehouse connection
+  - **Input**: `from beacon.core.settings import WarehouseSettings; settings = WarehouseSettings()`
+  - **Expected Output**: WarehouseSettings object with `warehouse.local_path` attribute containing absolute path string
+  - **Validation**: Pydantic Settings loads TOML automatically, returns structured object, validates warehouse section
   - **TDD Test Cases (write these first):**
-    - TC1: Valid config.toml with warehouse section → Returns Config with local_path set
+    - TC1: Valid config.toml with warehouse section → Returns WarehouseSettings with local_path set
     - TC2: Valid config with absolute path → local_path is absolute
     - TC3: Valid config with relative path → Raises ValidationError "local_path must be absolute"
     - TC4: Missing warehouse section → Raises ValidationError "Missing [warehouse] section"
     - TC5: Missing local_path key → Raises ValidationError "Missing local_path in [warehouse]"
-    - TC6: Invalid TOML syntax → Raises TOMLParseError with syntax message
+    - TC6: Invalid TOML syntax → Pydantic raises validation error
     - TC7: local_path is empty string → Raises ValidationError "local_path cannot be empty"
-    - TC8: File not found → Returns None or empty config (graceful handling)
+    - TC8: File not found → Pydantic raises validation error (no graceful handling for BaseSettings)
     - TC9: local_path is not a string → Raises ValidationError "local_path must be string"
-    - TC10: Extra unknown keys in config → Ignored gracefully (forward compatibility)
-- [ ] 1.3 Implement configuration reader that loads both config.toml and beacon.yaml
-  - **Input**: `from beacon.core.config import ConfigReader; reader = ConfigReader(); config = reader.load()`
-  - **Expected Output**: Config object with warehouse.local_path and artifacts dict loaded from both files
-  - **Validation**: Config object has expected attributes, no exceptions raised, missing files handled gracefully
+    - TC10: Extra unknown keys in config → Ignored gracefully (extra="ignore" in model_config)
+- [x] 1.3 Settings objects read themselves (no separate reader needed)
+  - **Input**: `warehouse = WarehouseSettings(); beacon = BeaconSettings.from_yaml("beacon.yaml")`
+  - **Expected Output**: Each settings object loads its own configuration
+  - **Validation**: WarehouseSettings auto-loads from config.toml via Pydantic BaseSettings, BeaconSettings loads via from_yaml()
   - **TDD Test Cases (write these first):**
-    - TC1: Both files exist and valid → Returns complete config with both sections
-    - TC2: Only config.toml exists → Returns config with warehouse, artifacts is empty
-    - TC3: Only beacon.yaml exists → Returns config with artifacts, warehouse is None
-    - TC4: Neither file exists → Returns empty config or raises clear error
-    - TC5: config.toml invalid but beacon.yaml valid → Raises error for config.toml
-    - TC6: beacon.yaml invalid but config.toml valid → Raises error for beacon.yaml
-    - TC7: Both files invalid → Raises error for first encountered issue
-    - TC8: .agentic-beacon directory doesn't exist → Raises DirectoryNotFoundError
-    - TC9: Files exist but unreadable (permissions) → Raises PermissionError with clear message
-    - TC10: Load called multiple times → Returns consistent results (idempotent)
-- [ ] 1.4 Implement configuration writer for persisting warehouse connection
-  - **Input**: `writer.write_connection(local_path="/path/to/warehouse")`
+    - TC1: WarehouseSettings() → Pydantic loads from config.toml automatically
+    - TC2: BeaconSettings.from_yaml() → Manually parses YAML with validation
+    - TC3: config.toml missing → Pydantic raises validation error
+    - TC4: beacon.yaml missing → FileNotFoundError from from_yaml()
+    - TC5: Invalid TOML → Pydantic validation error
+    - TC6: Invalid YAML → YAMLParseError from from_yaml()
+    - TC7: .agentic-beacon directory doesn't exist → DirectoryNotFoundError from validate_beacon_directory()
+    - TC8: Files exist but unreadable → PermissionError
+    - TC9: Load called multiple times → Idempotent behavior
+    - TC10: Settings objects are independent → Can load one without the other
+- [x] 1.4 Settings objects write themselves (no separate writer needed)
+  - **Input**: `settings = WarehouseSettings.from_path("/path"); settings.to_toml("config.toml")`
   - **Expected Output**: `.agentic-beacon/config.toml` file created with [warehouse] section
   - **Validation**: File exists, contains correct TOML structure, roundtrip read returns same path
   - **TDD Test Cases (write these first):**
-    - TC1: Write new config.toml → File created with warehouse section and local_path
-    - TC2: Overwrite existing config.toml → Existing file replaced with new path
-    - TC3: Write with relative path → Converts to absolute before writing
-    - TC4: Write with ~ in path → Expands ~ to home directory
-    - TC5: Write to non-existent .agentic-beacon dir → Creates directory first
-    - TC6: Write with None or empty path → Raises ValueError "local_path required"
-    - TC7: Write to read-only directory → Raises PermissionError
+    - TC1: WarehouseSettings.from_path() → Validates path, writes TOML, returns settings
+    - TC2: settings.to_toml() → Writes current settings to file
+    - TC3: beacon.to_yaml() → Writes beacon settings to YAML
+    - TC4: Write with relative path → Validator converts to absolute
+    - TC5: Write with ~ in path → Expands ~ to home directory
+    - TC6: Write to non-existent .agentic-beacon dir → Creates directory first
+    - TC7: Write with None or empty path → Pydantic validation error
     - TC8: Roundtrip write then read → Read returns exact same path
-    - TC9: Write preserves other TOML sections → Existing sections not removed
-    - TC10: Write with invalid path characters → Raises ValueError with validation message
-- [ ] 1.5 Add validation for beacon.yaml structure (artifacts grouped by type)
-  - **Input**: `validator.validate_structure(beacon_config)` with config containing artifacts.knowledge, artifacts.skills, artifacts.contexts
+    - TC9: WarehouseSettings() loads from written file → Pydantic reads TOML
+    - TC10: BeaconSettings.from_yaml() loads from written file → Manual parser reads YAML
+- [x] 1.5 Add validation for beacon.yaml structure (artifacts grouped by type)
+  - **Input**: `validator.validate_structure(beacon_settings)` with settings containing artifacts.knowledge, artifacts.skills, artifacts.contexts
   - **Expected Output**: `ValidationResult(valid=True)` for correct structure, `ValidationResult(valid=False, errors=[...])` for invalid keys
   - **Validation**: Accepts valid artifact types, rejects unknown types (e.g., "artifacts.unknown"), validates each type contains list of strings
   - **TDD Test Cases (write these first):**
@@ -80,8 +80,8 @@
     - TC8: Multiple unknown types → ValidationResult lists all unknown types in errors
     - TC9: Mixed valid and invalid types → ValidationResult lists only invalid ones
     - TC10: Artifact paths with invalid characters → ValidationResult(valid=False) with path validation errors
-- [ ] 1.6 Add validation to ensure .agentic-beacon directory exists before config operations
-  - **Input**: `config_manager.validate_directory()` when .agentic-beacon/ doesn't exist
+- [x] 1.6 Add helper function to validate .agentic-beacon directory exists
+  - **Input**: `from beacon.core.settings import validate_beacon_directory; validate_beacon_directory()` when .agentic-beacon/ doesn't exist
   - **Expected Output**: Raises DirectoryNotFoundError with message "Project not initialized. Run 'abc setup' first."
   - **Validation**: Check passes when directory exists, raises specific exception when missing, error message is actionable
   - **TDD Test Cases (write these first):**
