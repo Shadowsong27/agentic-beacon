@@ -232,6 +232,17 @@
   - **Input**: `abc setup` (after warehouse connected)
   - **Expected Output**: Interactive prompt asking which workflow (agent-assisted/manual/skip), beacon.yaml created
   - **Validation**: Command succeeds, beacon.yaml exists, contains artifacts: {} structure
+  - **TDD Test Cases (write these first):**
+    - TC1: Setup with warehouse connected → Interactive prompt shown, exits cleanly
+    - TC2: Setup without warehouse connected → Error "No warehouse connected. Run 'abc warehouse connect' first."
+    - TC3: Setup when beacon.yaml already exists → Prompt to overwrite or abort
+    - TC4: Setup with --manual flag → Skips prompt, creates template directly
+    - TC5: Setup with --agent-assisted flag → Skips prompt, installs skill directly
+    - TC6: User selects "skip" option → Exit code 0, no beacon.yaml created
+    - TC7: Setup in directory without .agentic-beacon → Error with actionable message
+    - TC8: Setup with both --manual and --agent-assisted → Error "Mutually exclusive flags"
+    - TC9: Setup with invalid flag → Exit code 2, shows usage help
+    - TC10: Setup interrupted (Ctrl+C) → Graceful exit, no partial beacon.yaml
 - [ ] 4.2 Create empty beacon.yaml template with commented examples
   - **Input**: Template generation function called during `abc setup --manual`
   - **Expected Output**: `.agentic-beacon/beacon.yaml` file with structure:
@@ -245,14 +256,47 @@
         # - backend-microservice
     ```
   - **Validation**: File created, valid YAML, contains all three artifact types with empty lists, includes helpful comments
+  - **TDD Test Cases (write these first):**
+    - TC1: Generate template → File created with correct structure
+    - TC2: Template is valid YAML → Parses without errors
+    - TC3: Template has all three artifact types → knowledge, skills, contexts present
+    - TC4: All artifact types are empty lists → Each type = []
+    - TC5: Template includes commented examples → Comments show usage patterns
+    - TC6: Comments are valid YAML comments → Start with #
+    - TC7: Template when beacon.yaml exists → Overwrites or raises error based on force flag
+    - TC8: Template file permissions → Readable and writable by user
+    - TC9: Template indentation consistent → 2 spaces (YAML standard)
+    - TC10: Roundtrip parse template → Loads successfully with correct structure
 - [ ] 4.3 Add support for three workflows: agent-assisted, copy, manual
   - **Input**: `abc setup` (interactive)
   - **Expected Output**: Prompt with 3 choices: "1) Agent-assisted (install project-setup skill)", "2) Manual (create empty template)", "3) Skip (create later)"
   - **Validation**: All three workflows implemented, each produces correct outcome, user can select via number
+  - **TDD Test Cases (write these first):**
+    - TC1: Select option 1 (agent-assisted) → Installs skill, creates beacon.yaml template
+    - TC2: Select option 2 (manual) → Creates empty beacon.yaml with comments
+    - TC3: Select option 3 (skip) → Exits cleanly, no beacon.yaml created
+    - TC4: Invalid selection (0 or 4) → Error, prompts again
+    - TC5: Non-numeric input → Error, prompts again
+    - TC6: Empty input (just Enter) → Uses default or prompts again
+    - TC7: Ctrl+C during prompt → Graceful exit
+    - TC8: All workflows create valid beacon.yaml → Parseable YAML structure
+    - TC9: Agent-assisted includes skill + template → Both skill and beacon.yaml exist
+    - TC10: Workflow selection is case-insensitive → "1", "agent", "Agent-assisted" all work
 - [ ] 4.4 Implement project-setup skill installation for agent-assisted workflow
   - **Input**: User selects agent-assisted workflow
   - **Expected Output**: project-setup skill copied from warehouse to `.agentic-beacon/skills/project-setup/`, confirmation message
   - **Validation**: Skill directory created, SKILL.md present, user informed how to invoke skill
+  - **TDD Test Cases (write these first):**
+    - TC1: Skill exists in warehouse → Copied to .agentic-beacon/skills/
+    - TC2: Skill directory structure preserved → All files/subdirs copied
+    - TC3: SKILL.md exists after copy → File present and readable
+    - TC4: Skill not found in warehouse → Error "project-setup skill missing from warehouse"
+    - TC5: Skill already exists locally → Prompt to overwrite or skip
+    - TC6: Insufficient permissions to create skills/ → Error about permissions
+    - TC7: Confirmation message shown → Includes path and invocation instructions
+    - TC8: Skill copied as regular files → Not symlinks
+    - TC9: Skill copy preserves file permissions → Scripts remain executable
+    - TC10: Multiple skill files → All copied correctly
 - [ ] 4.5 Add interactive workflow selection prompts
   - **Input**: `abc setup` without flags
   - **Expected Output**: Clear prompt describing each workflow option with recommendations
@@ -273,6 +317,17 @@
   - **Input**: Check `examples/sample-warehouse/skills/project-setup/SKILL.md` exists
   - **Expected Output**: SKILL.md file with clear instructions for agent to generate warehouse catalog and populate beacon.yaml
   - **Validation**: File exists, contains proper skill structure, instructions are clear for LLM consumption
+  - **TDD Test Cases (write these first):**
+    - TC1: SKILL.md exists in warehouse → File present at correct path
+    - TC2: SKILL.md has proper frontmatter → Contains title, description metadata
+    - TC3: Instructions are LLM-readable → Clear step-by-step format
+    - TC4: Includes catalog generation steps → Explicit instructions for scanning
+    - TC5: Includes beacon.yaml population guidance → How to select artifacts
+    - TC6: Examples provided → Shows catalog format and selection criteria
+    - TC7: File is valid markdown → Renders correctly
+    - TC8: Instructions mention project analysis → Tells agent to check package.json, etc.
+    - TC9: Skill specifies output location → .agentic-beacon/warehouse-catalog.md
+    - TC10: Error handling guidance → What to do if warehouse disconnected
 - [ ] 5.2 Implement warehouse catalog generation (scan warehouse, output markdown tree)
   - **Input**: Skill invoked with connected warehouse at `~/org-warehouse`
   - **Expected Output**: Tree structure showing all artifacts by type:
@@ -288,10 +343,32 @@
     - backend-microservice
     ```
   - **Validation**: Scans all artifact directories, outputs markdown, grouped by type, includes relative paths from warehouse root
+  - **TDD Test Cases (write these first):**
+    - TC1: Warehouse with all artifact types → Catalog lists all three sections
+    - TC2: Warehouse with only knowledge → Catalog has only knowledge section
+    - TC3: Empty warehouse directories → Sections shown as empty
+    - TC4: Nested artifacts → Full relative paths shown
+    - TC5: Artifacts with special characters → Handled correctly in markdown
+    - TC6: Large warehouse (1000+ artifacts) → Generates efficiently
+    - TC7: Warehouse path invalid → Error with clear message
+    - TC8: Permission denied on artifact directory → Error or skip with warning
+    - TC9: Symlinks in warehouse → Follows or notes symlink appropriately
+    - TC10: Output is valid markdown → Parses and renders correctly
 - [ ] 5.3 Save catalog to .agentic-beacon/warehouse-catalog.md
   - **Input**: Catalog generation completes
   - **Expected Output**: `.agentic-beacon/warehouse-catalog.md` file created with generated catalog content
   - **Validation**: File exists, contains catalog, readable by user and agent, path is project-relative
+  - **TDD Test Cases (write these first):**
+    - TC1: Catalog saved successfully → File exists at correct path
+    - TC2: File contains generated content → Matches expected markdown structure
+    - TC3: File is readable → User and agent can open and read
+    - TC4: File overwrites if exists → Previous catalog replaced
+    - TC5: .agentic-beacon directory missing → Error with actionable message
+    - TC6: Insufficient write permissions → Error about permissions
+    - TC7: Catalog content complete → All scanned artifacts present
+    - TC8: File encoding is UTF-8 → Handles international characters
+    - TC9: Line endings normalized → Consistent across platforms
+    - TC10: File size reasonable → Not excessively large for LLM context
 - [ ] 5.4 Format catalog for LLM readability (clear markdown structure)
   - **Input**: Generated catalog file
   - **Expected Output**: Proper markdown with headers, bullet points, clear grouping, artifact descriptions if available
@@ -539,10 +616,32 @@
   - **Input**: `abc warehouse init test-warehouse`
   - **Expected Output**: New warehouse created in ./test-warehouse/ with standard structure
   - **Validation**: Command works under warehouse subcommand, same behavior as old `abc init`, help text updated
+  - **TDD Test Cases (write these first):**
+    - TC1: warehouse init with name → Creates warehouse with correct structure
+    - TC2: warehouse init in existing directory → Error about directory exists
+    - TC3: warehouse init with path containing spaces → Handles correctly
+    - TC4: warehouse init without name argument → Error, shows usage
+    - TC5: warehouse init creates all required directories → contexts/, knowledge/, skills/, docs/
+    - TC6: warehouse init creates required files → AGENTS.global.md, README.md
+    - TC7: warehouse init with --help → Shows command-specific help
+    - TC8: warehouse init behavior matches old abc init → Exact same output
+    - TC9: warehouse init exit code 0 → Success indicator
+    - TC10: warehouse init output mentions next steps → Suggests adding artifacts
 - [ ] 10.2 Update help text for all warehouse subcommands
   - **Input**: `abc warehouse --help`
   - **Expected Output**: Help showing "Warehouse management commands" with init and connect subcommands described
   - **Validation**: Help text clear and comprehensive, describes each subcommand purpose, shows examples
+  - **TDD Test Cases (write these first):**
+    - TC1: abc warehouse --help → Shows warehouse group help
+    - TC2: Help lists all subcommands → init and connect visible
+    - TC3: Each subcommand has description → Purpose clearly stated
+    - TC4: Help includes usage examples → Shows typical command patterns
+    - TC5: Help text formatting consistent → Aligned, readable
+    - TC6: abc warehouse init --help → Shows init-specific help
+    - TC7: abc warehouse connect --help → Shows connect-specific help
+    - TC8: Help mentions relationship to client commands → References sync, setup
+    - TC9: Help accessible via -h shorthand → Both --help and -h work
+    - TC10: Help exit code is 0 → Not treated as error
 - [ ] 10.4 Ensure warehouse connect, warehouse init are properly grouped
   - **Input**: `abc --help`
   - **Expected Output**: Top-level commands include "warehouse" group; `abc warehouse --help` shows init and connect
@@ -563,14 +662,47 @@
   - **Input**: `abc warehouse connect` creates config.toml
   - **Expected Output**: .gitignore contains line `.agentic-beacon/config.toml` (added if not present)
   - **Validation**: Line added to .gitignore, no duplicates if run multiple times, file created if doesn't exist
+  - **TDD Test Cases (write these first):**
+    - TC1: No .gitignore exists → Creates .gitignore with entry
+    - TC2: .gitignore exists, entry missing → Appends entry
+    - TC3: .gitignore already has entry → No duplicate added
+    - TC4: .gitignore has similar pattern → Exact pattern still added (no false match)
+    - TC5: Run connect twice → Only one entry exists
+    - TC6: .gitignore has entry with different format → Normalizes to standard format
+    - TC7: .gitignore read-only → Error with clear message
+    - TC8: Entry added with proper newline → No formatting issues
+    - TC9: .gitignore in subdirectory → Finds project root .gitignore
+    - TC10: Verify entry added is exactly `.agentic-beacon/config.toml` → No extra slashes or variations
 - [ ] 11.2 Add automatic .gitignore update to exclude .agentic-beacon/artifacts/
   - **Input**: `abc sync` creates artifacts directory
   - **Expected Output**: .gitignore contains line `.agentic-beacon/artifacts/` (added if not present)
   - **Validation**: Line added to .gitignore, trailing slash present, no duplicates on repeated runs
+  - **TDD Test Cases (write these first):**
+    - TC1: Entry added with trailing slash → Pattern is `.agentic-beacon/artifacts/`
+    - TC2: Entry without trailing slash exists → Normalized to have trailing slash
+    - TC3: Multiple sync runs → Only one entry present
+    - TC4: Both config.toml and artifacts/ entries → Both present, properly ordered
+    - TC5: .gitignore section header added → Entries grouped under "# Agentic Beacon" comment
+    - TC6: Entries respect existing .gitignore format → Consistent line endings
+    - TC7: Pattern excludes directory and contents → Git correctly ignores artifacts/
+    - TC8: Verify with git status → artifacts/ not listed in untracked files
+    - TC9: artifacts/ deleted and recreated → .gitignore entry persists
+    - TC10: Pattern works for nested artifacts → All files under artifacts/ ignored
 - [ ] 11.3 Ensure .agentic-beacon/beacon.yaml is NOT in .gitignore
   - **Input**: Check .gitignore after all setup commands
   - **Expected Output**: .gitignore does NOT contain `beacon.yaml` or `.agentic-beacon/beacon.yaml`
   - **Validation**: beacon.yaml remains committable, not excluded by any gitignore pattern
+  - **TDD Test Cases (write these first):**
+    - TC1: After all commands → beacon.yaml not in .gitignore
+    - TC2: git status shows beacon.yaml → Not ignored, appears as untracked/modified
+    - TC3: User manually adds beacon.yaml to .gitignore → Warning shown on next sync
+    - TC4: Pattern `.agentic-beacon/*` with negation → Use `!.agentic-beacon/beacon.yaml` pattern
+    - TC5: Verify beacon.yaml is trackable → Can be added and committed via git
+    - TC6: .gitignore patterns don't match beacon.yaml → Test with git check-ignore
+    - TC7: Multiple beacon.yaml patterns checked → None exclude it
+    - TC8: Subdirectory .gitignore doesn't exclude → Check all .gitignore files
+    - TC9: Global gitignore doesn't interfere → beacon.yaml still committable
+    - TC10: Documentation warns about beacon.yaml → Must be committed for team use
 - [ ] 11.4 Create .gitignore if it doesn't exist in project root
   - **Input**: Run `abc warehouse connect` in project without .gitignore
   - **Expected Output**: .gitignore file created with agentic-beacon exclusions
@@ -579,6 +711,19 @@
   - **Input**: .gitignore with existing content: "node_modules/\n*.log", then run abc commands
   - **Expected Output**: .gitignore contains original content plus agentic-beacon exclusions at end
   - **Validation**: Original content preserved, new lines appended, no content lost, proper newline separation
+  - **TDD Test Cases (write these first):**
+    - TC1: Existing content preserved → Original lines intact
+    - TC2: New entries appended at end → After existing content
+    - TC3: Proper newline separation → Blank line before agentic-beacon section
+    - TC4: No content duplication → Original entries not repeated
+    - TC5: File encoding preserved → UTF-8 maintained
+    - TC6: Line endings preserved → CRLF or LF respected
+    - TC7: Comments in original .gitignore → Preserved correctly
+    - TC8: Empty lines in original → Preserved
+    - TC9: Trailing newline handling → Final newline added if missing
+    - TC10: Read-modify-write atomic → No race conditions or partial writes
+    - TC11: Large .gitignore (1000+ lines) → Efficiently handled
+    - TC12: Backup not created → Direct modification, no .gitignore.bak files
 
 ## 12. Error Handling and User Feedback
 
@@ -591,6 +736,17 @@
   - **Input**: `abc warehouse connect --path /does/not/exist`
   - **Expected Output**: Error: "Path not found: /does/not/exist. Please check the path and try again.", exit code 1
   - **Validation**: Detects missing path, clear error message, suggests checking path, exit code 1
+  - **TDD Test Cases (write these first):**
+    - TC1: Absolute path doesn't exist → Error with exact path shown
+    - TC2: Relative path doesn't exist → Error with resolved path shown
+    - TC3: Path with typo → Error message helps identify mistake
+    - TC4: Parent directory exists but target doesn't → Clear about which part missing
+    - TC5: Path requires expansion (~) but doesn't exist → Error shows expanded path
+    - TC6: Empty path string → Error "Path cannot be empty"
+    - TC7: Path is null/None → Error with usage help
+    - TC8: Network path unreachable → Error about network/mount issues
+    - TC9: Error message format consistent → Matches other error patterns
+    - TC10: Exit code is 1 → Indicates failure to caller
 - [ ] 12.2 Add error handling for invalid warehouse structure with clear messages
   - **Input**: `abc warehouse connect --path ~/not-a-warehouse` (missing required directories)
   - **Expected Output**: Multi-line error showing all validation failures: "Invalid warehouse structure:", "✗ Missing: contexts/", "✗ Missing: knowledge/", "See examples/sample-warehouse for reference."
@@ -611,6 +767,19 @@
   - **Input**: Any error condition in system
   - **Expected Output**: Error message format: "Problem description. Suggestion for resolution."
   - **Validation**: All errors follow consistent format, include actionable next step, avoid technical jargon where possible
+  - **TDD Test Cases (write these first):**
+    - TC1: All errors have two parts → Problem + Suggestion
+    - TC2: Suggestions are actionable → Include specific commands when applicable
+    - TC3: Error messages user-friendly → No stack traces, technical jargon minimal
+    - TC4: Consistent formatting → All follow same pattern
+    - TC5: Errors include context → Show relevant paths, values
+    - TC6: Multi-error scenarios → All issues listed clearly
+    - TC7: Errors suggest --help when appropriate → Guide to more info
+    - TC8: Critical vs warning distinction → Different formatting/colors
+    - TC9: Errors written to stderr → Not mixed with stdout
+    - TC10: Exit codes meaningful → 1 for errors, 2 for usage, 0 for success
+    - TC11: Error messages testable → Can be matched in tests
+    - TC12: Localization-ready → Messages can be externalized (future)
 - [ ] 12.7 Add helpful error when user tries deprecated abc init command
   - **Input**: `abc init my-warehouse`
   - **Expected Output**: Error: "Command 'abc init' has been renamed in v2.0.0. Use 'abc warehouse init my-warehouse' instead.", exit code 1
@@ -627,6 +796,19 @@
   - **Input**: `pytest tests/test_warehouse_validator.py -v`
   - **Expected Output**: All test cases pass (valid warehouse, missing directories, missing files, invalid structure)
   - **Validation**: Exit code 0, >10 test cases covering all validation scenarios
+  - **TDD Test Cases (write these first):**
+    - TC1: Test file exists → tests/test_warehouse_validator.py present
+    - TC2: All validator methods tested → validate(), validate_directories(), validate_files()
+    - TC3: Valid warehouse passes → ValidationResult(valid=True)
+    - TC4: Missing each directory individually → Each caught and reported
+    - TC5: Missing each required file → Each caught with specific error
+    - TC6: Invalid path types → File instead of dir, dir instead of file
+    - TC7: Permission errors → Unreadable directories/files
+    - TC8: Edge cases → Symlinks, special characters, spaces
+    - TC9: Error messages validated → Check exact wording
+    - TC10: Test coverage >90% → All validator code paths exercised
+    - TC11: Tests use fixtures → Sample warehouses for testing
+    - TC12: Tests isolated → Each test independent, no shared state
 - [ ] 13.2 Add unit tests for beacon.yaml parser and validator
   - **Input**: `pytest tests/test_beacon_parser.py -v`
   - **Expected Output**: Test cases pass: valid YAML parsing, invalid YAML rejection, unknown artifact types rejected, glob pattern validation
@@ -651,6 +833,19 @@
   - **Input**: `pytest tests/integration/test_connect.py -v`
   - **Expected Output**: Test connects to sample warehouse, verifies config.toml created, validates connection persists
   - **Validation**: Exit code 0, integration test covers full connect workflow end-to-end
+  - **TDD Test Cases (write these first):**
+    - TC1: Full connect workflow → Command execution, config creation, validation
+    - TC2: Connect with valid warehouse → Success path tested
+    - TC3: Connect with invalid warehouse → Error handling tested
+    - TC4: Connect overwrites existing → Reconnection works
+    - TC5: Connect with relative path → Path resolution tested
+    - TC6: Interactive mode tested → Mock user input
+    - TC7: Progress messages validated → Output checked
+    - TC8: Config.toml content validated → Correct structure and values
+    - TC9: Test uses temporary directory → Isolated, cleanup after
+    - TC10: Test creates sample warehouse → Fixture provides test warehouse
+    - TC11: Test runs in CI → No interactive dependencies
+    - TC12: Test timing reasonable → Completes within 5 seconds
 - [ ] 13.8 Add integration tests for abc setup with different workflows
   - **Input**: `pytest tests/integration/test_setup.py -v`
   - **Expected Output**: Tests pass for all three workflows (agent-assisted, manual, skip), beacon.yaml created correctly
@@ -686,6 +881,17 @@
 - [ ] **[MANUAL]** 14.1 Update README.md to change abc init to abc warehouse init
   - **Rationale**: Requires reviewing entire README for all occurrences and updating examples
   - **Timing**: After command implementation complete
+  - **TDD Test Cases (write these first):**
+    - TC1: Grep README for "abc init" → No occurrences found
+    - TC2: All examples use "abc warehouse init" → Consistent terminology
+    - TC3: Quick start section updated → Shows new command
+    - TC4: All code blocks tested → Commands execute successfully
+    - TC5: Screenshots/GIFs updated → Show new command structure
+    - TC6: Links to detailed docs work → No broken references
+    - TC7: Package manager analogy explained → node_modules comparison clear
+    - TC8: README renders correctly on GitHub → Markdown validated
+    - TC9: Table of contents updated → Reflects new structure
+    - TC10: Version badge updated → Shows v2.0.0
 - [ ] 14.2 Add comprehensive documentation for beacon.yaml config format
   - **Input**: Create/update docs/beacon-config-guide.md
   - **Expected Output**: Documentation explaining beacon.yaml structure, artifact types, glob patterns, examples for different project types
@@ -754,6 +960,17 @@
   - **Input**: `abc warehouse connect --path examples/sample-warehouse`
   - **Expected Output**: "✓ Connected successfully!" message, connection config created
   - **Validation**: WarehouseValidator accepts structure, all required files/directories present
+  - **TDD Test Cases (write these first):**
+    - TC1: Connection succeeds → Exit code 0, config.toml created
+    - TC2: All required directories present → contexts/, knowledge/, skills/, docs/
+    - TC3: All required files present → AGENTS.global.md, README
+    - TC4: Sample artifacts exist → Knowledge/skills/contexts populated
+    - TC5: project-setup skill present → Can be copied for agent-assisted workflow
+    - TC6: Structure matches documentation → Examples align with specs
+    - TC7: No extra .agentic-beacon/ directory → Is warehouse not project
+    - TC8: README provides guidance → Explains warehouse purpose
+    - TC9: License file present → Legal compliance
+    - TC10: Structure validates from repository root → Relative path works
 - [ ] 15.5 Test abc warehouse connect with examples/sample-warehouse/
 - [ ] 15.6 Test project-setup skill catalog generation with sample warehouse
   - **Input**: Run project-setup skill against examples/sample-warehouse/
@@ -771,6 +988,17 @@
   - **Input**: Create warehouse with v1.x `abc init`, then connect with v2.0 `abc warehouse connect`
   - **Expected Output**: Connection succeeds, warehouse validates successfully
   - **Validation**: No structural changes required, all validation passes
+  - **TDD Test Cases (write these first):**
+    - TC1: v1.x warehouse structure → Passes v2.0 validation
+    - TC2: Connection succeeds → No migration needed
+    - TC3: All v1.x features work → Skills, knowledge, contexts accessible
+    - TC4: Sync from v1.x warehouse → Artifacts copy correctly
+    - TC5: No breaking changes → Structure identical
+    - TC6: Test with multiple v1.x warehouses → All validate
+    - TC7: Symlinks in v1.x warehouse → Handled correctly
+    - TC8: Permissions preserved → No permission changes needed
+    - TC9: README format compatible → Old and new formats accepted
+    - TC10: Integration test → Full workflow from v1.x warehouse to v2.0 client
 - [ ] 16.2 Test that warehouse structure validation accepts old warehouses
   - **Input**: `validator.validate("/path/to/v1-warehouse")`
   - **Expected Output**: ValidationResult(valid=True) with no structural change requirements
