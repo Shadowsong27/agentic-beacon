@@ -59,11 +59,11 @@ jobs:
         run: |
           echo "Installing package..."
           uv pip install dist/*.whl
-          
+
           echo "Testing CLI..."
-          abc --version
-          abc --help
-          
+          uv run abc --version
+          uv run abc --help
+
           echo "✓ CLI works!"
 
       - name: Publish summary
