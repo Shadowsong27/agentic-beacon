@@ -9,7 +9,9 @@ import subprocess
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import List, Optional
+
+from loguru import logger
+from pydantic import BaseModel
 
 
 class DeltaStatus(Enum):
@@ -20,34 +22,35 @@ class DeltaStatus(Enum):
     MISSING = "missing"   # In beacon.yaml but not synced locally
 
 
-@dataclass
-class ComparisonResult:
+class ComparisonResult(BaseModel):
     """Result of comparing a single artifact."""
     path: str
     status: DeltaStatus
-    local_hash: Optional[str] = None
-    warehouse_hash: Optional[str] = None
+    local_hash: str | None = None
+    warehouse_hash: str | None = None
+
+    model_config = {"arbitrary_types_allowed": True}
 
 
 @dataclass
 class DeltaSummary:
     """Summary of all artifact comparisons."""
-    results: List[ComparisonResult] = field(default_factory=list)
+    results: list[ComparisonResult] = field(default_factory=list)
 
     @property
-    def modified(self) -> List[ComparisonResult]:
+    def modified(self) -> list[ComparisonResult]:
         return [r for r in self.results if r.status == DeltaStatus.MODIFIED]
 
     @property
-    def added(self) -> List[ComparisonResult]:
+    def added(self) -> list[ComparisonResult]:
         return [r for r in self.results if r.status == DeltaStatus.ADDED]
 
     @property
-    def missing(self) -> List[ComparisonResult]:
+    def missing(self) -> list[ComparisonResult]:
         return [r for r in self.results if r.status == DeltaStatus.MISSING]
 
     @property
-    def identical(self) -> List[ComparisonResult]:
+    def identical(self) -> list[ComparisonResult]:
         return [r for r in self.results if r.status == DeltaStatus.IDENTICAL]
 
     @property
@@ -55,6 +58,7 @@ class DeltaSummary:
         return any(r.status != DeltaStatus.IDENTICAL for r in self.results)
 
 
+@dataclass
 class DeltaComparator:
     """Compares local artifacts against warehouse versions.
 
@@ -62,21 +66,21 @@ class DeltaComparator:
     Only compares artifacts declared in beacon.yaml.
     """
 
-    def __init__(self, warehouse_path: Path, artifacts_path: Path):
-        """Initialize comparator with warehouse and artifacts paths.
+    warehouse_path: Path
+    artifacts_path: Path
 
-        Args:
-            warehouse_path: Path to warehouse directory
-            artifacts_path: Path to .agentic-beacon/artifacts/ directory
+    def __post_init__(self) -> None:
+        """Resolve paths and validate warehouse directory.
 
         Raises:
-            ValueError: If paths are invalid
+            ValueError: If warehouse_path is not a valid directory
         """
-        self.warehouse_path = Path(warehouse_path).resolve()
-        self.artifacts_path = Path(artifacts_path).resolve()
+        self.warehouse_path = Path(self.warehouse_path).resolve()
+        self.artifacts_path = Path(self.artifacts_path).resolve()
+        logger.debug("DeltaComparator initialized: warehouse={}, artifacts={}", self.warehouse_path, self.artifacts_path)
 
         if not self.warehouse_path.is_dir():
-            raise ValueError(f"Warehouse path is not a valid directory: {warehouse_path}")
+            raise ValueError(f"Warehouse path is not a valid directory: {self.warehouse_path}")
 
     def compute_hash(self, file_path: Path | str) -> str:
         """Compute SHA256 hash of a file.
@@ -122,6 +126,7 @@ class DeltaComparator:
 
         local_exists = local_file.is_file()
         warehouse_exists = warehouse_file.is_file()
+        logger.debug("Comparing {}: local_exists={}, warehouse_exists={}", relative_path, local_exists, warehouse_exists)
 
         if not local_exists and not warehouse_exists:
             return ComparisonResult(
@@ -164,7 +169,7 @@ class DeltaComparator:
                 warehouse_hash=warehouse_hash,
             )
 
-    def compare_all(self, artifact_paths: Optional[List[str]] = None) -> DeltaSummary:
+    def compare_all(self, artifact_paths: list[str] | None = None) -> DeltaSummary:
         """Compare all artifacts.
 
         Args:
@@ -263,13 +268,15 @@ class DeltaComparator:
 
     def _simple_diff(self, file1: Path, file2: Path) -> str:
         """Simple line-by-line diff fallback when git is not available."""
+        import difflib
+
         try:
             lines1 = file1.read_text().splitlines()
             lines2 = file2.read_text().splitlines()
-        except Exception as e:
+        except OSError as e:
+            logger.debug("Error reading files for diff: {}", e)
             return f"Error reading files: {e}"
 
-        import difflib
         diff = difflib.unified_diff(
             lines1, lines2,
             fromfile=f"warehouse/{file1.name}",

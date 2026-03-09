@@ -7,7 +7,8 @@ Automatically manages .gitignore entries to ensure:
 """
 
 from pathlib import Path
-from typing import List
+
+from loguru import logger
 
 
 # Entries that should be in .gitignore
@@ -33,7 +34,7 @@ class GitignoreManager:
         self.project_root = Path(project_root).resolve()
         self.gitignore_path = self.project_root / ".gitignore"
 
-    def ensure_entries(self, entries: List[str] | None = None) -> bool:
+    def ensure_entries(self, entries: list[str] | None = None) -> bool:
         """Ensure all required entries are in .gitignore.
 
         Creates .gitignore if it doesn't exist.
@@ -61,6 +62,7 @@ class GitignoreManager:
         missing_entries = [e for e in entries if e not in existing_lines]
 
         if not missing_entries:
+            logger.debug("No .gitignore entries to add")
             return False  # No changes needed
 
         # Build new content to append
@@ -85,6 +87,7 @@ class GitignoreManager:
 
         try:
             self.gitignore_path.write_text(new_content, encoding="utf-8")
+            logger.debug("Updated .gitignore with {} entries: {}", len(missing_entries), missing_entries)
         except PermissionError as e:
             raise PermissionError(
                 f"Cannot write to {self.gitignore_path}: {e}"

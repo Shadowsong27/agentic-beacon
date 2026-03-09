@@ -1,17 +1,16 @@
 """Tests for SyncEngine - snapshot-based artifact syncing.
 
-Following TDD workflow for tasks 6.1-6.8:
+Covers tasks 6.1-6.5:
 - Task 6.1: SyncEngine class creation
 - Task 6.2: Pure copy sync (no symlinks)
 - Task 6.3: Glob pattern expansion
 - Task 6.4: Directory structure preservation
 - Task 6.5: Idempotent sync logic
-- Task 6.6-6.8: Flags (--preserve, --prune, --verbose)
+
+Tasks 6.6-6.8 (--preserve, --prune, --verbose) covered in test_sync_preserve_prune.py.
 """
 import pytest
 import os
-import hashlib
-from pathlib import Path
 from beacon.core.sync import SyncEngine
 
 
@@ -123,7 +122,7 @@ def test_sync_engine_no_symlinks_created(valid_warehouse, temp_dir):
 # ========== Task 6.3: Glob Pattern Expansion ==========
 
 
-def test_expand_glob_with_double_star(valid_warehouse):
+def test_expand_glob_with_double_star(valid_warehouse, tmp_path):
     """TC1: Pattern with ** → Returns all matching files recursively."""
     # Create nested structure
     (valid_warehouse / "knowledge" / "python").mkdir(parents=True, exist_ok=True)
@@ -131,7 +130,7 @@ def test_expand_glob_with_double_star(valid_warehouse):
     (valid_warehouse / "knowledge" / "python" / "sub").mkdir(exist_ok=True)
     (valid_warehouse / "knowledge" / "python" / "sub" / "file2.md").write_text("test")
     
-    engine = SyncEngine(warehouse_path=valid_warehouse, artifacts_path=Path("/tmp"))
+    engine = SyncEngine(warehouse_path=valid_warehouse, artifacts_path=tmp_path / "artifacts")
     
     matches = engine.expand_glob("knowledge/python/**/*.md")
     
@@ -140,7 +139,7 @@ def test_expand_glob_with_double_star(valid_warehouse):
     assert any("file2.md" in str(m) for m in matches)
 
 
-def test_expand_glob_with_single_star(valid_warehouse):
+def test_expand_glob_with_single_star(valid_warehouse, tmp_path):
     """TC2: Pattern with * → Returns files matching in single directory."""
     (valid_warehouse / "knowledge").mkdir(parents=True, exist_ok=True)
     (valid_warehouse / "knowledge" / "file1.md").write_text("test")
@@ -148,7 +147,7 @@ def test_expand_glob_with_single_star(valid_warehouse):
     (valid_warehouse / "knowledge" / "sub").mkdir(exist_ok=True)
     (valid_warehouse / "knowledge" / "sub" / "file3.md").write_text("test")
     
-    engine = SyncEngine(warehouse_path=valid_warehouse, artifacts_path=Path("/tmp"))
+    engine = SyncEngine(warehouse_path=valid_warehouse, artifacts_path=tmp_path / "artifacts")
     
     matches = engine.expand_glob("knowledge/*.md")
     
@@ -156,22 +155,22 @@ def test_expand_glob_with_single_star(valid_warehouse):
     assert all("sub" not in str(m) for m in matches)
 
 
-def test_expand_glob_no_matches(valid_warehouse):
+def test_expand_glob_no_matches(valid_warehouse, tmp_path):
     """TC4: Pattern matching no files → Returns empty list, no error."""
-    engine = SyncEngine(warehouse_path=valid_warehouse, artifacts_path=Path("/tmp"))
+    engine = SyncEngine(warehouse_path=valid_warehouse, artifacts_path=tmp_path / "artifacts")
     
     matches = engine.expand_glob("knowledge/nonexistent/**/*.md")
     
     assert matches == []
 
 
-def test_expand_glob_only_returns_files(valid_warehouse):
+def test_expand_glob_only_returns_files(valid_warehouse, tmp_path):
     """TC9: Pattern matches directories → Returns only files, not directories."""
     (valid_warehouse / "knowledge" / "dir1").mkdir(parents=True, exist_ok=True)
     (valid_warehouse / "knowledge" / "dir1" / "file.md").write_text("test")
     (valid_warehouse / "knowledge" / "dir2").mkdir(exist_ok=True)
     
-    engine = SyncEngine(warehouse_path=valid_warehouse, artifacts_path=Path("/tmp"))
+    engine = SyncEngine(warehouse_path=valid_warehouse, artifacts_path=tmp_path / "artifacts")
     
     matches = engine.expand_glob("knowledge/**/*.md")
     

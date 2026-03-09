@@ -8,18 +8,22 @@ import hashlib
 import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, List, Optional
+from typing import Callable, Literal
+
+from loguru import logger
+from pydantic import BaseModel
 
 
-@dataclass
-class SyncResult:
+class SyncResult(BaseModel):
     """Result of a sync operation."""
 
     success: bool
-    action: str  # "copied", "skipped", "preserved", "error"
-    source_path: Optional[Path] = None
-    dest_path: Optional[Path] = None
-    error_message: Optional[str] = None
+    action: Literal["copied", "skipped", "preserved", "error"]
+    source_path: Path | None = None
+    dest_path: Path | None = None
+    error_message: str | None = None
+
+    model_config = {"arbitrary_types_allowed": True}
 
 
 @dataclass
@@ -31,10 +35,11 @@ class SyncSummary:
     preserved: int = 0
     pruned: int = 0
     errors: int = 0
-    results: List[SyncResult] = field(default_factory=list)
-    log_messages: List[str] = field(default_factory=list)
+    results: list[SyncResult] = field(default_factory=list)
+    log_messages: list[str] = field(default_factory=list)
 
 
+@dataclass
 class SyncEngine:
     """Engine for syncing artifacts from warehouse to project.
 
@@ -48,15 +53,14 @@ class SyncEngine:
     - Supports verbose logging
     """
 
-    def __init__(self, warehouse_path: Path, artifacts_path: Path):
-        """Initialize sync engine.
+    warehouse_path: Path
+    artifacts_path: Path
 
-        Args:
-            warehouse_path: Path to warehouse directory
-            artifacts_path: Path to .agentic-beacon/artifacts/ directory
-        """
-        self.warehouse_path = Path(warehouse_path)
-        self.artifacts_path = Path(artifacts_path)
+    def __post_init__(self) -> None:
+        """Normalize paths to Path objects."""
+        self.warehouse_path = Path(self.warehouse_path)
+        self.artifacts_path = Path(self.artifacts_path)
+        logger.debug("SyncEngine initialized: warehouse={}, artifacts={}", self.warehouse_path, self.artifacts_path)
 
     def copy_file(self, relative_path: str, preserve: bool = False) -> SyncResult:
         """Copy a single file from warehouse to artifacts directory.
@@ -71,36 +75,39 @@ class SyncEngine:
         source_file = self.warehouse_path / relative_path
         dest_file = self.artifacts_path / relative_path
 
-        try:
-            # Check if source exists
-            if not source_file.exists():
+        # Check if source exists
+        if not source_file.exists():
+            logger.debug("Source file not found: {}", source_file)
+            return SyncResult(
+                success=False,
+                action="error",
+                source_path=source_file,
+                error_message=f"Source file not found: {source_file}"
+            )
+
+        # Check if destination exists and is unchanged (idempotent check)
+        if dest_file.exists():
+            if self._files_identical(source_file, dest_file):
+                logger.debug("Skipping unchanged file: {}", relative_path)
                 return SyncResult(
-                    success=False,
-                    action="error",
+                    success=True,
+                    action="skipped",
                     source_path=source_file,
-                    error_message=f"Source file not found: {source_file}"
+                    dest_path=dest_file
                 )
 
-            # Check if destination exists and is unchanged (idempotent check)
-            if dest_file.exists():
-                if self._files_identical(source_file, dest_file):
-                    return SyncResult(
-                        success=True,
-                        action="skipped",
-                        source_path=source_file,
-                        dest_path=dest_file
-                    )
+            # File differs - check preserve flag
+            if preserve:
+                logger.debug("Preserving locally modified file: {}", relative_path)
+                return SyncResult(
+                    success=True,
+                    action="preserved",
+                    source_path=source_file,
+                    dest_path=dest_file
+                )
 
-                # File differs - check preserve flag
-                if preserve:
-                    return SyncResult(
-                        success=True,
-                        action="preserved",
-                        source_path=source_file,
-                        dest_path=dest_file
-                    )
-
-            # Create parent directories
+        # Create parent directories and copy file
+        try:
             dest_file.parent.mkdir(parents=True, exist_ok=True)
 
             # Copy file (always as regular file, never as symlink)
@@ -110,14 +117,23 @@ class SyncEngine:
             else:
                 shutil.copy2(source_file, dest_file)
 
+            logger.debug("Copied: {} -> {}", source_file, dest_file)
             return SyncResult(
                 success=True,
                 action="copied",
                 source_path=source_file,
                 dest_path=dest_file
             )
-
-        except Exception as e:
+        except PermissionError as e:
+            logger.debug("Permission denied copying {}: {}", relative_path, e)
+            return SyncResult(
+                success=False,
+                action="error",
+                source_path=source_file,
+                error_message=f"Permission denied: {e}"
+            )
+        except OSError as e:
+            logger.debug("OS error copying {}: {}", relative_path, e)
             return SyncResult(
                 success=False,
                 action="error",
@@ -127,11 +143,11 @@ class SyncEngine:
 
     def sync_all(
         self,
-        artifact_paths: List[str],
+        artifact_paths: list[str],
         preserve: bool = False,
         prune: bool = False,
         verbose: bool = False,
-        log_fn: Optional[Callable[[str], None]] = None,
+        log_fn: Callable[[str], None] | None = None,
     ) -> SyncSummary:
         """Sync all artifacts from a list of paths.
 
@@ -186,9 +202,10 @@ class SyncEngine:
                         try:
                             file_path.unlink()
                             summary.pruned += 1
+                            logger.debug("Pruned: {}", rel_path)
                             if verbose:
                                 log(f"  Pruned: {rel_path}")
-                        except Exception as e:
+                        except OSError as e:
                             summary.errors += 1
                             log(f"  Error pruning {rel_path}: {e}")
 
@@ -197,7 +214,7 @@ class SyncEngine:
 
         return summary
 
-    def expand_glob(self, pattern: str) -> List[str]:
+    def expand_glob(self, pattern: str) -> list[str]:
         """Expand glob pattern to list of matching file paths.
 
         Args:
@@ -232,7 +249,7 @@ class SyncEngine:
             hash1 = self._compute_file_hash(file1)
             hash2 = self._compute_file_hash(file2)
             return hash1 == hash2
-        except Exception:
+        except OSError:
             return False
 
     def _compute_file_hash(self, file_path: Path) -> str:
