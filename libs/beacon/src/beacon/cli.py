@@ -375,11 +375,11 @@ def _create_beacon_template(path: Path) -> None:
     """Create empty beacon.yaml template with commented examples."""
     template = """artifacts:
   contexts: []
-    # Context name maps to contexts/AGENTS.<name>.md in warehouse
+    # Filename within the contexts/ directory in warehouse
     # Examples:
-    # - global
-    # - python
-    # - data-platform
+    # - AGENTS.global.md
+    # - AGENTS.python.md
+    # - team-standards.md
 
   knowledge: []
     # Full warehouse-relative paths (supports globs)
@@ -466,9 +466,9 @@ def sync() -> None:
         artifact_paths = []
         console.print(f"\n[blue]Syncing artifacts from warehouse...[/blue]\n")
 
-        # Resolve contexts: "global" → "contexts/AGENTS.global.md"
+        # Resolve contexts: filename within contexts/ (e.g. "AGENTS.global.md" → "contexts/AGENTS.global.md")
         for context_name in beacon_settings.artifacts.contexts:
-            artifact_paths.append(f"contexts/AGENTS.{context_name}.md")
+            artifact_paths.append(f"contexts/{context_name}")
 
         # Resolve knowledge: full warehouse-relative paths (e.g. "knowledge/global/**/*.md")
         for pattern in beacon_settings.artifacts.knowledge:
@@ -555,7 +555,7 @@ def update(*, project: Optional[Path]) -> None:
         artifact_paths: list[str] = []
 
         for context_name in beacon_settings.artifacts.contexts:
-            artifact_paths.append(f"contexts/AGENTS.{context_name}.md")
+            artifact_paths.append(f"contexts/{context_name}")
 
         for pattern in beacon_settings.artifacts.knowledge:
             if "*" in pattern or "?" in pattern or "[" in pattern:
@@ -790,7 +790,7 @@ def delta(*, project: Optional[Path]) -> None:
         beacon_settings = BeaconSettings.from_yaml(beacon_yaml)
 
         for context_name in beacon_settings.artifacts.contexts:
-            expected_paths.append(f"contexts/AGENTS.{context_name}.md")
+            expected_paths.append(f"contexts/{context_name}")
 
         for pattern in beacon_settings.artifacts.knowledge:
             if "*" in pattern or "?" in pattern:
