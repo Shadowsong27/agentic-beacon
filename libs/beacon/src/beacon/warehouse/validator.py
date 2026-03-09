@@ -15,21 +15,18 @@ class WarehouseValidator:
     """Validates warehouse directory structure.
     
     A valid warehouse must contain:
-    - Required directories: contexts/, knowledge/, knowledge/global/, skills/, docs/
-    - Required files: contexts/AGENTS.global.md, README.md
+    - Required directories: contexts/, knowledge/, skills/, docs/
+    - Required file: README.md
     """
 
     REQUIRED_DIRECTORIES = [
         "contexts",
         "knowledge",
-        "knowledge/global",
         "skills",
         "docs",
     ]
 
-    REQUIRED_FILES = [
-        "contexts/AGENTS.global.md",
-    ]
+    REQUIRED_FILES: list[str] = []
 
     OPTIONAL_FILES = [
         "README.md",

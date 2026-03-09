@@ -131,10 +131,8 @@ def test_connect_overwrites_existing_connection(valid_warehouse, temp_dir, monke
     warehouse2.mkdir()
     (warehouse2 / "contexts").mkdir()
     (warehouse2 / "knowledge").mkdir()
-    (warehouse2 / "knowledge" / "global").mkdir()
     (warehouse2 / "skills").mkdir()
     (warehouse2 / "docs").mkdir()
-    (warehouse2 / "contexts" / "AGENTS.global.md").write_text("# Global")
     (warehouse2 / "README.md").write_text("# Warehouse 2")
     
     project_dir = temp_dir / "project"

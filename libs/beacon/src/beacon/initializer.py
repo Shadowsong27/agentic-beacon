@@ -32,8 +32,8 @@ class WarehouseInitializer:
 
         Args:
             org_name: Organization name for documentation
-            languages: List of primary languages (e.g., ["python", "typescript"])
-            domains: List of primary domains (e.g., ["data-platform", "web-services"])
+            languages: Ignored — inner knowledge structure is user-defined
+            domains: Ignored — inner knowledge structure is user-defined
             init_git: Whether to initialize git repository
 
         Returns:
@@ -47,9 +47,9 @@ class WarehouseInitializer:
         # Create directory structure
         self._create_structure()
 
-        # Create placeholder files
+        # Create starter files
         self._create_contexts(org_name)
-        self._create_knowledge(languages or [], domains or [])
+        self._create_knowledge()
         self._create_skills()
         self._create_docs(org_name)
         self._create_root_files(org_name)
@@ -61,312 +61,59 @@ class WarehouseInitializer:
         result = {
             "warehouse_path": str(self.warehouse_path),
             "git_initialized": init_git,
-            "languages": languages or [],
-            "domains": domains or [],
         }
 
         logger.info(f"Warehouse initialized successfully: {result}")
         return result
 
     def _create_structure(self) -> None:
-        """Create basic directory structure."""
+        """Create required directory structure."""
         self.warehouse_path.mkdir(parents=True)
         (self.warehouse_path / "contexts").mkdir()
-        (self.warehouse_path / "knowledge" / "global" / "decisions").mkdir(parents=True)
-        (self.warehouse_path / "knowledge" / "global" / "lessons").mkdir(parents=True)
-        (self.warehouse_path / "knowledge" / "global" / "facts").mkdir(parents=True)
-        (self.warehouse_path / "knowledge" / "languages").mkdir(parents=True)
-        (self.warehouse_path / "knowledge" / "domains").mkdir(parents=True)
+        (self.warehouse_path / "knowledge").mkdir()
         (self.warehouse_path / "skills").mkdir()
         (self.warehouse_path / "docs").mkdir()
 
     def _create_contexts(self, org_name: str) -> None:
-        """Create context files."""
-        global_context = f"""# Global Context
+        """Create starter context file."""
+        global_context = f"""# {org_name} — Agent Context
 
-**Organization:** {org_name}  
+**Organization:** {org_name}
 **Last Updated:** [Date]
 
 ---
 
 ## Purpose
 
-This file contains universal practices and standards that apply to ALL projects in {org_name}.
+This file contains practices and standards that apply to all projects in {org_name}.
+Add your team's rules, conventions, and workflow here.
 
 ---
 
-## Commit Conventions
+## Instructions
 
-**Brief:** Use Conventional Commits format for all commits.
-
-**Format:** `<type>(<scope>): <description>`
-
-**Common types:** feat, fix, refactor, docs, test, chore
-
-**Read:** [Full guide](../knowledge/global/decisions/commit-conventions.md)
-
----
-
-## Code Review Process
-
-**Brief:** All changes require PR review from at least one team member.
-
-**Read:** [Review guidelines](../knowledge/global/lessons/code-review-process.md)
-
----
-
-## Documentation Standards
-
-**Brief:** Document all public APIs and complex logic.
-
-**Read:** [Documentation guide](../knowledge/global/decisions/documentation-standards.md)
-
----
-
-## Progressive Disclosure
-
-Keep context files minimal with pointers to detailed knowledge:
-
-- **In context files:** 1-2 sentence summary + pointer
-- **In knowledge files:** Full explanation with examples
-
-**Example:**
-```markdown
-## Rule Name
-
-**Brief:** Brief statement of the rule.
-
-**Read:** [Detailed explanation](../knowledge/.../file.md)
-```
-
----
-
-**Instructions:** Replace this placeholder with your organization's actual standards.
+Replace this placeholder with your organization's actual standards.
+See the Agentic Beacon documentation for guidance on writing effective context files.
 """
-        (self.warehouse_path / "contexts" / "AGENTS.global.md").write_text(global_context)
+        (self.warehouse_path / "contexts" / "AGENTS.md").write_text(global_context)
 
-        readme = """# Contexts Directory
+    def _create_knowledge(self) -> None:
+        """Create starter knowledge file."""
+        placeholder = """# Knowledge
 
-This directory contains AGENTS.md context files organized by scope.
+Add your team's knowledge artifacts here. The structure is entirely yours to define.
 
-## Structure
+Examples of what teams put here:
+- Architectural decisions and their rationale
+- Coding standards and conventions
+- Framework-specific patterns and best practices
+- Security policies
+- "Why we chose X" explanations
 
-```
-contexts/
-├── AGENTS.global.md           # Required for all projects
-├── AGENTS.<language>.md       # Language-specific contexts
-└── AGENTS.<domain>.md         # Domain-specific contexts
-```
-
-## Creating New Context Files
-
-1. **Determine scope**: Global, language, or domain-specific?
-2. **Follow naming**: `AGENTS.<scope>.md` (e.g., `AGENTS.python.md`)
-3. **Use progressive disclosure**: Brief summaries + pointers to knowledge files
-4. **Reference knowledge**: Point to files in corresponding knowledge directory
-
-## Usage
-
-Teams select which contexts to install in their projects:
-
-```bash
-abc setup --context global --context python --context data-platform
-```
-
-Selected context files are copied to `.opencode/contexts/` in the project.
+There are no required subdirectories or naming conventions.
+Organize knowledge however makes sense for your team.
 """
-        (self.warehouse_path / "contexts" / "README.md").write_text(readme)
-
-    def _create_knowledge(self, languages: list[str], domains: list[str]) -> None:
-        """Create knowledge structure with placeholders."""
-        # Global knowledge placeholders
-        decisions_placeholder = """# Placeholder - Add Your Decisions
-
-## What Goes Here
-
-Technical choices and their rationale that apply across all projects.
-
-## Format
-
-```markdown
-## Decision: [Title]
-
-**Context:** Why this decision was needed
-
-**Options Considered:**
-1. Option A - pros/cons
-2. Option B - pros/cons
-
-**Decision:** What we chose
-
-**Rationale:** Why this is the best choice
-
-**Consequences:** Trade-offs we accept
-
-**Date:** YYYY-MM-DD
-```
-
-## Examples
-
-- `commit-conventions.md` - Commit message standards
-- `code-review-policy.md` - PR review requirements
-- `testing-strategy.md` - Testing approach and tools
-
----
-
-**Delete this file and add your actual decisions.**
-"""
-        (self.warehouse_path / "knowledge" / "global" / "decisions" / ".placeholder.md").write_text(
-            decisions_placeholder
-        )
-
-        lessons_placeholder = """# Placeholder - Add Your Lessons
-
-## What Goes Here
-
-Patterns where agents commonly fail or get distracted, applicable across all projects.
-
-## Format
-
-```markdown
-## Lesson: [Title]
-
-**Agent Failure Mode:** How agents typically fail
-
-**Correct Pattern:** What agents should do instead
-
-**Guardrail:** Questions agents should ask before acting
-
-**When this matters:** Context where this applies
-
-**Date:** YYYY-MM-DD
-```
-
-## Examples
-
-- `session-handoff-patterns.md` - How to hand off work between sessions
-- `progressive-disclosure.md` - When to load detailed context
-- `exception-handling.md` - Common exception handling mistakes
-
----
-
-**Delete this file and add your actual lessons.**
-"""
-        (self.warehouse_path / "knowledge" / "global" / "lessons" / ".placeholder.md").write_text(
-            lessons_placeholder
-        )
-
-        facts_placeholder = """# Placeholder - Add Your Facts
-
-## What Goes Here
-
-Established technical information and configurations that apply across all projects.
-
-## Format
-
-```markdown
-## Fact: [Title]
-
-**Statement:** The fact itself
-
-**Context:** When/where this applies
-
-**Usage Notes:** How to use this information
-
-**Date:** YYYY-MM-DD
-```
-
-## Examples
-
-- `infrastructure-endpoints.md` - Shared infrastructure configs
-- `security-requirements.md` - Security standards
-- `deployment-environments.md` - Environment names and access
-
----
-
-**Delete this file and add your actual facts.**
-"""
-        (self.warehouse_path / "knowledge" / "global" / "facts" / ".placeholder.md").write_text(
-            facts_placeholder
-        )
-
-        # Create language-specific directories
-        for lang in languages:
-            lang_dir = self.warehouse_path / "knowledge" / "languages" / lang
-            (lang_dir / "decisions").mkdir(parents=True)
-            (lang_dir / "lessons").mkdir(parents=True)
-            (lang_dir / "facts").mkdir(parents=True)
-
-            placeholder = f"""# {lang.title()} Knowledge
-
-Add {lang}-specific knowledge here:
-- Decisions: Technical choices for {lang} projects
-- Lessons: Common {lang} agent failure modes
-- Facts: {lang} configurations and standards
-"""
-            (lang_dir / "README.md").write_text(placeholder)
-
-        # Create domain-specific directories
-        for domain in domains:
-            domain_dir = self.warehouse_path / "knowledge" / "domains" / domain
-            (domain_dir / "decisions").mkdir(parents=True)
-            (domain_dir / "lessons").mkdir(parents=True)
-            (domain_dir / "facts").mkdir(parents=True)
-
-            placeholder = f"""# {domain.replace('-', ' ').title()} Knowledge
-
-Add {domain}-specific knowledge here:
-- Decisions: Technical choices for {domain} projects
-- Lessons: Common {domain} patterns and anti-patterns
-- Facts: {domain} configurations and infrastructure
-"""
-            (domain_dir / "README.md").write_text(placeholder)
-
-        # Knowledge README
-        knowledge_readme = """# Knowledge Directory
-
-Atomic, reusable knowledge organized by scope and type.
-
-## Structure
-
-```
-knowledge/
-├── global/              # Universal knowledge (all projects)
-│   ├── decisions/
-│   ├── lessons/
-│   └── facts/
-├── languages/          # Language-specific knowledge
-│   ├── python/
-│   ├── typescript/
-│   └── ...
-└── domains/            # Domain-specific knowledge
-    ├── data-platform/
-    ├── web-services/
-    └── ...
-```
-
-## Knowledge Types
-
-### Decisions
-Technical choices made and their rationale.
-
-### Lessons
-Patterns where agents commonly fail or get distracted.
-
-### Facts
-Established technical information and configurations.
-
-## Selective Installation
-
-When projects select contexts during setup, only relevant knowledge is copied:
-
-```bash
-abc setup --context python --knowledge global --knowledge languages/python
-```
-
-This copies only global and Python-specific knowledge to the project.
-"""
-        (self.warehouse_path / "knowledge" / "README.md").write_text(knowledge_readme)
+        (self.warehouse_path / "knowledge" / "README.md").write_text(placeholder)
 
     def _create_skills(self) -> None:
         """Create skills structure."""

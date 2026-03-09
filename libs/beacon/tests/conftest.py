@@ -81,16 +81,14 @@ def valid_warehouse(temp_dir):
     """Create a valid warehouse structure for testing."""
     warehouse_path = temp_dir / "test-warehouse"
     warehouse_path.mkdir()
-    
+
     # Create required directories
     (warehouse_path / "contexts").mkdir()
     (warehouse_path / "knowledge").mkdir()
-    (warehouse_path / "knowledge" / "global").mkdir()
     (warehouse_path / "skills").mkdir()
     (warehouse_path / "docs").mkdir()
-    
-    # Create required files
-    (warehouse_path / "contexts" / "AGENTS.global.md").write_text("# Global context")
+
+    # Create required README
     (warehouse_path / "README.md").write_text("# Test Warehouse")
-    
+
     return warehouse_path
