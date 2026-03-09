@@ -2,7 +2,7 @@
 
 A high-level design guide for centralized context, knowledge, and skills management in agentic engineering.
 
-**Last Updated:** 2026-03-06
+**Last Updated:** 2026-03-10
 
 > **Built for OpenCode:** This design was developed with [OpenCode](https://opencode.ai) usage in mind. While we keep patterns as generic as possible, the experience with other AI coding agents may differ. The core concepts (centralized context, progressive disclosure, DRY) remain applicable across tools.
 
@@ -140,7 +140,7 @@ This design uses a **two-tier approach** to manage agent information efficiently
 
 **Naming conventions:**
 - **Warehouse level:** Simple filenames (e.g., `global.md`, `python.md`, `data-platform.md`)
-- **Project level:** Single `AGENTS.md` file (at `<project>/.opencode/AGENTS.md`)
+- **Project level:** Single `AGENTS.md` file at the project root
 - **User level:** Single `AGENTS.md` file (at `~/.config/opencode/AGENTS.md`)
 
 The warehouse uses flexible naming because files are loaded via `opencode.json` configuration. Project and user levels use `AGENTS.md` as a convention for easy identification.
@@ -169,7 +169,7 @@ Without this separation, AGENTS.md files become bloated with details agents rare
 
 **Rule:** Only quote type annotations for forward references.
 
-**Read:** [Common mistakes](~/.agentic-context/knowledge/languages/python/lessons/quoted-type-annotations.md)
+**Read:** [Common mistakes](.agentic-beacon/artifacts/knowledge/languages/python/lessons/quoted-type-annotations.md)
 ```
 
 ```markdown
@@ -202,7 +202,7 @@ def process(data: list[Document]) -> ProcessedResult:
 
 If DAG parsing fails, consult the debugging checklist.
 
-**See:** [Airflow debugging checklist](~/.agentic-context/knowledge/domains/data-platform/lessons/airflow-debugging-checklist.md)
+**See:** [Airflow debugging checklist](.agentic-beacon/artifacts/knowledge/domains/data-platform/lessons/airflow-debugging-checklist.md)
 ```
 
 ```markdown
@@ -245,7 +245,7 @@ Context files serve as **boot context** - the knowledge agents see immediately o
 
 **Naming conventions:**
 - **Warehouse:** Simple filenames like `global.md`, `python.md`, `data-platform.md`
-- **Project:** Single `AGENTS.md` at `<project>/.opencode/AGENTS.md`
+- **Project:** Single `AGENTS.md` at the project root
 - **User:** Single `AGENTS.md` at `~/.config/opencode/AGENTS.md`
 
 ### Multi-Tier Context Model
@@ -286,9 +286,9 @@ Context files should be a **pointer system**, not an encyclopedia.
 
 **Rule:** Always use PostgreSQL for development, never SQLite.
 
-**Rationale:** [See decision doc](~/.agentic-context/knowledge/decisions/postgres-over-sqlite.md)
+**Rationale:** [See decision doc](.agentic-beacon/artifacts/knowledge/decisions/postgres-over-sqlite.md)
 
-**Troubleshooting:** [Connection pool guide](~/.agentic-context/knowledge/lessons/postgres-troubleshooting.md)
+**Troubleshooting:** [Connection pool guide](.agentic-beacon/artifacts/knowledge/lessons/postgres-troubleshooting.md)
 ```
 
 **Benefits:**
@@ -409,7 +409,7 @@ knowledge/
 - Referenced by domain-specific contexts (e.g., `data-platform.md`, `web-app.md`)
 - Domain-specific infrastructure, tools, and practices
 
-**Selective installation:** When teams run setup and select contexts, the CLI only copies relevant knowledge directories to `~/.agentic-context/`. A project using Python + Data Platform gets `global/`, `languages/python/`, and `domains/data-platform/` knowledge, but not `web-app/` or `typescript/` knowledge.
+**Selective installation:** When teams configure `beacon.yaml` and run `abc sync`, the CLI only copies the declared artifacts to `.agentic-beacon/artifacts/`. A project using Python + Data Platform knowledge gets `global/`, `languages/python/`, and `domains/data-platform/` knowledge, but not `web-app/` or `typescript/` knowledge.
 
 ### Discovery: Proactive vs Reactive Pointers
 
@@ -423,7 +423,7 @@ Example in `global.md`:
 
 **Rule:** Use conventional commits format for all commits.
 
-**Read:** [Conventional commits guide](~/.agentic-context/knowledge/global/decisions/conventional-commits.md)
+**Read:** [Conventional commits guide](.agentic-beacon/artifacts/knowledge/global/decisions/conventional-commits.md)
 ```
 
 Example in `data-platform.md`:
@@ -432,7 +432,7 @@ Example in `data-platform.md`:
 
 **Rule:** Use two-workflow approach (venv for parsing, Docker for execution).
 
-**Read:** [Two-workflow decision](~/.agentic-context/knowledge/domains/data-platform/decisions/two-workflow-approach.md)
+**Read:** [Two-workflow decision](.agentic-beacon/artifacts/knowledge/domains/data-platform/decisions/two-workflow-approach.md)
 ```
 
 Use proactive pointers for:
@@ -448,8 +448,7 @@ Example in `data-platform.md`:
 
 If DAG parsing fails, consult the debugging checklist.
 
-**See:** [Airflow debugging checklist](~/.agentic-context/knowledge/domains/data-platform/lessons/airflow-debugging-checklist.md)
-```
+**See:** [Airflow debugging checklist](.agentic-beacon/artifacts/knowledge/domains/data-platform/lessons/airflow-debugging-checklist.md)
 
 Use reactive pointers for:
 - Troubleshooting guides consulted during errors
@@ -498,7 +497,7 @@ def create_node(self) -> "TreeNode":
 
 Use primitive types when available (`list` not `List`).
 
-**Read:** [Common annotation mistakes](~/.agentic-context/knowledge/languages/python/lessons/quoted-type-annotations.md)
+**Read:** [Common annotation mistakes](.agentic-beacon/artifacts/knowledge/languages/python/lessons/quoted-type-annotations.md)
 ```
 
 **In knowledge file (detailed):**
@@ -588,21 +587,18 @@ skills/
 
 **Primary method: CLI**
 ```bash
-# List all available skills
-$ agentic-list skills
+# List all available content (including skills) in the connected warehouse
+abc list
 
-Available skills:
-  - openspec-propose: Create new OpenSpec change with design and tasks
-  - openspec-apply-change: Implement tasks from an OpenSpec change
-  - pr-review: Comprehensive code review for pull requests
-  - airflow-debug: Debug Airflow DAG parsing and execution issues
-
-# Show skill details
-$ agentic-show skill openspec-propose
+# Example output (skills section):
+#   skills/
+#     openspec-propose/    - Create new OpenSpec change with design and tasks
+#     openspec-apply-change/ - Implement tasks from an OpenSpec change
+#     pr-review/           - Comprehensive code review for pull requests
 ```
 
 **Secondary method: Browse repository**
-- Navigate to `skills/README.md` in the central repository
+- Navigate to `skills/README.md` in the warehouse repository
 - Catalog is maintained by agents when skills are added or updated
 - Includes skill name, description, and usage notes
 
@@ -636,15 +632,18 @@ The skill's `SKILL.md` contains detailed instructions agents follow when invoked
 
 ### 1. Setup (One-time per project)
 
-Run CLI tool with interactive selection:
-- Choose language contexts (Python, TypeScript, etc.)
-- Choose domain contexts (Data Platform, Web App, etc.)
-- Choose skills to install
+Connect the project to a warehouse and declare which artifacts to use:
+
+```bash
+abc warehouse connect --path ~/org-warehouse
+abc setup --manual   # or --agent-assisted
+# Edit .agentic-beacon/beacon.yaml to choose contexts, knowledge, and skills
+abc sync
+```
 
 **Result:**
-- Context files copied to standard location (`~/.agentic-context/`)
-- Skills copied to project (`.opencode/skills/`)
-- Project's `opencode.json` configured to reference all contexts
+- Artifacts copied to `.agentic-beacon/artifacts/` (contexts, knowledge, skills)
+- Project's `opencode.json` can reference the synced contexts
 - Project's `AGENTS.md` created for project-specific content
 
 ### 2. Use (Daily development)
@@ -653,25 +652,28 @@ Agents automatically load all configured contexts on session start. Developers d
 
 ### 3. Update (Periodic sync)
 
-Run sync command to pull latest from central repo:
-- Context files updated in standard location
-- Skills updated in project
-- Version conflicts flagged for manual review
+Pull the latest warehouse changes and re-sync:
+
+```bash
+cd ~/org-warehouse && git pull
+cd ~/my-project && abc sync    # or abc update to force overwrite
+```
+
+Version conflicts (files you've edited locally) are flagged by `abc delta` before syncing.
 
 ### 4. Contribute (Give back improvements)
 
-When you improve a skill or discover a pattern worth sharing:
+When you improve a context, knowledge file, or skill:
 - Test locally in your project
-- Use contribution command to prepare for central repo
-- Submit PR with test results
-- CI validates against test projects
-- Once merged, available to all teams
+- Review local vs warehouse changes with `abc delta`
+- Submit a PR to the warehouse repository
+- Once merged, available to all teams via their next sync
 
 ### Technical Notes
 
-- **Standard location:** Context files live in `~/.agentic-context/` to avoid path differences across machines
-- **OpenCode native support:** The `instructions` field in `opencode.json` loads multiple files automatically
-- **Glob patterns supported:** Can reference `docs/**/*.md` for dynamic inclusion
-- **Load order matters:** Project AGENTS.md loads last, so it can override global patterns
+- **Artifact location:** Synced artifacts live in `.agentic-beacon/artifacts/` within each project
+- **OpenCode native support:** The `instructions` field in `opencode.json` loads context files automatically
+- **Glob patterns supported:** `beacon.yaml` supports `knowledge/global/**/*.md` style patterns
+- **Load order matters:** Project `AGENTS.md` loads last, so it can override global patterns
 
 ---
