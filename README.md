@@ -1,10 +1,10 @@
-# Agentic Beacon
+# 🚀 Agentic Beacon
 
 **An opinionated framework for standardizing and distributing agentic engineering artifacts across teams.**
 
 Agentic Beacon provides:
-1. **A methodology** for managing contexts, knowledge, and skills - the core agentic engineering artifacts worthy of standardization and team-wide distribution
-2. **CLI tooling (`abc`)** for initializing warehouses, managing connections, and distributing artifacts across projects
+1. 🗂️ **A methodology** for managing contexts, knowledge, and skills - the core agentic engineering artifacts worthy of standardization and team-wide distribution
+2. 🛠️ **CLI tooling (`abc`)** for initializing warehouses, managing connections, and distributing artifacts across projects
 
 > **Opinionated Framework:** Agentic Beacon takes a **specific stance** on how to organize and distribute agentic artifacts. This is not a universal standard - it's an opinionated approach based on DRY principles, file-based simplicity, and centralized collaboration. The agentic engineering landscape is rapidly evolving, and this framework provides one possible solution. Evaluate whether this approach fits your team's needs and adapt accordingly.
 
@@ -16,17 +16,17 @@ Agentic Beacon is a **framework** for collaborative AI-assisted development that
 
 ### The Framework Components
 
-**1. Methodology - Artifact Standardization**
+**1. 📐 Methodology - Artifact Standardization**
 
 Defines three core artifact types that should be centralized and distributed:
 
-- **Contexts** - Boot instructions and coding standards loaded on agent session start
-- **Knowledge** - Atomic decisions, lessons, and facts organized by scope (global/language/domain)
-- **Skills** - Reusable workflows, procedures, and specialized instructions
+- 📄 **Contexts** - Boot instructions and coding standards loaded on agent session start
+- 🧠 **Knowledge** - Atomic decisions, lessons, and facts organized by scope (global/language/domain)
+- ⚡ **Skills** - Reusable workflows, procedures, and specialized instructions
 
 These artifacts form a **warehouse** - a single source of truth for your organization's agentic practices.
 
-**2. CLI Tooling - Warehouse Operations**
+**2. 💻 CLI Tooling - Warehouse Operations**
 
 The `abc` CLI provides practical tools for:
 
@@ -36,7 +36,7 @@ The `abc` CLI provides practical tools for:
 - **Discovery** - Find local changes that could benefit other teams (`abc delta`)
 - **Management** - Track installed content and maintain sync (`abc status`, `abc update`, `abc clean`)
 
-### Core Principle: Don't Repeat Yourself (DRY)
+### 🔁 Core Principle: Don't Repeat Yourself (DRY)
 
 **DRY for agentic knowledge** - the fundamental philosophy behind this framework.
 
@@ -46,7 +46,7 @@ Instead of duplicating agent instructions, coding standards, and learned pattern
 - **Onboarding is instant** - New developers and agents inherit organizational knowledge automatically
 - **Evolution is natural** - Adapt the structure as practices evolve, without rewriting every project
 
-### Design Philosophy: Intentionally Lightweight
+### 🪶 Design Philosophy: Intentionally Lightweight
 
 **Why markdown files and Git instead of a database or RAG system?**
 
@@ -61,21 +61,21 @@ The agentic engineering landscape is shifting rapidly. What's best practice toda
 
 > For the full reasoning, see [Why This Exists: Three Questions](./docs/agentic-warehouse-design.md#why-this-exists-three-questions) in the design docs.
 
-## Framework Architecture
+## 🏗️ Framework Architecture
 
 ### Artifact Types
 
-**Contexts** - Instructions loaded at agent boot time
+📄 **Contexts** - Instructions loaded at agent boot time
 - Global standards applicable to all projects
 - Language-specific conventions (Python, TypeScript, etc.)
 - Domain-specific patterns (data platforms, web services, etc.)
 
-**Knowledge** - Atomic information units organized hierarchically
+🧠 **Knowledge** - Atomic information units organized hierarchically
 - Decisions: Technical choices and rationale
 - Lessons: Learnings from agent failures and successes
 - Facts: Established configurations and references
 
-**Skills** - Reusable procedures and workflows
+⚡ **Skills** - Reusable procedures and workflows
 - Multi-step processes agents follow
 - Specialized instructions for specific tasks
 - Templates and automation with usage guides
@@ -114,7 +114,7 @@ my-warehouse/              # Created by: abc warehouse init my-warehouse
 - **Warehouse contexts:** Simple filenames (e.g., `global.md`, `python.md`)
 - **Project/User level:** Single `AGENTS.md` file by convention
 
-## Getting Started
+## 🚦 Getting Started
 
 ### Installation
 
@@ -182,7 +182,7 @@ agentic-beacon/
 
 > **Note on `knowledge/` and `skills/`:** These folders contain artifacts specific to developing the Agentic Beacon framework itself. They are **not** a warehouse and not meant to be distributed to other projects.
 
-## Documentation
+## 📚 Documentation
 
 ### Conceptual Design (docs/)
 - **[Agentic Warehouse Design](./docs/agentic-warehouse-design.md)** - High-level design and architecture
@@ -201,7 +201,7 @@ agentic-beacon/
 ### Examples (examples/)
 - **[Sample Warehouse](./examples/sample-warehouse/)** - Example output from `abc warehouse init`
 
-## CLI Reference
+## ⌨️ CLI Reference
 
 ### Commands
 
@@ -217,14 +217,14 @@ agentic-beacon/
 | `abc list` | List available content in the connected warehouse |
 | `abc clean` | Remove synced artifacts from the project |
 
-## For Organizations
+## 🏢 For Organizations
 
 1. **Initialize warehouse**: `abc warehouse init` to create structure
 2. **Customize**: Add your organization's contexts, knowledge, and skills
 3. **Share**: Teams install `agentic-beacon` and use `abc warehouse connect` in projects
 4. **Optional**: Host internally on private PyPI (see [Private Deployment Guide](./libs/beacon/PRIVATE_DEPLOYMENT.md))
 
-## For Teams
+## 👥 For Teams
 
 1. **Install**: `uv tool install agentic-beacon`
 2. **Connect**: `abc warehouse connect --path ~/your-warehouse`
@@ -233,7 +233,7 @@ agentic-beacon/
 5. **Stay current**: `abc update` after warehouse changes
 6. **Contribute**: Use `abc delta` to find new patterns worth sharing back
 
-## Technical Details
+## 🔧 Technical Details
 
 - **Package Name:** `agentic-beacon`
 - **CLI Command:** `abc`
