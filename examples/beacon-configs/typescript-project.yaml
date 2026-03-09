@@ -1,0 +1,12 @@
+# beacon.yaml for a TypeScript project
+# Copy to your project's .agentic-beacon/beacon.yaml
+
+artifacts:
+  knowledge:
+    - languages/typescript/**/*.md
+    - global/decisions/**/*.md
+    - global/lessons/**/*.md
+  skills:
+    - code-review/SKILL.md
+  contexts:
+    - AGENTS.global.md

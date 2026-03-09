@@ -1,5 +1,35 @@
 # Changelog
 
+## [2.0.0] (Unreleased)
+
+### ⚠ BREAKING CHANGES
+
+* `abc init` has been moved to `abc warehouse init`
+* New config-based artifact management replaces direct file copying
+
+### Features
+
+* **config**: Add beacon.yaml for declarative artifact dependency management
+* **config**: Add config.toml for warehouse connection persistence
+* **sync**: Implement `abc sync` command with pure copy (no symlinks) from warehouse
+* **sync**: Add `--preserve` flag to skip locally modified files during sync
+* **sync**: Add `--prune` flag to remove artifacts no longer in beacon.yaml
+* **sync**: Add `--verbose` flag for detailed sync output
+* **delta**: Implement `abc delta` command with hash-based summary comparison
+* **delta**: Add detailed `abc delta <file>` with git diff --no-index integration
+* **delta**: Add color output and `--no-color` flag for diffs
+* **setup**: Implement `abc setup` command with three workflows (agent-assisted, manual, skip)
+* **setup**: Add agent-assisted workflow with warehouse catalog generation
+* **warehouse**: Add `abc warehouse connect` command for warehouse connection
+* **gitignore**: Automatic .gitignore management (exclude config.toml, artifacts/)
+* **skill**: Add project-setup skill for AI-agent-assisted beacon.yaml population
+
+### Code Refactoring
+
+* Move `abc init` to `abc warehouse init` with deprecation error for old command
+* Separate warehouse management commands under `abc warehouse` subgroup
+* Keep client operations (sync, delta, setup) at top level
+
 ## [1.1.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v1.0.0...agentic-beacon@v1.1.0) (2026-03-07)
 
 

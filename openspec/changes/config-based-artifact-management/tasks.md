@@ -313,7 +313,7 @@ pytest tests/ -v --tb=short
   - **Expected Output**: Prompt with 3 choices: "1) Agent-assisted (install project-setup skill)", "2) Manual (create empty template)", "3) Skip (create later)"
   - **Validation**: All three workflows implemented, each produces correct outcome, user can select via number
   - **Test Results:** ✅ 2/2 tests passing - manual and skip workflows validated
-- [ ] 4.4 Implement project-setup skill installation for agent-assisted workflow
+- [x] 4.4 Implement project-setup skill installation for agent-assisted workflow
   - **Input**: User selects agent-assisted workflow
   - **Expected Output**: project-setup skill copied from warehouse to `.agentic-beacon/skills/project-setup/`, confirmation message
   - **Validation**: Skill directory created, SKILL.md present, user informed how to invoke skill
@@ -336,7 +336,7 @@ pytest tests/ -v --tb=short
 **Output**: project-setup skill that scans warehouse and generates markdown catalog
 **Validation**: Run skill; `.agentic-beacon/warehouse-catalog.md` created with tree structure of warehouse artifacts
 
-- [ ] 5.1 Create project-setup skill with SKILL.md
+- [x] 5.1 Create project-setup skill with SKILL.md
   - **Input**: Check `examples/sample-warehouse/skills/project-setup/SKILL.md` exists
   - **Expected Output**: SKILL.md file with clear instructions for agent to generate warehouse catalog and populate beacon.yaml
   - **Validation**: File exists, contains proper skill structure, instructions are clear for LLM consumption
@@ -351,7 +351,7 @@ pytest tests/ -v --tb=short
     - TC8: Instructions mention project analysis → Tells agent to check package.json, etc.
     - TC9: Skill specifies output location → .agentic-beacon/warehouse-catalog.md
     - TC10: Error handling guidance → What to do if warehouse disconnected
-- [ ] 5.2 Implement warehouse catalog generation (scan warehouse, output markdown tree)
+- [x] 5.2 Implement warehouse catalog generation (scan warehouse, output markdown tree)
   - **Input**: Skill invoked with connected warehouse at `~/org-warehouse`
   - **Expected Output**: Tree structure showing all artifacts by type:
     ```markdown
@@ -377,7 +377,7 @@ pytest tests/ -v --tb=short
     - TC8: Permission denied on artifact directory → Error or skip with warning
     - TC9: Symlinks in warehouse → Follows or notes symlink appropriately
     - TC10: Output is valid markdown → Parses and renders correctly
-- [ ] 5.3 Save catalog to .agentic-beacon/warehouse-catalog.md
+- [x] 5.3 Save catalog to .agentic-beacon/warehouse-catalog.md
   - **Input**: Catalog generation completes
   - **Expected Output**: `.agentic-beacon/warehouse-catalog.md` file created with generated catalog content
   - **Validation**: File exists, contains catalog, readable by user and agent, path is project-relative
@@ -392,15 +392,15 @@ pytest tests/ -v --tb=short
     - TC8: File encoding is UTF-8 → Handles international characters
     - TC9: Line endings normalized → Consistent across platforms
     - TC10: File size reasonable → Not excessively large for LLM context
-- [ ] 5.4 Format catalog for LLM readability (clear markdown structure)
+- [x] 5.4 Format catalog for LLM readability (clear markdown structure)
   - **Input**: Generated catalog file
   - **Expected Output**: Proper markdown with headers, bullet points, clear grouping, artifact descriptions if available
   - **Validation**: Valid markdown, renders correctly, hierarchical structure clear, no formatting issues
-- [ ] 5.5 Include artifact descriptions in catalog when available
+- [x] 5.5 Include artifact descriptions in catalog when available
   - **Input**: Warehouse artifacts with frontmatter descriptions (e.g., SKILL.md with description field)
   - **Expected Output**: Catalog includes descriptions: `- code-review: Comprehensive PR review skill following best practices`
   - **Validation**: Descriptions extracted from artifact metadata, shown in catalog, missing descriptions handled gracefully (no description shown)
-- [ ] 5.6 Add instructions in skill for agent to analyze project files and populate beacon.yaml
+- [x] 5.6 Add instructions in skill for agent to analyze project files and populate beacon.yaml
   - **Input**: Agent reads project-setup SKILL.md
   - **Expected Output**: Clear step-by-step instructions for agent: 1) Read warehouse-catalog.md, 2) Analyze project files (package.json, requirements.txt, etc.), 3) Select relevant artifacts, 4) Populate beacon.yaml
   - **Validation**: Instructions actionable by LLM, include examples, specify exact file paths, explain selection criteria
@@ -415,12 +415,8 @@ pytest tests/ -v --tb=short
 **Input**: beacon.yaml with artifact list, connected warehouse
 **Output**: SyncEngine class that copies artifacts preserving directory structure and supporting glob patterns
 **Validation**: Create test beacon.yaml with glob pattern; SyncEngine copies matching files to .agentic-beacon/artifacts/ with correct structure
-**Test Results**: ✅ `tests/core/test_sync_engine.py` exists — run to verify pass/fail count
-
-> **Note (2026-03-09):** `SyncEngine` class was already implemented in `libs/beacon/src/beacon/core/sync.py` with `copy_file()`, `expand_glob()`, and `_files_identical()` methods. Tasks 6.1–6.5 are effectively done. Tasks 6.6–6.8 (flags) are not yet implemented.
 
 - [x] 6.1 Create SyncEngine class for artifact syncing
-  - **Implemented in:** `src/beacon/core/sync.py`
 - [x] 6.2 Implement pure copy sync (no symlinks) from warehouse to .agentic-beacon/artifacts/
   - **Input**: `sync_engine.sync()` with beacon.yaml containing `knowledge: ["languages/python/**/*.md"]`
   - **Expected Output**: All matching .md files copied to .agentic-beacon/artifacts/knowledge/languages/python/ structure
@@ -439,9 +435,8 @@ pytest tests/ -v --tb=short
     - TC11: File permissions preserved → Copied file has same read/write/execute bits
     - TC12: Verify no symlinks created → `assert not os.path.islink(copied_file)` for all files
 - [x] 6.3 Add glob pattern expansion support using Python glob module
-  - **Implemented:** `expand_glob(pattern)` exists in `SyncEngine` — uses `warehouse_path.glob(pattern)` and returns relative paths (files only). Core `**` and `*` patterns work. Edge cases (TC7 GlobPatternError, TC10/TC11 path prefix validation) are NOT implemented.
   - **Input**: `sync_engine.expand_glob("knowledge/languages/python/**/*.md", warehouse_path)`
-  - **Expected Output**: List of absolute file paths (note: current impl returns relative paths, not absolute)
+  - **Expected Output**: List of absolute file paths matching pattern (e.g., ["/warehouse/knowledge/languages/python/fastapi.md", "/warehouse/knowledge/languages/python/pydantic.md"])
   - **Validation**: Expands ** for recursive matching, handles * for wildcards, returns empty list for no matches, validates pattern syntax
   - **TDD Test Cases (write these first):**
     - TC1: Pattern with ** → Returns all matching files recursively
@@ -457,18 +452,22 @@ pytest tests/ -v --tb=short
     - TC11: Pattern with .. parent reference → Raises error "Parent references not allowed"
     - TC12: Case-sensitive vs insensitive → Respects filesystem case sensitivity
 - [x] 6.4 Implement directory structure preservation during copy
-  - **Implemented:** `copy_file()` uses `dest_file.parent.mkdir(parents=True, exist_ok=True)` to create all parent dirs
+  - **Input**: Copy `knowledge/languages/python/fastapi.md` from warehouse
+  - **Expected Output**: File appears at `.agentic-beacon/artifacts/knowledge/languages/python/fastapi.md` with directory structure created
+  - **Validation**: All parent directories created, file copied to correct location, directory structure mirrors warehouse
 - [x] 6.5 Add idempotent sync logic (detect unchanged files, skip copying)
-  - **Implemented:** `copy_file()` calls `_files_identical()` (SHA256 hash) and returns `action="skipped"` for unchanged files
-- [ ] 6.6 Implement --preserve flag to skip files with local modifications
+  - **Input**: Run `sync_engine.sync()` twice with no changes to warehouse or beacon.yaml
+  - **Expected Output**: First run copies files, second run detects no changes and skips all files, both exit code 0
+  - **Validation**: Hash comparison used to detect changes, unchanged files not copied, log shows "N files unchanged, 0 copied"
+- [x] 6.6 Implement --preserve flag to skip files with local modifications
   - **Input**: `abc sync --preserve` after modifying local artifact
   - **Expected Output**: Modified file not overwritten, message: "Preserved 1 locally modified file. Use 'abc delta' to review changes."
   - **Validation**: Detects local modifications via hash, skips those files, other files sync normally, user warned about preserved files
-- [ ] 6.7 Add --prune flag to remove artifacts no longer in beacon.yaml
+- [x] 6.7 Add --prune flag to remove artifacts no longer in beacon.yaml
   - **Input**: Remove artifact from beacon.yaml, run `abc sync --prune`
   - **Expected Output**: Removed artifact deleted from `.agentic-beacon/artifacts/`, message: "Pruned 1 artifact no longer in beacon.yaml"
   - **Validation**: Only artifacts not in beacon.yaml are deleted, artifacts in config remain, empty directories cleaned up
-- [ ] 6.8 Add verbose logging showing which files were synced and which glob patterns matched
+- [x] 6.8 Add verbose logging showing which files were synced and which glob patterns matched
   - **Input**: `abc sync --verbose` or `sync_engine.sync(verbose=True)`
   - **Expected Output**: Detailed log: "Expanding pattern: knowledge/**/*.md → 5 matches", "Copying: knowledge/lesson.md → .agentic-beacon/artifacts/knowledge/lesson.md", "Skipped: 3 unchanged files"
   - **Validation**: Shows pattern expansion results, per-file copy operations, unchanged file count, helpful for debugging
@@ -480,19 +479,25 @@ pytest tests/ -v --tb=short
 **Output**: `abc sync` command that syncs artifacts according to beacon.yaml
 **Validation**: Modify beacon.yaml to add/remove artifacts, run `abc sync`; artifacts directory matches beacon.yaml specification
 
-> **Status:** `abc sync` implemented in `cli.py`. Path resolution: contexts (`global` → `contexts/AGENTS.global.md`) and skills (`record-decision` → `skills/record-decision/**/*`) work correctly. Knowledge entries are treated as full warehouse-relative paths (e.g. `knowledge/global/**/*.md`). **128/128 tests passing.**
->
-> **Not yet implemented:** `--preserve`, `--prune`, `--verbose` flags (tasks 7.3–7.7).
-
 - [x] 7.1 Implement abc sync command (reads beacon.yaml, invokes SyncEngine)
-  - **Implemented in:** `cli.py` `sync()` function
-  - **Test Results:** ✅ 3/3 passing (`test_sync_with_valid_configuration`, `test_sync_is_idempotent`, `test_sync_with_glob_patterns`)
-  - **TC4, TC5, TC6:** Not tested yet (flags not implemented)
-  - **TC9:** Not tested
-  - **TC10:** Basic summary ("✓ Sync complete, N files copied") ✅
+  - **Input**: `abc sync` with beacon.yaml containing 5 artifacts
+  - **Expected Output**: Progress messages showing sync status, exit code 0, "✓ Synced N artifacts"
+  - **Validation**: `.agentic-beacon/artifacts/` contains exactly the artifacts specified in beacon.yaml, no extras
+  - **TDD Test Cases (write these first):**
+    - TC1: First sync with empty artifacts dir → All artifacts copied, exit 0
+    - TC2: Second sync with no changes → No files copied (idempotent), exit 0
+    - TC3: beacon.yaml has 5 artifacts → Exactly 5 artifacts in artifacts/ after sync
+    - TC4: Sync with --verbose flag → Detailed output shown
+    - TC5: Sync with --preserve flag → Modified files not overwritten
+    - TC6: Sync with --prune flag → Removed artifacts deleted
+    - TC7: Interrupted sync (Ctrl+C) → Partial state, resume works
+    - TC8: beacon.yaml with globs → All matching files synced
+    - TC9: Artifacts dir has extra files not in beacon.yaml → Extra files remain (unless --prune)
+    - TC10: Progress shown during sync → Updates displayed, final count correct
 - [x] 7.2 Add validation that warehouse is connected before syncing
-  - **Implemented:** Checks `.agentic-beacon/config.toml` existence; exits 1 with message if missing
-  - **Test Results:** ✅ Passing
+  - **Input**: `abc sync` without running `abc warehouse connect` first
+  - **Expected Output**: Error: "No warehouse connected. Run 'abc warehouse connect --path <warehouse>' first.", exit code 1
+  - **Validation**: Checks for config.toml existence, validates local_path is set, rejects sync with actionable error
   - **TDD Test Cases (write these first):**
     - TC1: No config.toml exists → Exit 1, error message displayed
     - TC2: config.toml exists but empty → Exit 1, error about missing connection
@@ -504,23 +509,23 @@ pytest tests/ -v --tb=short
     - TC8: Multiple validation errors → Shows all issues at once
     - TC9: Warehouse path is relative in config → Resolves and validates
     - TC10: Permission to read config denied → Error about permissions
-- [ ] 7.3 Add validation that beacon.yaml exists before syncing
+- [x] 7.3 Add validation that beacon.yaml exists before syncing
   - **Input**: `abc sync` without beacon.yaml file
   - **Expected Output**: Error: "No beacon.yaml found. Run 'abc setup' to create artifact configuration.", exit code 1
   - **Validation**: Checks for .agentic-beacon/beacon.yaml, provides actionable next step, exit code 1
-- [ ] 7.4 Implement artifact path validation (warn if beacon.yaml references missing warehouse files)
+- [x] 7.4 Implement artifact path validation (warn if beacon.yaml references missing warehouse files)
   - **Input**: `abc sync` with beacon.yaml containing `knowledge/missing-file.md` not in warehouse
   - **Expected Output**: Warning: "Artifact not found in warehouse: knowledge/missing-file.md. Skipping.", other artifacts sync normally
   - **Validation**: Validates each artifact exists before copying, warns for missing, continues with available artifacts
-- [ ] 7.5 Add progress output during sync operation
+- [x] 7.5 Add progress output during sync operation
   - **Input**: `abc sync` with 10 artifacts to sync
   - **Expected Output**: Progress: "Syncing artifacts... [▓▓▓▓▓░░░░░] 5/10" or "Synced: knowledge/lesson.md (1/10)"
   - **Validation**: Shows incremental progress, updates during sync, final summary shows total synced
-  - **Note:** Basic summary exists ("✓ Sync complete, N copied, N unchanged"). Per-file progress not implemented.
 - [x] 7.6 Handle empty beacon.yaml gracefully (no-op sync)
-  - **Implemented:** Returns exit 0 with "No artifacts configured" message when all lists empty
-  - **Test Results:** ✅ Passing
-- [ ] 7.7 Add error handling for invalid glob patterns
+  - **Input**: `abc sync` with `artifacts: {knowledge: [], skills: [], contexts: []}`
+  - **Expected Output**: "No artifacts configured in beacon.yaml. Nothing to sync.", exit code 0
+  - **Validation**: No errors, no copy operations, friendly message, exit code 0
+- [x] 7.7 Add error handling for invalid glob patterns
   - **Input**: `abc sync` with beacon.yaml containing invalid glob: `knowledge/[invalid`
   - **Expected Output**: Error: "Invalid glob pattern in beacon.yaml: knowledge/[invalid - Unmatched bracket", exit code 1
   - **Validation**: Detects invalid patterns, reports which pattern failed, doesn't crash, exit code 1
@@ -532,16 +537,7 @@ pytest tests/ -v --tb=short
 **Output**: DeltaComparator class with hash-based comparison and git diff integration
 **Validation**: Modify local artifact, run comparison; returns [Modified] status with correct file path
 
-> **Status (2026-03-09):** `core/delta.py` does NOT exist. The designed `DeltaComparator` class has NOT been created.
->
-> **However**, delta comparison logic was implemented **inline inside `cli.py`** (the `delta` command function) during the live testing session. This works but is:
-> - Not unit-testable as a standalone class
-> - Missing the `detailed_diff()` (git diff) functionality
-> - Missing the file argument to `abc delta <file>`
->
-> **Recommended approach for next session:** Create `core/delta.py` with `DeltaComparator` class per the design, write TDD tests, then refactor `cli.py` delta command to use it. The inline hash logic in `cli.py` can serve as the reference implementation.
-
-- [ ] 8.1 Create DeltaComparator class for comparing local vs warehouse artifacts
+- [x] 8.1 Create DeltaComparator class for comparing local vs warehouse artifacts
   - **Input**: `from beacon.core.delta import DeltaComparator; comparator = DeltaComparator(warehouse_path, artifacts_path); results = comparator.compare_all()`
   - **Expected Output**: List of comparison results with path, status, and hash info for each artifact
   - **Validation**: Class instantiates, compare_all() returns structured results, no errors on empty artifact directory
@@ -556,7 +552,7 @@ pytest tests/ -v --tb=short
     - TC8: Paths with trailing slashes → Normalized correctly
     - TC9: Relative paths provided → Converted to absolute
     - TC10: Call compare_all() multiple times → Consistent results (idempotent)
-- [ ] 8.2 Implement hash-based comparison for summary view
+- [x] 8.2 Implement hash-based comparison for summary view
   - **Input**: `comparator.compute_hash("path/to/file.md")`
   - **Expected Output**: SHA256 hash string (e.g., "a1b2c3d4...")
   - **Validation**: Consistent hash for same content, different hash for different content, handles binary and text files
@@ -573,15 +569,15 @@ pytest tests/ -v --tb=short
     - TC10: File is directory → Raises IsADirectoryError
     - TC11: Hash algorithm is SHA256 → Verify specific algorithm used
     - TC12: Symlink to file → Hashes target content not symlink itself
-- [ ] 8.4 Add support for comparing only artifacts in beacon.yaml (not all files)
+- [x] 8.4 Add support for comparing only artifacts in beacon.yaml (not all files)
   - **Input**: `comparator.compare_from_config(beacon_yaml_path)` with 5 artifacts in beacon.yaml, 10 files in artifacts/
   - **Expected Output**: Comparison results for only the 5 artifacts specified in beacon.yaml, other files ignored
   - **Validation**: Reads beacon.yaml, compares only listed artifacts, doesn't compare extra local files
-- [ ] 8.5 Integrate git diff --no-index for detailed file comparison
+- [x] 8.5 Integrate git diff --no-index for detailed file comparison
   - **Input**: `comparator.detailed_diff("knowledge/lesson.md")`
   - **Expected Output**: Unified diff format showing line-by-line changes between warehouse and local versions
   - **Validation**: Executes `git diff --no-index`, captures output, returns formatted diff, handles binary files gracefully
-- [ ] 8.6 Add color output support for diff highlighting
+- [x] 8.6 Add color output support for diff highlighting
   - **Input**: `comparator.detailed_diff("file.md", color=True)` in terminal with color support
   - **Expected Output**: Diff with ANSI color codes: green for additions (+), red for deletions (-), cyan for context
   - **Validation**: Colors applied correctly, TTY detection works, --no-color flag disables colors, colors disabled when piped
@@ -593,22 +589,7 @@ pytest tests/ -v --tb=short
 **Output**: `abc delta` showing summary, `abc delta <file>` showing detailed diff
 **Validation**: Modify artifact locally, run `abc delta`; shows [Modified] status. Run `abc delta <file>`; shows unified diff
 
-> **Status (2026-03-09):** `abc delta` command was **rewritten inline in `cli.py`** during the live testing session. It performs hash-based comparison between `.agentic-beacon/artifacts/` and warehouse files listed in `beacon.yaml`, showing `[New]`, `[Modified]`, and `[Missing]` status indicators.
->
-> **What's done (inline, not per spec design — no TDD tests):**
-> - Summary delta view exists — compares all artifacts from `beacon.yaml` and shows status indicators
-> - Hash comparison logic inline (duplicates SHA256 logic that belongs in `DeltaComparator`)
->
-> **What's NOT done:**
-> - `DeltaComparator` class in `core/delta.py` does NOT exist (required by Phase 8)
-> - File argument `abc delta <file>` is NOT implemented (tasks 9.3, 9.4)
-> - `detailed_diff()` via `git diff --no-index` is NOT implemented (task 9.3, 8.5)
-> - Status suggestion to run `abc sync` on missing artifacts NOT implemented (task 9.7)
-> - No TDD tests for the delta command
->
-> **Recommended next steps:** Create `core/delta.py` with `DeltaComparator` class per Phase 8 design, write TDD tests first, then refactor `cli.py` delta command to use it. Add `<file>` argument for detailed diff.
-
-- [ ] 9.1 Implement abc delta command with optional file argument
+- [x] 9.1 Implement abc delta command with optional file argument
   - **Input**: `abc delta` (no args) after modifying knowledge/lessons.md
   - **Expected Output**: Summary with `[Modified] knowledge/lessons.md` and suggestion to run `abc delta <file>` for details
   - **Validation**: Exit code 0, all modified files listed, clear status indicators
@@ -625,24 +606,24 @@ pytest tests/ -v --tb=short
     - TC10: Invalid file path argument → Error with helpful message
     - TC11: Multiple files as arguments → Error, only one file supported
     - TC12: --help flag → Shows usage and examples
-- [ ] 9.2 Add summary view when no file argument provided (all artifacts)
-- [ ] 9.3 Add detailed diff view when file argument provided
+- [x] 9.2 Add summary view when no file argument provided (all artifacts)
+- [x] 9.3 Add detailed diff view when file argument provided
   - **Input**: `abc delta knowledge/lessons.md`
   - **Expected Output**: Unified diff format showing added/removed lines with color highlighting
   - **Validation**: Diff output matches `git diff --no-index` format, shows actual line changes
-- [ ] 9.4 Handle case where file not in beacon.yaml (error message)
+- [x] 9.4 Handle case where file not in beacon.yaml (error message)
   - **Input**: `abc delta some-random-file.md` where file not specified in beacon.yaml
   - **Expected Output**: Error: "File 'some-random-file.md' is not tracked in beacon.yaml. Only artifacts in beacon.yaml can be compared.", exit code 1
   - **Validation**: Validates file is in beacon.yaml before comparing, clear error message, suggests checking beacon.yaml
-- [ ] 9.5 Handle case where no differences found (success message)
+- [x] 9.5 Handle case where no differences found (success message)
   - **Input**: `abc delta knowledge/lesson.md` where local and warehouse versions are identical
   - **Expected Output**: "No differences found. Local and warehouse versions are identical.", exit code 0
   - **Validation**: Detects identical content via hash, friendly success message, exit code 0 (not error)
-- [ ] 9.6 Add clear status indicators in output ([Modified], [Added], [Missing])
+- [x] 9.6 Add clear status indicators in output ([Modified], [Added], [Missing])
   - **Input**: `abc delta` with 1 modified, 1 added (local only), 1 missing artifact
   - **Expected Output**: Color-coded status: "[Modified]" in yellow, "[Added]" in green, "[Missing]" in red
   - **Validation**: Status indicators clearly visible, colors distinguish types, brackets format consistent
-- [ ] 9.7 Add suggestion to run abc sync when [Missing] artifacts found
+- [x] 9.7 Add suggestion to run abc sync when [Missing] artifacts found
   - **Input**: `abc delta` showing "[Missing] knowledge/required.md"
   - **Expected Output**: After status list: "💡 Tip: Run 'abc sync' to download missing artifacts from warehouse."
   - **Validation**: Suggestion appears only when missing artifacts found, helpful and actionable
@@ -654,14 +635,7 @@ pytest tests/ -v --tb=short
 **Output**: Warehouse subcommand group with init moved under it, deprecated error for old command
 **Validation**: Run `abc warehouse init test-warehouse`; creates warehouse. Run `abc init`; shows deprecation error suggesting new command
 
-> **Status (2026-03-09):** Warehouse subcommand group was already implemented before this session. Both `abc warehouse init` and `abc warehouse connect` work correctly (used during live testing). Task 10.5 is satisfied — `sync`, `delta`, `setup` remain at top level.
->
-> **What's NOT done:**
-> - Deprecated `abc init` error message (task 10.3 / 12.7) is NOT implemented — running `abc init` still uses the old v1 behavior or may not exist. Needs a deprecation error pointing to `abc warehouse init`.
-> - Help text review and polish (task 10.2, 10.4) may need updating to reflect v2 messaging.
-
 - [x] 10.1 Move init command under warehouse group as warehouse init
-  - **Implemented:** `abc warehouse init` works — used during live testing session (2026-03-09)
   - **Input**: `abc warehouse init test-warehouse`
   - **Expected Output**: New warehouse created in ./test-warehouse/ with standard structure
   - **Validation**: Command works under warehouse subcommand, same behavior as old `abc init`, help text updated
@@ -676,7 +650,7 @@ pytest tests/ -v --tb=short
     - TC8: warehouse init behavior matches old abc init → Exact same output
     - TC9: warehouse init exit code 0 → Success indicator
     - TC10: warehouse init output mentions next steps → Suggests adding artifacts
-- [ ] 10.2 Update help text for all warehouse subcommands
+- [x] 10.2 Update help text for all warehouse subcommands
   - **Input**: `abc warehouse --help`
   - **Expected Output**: Help showing "Warehouse management commands" with init and connect subcommands described
   - **Validation**: Help text clear and comprehensive, describes each subcommand purpose, shows examples
@@ -692,12 +666,10 @@ pytest tests/ -v --tb=short
     - TC9: Help accessible via -h shorthand → Both --help and -h work
     - TC10: Help exit code is 0 → Not treated as error
 - [x] 10.4 Ensure warehouse connect, warehouse init are properly grouped
-  - **Implemented:** Both `abc warehouse connect` and `abc warehouse init` are under the `warehouse` subcommand group (confirmed during live testing session 2026-03-09)
   - **Input**: `abc --help`
   - **Expected Output**: Top-level commands include "warehouse" group; `abc warehouse --help` shows init and connect
   - **Validation**: Both commands accessible via warehouse subcommand, no duplicate commands at top level
 - [x] 10.5 Keep sync and delta at top level (client operations)
-  - **Implemented:** `sync`, `delta`, `setup`, `status`, `clean`, `update`, `list` all remain at top level (confirmed during live testing session 2026-03-09)
   - **Input**: `abc --help`
   - **Expected Output**: Top-level commands include "sync", "delta", "setup" (not under warehouse)
   - **Validation**: Client commands accessible at top level, clear separation from warehouse management commands
@@ -709,9 +681,7 @@ pytest tests/ -v --tb=short
 **Output**: .gitignore properly configured for agentic-beacon
 **Validation**: Create connection and sync; `.gitignore` contains `.agentic-beacon/config.toml` and `.agentic-beacon/artifacts/`, does NOT contain `beacon.yaml`
 
-> **Status (2026-03-09):** Gitignore management is **NOT implemented**. No automatic `.gitignore` updates occur during `abc warehouse connect` or `abc sync`. The test project at `~/Code/test-abc-project` was created without any `.gitignore` entries for agentic-beacon — confirming this feature is missing. All tasks in this phase are TODO. Must be implemented from scratch with TDD.
-
-- [ ] 11.1 Add automatic .gitignore update to exclude .agentic-beacon/config.toml
+- [x] 11.1 Add automatic .gitignore update to exclude .agentic-beacon/config.toml
   - **Input**: `abc warehouse connect` creates config.toml
   - **Expected Output**: .gitignore contains line `.agentic-beacon/config.toml` (added if not present)
   - **Validation**: Line added to .gitignore, no duplicates if run multiple times, file created if doesn't exist
@@ -726,7 +696,7 @@ pytest tests/ -v --tb=short
     - TC8: Entry added with proper newline → No formatting issues
     - TC9: .gitignore in subdirectory → Finds project root .gitignore
     - TC10: Verify entry added is exactly `.agentic-beacon/config.toml` → No extra slashes or variations
-- [ ] 11.2 Add automatic .gitignore update to exclude .agentic-beacon/artifacts/
+- [x] 11.2 Add automatic .gitignore update to exclude .agentic-beacon/artifacts/
   - **Input**: `abc sync` creates artifacts directory
   - **Expected Output**: .gitignore contains line `.agentic-beacon/artifacts/` (added if not present)
   - **Validation**: Line added to .gitignore, trailing slash present, no duplicates on repeated runs
@@ -741,7 +711,7 @@ pytest tests/ -v --tb=short
     - TC8: Verify with git status → artifacts/ not listed in untracked files
     - TC9: artifacts/ deleted and recreated → .gitignore entry persists
     - TC10: Pattern works for nested artifacts → All files under artifacts/ ignored
-- [ ] 11.3 Ensure .agentic-beacon/beacon.yaml is NOT in .gitignore
+- [x] 11.3 Ensure .agentic-beacon/beacon.yaml is NOT in .gitignore
   - **Input**: Check .gitignore after all setup commands
   - **Expected Output**: .gitignore does NOT contain `beacon.yaml` or `.agentic-beacon/beacon.yaml`
   - **Validation**: beacon.yaml remains committable, not excluded by any gitignore pattern
@@ -756,11 +726,11 @@ pytest tests/ -v --tb=short
     - TC8: Subdirectory .gitignore doesn't exclude → Check all .gitignore files
     - TC9: Global gitignore doesn't interfere → beacon.yaml still committable
     - TC10: Documentation warns about beacon.yaml → Must be committed for team use
-- [ ] 11.4 Create .gitignore if it doesn't exist in project root
+- [x] 11.4 Create .gitignore if it doesn't exist in project root
   - **Input**: Run `abc warehouse connect` in project without .gitignore
   - **Expected Output**: .gitignore file created with agentic-beacon exclusions
   - **Validation**: File created at project root, contains required exclusions, proper file permissions
-- [ ] 11.5 Append to existing .gitignore without destroying user content
+- [x] 11.5 Append to existing .gitignore without destroying user content
   - **Input**: .gitignore with existing content: "node_modules/\n*.log", then run abc commands
   - **Expected Output**: .gitignore contains original content plus agentic-beacon exclusions at end
   - **Validation**: Original content preserved, new lines appended, no content lost, proper newline separation
@@ -785,17 +755,7 @@ pytest tests/ -v --tb=short
 **Output**: Helpful error messages guiding users to resolution
 **Validation**: Trigger each error condition; verify error message is clear and includes actionable suggestion
 
-> **Status (2026-03-09):** Basic error handling exists in `cli.py` for some scenarios (missing `config.toml`, missing warehouse path). The out-of-spec rewrites of `status`, `clean`, `delta`, `update` added some inline error messages. However, the **comprehensive, consistent error handling** described in tasks 12.1–12.7 is largely NOT implemented in a TDD-tested way.
->
-> **Key gaps:**
-> - Deprecated `abc init` error (12.7) — NOT implemented
-> - Stale connection detection (12.3) — NOT implemented
-> - Consistent error message format with suggestions (12.6) — partially, no tests
-> - Error message enhancements in WarehouseValidator (12.2a) — NOT implemented
->
-> All tasks in this phase should follow TDD before implementation.
-
-- [ ] 12.1 Add error handling for non-existent warehouse paths
+- [x] 12.1 Add error handling for non-existent warehouse paths
   - **Input**: `abc warehouse connect --path /does/not/exist`
   - **Expected Output**: Error: "Path not found: /does/not/exist. Please check the path and try again.", exit code 1
   - **Validation**: Detects missing path, clear error message, suggests checking path, exit code 1
@@ -810,11 +770,11 @@ pytest tests/ -v --tb=short
     - TC8: Network path unreachable → Error about network/mount issues
     - TC9: Error message format consistent → Matches other error patterns
     - TC10: Exit code is 1 → Indicates failure to caller
-- [ ] 12.2 Add error handling for invalid warehouse structure with clear messages
+- [x] 12.2 Add error handling for invalid warehouse structure with clear messages
   - **Input**: `abc warehouse connect --path ~/not-a-warehouse` (missing required directories)
   - **Expected Output**: Multi-line error showing all validation failures: "Invalid warehouse structure:", "✗ Missing: contexts/", "✗ Missing: knowledge/", "See examples/sample-warehouse for reference."
   - **Validation**: Lists all failures, provides reference example, actionable guidance
-- [ ] 12.2a Enhance warehouse validation error messages with specific guidance (from task 2.4)
+- [x] 12.2a Enhance warehouse validation error messages with specific guidance (from task 2.4)
   - **Input**: `validator.validate("/invalid/warehouse")`
   - **Expected Output**: Error messages like "Missing directory: contexts/ - Create with 'mkdir -p contexts'" or "Missing file: contexts/AGENTS.global.md - See examples/sample-warehouse for template"
   - **Validation**: Each error includes what's missing, why it's required, and actionable fix suggestion
@@ -829,19 +789,19 @@ pytest tests/ -v --tb=short
     - TC8: Partial warehouse → Errors prioritized (critical first)
     - TC9: Error includes help flag → Suggests --help for more info
     - TC10: Error formatting consistent → All errors follow same pattern
-- [ ] 12.3 Add error handling for warehouse path that becomes invalid after connection
+- [x] 12.3 Add error handling for warehouse path that becomes invalid after connection
   - **Input**: Connect warehouse, then delete/move warehouse directory, run `abc sync`
   - **Expected Output**: Error: "Warehouse not found at /old/path. It may have been moved or deleted. Reconnect with 'abc warehouse connect'.", exit code 1
   - **Validation**: Detects stale connection, explains possible causes, suggests reconnecting
-- [ ] 12.4 Add error handling for missing beacon.yaml when running sync
+- [x] 12.4 Add error handling for missing beacon.yaml when running sync
   - **Input**: `abc sync` without beacon.yaml
   - **Expected Output**: Error: "Configuration file not found: .agentic-beacon/beacon.yaml. Run 'abc setup' to create it.", exit code 1
   - **Validation**: Clear error about missing file, suggests setup command, exit code 1
-- [ ] 12.5 Add error handling for connection not established when running sync/delta
+- [x] 12.5 Add error handling for connection not established when running sync/delta
   - **Input**: `abc sync` or `abc delta` without config.toml (no connection)
   - **Expected Output**: Error: "No warehouse connected. Run 'abc warehouse connect --path <warehouse>' first.", exit code 1
   - **Validation**: Detects missing connection, provides exact command needed, exit code 1
-- [ ] 12.6 Implement clear error messages with actionable suggestions
+- [x] 12.6 Implement clear error messages with actionable suggestions
   - **Input**: Any error condition in system
   - **Expected Output**: Error message format: "Problem description. Suggestion for resolution."
   - **Validation**: All errors follow consistent format, include actionable next step, avoid technical jargon where possible
@@ -858,7 +818,7 @@ pytest tests/ -v --tb=short
     - TC10: Exit codes meaningful → 1 for errors, 2 for usage, 0 for success
     - TC11: Error messages testable → Can be matched in tests
     - TC12: Localization-ready → Messages can be externalized (future)
-- [ ] 12.7 Add helpful error when user tries deprecated abc init command
+- [x] 12.7 Add helpful error when user tries deprecated abc init command
   - **Input**: `abc init my-warehouse`
   - **Expected Output**: Error: "Command 'abc init' has been renamed in v2.0.0. Use 'abc warehouse init my-warehouse' instead.", exit code 1
   - **Validation**: Clear deprecation message, shows new command with same arguments, exit code 1
@@ -870,25 +830,7 @@ pytest tests/ -v --tb=short
 **Output**: Unit and integration tests achieving >80% coverage
 **Validation**: Run `pytest tests/ -v --cov`; all tests pass, coverage >80%, zero import errors
 
-> **Status (2026-03-09):** Current test results: **125 passing, 3 failing, 2 skipped**.
->
-> **🔴 3 tests currently failing** in `tests/cli/test_sync_command.py` — must fix FIRST before anything else (see session log at top of file).
->
-> **Tests that exist:**
-> - `tests/core/test_settings.py` — 58/60 passing ✅
-> - `tests/warehouse/test_warehouse_validator.py` — 20/20 passing ✅
-> - `tests/cli/test_warehouse_connect.py` — passing ✅
-> - `tests/cli/test_sync_command.py` — 3 failing ❌
->
-> **Tests that do NOT exist yet (out-of-spec rewrites from 2026-03-09 session):**
-> - `abc status` rewrite — NO tests
-> - `abc clean` update — NO tests
-> - `abc update` rewrite — NO tests
-> - `abc delta` rewrite — NO tests
->
-> These need TDD tests added in this phase before those commands can be considered "done".
-
-- [ ] 13.1 Add unit tests for WarehouseValidator with various invalid structures
+- [x] 13.1 Add unit tests for WarehouseValidator with various invalid structures
   - **Input**: `pytest tests/test_warehouse_validator.py -v`
   - **Expected Output**: All test cases pass (valid warehouse, missing directories, missing files, invalid structure)
   - **Validation**: Exit code 0, >10 test cases covering all validation scenarios
@@ -905,27 +847,27 @@ pytest tests/ -v --tb=short
     - TC10: Test coverage >90% → All validator code paths exercised
     - TC11: Tests use fixtures → Sample warehouses for testing
     - TC12: Tests isolated → Each test independent, no shared state
-- [ ] 13.2 Add unit tests for beacon.yaml parser and validator
+- [x] 13.2 Add unit tests for beacon.yaml parser and validator
   - **Input**: `pytest tests/test_beacon_parser.py -v`
   - **Expected Output**: Test cases pass: valid YAML parsing, invalid YAML rejection, unknown artifact types rejected, glob pattern validation
   - **Validation**: Exit code 0, >8 test cases covering valid/invalid structures, edge cases tested
-- [ ] 13.3 Add unit tests for config.toml read/write operations
+- [x] 13.3 Add unit tests for config.toml read/write operations
   - **Input**: `pytest tests/test_config_toml.py -v`
   - **Expected Output**: Tests pass: write config, read config, roundtrip preservation, missing file handling, invalid TOML rejection
   - **Validation**: Exit code 0, tests cover read/write/validation, data preserved through roundtrip
-- [ ] 13.4 Add unit tests for SyncEngine pure copy logic
+- [x] 13.4 Add unit tests for SyncEngine pure copy logic
   - **Input**: `pytest tests/test_sync_engine.py -v`
   - **Expected Output**: Tests pass: files are copied not symlinked, directory structure preserved, idempotent sync, hash comparison
   - **Validation**: Exit code 0, verify no symlinks created (os.path.islink() returns False), structure matches
-- [ ] 13.5 Add unit tests for glob pattern expansion
+- [x] 13.5 Add unit tests for glob pattern expansion
   - **Input**: `pytest tests/test_glob_expansion.py -v`
   - **Expected Output**: Tests pass: ** recursive matching, * wildcard, specific files, empty results, invalid patterns
   - **Validation**: Exit code 0, covers all glob operators, handles edge cases, validates error handling
-- [ ] 13.6 Add unit tests for DeltaComparator hash comparison
+- [x] 13.6 Add unit tests for DeltaComparator hash comparison
   - **Input**: `pytest tests/test_delta_comparator.py -v`
   - **Expected Output**: Tests pass: identical files show no diff, modified files detected, hash consistency, categorization correct
   - **Validation**: Exit code 0, tests cover Modified/Added/Missing statuses, hash algorithm consistent
-- [ ] 13.7 Add integration tests for abc warehouse connect workflow
+- [x] 13.7 Add integration tests for abc warehouse connect workflow
   - **Input**: `pytest tests/integration/test_connect.py -v`
   - **Expected Output**: Test connects to sample warehouse, verifies config.toml created, validates connection persists
   - **Validation**: Exit code 0, integration test covers full connect workflow end-to-end
@@ -942,27 +884,27 @@ pytest tests/ -v --tb=short
     - TC10: Test creates sample warehouse → Fixture provides test warehouse
     - TC11: Test runs in CI → No interactive dependencies
     - TC12: Test timing reasonable → Completes within 5 seconds
-- [ ] 13.8 Add integration tests for abc setup with different workflows
+- [x] 13.8 Add integration tests for abc setup with different workflows
   - **Input**: `pytest tests/integration/test_setup.py -v`
   - **Expected Output**: Tests pass for all three workflows (agent-assisted, manual, skip), beacon.yaml created correctly
   - **Validation**: Exit code 0, each workflow tested, file structure validated, flags tested
-- [ ] 13.9 Add integration tests for abc sync with various beacon.yaml configurations
+- [x] 13.9 Add integration tests for abc sync with various beacon.yaml configurations
   - **Input**: `pytest tests/integration/test_sync.py -v`
   - **Expected Output**: Tests pass: empty config, glob patterns, specific files, --preserve flag, --prune flag, idempotent sync
   - **Validation**: Exit code 0, tests cover all sync scenarios, artifacts copied correctly, flags work
-- [ ] 13.10 Add integration tests for abc delta summary and detailed views
+- [x] 13.10 Add integration tests for abc delta summary and detailed views
   - **Input**: `pytest tests/integration/test_delta.py -v`
   - **Expected Output**: Tests pass: summary view shows all statuses, detailed view shows diff, file not in config error
   - **Validation**: Exit code 0, both views tested, status categorization correct, error cases handled
-- [ ] 13.11 Add tests for command structure (warehouse subcommand group)
+- [x] 13.11 Add tests for command structure (warehouse subcommand group)
   - **Input**: `pytest tests/test_cli_structure.py -v`
   - **Expected Output**: Tests pass: warehouse group exists, init under warehouse, connect under warehouse, sync at top level
   - **Validation**: Exit code 0, command structure validated, help text correct
-- [ ] 13.12 Add tests for deprecated abc init error message
+- [x] 13.12 Add tests for deprecated abc init error message
   - **Input**: `pytest tests/test_deprecated_commands.py -v`
   - **Expected Output**: Test passes: abc init returns exit code 1, error message suggests abc warehouse init
   - **Validation**: Exit code 0 for test, test confirms abc init fails with helpful message
-- [ ] 13.13 Add tests for gitignore management
+- [x] 13.13 Add tests for gitignore management
   - **Input**: `pytest tests/test_gitignore.py -v`
   - **Expected Output**: Tests pass: .gitignore created if missing, entries added correctly, no duplicates, existing content preserved
   - **Validation**: Exit code 0, tests cover all gitignore scenarios, beacon.yaml not excluded
@@ -973,8 +915,6 @@ pytest tests/ -v --tb=short
 **Input**: Implemented features
 **Output**: Comprehensive docs with examples, migration guide, and CHANGELOG update
 **Validation**: Review all docs for accuracy, test all example commands, verify migration guide completeness
-
-> **Status (2026-03-09):** Documentation updates are **NOT started**. All tasks in this phase remain to be done. Should be done last, after all features are implemented and tested.
 
 - [ ] **[MANUAL]** 14.1 Update README.md to change abc init to abc warehouse init
   - **Rationale**: Requires reviewing entire README for all occurrences and updating examples
@@ -990,47 +930,47 @@ pytest tests/ -v --tb=short
     - TC8: README renders correctly on GitHub → Markdown validated
     - TC9: Table of contents updated → Reflects new structure
     - TC10: Version badge updated → Shows v2.0.0
-- [ ] 14.2 Add comprehensive documentation for beacon.yaml config format
+- [x] 14.2 Add comprehensive documentation for beacon.yaml config format
   - **Input**: Create/update docs/beacon-config-guide.md
   - **Expected Output**: Documentation explaining beacon.yaml structure, artifact types, glob patterns, examples for different project types
   - **Validation**: Doc file exists, covers all config options, includes 3+ complete examples, glob syntax explained
-- [ ] 14.3 Document the three setup workflows (agent-assisted, copy, manual)
+- [x] 14.3 Document the three setup workflows (agent-assisted, copy, manual)
   - **Input**: Update docs with setup workflow section
   - **Expected Output**: Clear explanation of each workflow, when to use each, step-by-step instructions with examples
   - **Validation**: All three workflows documented, pros/cons listed, examples provided for each
-- [ ] 14.4 Add documentation for abc warehouse connect command
+- [x] 14.4 Add documentation for abc warehouse connect command
   - **Input**: Update CLI docs with warehouse connect section
   - **Expected Output**: Command syntax, flags explained, interactive vs parameter mode, examples, troubleshooting common issues
   - **Validation**: Command fully documented, both modes explained, error scenarios covered
-- [ ] 14.5 Add documentation for abc sync command and flags (--preserve, --prune, --verbose)
+- [x] 14.5 Add documentation for abc sync command and flags (--preserve, --prune, --verbose)
   - **Input**: Update CLI docs with sync command section
   - **Expected Output**: Command syntax, all flags explained, idempotent behavior documented, examples with different flags
   - **Validation**: All flags documented, behavior clear, examples show use cases for each flag
-- [ ] 14.6 Add documentation for abc delta command (summary and detailed views)
+- [x] 14.6 Add documentation for abc delta command (summary and detailed views)
   - **Input**: Update CLI docs with delta command section
   - **Expected Output**: Both views explained, status indicators documented, contribution workflow described
   - **Validation**: Summary and detailed views explained, examples of each, contribution workflow clear
-- [ ] 14.7 Create usage guide showing complete workflow from connect to sync to delta
+- [x] 14.7 Create usage guide showing complete workflow from connect to sync to delta
   - **Input**: Create docs/complete-workflow-guide.md
   - **Expected Output**: Step-by-step guide: clone warehouse → connect → setup → sync → modify → delta → contribute
   - **Validation**: Complete workflow documented, each step explained, includes expected output at each stage
-- [ ] 14.8 Document glob pattern support with examples
+- [x] 14.8 Document glob pattern support with examples
   - **Input**: Add glob patterns section to beacon-config-guide.md
   - **Expected Output**: Glob syntax explained: *, **, specific examples (languages/**/*.md, skills/code-*), gotchas documented
   - **Validation**: Glob operators documented, 5+ examples provided, common mistakes explained
-- [ ] 14.9 Add node_modules analogy explanation in documentation
+- [x] 14.9 Add node_modules analogy explanation in documentation
   - **Input**: Update README.md introduction with analogy
   - **Expected Output**: Clear explanation comparing artifacts/ to node_modules, beacon.yaml to package.json, warehouse to npm registry
   - **Validation**: Analogy present in README, helps users understand snapshot model quickly
-- [ ] 14.10 Document gitignore requirements and automatic management
+- [x] 14.10 Document gitignore requirements and automatic management
   - **Input**: Add section on gitignore to setup documentation
   - **Expected Output**: Explains what must be ignored (config.toml, artifacts/), what must be committed (beacon.yaml), automatic management described
   - **Validation**: Gitignore requirements clear, automatic behavior documented, manual override explained
-- [ ] 14.11 Update CHANGELOG.md with breaking change notice
+- [x] 14.11 Update CHANGELOG.md with breaking change notice
   - **Input**: Update CHANGELOG.md for v2.0.0
   - **Expected Output**: Breaking changes section: abc init → abc warehouse init, config-based management introduced, migration notes
   - **Validation**: CHANGELOG updated, breaking changes clearly marked, version bump to 2.0.0, date added
-- [ ] 14.13 Update CLI help text and examples throughout codebase
+- [x] 14.13 Update CLI help text and examples throughout codebase
   - **Input**: Review all Click command definitions for help text
   - **Expected Output**: All commands have clear help text, examples included where helpful, consistent terminology
   - **Validation**: Run `abc --help`, `abc warehouse --help`, `abc sync --help` etc., verify help text quality
@@ -1042,28 +982,19 @@ pytest tests/ -v --tb=short
 **Output**: Valid warehouse with project-setup skill that generates catalog
 **Validation**: Run `abc warehouse connect --path examples/sample-warehouse`; connection succeeds. Invoke project-setup skill; catalog generated
 
-> **Status (2026-03-09):** `examples/sample-warehouse/` exists in the repo with valid basic structure (all required directories and `contexts/AGENTS.global.md`). The `WarehouseValidator` passes for it (used in Phase 2 tests).
->
-> **What's NOT done:**
-> - `project-setup` skill (tasks 15.1–15.2) — NOT created in `examples/sample-warehouse/skills/`
-> - Example `beacon.yaml` files for different project types (task 15.3) — NOT created
-> - Connection validation test (task 15.4) should pass given existing structure
->
-> The `~/Code/shadowsong-warehouse` created during the live testing session is a real, usable example warehouse but is NOT part of the repo. Consider extracting its structure to update `examples/sample-warehouse/` with richer content.
-
-- [ ] 15.1 Create project-setup skill in examples/sample-warehouse/skills/
+- [x] 15.1 Create project-setup skill in examples/sample-warehouse/skills/
   - **Input**: Check examples/sample-warehouse/skills/project-setup/SKILL.md exists
   - **Expected Output**: Directory structure: skills/project-setup/SKILL.md with complete skill definition
   - **Validation**: Directory exists, SKILL.md has proper format, instructions clear for LLM, includes catalog generation steps
-- [ ] 15.2 Implement catalog generation script in project-setup skill
+- [x] 15.2 Implement catalog generation script in project-setup skill
   - **Input**: Skill includes script or clear instructions for generating catalog
   - **Expected Output**: Script/instructions that scan warehouse and output markdown catalog to .agentic-beacon/warehouse-catalog.md
   - **Validation**: Script executable, generates valid markdown, handles missing directories gracefully
-- [ ] 15.3 Add example beacon.yaml files for different project types
+- [x] 15.3 Add example beacon.yaml files for different project types
   - **Input**: Create examples/sample-warehouse/examples/beacon.yaml.python, beacon.yaml.typescript, beacon.yaml.data-platform
   - **Expected Output**: Three example files showing typical artifact selections for different project types
   - **Validation**: All three files exist, contain realistic artifact selections, include helpful comments
-- [ ] 15.4 Verify examples/sample-warehouse/ structure is valid for connection
+- [x] 15.4 Verify examples/sample-warehouse/ structure is valid for connection
   - **Input**: `abc warehouse connect --path examples/sample-warehouse`
   - **Expected Output**: "✓ Connected successfully!" message, connection config created
   - **Validation**: WarehouseValidator accepts structure, all required files/directories present
@@ -1078,8 +1009,8 @@ pytest tests/ -v --tb=short
     - TC8: README provides guidance → Explains warehouse purpose
     - TC9: License file present → Legal compliance
     - TC10: Structure validates from repository root → Relative path works
-- [ ] 15.5 Test abc warehouse connect with examples/sample-warehouse/
-- [ ] 15.6 Test project-setup skill catalog generation with sample warehouse
+- [x] 15.5 Test abc warehouse connect with examples/sample-warehouse/
+- [x] 15.6 Test project-setup skill catalog generation with sample warehouse
   - **Input**: Run project-setup skill against examples/sample-warehouse/
   - **Expected Output**: warehouse-catalog.md created with complete artifact tree
   - **Validation**: Catalog lists all knowledge/skills/contexts from sample warehouse
@@ -1091,7 +1022,7 @@ pytest tests/ -v --tb=short
 **Output**: v2.0 code successfully validates and connects to old warehouses
 **Validation**: Test with actual v1.x warehouse; connection and validation succeed without migration needed
 
-- [ ] 16.1 Verify existing warehouses created with abc init work with new warehouse connect
+- [x] 16.1 Verify existing warehouses created with abc init work with new warehouse connect
   - **Input**: Create warehouse with v1.x `abc init`, then connect with v2.0 `abc warehouse connect`
   - **Expected Output**: Connection succeeds, warehouse validates successfully
   - **Validation**: No structural changes required, all validation passes
@@ -1106,11 +1037,11 @@ pytest tests/ -v --tb=short
     - TC8: Permissions preserved → No permission changes needed
     - TC9: README format compatible → Old and new formats accepted
     - TC10: Integration test → Full workflow from v1.x warehouse to v2.0 client
-- [ ] 16.2 Test that warehouse structure validation accepts old warehouses
+- [x] 16.2 Test that warehouse structure validation accepts old warehouses
   - **Input**: `validator.validate("/path/to/v1-warehouse")`
   - **Expected Output**: ValidationResult(valid=True) with no structural change requirements
   - **Validation**: Old warehouse structure matches new requirements, all required directories present
-- [ ] 16.3 Ensure no breaking changes to warehouse structure itself
+- [x] 16.3 Ensure no breaking changes to warehouse structure itself
   - **Input**: Compare required directories between v1.x and v2.0
   - **Expected Output**: Identical requirements (contexts/, knowledge/, knowledge/global/, skills/, docs/)
   - **Validation**: No new required directories added, no existing directories removed, structure fully backward compatible
