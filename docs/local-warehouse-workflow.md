@@ -10,8 +10,8 @@ This document describes the high-level workflow for using local warehouses with 
 Remote Warehouse (GitHub)
        ↓ git pull
 Local Warehouse Clone (~/org-warehouse) ← User maintains with git
-       ↓ abc download/setup (PURE COPY)
-Project Artifacts (.agents/) ← Snapshot, can be locally modified
+       ↓ abc sync (PURE COPY)
+Project Artifacts (.agentic-beacon/artifacts/) ← Snapshot, can be locally modified
        ↓ abc delta (COMPARE & CONTRIBUTE)
 Back to Local Warehouse ← User commits and pushes
 ```
@@ -35,7 +35,7 @@ You want deterministic project behavior. If a developer pulls a breaking change 
 ### 3. Local Experimentation (The "Delta" Loop)
 A developer might want to tweak a knowledge file to see if the agent writes better code. If it's a symlink, they are directly editing their central warehouse repo.
 
-**With a pure copy**, they can safely edit `.agents/knowledge/lessons.md` locally, test it out, and then use the delta workflow to review local changes against the warehouse before deciding to push them upstream.
+**With a pure copy**, they can safely edit `.agentic-beacon/artifacts/knowledge/lessons.md` locally, test it out, and then use the delta workflow to review local changes against the warehouse before deciding to push them upstream.
 
 ### 4. Cross-Platform Compatibility
 Symlinks on Windows can still be problematic (often requiring Developer Mode or admin privileges). **Pure file copying is universally safe.**
@@ -74,24 +74,24 @@ abc warehouse connect --path ~/org-warehouse
 Download artifacts from the connected warehouse:
 
 ```bash
-# Install all artifacts
-abc setup --all
+# Configure which artifacts you want
+abc setup --manual
+# Edit .agentic-beacon/beacon.yaml to declare contexts, knowledge, and skills
 
-# Or selectively install
-abc download context python
-abc download skill deploy-production
+# Sync artifacts from warehouse
+abc sync
 ```
 
 **What happens:**
-- CLI performs **pure copy** of artifacts into `my-project/.agents/`
+- CLI performs **pure copy** of declared artifacts into `my-project/.agentic-beacon/artifacts/`
 - Creates a snapshot at the current warehouse state
-- Developer adds `.agents/` to `.gitignore` (artifacts aren't duplicated in project's Git repo)
+- `.agentic-beacon/artifacts/` is gitignored (artifacts aren't duplicated in project's Git repo)
 
 ### Phase 4: Local Iteration Loop (Working with Agent)
 
 The developer works on their project. Suppose the agent keeps making a specific mistake with a Python library:
 
-1. Developer opens `my-project/.agents/knowledge/languages/python/lessons.md`
+1. Developer opens `my-project/.agentic-beacon/artifacts/knowledge/languages/python/lessons.md`
 2. Adds a new guardrail instruction locally
 3. Tests with agent
 4. Because it's a pure copy, this local mutation is safe—doesn't affect other projects
@@ -103,19 +103,18 @@ The developer works on their project. Suppose the agent keeps making a specific 
 Once the developer confirms their new guardrail works, they check localized changes:
 
 ```bash
-abc delta --warehouse ~/org-warehouse
+abc delta
 ```
 
 **What happens:**
-- CLI compares project `.agents/` against connected warehouse
+- CLI compares project `.agentic-beacon/artifacts/` against connected warehouse
 - Highlights that `lessons.md` was modified locally
 - Shows diff of changes
 
 **Developer workflow:**
 1. Review the delta output
 2. Decide: keep local, contribute to warehouse, or discard
-3. If contributing: manually copy changes to `~/org-warehouse/knowledge/languages/python/lessons.md`
-4. Commit in warehouse: `cd ~/org-warehouse && git commit -am "Add Python library guardrail"`
+3. If contributing: manually copy changes to `~/org-warehouse/knowledge/languages/python/lessons.md`4. Commit in warehouse: `cd ~/org-warehouse && git commit -am "Add Python library guardrail"`
 5. Push to remote: `git push origin main`
 6. Open PR for team review
 
@@ -136,9 +135,8 @@ abc update
 ```
 
 **What happens:**
-- CLI detects if user made local changes in `.agents/`
-- Warns: "You have local changes in .agents/, use abc delta to review before updating"
-- If no conflicts or user confirms, overwrites `.agents/` with fresh copy from warehouse
+- `abc update` re-syncs all artifacts declared in `beacon.yaml`, force-overwriting local copies with the latest from the warehouse
+- Any local modifications to artifacts will be lost — use `abc delta` first to review and save changes worth keeping
 
 ## Benefits of This Workflow
 
@@ -155,17 +153,17 @@ abc update
 ### For Agent Compatibility
 - ✅ **Physical files**: All artifacts present in project directory
 - ✅ **No path resolution issues**: Works in Docker, remote environments, sandboxes
-- ✅ **Consistent paths**: Agents always read from `.agents/` in project root
+- ✅ **Consistent paths**: Agents always read from `.agentic-beacon/artifacts/` in project root
 
 ## Command Summary
 
 | Command | Purpose |
 |---------|---------|
 | `abc warehouse connect --path <path>` | Connect project to local warehouse |
-| `abc setup --all` | Initial snapshot: copy all artifacts to project |
-| `abc download <artifact>` | Copy specific artifact from warehouse |
-| `abc update` | Refresh artifacts from warehouse (with change detection) |
-| `abc delta` | Compare local changes against warehouse |
+| `abc setup --manual` | Create `beacon.yaml` to declare which artifacts to sync |
+| `abc sync` | Initial snapshot: copy declared artifacts to project |
+| `abc update` | Refresh artifacts from warehouse (force-overwrites local copies) |
+| `abc delta` | Compare local artifact changes against warehouse |
 | `git pull` (in warehouse) | Update local warehouse from remote |
 
 ## The Node_modules Analogy
@@ -186,7 +184,7 @@ Could track checksums/timestamps to detect local modifications automatically:
 ```bash
 abc status
 # Output:
-# Modified: .agents/knowledge/languages/python/lessons.md
+# Modified: .agentic-beacon/artifacts/knowledge/languages/python/lessons.md
 # Run 'abc delta' to review changes
 ```
 
@@ -206,4 +204,4 @@ abc push --message "Add Python guardrail"
 
 ---
 
-**Last Updated:** 2026-03-08
+**Last Updated:** 2026-03-10

@@ -10,7 +10,7 @@ A comprehensive guide to creating and maintaining project-specific agent context
 
 Project-level AGENTS.md serves as the **entry point for agents working in your codebase**. It provides project-specific context that agents need to understand your architecture, navigate your code, follow project conventions, and troubleshoot issues.
 
-**Location:** `<project-root>/.opencode/AGENTS.md`
+**Location:** `<project-root>/AGENTS.md`
 
 **Purpose:** Bridge the gap between generic organizational standards (from warehouse) and the specific implementation details of THIS codebase.
 
@@ -1767,5 +1767,5 @@ Project-level AGENTS.md is your **project's instruction manual for AI agents**. 
 
 **Related Documentation:**
 - [AGENTS.md Architecture Guide](./agents-md-architecture.md) - Three-tier context model
-- [Agentic Warehouse Design](./agentic-warehouse-design.md) - Overall architecture
-- [Warehouse Contribution Guide](./warehouse-contribution-guide.md) - How to contribute patterns back
+- [Agentic Warehouse Design](../agentic-warehouse-design.md) - Overall architecture
+- [Warehouse Contribution Guide](../../guides/warehouse-contribution-guide.md) - How to contribute patterns back

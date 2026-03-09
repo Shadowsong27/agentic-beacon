@@ -39,9 +39,9 @@ contexts/
 
 ## Project Level: Convention AGENTS.md
 
-**Location:** `<project-root>/.opencode/AGENTS.md`
+**Location:** `<project-root>/AGENTS.md`
 
-**Convention:** Single file named `AGENTS.md`
+**Convention:** Single file named `AGENTS.md` at the project root
 
 **Why:**
 - Immediately recognizable as boot context
@@ -52,24 +52,20 @@ contexts/
 **Example project structure:**
 ```
 my-project/
-├── .opencode/
-│   ├── AGENTS.md          ← Project-specific context
-│   ├── opencode.json      ← References warehouse contexts
-│   └── skills/            ← Project skills
+├── AGENTS.md                          ← Project-specific context
+├── .agentic-beacon/
+│   ├── beacon.yaml                    ← Artifact declarations (committed)
+│   ├── config.toml                    ← Warehouse path (gitignored)
+│   └── artifacts/                     ← Synced artifacts (gitignored)
+│       ├── contexts/
+│       │   ├── global.md
+│       │   └── python.md
+│       ├── knowledge/
+│       └── skills/
 └── src/
 ```
 
-**Example opencode.json:**
-```json
-{
-  "instructions": [
-    "~/.agentic-context/global.md",
-    "~/.agentic-context/python.md",
-    "~/.agentic-context/data-platform.md",
-    ".opencode/AGENTS.md"
-  ]
-}
-```
+**How warehouse contexts are loaded:** Synced context files land in `.agentic-beacon/artifacts/contexts/`. Configure your agent tool (e.g. `opencode.json`) to include them as instructions alongside the project `AGENTS.md`.
 
 ---
 
@@ -97,16 +93,16 @@ my-project/
 When an agent starts, contexts load in this order:
 
 ```
-1. Warehouse contexts (via opencode.json)
-   ├── ~/.agentic-context/global.md
-   ├── ~/.agentic-context/python.md
-   └── ~/.agentic-context/data-platform.md
+1. Warehouse contexts (synced to .agentic-beacon/artifacts/contexts/)
+   ├── .agentic-beacon/artifacts/contexts/global.md
+   ├── .agentic-beacon/artifacts/contexts/python.md
+   └── .agentic-beacon/artifacts/contexts/data-platform.md
 
 2. User preferences (if exists)
    └── ~/.config/opencode/AGENTS.md
 
 3. Project context (last, can override)
-   └── .opencode/AGENTS.md
+   └── AGENTS.md
 ```
 
 **Precedence:** Later files can override earlier files.
@@ -117,8 +113,8 @@ When an agent starts, contexts load in this order:
 
 | Level | Location | Naming | Example | Why |
 |-------|----------|--------|---------|-----|
-| **Warehouse** | `warehouse/contexts/` | Simple, flexible | `python.md`, `data-platform.md` | Cleaner, configured via opencode.json |
-| **Project** | `<project>/.opencode/` | Convention: `AGENTS.md` | `AGENTS.md` | Standard, recognizable, consolidated |
+| **Warehouse** | `warehouse/contexts/` | Simple, flexible | `python.md`, `data-platform.md` | Cleaner, configured via beacon.yaml |
+| **Project** | `<project-root>/` | Convention: `AGENTS.md` | `AGENTS.md` | Standard, recognizable, consolidated |
 | **User** | `~/.config/opencode/` | Convention: `AGENTS.md` | `AGENTS.md` | Standard, recognizable, personal |
 
 ---
@@ -143,16 +139,14 @@ contexts/
 └── data-platform.md
 ```
 
-**Update opencode.json references:**
-```json
-{
-  "instructions": [
-    "~/.agentic-context/global.md",           // Changed
-    "~/.agentic-context/python.md",           // Changed
-    "~/.agentic-context/data-platform.md",    // Changed
-    ".opencode/AGENTS.md"                     // Unchanged
-  ]
-}
+**Update beacon.yaml and your agent tool config to use new names:**
+```yaml
+# .agentic-beacon/beacon.yaml
+artifacts:
+  contexts:
+    - contexts/global.md       # was contexts/AGENTS.global.md
+    - contexts/python.md       # was contexts/AGENTS.python.md
+    - contexts/data-platform.md  # was contexts/AGENTS.data-platform.md
 ```
 
 ---
@@ -172,5 +166,5 @@ contexts/
 
 **Overall:**
 - ✅ Best of both worlds: flexibility where needed, convention where helpful
-- ✅ Configuration-driven (opencode.json) instead of filename-driven
+- ✅ Configuration-driven (`beacon.yaml`) instead of filename-driven
 - ✅ Clear separation of concerns across tiers

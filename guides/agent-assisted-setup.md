@@ -83,7 +83,7 @@ Skill: Generate Unit Tests
 ### contexts/global.md
 Organization-Wide Agent Context
 
-### contexts/teams/backend/AGENTS.md
+### contexts/teams/backend.md
 Backend Team Standards
 ```
 

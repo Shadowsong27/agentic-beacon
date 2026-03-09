@@ -41,7 +41,7 @@ artifacts:
 
   contexts:
     - contexts/global.md
-    - contexts/backend/AGENTS.md
+    - contexts/backend.md
 ```
 
 Then sync:
@@ -95,7 +95,7 @@ artifacts:
     - skills/code-review/**/*
   contexts:
     - contexts/global.md
-    - contexts/data-team/AGENTS.md
+    - contexts/data-team.md
 ```
 
 **A minimal setup for a new project:**
@@ -153,35 +153,6 @@ Test that the agent is using the artifacts by asking it a question that your kno
 
 ---
 
-## Integration with Dev Tools
-
-### Pre-commit hook
-
-Keep artifacts in sync automatically:
-
-```yaml
-# .pre-commit-config.yaml
-repos:
-  - repo: local
-    hooks:
-      - id: sync-beacon-artifacts
-        name: Sync Beacon Artifacts
-        entry: abc sync
-        language: system
-        pass_filenames: false
-```
-
-### CI/CD
-
-```yaml
-# .github/workflows/ci.yml
-- name: Setup Beacon Artifacts
-  run: |
-    pip install agentic-beacon
-    abc warehouse connect --path ./warehouse
-    abc sync
-```
-
 ---
 
 ## Troubleshooting
@@ -215,13 +186,7 @@ Use a more specific pattern:
 
 ### Conflicting local edits
 
-Use `--preserve` to protect local modifications:
-
-```bash
-abc sync --preserve
-```
-
-Use `abc delta` to review what differs before deciding whether to keep or discard local changes.
+If you've modified synced artifacts locally and want to avoid losing those changes, see **[Advanced Patterns — The Delta Workflow](./advanced-patterns.md#the-delta-workflow)** for how to review local changes and decide what to keep or contribute back to the warehouse.
 
 ---
 

@@ -4,13 +4,11 @@ Skills are reusable agent workflows stored in your warehouse. When a project syn
 
 ## What is a Skill?
 
-A skill is a directory in `skills/` with a `SKILL.md` file that describes:
-- **What the skill does** and when to invoke it
-- **Step-by-step instructions** the agent should follow
-- **Inputs and outputs** (what the agent needs to know)
-- Any supporting files (templates, checklists, examples)
+A skill is a packaged capability — a modular unit of work defined by the **outcome it enables**, not how it's implemented. Skills range from pure reasoning instructions (cognitive) to multi-step orchestrated workflows combining prompts and tool calls.
 
-The agent reads `SKILL.md` and executes the instructions when invoked.
+In Agentic Beacon, skills are distributed as a directory containing a `SKILL.md` entry point plus optional supporting files. The agent reads `SKILL.md` and follows its instructions when invoked.
+
+> For a deeper conceptual breakdown — cognitive vs. action vs. workflow skills, and why "everything is a prompt" — see [Understanding Agent Skills](../docs/understanding-agent-skills.md).
 
 ## Directory Structure
 
@@ -101,7 +99,7 @@ A structured review with three sections:
 
 ### Generate Unit Tests
 
-```markdown
+````markdown
 # Skill: Generate Unit Tests
 
 ## Purpose
@@ -138,13 +136,13 @@ def test_<function>_raises_on_invalid_input():
 
 ## Output
 A complete test file or test module, ready to run with `pytest`.
-```
+````
 
 ---
 
 ### Write PR Description
 
-```markdown
+````markdown
 # Skill: Write PR Description
 
 ## Purpose
@@ -174,7 +172,7 @@ Before opening a pull request.
 ## Breaking Changes
 <none or description>
 ```
-```
+````
 
 ---
 

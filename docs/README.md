@@ -44,6 +44,13 @@ Files:
 - The six-phase workflow (clone → connect → snapshot → iterate → contribute → sync)
 - Design rationale for the distribution approach
 
+### Concepts
+
+**[Understanding Agent Skills](./understanding-agent-skills.md)**
+- What an agent skill is — defined by outcome, not implementation
+- The spectrum: cognitive, action, and workflow skills
+- Why "everything is a prompt" and what that means for skill design
+
 ---
 
 ## Practical Guides
@@ -65,6 +72,7 @@ For step-by-step instructions and how-to guides, see:
 | `spec-driven-development.md` | Learn structured feature planning | Developers planning features |
 | `specs-vs-artifacts.md` | Understand distinction between specs and artifacts | Everyone |
 | `local-warehouse-workflow.md` | Understand snapshot/copy design rationale | Framework contributors, curious users |
+| `understanding-agent-skills.md` | Understand what agent skills are conceptually | Anyone designing or evaluating skills |
 
 ---
 
