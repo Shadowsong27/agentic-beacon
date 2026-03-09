@@ -58,6 +58,7 @@ def find_project_root() -> Path:
 
 
 @click.group()
+@click.version_option(package_name="agentic-beacon")
 @click.option("--verbose", is_flag=True, help="Enable verbose logging")
 def main(*, verbose: bool) -> None:
     """Agentic Beacon CLI (abc) - Guide your agents with distributed knowledge."""
