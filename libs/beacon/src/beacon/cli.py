@@ -374,20 +374,25 @@ def setup(*, manual: bool, agent_assisted: bool) -> None:
 def _create_beacon_template(path: Path) -> None:
     """Create empty beacon.yaml template with commented examples."""
     template = """artifacts:
-  knowledge: []
+  contexts: []
+    # Context name maps to contexts/AGENTS.<name>.md in warehouse
     # Examples:
-    # - languages/python/**/*.md
-    # - infrastructure/docker-standards.md
-    
+    # - global
+    # - python
+    # - data-platform
+
+  knowledge: []
+    # Full warehouse-relative paths (supports globs)
+    # Examples:
+    # - knowledge/global/**/*.md
+    # - knowledge/languages/python/**/*.md
+    # - knowledge/domains/data-platform/*.md
+
   skills: []
+    # Skill directory name in warehouse skills/ directory
     # Examples:
     # - code-review
     # - generate-unit-tests
-    
-  contexts: []
-    # Examples:
-    # - backend-microservice
-    # - data-platform
 """
     path.write_text(template)
 
@@ -460,18 +465,27 @@ def sync() -> None:
         # Collect all artifact paths (expanding globs)
         artifact_paths = []
         console.print(f"\n[blue]Syncing artifacts from warehouse...[/blue]\n")
-        
-        for artifact_type in ["knowledge", "skills", "contexts"]:
-            artifacts_list = getattr(beacon_settings.artifacts, artifact_type)
-            for pattern in artifacts_list:
-                # Check if pattern contains glob characters
-                if "*" in pattern or "?" in pattern or "[" in pattern:
-                    # Expand glob
-                    matches = sync_engine.expand_glob(pattern)
-                    artifact_paths.extend(matches)
-                else:
-                    # Direct path
-                    artifact_paths.append(pattern)
+
+        # Resolve contexts: "global" → "contexts/AGENTS.global.md"
+        for context_name in beacon_settings.artifacts.contexts:
+            artifact_paths.append(f"contexts/AGENTS.{context_name}.md")
+
+        # Resolve knowledge: full warehouse-relative paths (e.g. "knowledge/global/**/*.md")
+        for pattern in beacon_settings.artifacts.knowledge:
+            if "*" in pattern or "?" in pattern or "[" in pattern:
+                matches = sync_engine.expand_glob(pattern)
+                artifact_paths.extend(matches)
+            else:
+                artifact_paths.append(pattern)
+
+        # Resolve skills: "record-decision" → all files in "skills/record-decision/"
+        for skill_name in beacon_settings.artifacts.skills:
+            skill_dir = warehouse_path / "skills" / skill_name
+            if skill_dir.exists() and skill_dir.is_dir():
+                skill_files = sync_engine.expand_glob(f"skills/{skill_name}/**/*")
+                artifact_paths.extend(skill_files)
+            else:
+                artifact_paths.append(f"skills/{skill_name}")
         
         # Sync all artifacts
         copied_count = 0
@@ -508,42 +522,76 @@ def sync() -> None:
     type=click.Path(exists=True, file_okay=False, path_type=Path),
     help="Path to project root (auto-detected if not provided)",
 )
-@click.option(
-    "--warehouse",
-    type=click.Path(exists=True, file_okay=False, path_type=Path),
-    help="Path to warehouse repository (auto-detected if not provided)",
-)
-def update(*, project: Optional[Path], warehouse: Optional[Path]) -> None:
-    """Update existing .opencode content from warehouse."""
-    warehouse_root = warehouse or find_warehouse_root()
-    if not warehouse_root:
-        console.print(
-            "[red]Error:[/red] Could not find warehouse root. Specify --warehouse."
-        )
-        sys.exit(1)
-
+def update(*, project: Optional[Path]) -> None:
+    """Update existing synced artifacts from warehouse (re-runs sync, overwrites changes)."""
     project_root = project or find_project_root()
-    opencode_dir = project_root / ".opencode"
+    beacon_dir = project_root / ".agentic-beacon"
 
-    if not opencode_dir.exists():
-        console.print(
-            f"[red]Error:[/red] No .opencode directory found at {project_root}"
-        )
-        console.print("Run 'agentic setup' first.")
+    if not beacon_dir.exists():
+        console.print(f"[red]Error:[/red] No warehouse connected at {project_root}")
+        console.print("Run 'abc warehouse connect' first.")
         sys.exit(1)
 
-    console.print(f"[blue]Updating:[/blue] {opencode_dir}")
+    if not (beacon_dir / "beacon.yaml").exists():
+        console.print(f"[red]Error:[/red] No beacon.yaml found.")
+        console.print("Run 'abc setup' to create artifact configuration.")
+        sys.exit(1)
+
+    console.print(f"[blue]Updating artifacts from warehouse...[/blue]")
 
     try:
-        distributor = WarehouseDistributor(
-            warehouse_root=warehouse_root, target_root=project_root
-        )
-        result = distributor.update()
+        from .core.settings import WarehouseSettings, BeaconSettings
+        from .core.sync import SyncEngine
 
-        console.print("[bold green]✓ Update complete![/bold green]")
-        console.print(f"  [blue]Contexts:[/blue] {result['contexts']} files")
-        console.print(f"  [blue]Knowledge:[/blue] {result['knowledge']} files")
-        console.print(f"  [blue]Skills:[/blue] {result['skills']} directories")
+        warehouse_settings = WarehouseSettings()
+        warehouse_path = Path(warehouse_settings.warehouse.local_path)
+        beacon_settings = BeaconSettings.from_yaml(beacon_dir / "beacon.yaml")
+
+        artifacts_dir = beacon_dir / "artifacts"
+        artifacts_dir.mkdir(exist_ok=True)
+
+        sync_engine = SyncEngine(warehouse_path=warehouse_path, artifacts_path=artifacts_dir)
+
+        artifact_paths: list[str] = []
+
+        for context_name in beacon_settings.artifacts.contexts:
+            artifact_paths.append(f"contexts/AGENTS.{context_name}.md")
+
+        for pattern in beacon_settings.artifacts.knowledge:
+            if "*" in pattern or "?" in pattern or "[" in pattern:
+                artifact_paths.extend(sync_engine.expand_glob(pattern))
+            else:
+                artifact_paths.append(pattern)
+
+        for skill_name in beacon_settings.artifacts.skills:
+            skill_dir = warehouse_path / "skills" / skill_name
+            if skill_dir.exists() and skill_dir.is_dir():
+                artifact_paths.extend(sync_engine.expand_glob(f"skills/{skill_name}/**/*"))
+            else:
+                artifact_paths.append(f"skills/{skill_name}")
+
+        copied_count = 0
+        overwritten_count = 0
+        error_count = 0
+
+        for artifact_path in artifact_paths:
+            # Force update: remove destination first so idempotent check doesn't skip
+            dest = artifacts_dir / artifact_path
+            if dest.exists():
+                dest.unlink()
+                overwritten_count += 1
+            result = sync_engine.copy_file(artifact_path)
+            if result.action == "copied":
+                copied_count += 1
+            elif result.action == "error":
+                error_count += 1
+                console.print(f"  [red]✗[/red] {artifact_path}: {result.error_message}")
+
+        console.print(f"\n[bold green]✓ Update complete![/bold green]")
+        console.print(f"  [blue]Updated:[/blue] {overwritten_count} files")
+        console.print(f"  [blue]New:[/blue] {copied_count - overwritten_count if copied_count > overwritten_count else 0} files")
+        if error_count > 0:
+            console.print(f"  [red]Errors:[/red] {error_count} files")
 
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
@@ -604,27 +652,19 @@ def list(*, warehouse: Optional[Path]) -> None:
     type=click.Path(exists=True, file_okay=False, path_type=Path),
     help="Path to project root (auto-detected if not provided)",
 )
-@click.confirmation_option(prompt="Are you sure you want to remove .opencode?")
+@click.confirmation_option(prompt="Are you sure you want to remove synced artifacts?")
 def clean(*, project: Optional[Path]) -> None:
-    """Remove .opencode directory from project."""
+    """Remove synced artifacts from project (.agentic-beacon/artifacts/)."""
+    import shutil
+
     project_root = project or find_project_root()
-    warehouse_root = find_warehouse_root()
+    artifacts_dir = project_root / ".agentic-beacon" / "artifacts"
 
-    if not warehouse_root:
-        console.print(
-            "[yellow]Warning:[/yellow] Could not find warehouse root. "
-            "Proceeding with clean anyway."
-        )
-        warehouse_root = Path.cwd()
-
-    distributor = WarehouseDistributor(
-        warehouse_root=warehouse_root, target_root=project_root
-    )
-
-    if distributor.clean():
-        console.print(f"[green]✓ Removed:[/green] {project_root / '.opencode'}")
+    if artifacts_dir.exists():
+        shutil.rmtree(artifacts_dir)
+        console.print(f"[green]✓ Removed:[/green] {artifacts_dir}")
     else:
-        console.print(f"[yellow]No .opencode directory found at {project_root}[/yellow]")
+        console.print(f"[yellow]No artifacts found at {artifacts_dir}[/yellow]")
 
 
 @main.command()
@@ -636,45 +676,68 @@ def clean(*, project: Optional[Path]) -> None:
 def status(*, project: Optional[Path]) -> None:
     """Show current warehouse installation status."""
     project_root = project or find_project_root()
-    opencode_dir = project_root / ".opencode"
+    beacon_dir = project_root / ".agentic-beacon"
+    artifacts_dir = beacon_dir / "artifacts"
+    beacon_yaml = beacon_dir / "beacon.yaml"
 
-    if not opencode_dir.exists():
-        console.print(f"[yellow]No warehouse content installed at {project_root}[/yellow]")
-        console.print("Run 'abc setup' to install.")
+    if not beacon_dir.exists():
+        console.print(f"[yellow]No warehouse connected at {project_root}[/yellow]")
+        console.print("Run 'abc warehouse connect' to connect to a warehouse.")
         sys.exit(0)
 
-    console.print(f"[blue]Installation:[/blue] {opencode_dir}")
+    # Show warehouse connection
+    config_file = beacon_dir / "config.toml"
+    if config_file.exists():
+        try:
+            from .core.settings import WarehouseSettings
+            warehouse_settings = WarehouseSettings()
+            console.print(f"[blue]Warehouse:[/blue] {warehouse_settings.warehouse.local_path}")
+        except Exception:
+            console.print(f"[blue]Config:[/blue] {config_file}")
 
-    # Read configuration
-    warehouse_root = find_warehouse_root() or Path.cwd()
-    distributor = WarehouseDistributor(
-        warehouse_root=warehouse_root, target_root=project_root
-    )
-    config = distributor._read_config()
+    if not artifacts_dir.exists():
+        console.print(f"\n[yellow]No artifacts synced yet.[/yellow]")
+        console.print("Run 'abc sync' to download artifacts from warehouse.")
+        sys.exit(0)
 
-    # Display installed content
-    if config.get("contexts"):
-        table = Table(title="Installed Contexts")
-        table.add_column("Context", style="cyan")
-        for context in config["contexts"]:
-            table.add_row(context)
-        console.print(table)
-        console.print()
+    # Show beacon.yaml configuration
+    if beacon_yaml.exists():
+        from .core.settings import BeaconSettings
+        beacon_settings = BeaconSettings.from_yaml(beacon_yaml)
 
-    if config.get("knowledge_scopes"):
-        table = Table(title="Installed Knowledge Scopes")
-        table.add_column("Scope", style="green")
-        for scope in config["knowledge_scopes"]:
-            table.add_row(scope)
-        console.print(table)
-        console.print()
+        if beacon_settings.artifacts.contexts:
+            table = Table(title="Configured Contexts")
+            table.add_column("Context", style="cyan")
+            for ctx in beacon_settings.artifacts.contexts:
+                synced = (artifacts_dir / "contexts" / f"AGENTS.{ctx}.md").exists()
+                status_str = "[green]✓[/green]" if synced else "[red]✗[/red]"
+                table.add_row(f"{status_str} {ctx}")
+            console.print(table)
+            console.print()
 
-    if config.get("skills"):
-        table = Table(title="Installed Skills")
-        table.add_column("Skill", style="yellow")
-        for skill in config["skills"]:
-            table.add_row(skill)
-        console.print(table)
+        if beacon_settings.artifacts.knowledge:
+            table = Table(title="Configured Knowledge Patterns")
+            table.add_column("Pattern", style="green")
+            for pattern in beacon_settings.artifacts.knowledge:
+                table.add_row(pattern)
+            console.print(table)
+            console.print()
+
+        if beacon_settings.artifacts.skills:
+            table = Table(title="Configured Skills")
+            table.add_column("Skill", style="yellow")
+            for skill in beacon_settings.artifacts.skills:
+                synced = (artifacts_dir / "skills" / skill).exists()
+                status_str = "[green]✓[/green]" if synced else "[red]✗[/red]"
+                table.add_row(f"{status_str} {skill}")
+            console.print(table)
+            console.print()
+
+    # Count synced files
+    import os
+    file_count = sum(len(files) for _, _, files in os.walk(str(artifacts_dir)))
+    console.print(f"[blue]Artifacts location:[/blue] {artifacts_dir}")
+    console.print(f"[blue]Total synced files:[/blue] {file_count}")
 
 
 @main.command()
@@ -683,99 +746,124 @@ def status(*, project: Optional[Path]) -> None:
     type=click.Path(exists=True, file_okay=False, path_type=Path),
     help="Path to project root (auto-detected if not provided)",
 )
-@click.option(
-    "--warehouse",
-    type=click.Path(exists=True, file_okay=False, path_type=Path),
-    help="Path to warehouse repository (auto-detected if not provided)",
-)
-def delta(*, project: Optional[Path], warehouse: Optional[Path]) -> None:
+def delta(*, project: Optional[Path]) -> None:
     """
-    Compare target installation with warehouse to find differences.
-    
+    Compare synced artifacts with warehouse to find differences.
+
     Shows:
-    - New files in target (potential contributions back to warehouse)
-    - Modified files in target (local customizations)  
-    - Missing files in target (content available in warehouse)
+    - New files added locally (potential contributions back to warehouse)
+    - Modified files that differ from warehouse
+    - Missing files available in warehouse but not synced
     """
-    warehouse_root = warehouse or find_warehouse_root()
-    if not warehouse_root:
-        console.print(
-            "[red]Error:[/red] Could not find warehouse root. Specify --warehouse."
-        )
-        sys.exit(1)
+    import hashlib
 
     project_root = project or find_project_root()
-    opencode_dir = project_root / ".opencode"
+    beacon_dir = project_root / ".agentic-beacon"
+    artifacts_dir = beacon_dir / "artifacts"
+    beacon_yaml = beacon_dir / "beacon.yaml"
 
-    if not opencode_dir.exists():
-        console.print(
-            f"[red]Error:[/red] No .opencode directory found at {project_root}"
-        )
-        console.print("Run 'abc setup' first.")
+    if not artifacts_dir.exists():
+        console.print(f"[red]Error:[/red] No artifacts synced at {project_root}")
+        console.print("Run 'abc sync' first.")
         sys.exit(1)
 
-    console.print(f"[blue]Comparing:[/blue] {opencode_dir}")
-    console.print(f"[blue]Warehouse:[/blue] {warehouse_root}")
+    # Load warehouse settings
+    try:
+        from .core.settings import WarehouseSettings, BeaconSettings
+        from .core.sync import SyncEngine
+
+        warehouse_settings = WarehouseSettings()
+        warehouse_path = Path(warehouse_settings.warehouse.local_path)
+    except Exception as e:
+        console.print(f"[red]Error:[/red] Could not load warehouse settings: {e}")
+        sys.exit(1)
+
+    console.print(f"[blue]Comparing:[/blue] {artifacts_dir}")
+    console.print(f"[blue]Warehouse:[/blue] {warehouse_path}")
     console.print()
 
-    try:
-        distributor = WarehouseDistributor(
-            warehouse_root=warehouse_root, target_root=project_root
-        )
-        result = distributor.delta()
+    sync_engine = SyncEngine(warehouse_path=warehouse_path, artifacts_path=artifacts_dir)
 
-        # Display new files in target
-        if result["new_in_target"]:
-            table = Table(title="[green]New in Target[/green] (Potential Contributions)")
-            table.add_column("File", style="green")
-            for file in result["new_in_target"]:
-                table.add_row(file)
-            console.print(table)
-            console.print()
-            console.print(
-                "[dim]💡 These files could be contributed back to the warehouse[/dim]"
-            )
-            console.print()
+    # Build expected artifact paths from beacon.yaml
+    expected_paths: list[str] = []
+    if beacon_yaml.exists():
+        beacon_settings = BeaconSettings.from_yaml(beacon_yaml)
 
-        # Display modified files in target
-        if result["modified_in_target"]:
-            table = Table(title="[yellow]Modified in Target[/yellow] (Local Changes)")
-            table.add_column("File", style="yellow")
-            for file in result["modified_in_target"]:
-                table.add_row(file)
-            console.print(table)
-            console.print()
-            console.print(
-                "[dim]⚠️  These files differ from warehouse - may be local customizations[/dim]"
-            )
-            console.print()
+        for context_name in beacon_settings.artifacts.contexts:
+            expected_paths.append(f"contexts/AGENTS.{context_name}.md")
 
-        # Display missing files in target
-        if result["missing_in_target"]:
-            table = Table(title="[red]Missing in Target[/red] (Available in Warehouse)")
-            table.add_column("File", style="red")
-            for file in result["missing_in_target"]:
-                table.add_row(file)
-            console.print(table)
-            console.print()
-            console.print(
-                "[dim]ℹ️  Run 'abc update' to sync with warehouse[/dim]"
-            )
-            console.print()
+        for pattern in beacon_settings.artifacts.knowledge:
+            if "*" in pattern or "?" in pattern:
+                expected_paths.extend(sync_engine.expand_glob(pattern))
+            else:
+                expected_paths.append(pattern)
 
-        # Summary
-        if not any([result["new_in_target"], result["modified_in_target"], result["missing_in_target"]]):
-            console.print("[green]✓ Target and warehouse are in sync![/green]")
-        else:
-            console.print("[bold]Summary:[/bold]")
-            console.print(f"  [green]New:[/green] {len(result['new_in_target'])} files")
-            console.print(f"  [yellow]Modified:[/yellow] {len(result['modified_in_target'])} files")
-            console.print(f"  [red]Missing:[/red] {len(result['missing_in_target'])} files")
+        for skill_name in beacon_settings.artifacts.skills:
+            skill_dir = warehouse_path / "skills" / skill_name
+            if skill_dir.exists():
+                expected_paths.extend(sync_engine.expand_glob(f"skills/{skill_name}/**/*"))
 
-    except Exception as e:
-        console.print(f"[red]Error:[/red] {e}")
-        logger.exception("Delta comparison failed")
-        sys.exit(1)
+    def file_hash(path: Path) -> str:
+        sha256 = hashlib.sha256()
+        with open(path, "rb") as f:
+            while chunk := f.read(8192):
+                sha256.update(chunk)
+        return sha256.hexdigest()
+
+    new_in_target: list[str] = []
+    modified_in_target: list[str] = []
+    missing_in_target: list[str] = []
+
+    # Check each expected path
+    expected_set = set(expected_paths)
+    for rel_path in expected_paths:
+        warehouse_file = warehouse_path / rel_path
+        artifact_file = artifacts_dir / rel_path
+        if artifact_file.exists():
+            if warehouse_file.exists() and file_hash(warehouse_file) != file_hash(artifact_file):
+                modified_in_target.append(rel_path)
+        elif warehouse_file.exists():
+            missing_in_target.append(rel_path)
+
+    # Find files in artifacts not in expected set
+    for artifact_file in artifacts_dir.rglob("*"):
+        if artifact_file.is_file():
+            rel = str(artifact_file.relative_to(artifacts_dir))
+            if rel not in expected_set:
+                new_in_target.append(rel)
+
+    # Display results
+    if new_in_target:
+        table = Table(title="[green]New in Target[/green] (Potential Contributions)")
+        table.add_column("File", style="green")
+        for file in new_in_target:
+            table.add_row(file)
+        console.print(table)
+        console.print("[dim]These files could be contributed back to the warehouse[/dim]\n")
+
+    if modified_in_target:
+        table = Table(title="[yellow]Modified in Target[/yellow] (Local Changes)")
+        table.add_column("File", style="yellow")
+        for file in modified_in_target:
+            table.add_row(file)
+        console.print(table)
+        console.print("[dim]These files differ from warehouse - may be local customizations[/dim]\n")
+
+    if missing_in_target:
+        table = Table(title="[red]Missing in Target[/red] (Available in Warehouse)")
+        table.add_column("File", style="red")
+        for file in missing_in_target:
+            table.add_row(file)
+        console.print(table)
+        console.print("[dim]Run 'abc sync' to download missing files[/dim]\n")
+
+    if not any([new_in_target, modified_in_target, missing_in_target]):
+        console.print("[green]✓ Target and warehouse are in sync![/green]")
+    else:
+        console.print("[bold]Summary:[/bold]")
+        console.print(f"  [green]New:[/green] {len(new_in_target)} files")
+        console.print(f"  [yellow]Modified:[/yellow] {len(modified_in_target)} files")
+        console.print(f"  [red]Missing:[/red] {len(missing_in_target)} files")
 
 
 def _interactive_select(
