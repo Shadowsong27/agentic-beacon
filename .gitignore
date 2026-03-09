@@ -33,8 +33,10 @@ logs/
 .env
 .env.local
 
-# Claude Code worktrees (ephemeral session state, not project artifacts)
+# Claude Code ephemeral/user-local content (not project artifacts)
 .claude/worktrees/
+.claude/commands/opsx/
+.claude/skills/openspec-*/
 
 # Distributed warehouse content (project-specific)
 .opencode/
