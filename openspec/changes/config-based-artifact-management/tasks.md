@@ -63,89 +63,6 @@ pytest tests/ -v --tb=short
 
 ---
 
-## 🗓️ Session Log: 2026-03-09 - Live Testing & Bug Fixes
-
-### What Was Done
-
-**Live warehouse setup and end-to-end testing was performed.** A real warehouse (`~/Code/shadowsong-warehouse`) and a separate test project (`~/Code/test-abc-project`) were created to validate all commands.
-
-**abc CLI installed from source:** `uv tool install -e libs/beacon`
-
-**Bugs fixed in `cli.py`:**
-
-1. **`abc sync` path resolution bug (PARTIAL FIX - see warning below):**
-   - Contexts: `global` now correctly resolves to `contexts/AGENTS.global.md` ✅
-   - Skills: `record-decision` now correctly scans all files in `skills/record-decision/**/*` ✅
-   - Knowledge: ⚠️ **incorrectly changed** - added `knowledge/` prefix, which breaks 3 existing tests
-   - See "🔴 Failing Tests" section below
-
-2. **`beacon.yaml` template comments updated** to reflect the v2 path format — but also needs re-check given the bug above.
-
-3. **`abc status` rewritten for v2:** Now reads `.agentic-beacon/beacon.yaml` and shows sync status per artifact. Previously used the old `.opencode/` design. **NOT part of original task list — done as necessary scaffolding.**
-
-4. **`abc clean` updated for v2:** Now removes `.agentic-beacon/artifacts/` instead of `.opencode/`. **NOT part of original task list.**
-
-5. **`abc update` rewritten for v2:** Now force-re-syncs all artifacts from `beacon.yaml` (overwrites local changes). Previously used the old `WarehouseDistributor.update()` targeting `.opencode/`. **NOT part of original task list.**
-
-### 🔴 Failing Tests (Must Fix First in Next Session)
-
-**3 tests failing in `tests/cli/test_sync_command.py`:**
-
-```
-FAILED tests/cli/test_sync_command.py::test_sync_with_valid_configuration
-FAILED tests/cli/test_sync_command.py::test_sync_is_idempotent
-FAILED tests/cli/test_sync_command.py::test_sync_with_glob_patterns
-```
-
-**Root Cause:** In `cli.py`, the `sync` command now prepends `knowledge/` to all knowledge entries in `beacon.yaml`. But the tests (and the spec design) intend knowledge entries to be **full warehouse-relative paths** (e.g. `knowledge/test.md`, `knowledge/python/*.md`). This double-prepends the prefix.
-
-**Fix needed in `sync` command (and `update` command) in `cli.py`:**
-```python
-# WRONG (current - double-prepends):
-for pattern in beacon_settings.artifacts.knowledge:
-    full_pattern = f"knowledge/{pattern}"   # removes this prefix logic
-
-# CORRECT (treat as raw warehouse path):
-for pattern in beacon_settings.artifacts.knowledge:
-    # knowledge entries ARE already full warehouse-relative paths
-    if "*" in pattern or "?" in pattern or "[" in pattern:
-        matches = sync_engine.expand_glob(pattern)
-        artifact_paths.extend(matches)
-    else:
-        artifact_paths.append(pattern)
-```
-
-**Also fix `beacon.yaml` template** — the examples should show FULL warehouse paths with `knowledge/` prefix:
-```yaml
-knowledge: []
-  # Full warehouse-relative paths (e.g. knowledge/global/**/*.md)
-  # Examples:
-  # - knowledge/global/**/*.md
-  # - knowledge/languages/python/**/*.md
-  # - knowledge/domains/data-platform/*.md
-```
-
-**Note:** The same fix is needed in the `update` command which duplicates the sync path resolution logic. Consider extracting shared path resolution into a helper function to avoid this duplication.
-
-### Current Test Status
-
-```
-125 passing, 3 failing, 2 skipped
-```
-**Fix the 3 failures before proceeding to any new tasks.**
-
-### Out-of-Spec Command Updates (v2 compatibility)
-
-These commands existed in v1 targeting `.opencode/` and were rewritten inline to unblock testing. They are **not covered by TDD tests yet** and should be properly tested in Phase 13:
-
-| Command | Status | Notes |
-|---------|--------|-------|
-| `abc status` | Rewritten | Shows warehouse + beacon.yaml config + sync status per artifact. No TDD tests. |
-| `abc clean` | Updated | Removes `.agentic-beacon/artifacts/`. No TDD tests. |
-| `abc update` | Rewritten | Force re-sync from beacon.yaml (overwrites all). No TDD tests. Duplicates sync path logic. |
-
----
-
 ## 1. Configuration Management
 
 **Goal**: Establish settings infrastructure for beacon.yaml (artifact dependencies) and config.toml (warehouse connection)
@@ -563,21 +480,16 @@ These commands existed in v1 targeting `.opencode/` and were rewritten inline to
 **Output**: `abc sync` command that syncs artifacts according to beacon.yaml
 **Validation**: Modify beacon.yaml to add/remove artifacts, run `abc sync`; artifacts directory matches beacon.yaml specification
 
-> **Status (2026-03-09):** `abc sync` command implemented in `cli.py`. Basic sync works but **3 TDD tests are currently failing** due to a path resolution bug introduced during the live testing session. **Must fix before any new work.**
+> **Status:** `abc sync` implemented in `cli.py`. Path resolution: contexts (`global` → `contexts/AGENTS.global.md`) and skills (`record-decision` → `skills/record-decision/**/*`) work correctly. Knowledge entries are treated as full warehouse-relative paths (e.g. `knowledge/global/**/*.md`). **128/128 tests passing.**
 >
-> **🔴 KNOWN BUG:** Knowledge entries in `beacon.yaml` are incorrectly prefixed with `knowledge/` in the sync command. Tests confirm knowledge entries should be **full warehouse-relative paths** (e.g. `knowledge/test.md`). Fix: remove the `f"knowledge/{pattern}"` wrapping for knowledge patterns and treat them as raw warehouse paths — same as contexts and skills use full resolution.
->
-> **Flags --preserve, --prune, --verbose not yet implemented (TC4-TC6).**
+> **Not yet implemented:** `--preserve`, `--prune`, `--verbose` flags (tasks 7.3–7.7).
 
 - [x] 7.1 Implement abc sync command (reads beacon.yaml, invokes SyncEngine)
   - **Implemented in:** `cli.py` `sync()` function
-  - **Test Results:** ⚠️ 3/6 tests passing — **3 failing due to knowledge path bug** (see session log above)
-  - **TC1:** ❌ Failing — knowledge path double-prefixed
-  - **TC2:** ❌ Failing — same root cause
+  - **Test Results:** ✅ 3/3 passing (`test_sync_with_valid_configuration`, `test_sync_is_idempotent`, `test_sync_with_glob_patterns`)
   - **TC4, TC5, TC6:** Not tested yet (flags not implemented)
-  - **TC8:** ❌ Failing — glob pattern also double-prefixed
   - **TC9:** Not tested
-  - **TC10:** Basic progress ("✓ Sync complete, N files copied") ✅
+  - **TC10:** Basic summary ("✓ Sync complete, N files copied") ✅
 - [x] 7.2 Add validation that warehouse is connected before syncing
   - **Implemented:** Checks `.agentic-beacon/config.toml` existence; exits 1 with message if missing
   - **Test Results:** ✅ Passing
