@@ -51,18 +51,26 @@ Project-level instructions for AI agents working on the Agentic Beacon framework
 
 **Location:** `libs/beacon/`
 
+**Project uses uv workspace** — single `.venv` at repo root, `libs/beacon` is a workspace member.
+
 **Quick commands:**
 ```bash
-cd libs/beacon && pip install -e .  # Install editable
-abc --version                        # Test CLI
-abc init test-warehouse              # Test command
+# From repo root (one-time setup)
+uv sync --group dev
+
+# Test CLI
+.venv/bin/abc --version
+# OR activate venv first:
+source .venv/bin/activate
+abc --version
+abc init test-warehouse
 ```
 
 **Read:** [CLI Development Workflow](knowledge/facts/cli-development-workflow.md)
 
 ### Unit Testing Workflow
 
-**Brief:** Standard workflow for running unit tests: activate venv → uv sync --extra dev → run pytest
+**Brief:** Standard workflow: `uv sync --group dev` at repo root → `pytest` (no cd into libs/beacon required)
 
 **Read:** [Fact: Unit Testing Workflow](knowledge/facts/unit-testing-workflow.md)
 
@@ -149,4 +157,4 @@ Follow the global Python standards from the user's AGENTS.md context:
 
 ---
 
-**Last Updated:** 2026-03-07
+**Last Updated:** 2026-03-10

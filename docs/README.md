@@ -32,20 +32,13 @@ Files:
 - Two-phase process: Specification → Implementation
 - Reduces ambiguity and improves AI collaboration
 
-### Implementation Details
-
-**[CLI Implementation Summary](./cli-implementation-summary.md)**
-- Technical architecture of the warehouse CLI
-- Package structure and key features
-- Implementation decisions and testing approach
-
 ---
 
 ## Practical Guides
 
 For step-by-step instructions and how-to guides, see:
 
-- **[guides/cli-quick-start.md](../guides/cli-quick-start.md)** - Getting started with the CLI
+- **[guides/getting-started.md](../guides/getting-started.md)** - Onboarding and first sync
 - **[guides/warehouse-contribution-guide.md](../guides/warehouse-contribution-guide.md)** - Contributing improvements
 
 ---
@@ -58,7 +51,6 @@ For step-by-step instructions and how-to guides, see:
 | `boot-context-design/agents-md-architecture.md` | Understand three-tier AGENTS.md model | Everyone writing AGENTS.md files |
 | `boot-context-design/project-level-agents-design.md` | Learn how to write effective project AGENTS.md | Project maintainers |
 | `spec-driven-development.md` | Learn structured feature planning | Developers planning features |
-| `cli-implementation-summary.md` | Understand CLI architecture | CLI maintainers, contributors |
 
 ---
 
@@ -72,8 +64,7 @@ For step-by-step instructions and how-to guides, see:
 
 **For contributors:**
 1. Start with design docs to understand philosophy
-2. Read [CLI Implementation Summary](./cli-implementation-summary.md) for technical details
-3. Check [guides/warehouse-contribution-guide.md](../guides/warehouse-contribution-guide.md) for process
+2. Check [guides/warehouse-contribution-guide.md](../guides/warehouse-contribution-guide.md) for process
 
 **For developers:**
 1. Read [Spec-Driven Development](./spec-driven-development.md) first
