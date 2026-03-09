@@ -1,0 +1,25 @@
+[project]
+name = "agentic-beacon-workspace"
+version = "0.0.0"
+requires-python = ">=3.12"
+dependencies = [
+    "agentic-beacon",
+]
+
+[tool.uv]
+managed = true
+
+[tool.uv.workspace]
+members = ["libs/*"]
+
+[tool.uv.sources]
+agentic-beacon = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["libs/beacon/tests"]

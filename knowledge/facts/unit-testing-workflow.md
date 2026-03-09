@@ -1,62 +1,61 @@
 # Fact: Unit Testing Workflow
 
-**Last Updated:** 2026-03-08
-**Context:** Agentic Beacon project - libs/beacon/ package testing
+**Last Updated:** 2026-03-10
+**Context:** Agentic Beacon project - uv workspace testing
 
 ---
 
 ## Overview
 
-Standard workflow for running unit tests in the beacon package using UV and pytest.
+The project uses a **uv workspace** with a single `.venv` at the repo root. `libs/beacon` is a workspace member — no separate venv is created there.
 
 ## Details
 
-The beacon package uses UV for dependency management and pytest for unit testing. Tests are located in the `tests/` directory within the package.
-
 **Required steps for running tests:**
 
-1. **Activate virtual environment**
+1. **Sync dependencies (one-time / after dependency changes)**
+   ```bash
+   uv sync --group dev
+   ```
+   Creates/updates `.venv` at repo root with `agentic-beacon` (editable from workspace) and all dev tools.
+
+2. **Run pytest from repo root**
+   ```bash
+   pytest
+   ```
+   pytest is configured in root `pyproject.toml` (`testpaths = ["libs/beacon/tests"]`).
+
+   Or activate the venv first:
    ```bash
    source .venv/bin/activate
+   pytest
    ```
 
-2. **Install dev dependencies with UV**
-   ```bash
-   uv sync --extra dev
-   ```
-   This ensures pytest and other testing tools are installed.
+## Full Command Sequence
 
-3. **Run pytest**
-   ```bash
-   pytest tests/core/ -v --tb=short
-   ```
-   Adjust the path and flags as needed for specific test suites.
-
-## Usage/Application
-
-**Full command sequence:**
 ```bash
-cd /Users/shadowsong/Code/agentic-beacon/libs/beacon
-source .venv/bin/activate
-uv sync --extra dev
-pytest tests/core/ -v --tb=short
+# From repo root
+uv sync --group dev
+pytest -v --tb=short
 ```
 
-**Common pytest flags:**
+## Common pytest Flags
+
 - `-v` - Verbose output
 - `--tb=short` - Short traceback format
 - `-k <pattern>` - Run tests matching pattern
 - `-x` - Stop on first failure
 - `--cov` - Generate coverage report
 
-**Test organization:**
-- `tests/` - Root test directory
-- `tests/core/` - Core module tests
-- `tests/conftest.py` - Shared fixtures
+## Workspace Structure
+
+- Root `pyproject.toml` — workspace definition, dev dependency group, pytest config
+- `libs/beacon/pyproject.toml` — workspace member (publishable package)
+- `.venv/` — single root venv (DO NOT create venvs inside `libs/beacon/`)
 
 ## Important Notes
 
-- Always activate the virtual environment before running tests
-- Use `uv sync --extra dev` instead of `pip install -e ".[dev]"` in UV workspaces
-- The virtual environment must exist before activation (create with `uv venv` if needed)
-- Tests follow TDD principles: write tests first (RED), implement code (GREEN), refactor (REFACTOR)
+- Always run from the **repo root**, not from `libs/beacon/`
+- `uv sync --group dev` replaces the old `uv sync --extra dev` workflow
+- No `cd libs/beacon` required anymore
+- The `libs/beacon/pyproject.toml` retains `[optional-dependencies] dev` for standalone PyPI installs only
