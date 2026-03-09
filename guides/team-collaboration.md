@@ -32,7 +32,6 @@ team-warehouse/
 ├── knowledge/
 │   ├── languages/
 │   │   ├── python/
-│   │   ├── typescript/
 │   │   └── go/
 │   ├── best-practices/
 │   └── infrastructure/
@@ -43,7 +42,7 @@ team-warehouse/
 ├── contexts/
 │   ├── teams/
 │   │   ├── backend/
-│   │   ├── frontend/
+│   │   ├── platform/
 │   │   └── devops/
 │   └── projects/
 ├── docs/
@@ -514,11 +513,10 @@ cd ~/our-team-warehouse && git pull && cd - && abc sync
 
 - **[Creating a Warehouse](./warehouse-creation.md)** - Detailed warehouse setup
 - **[Advanced Patterns](./advanced-patterns.md)** - Complex configurations
-- **[Migration Guide](./migration-v1-to-v2.md)** - Upgrade from v1.x
 
 ---
 
 **Related Guides:**
 - [Getting Started](./getting-started.md)
 - [Python Project Setup](./python-project-setup.md)
-- [Warehouse Contribution Guide](./warehouse-contribution-guide.md)
+- [Warehouse Creation](./warehouse-creation.md)

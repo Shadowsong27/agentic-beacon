@@ -1,615 +1,231 @@
 # Creating a Warehouse
 
-This guide walks you through creating and organizing a warehouse for your team or organization.
-
-## What is a Warehouse?
-
-A warehouse is a structured repository containing:
-- **Knowledge artifacts** - Documentation, best practices, standards
-- **Skills** - Reusable agent workflows and capabilities
-- **Contexts** - Team and project-specific configurations
-
-Think of it as your organization's knowledge base for AI agents.
+A warehouse is a git repository that stores your team's shared knowledge, skills, and contexts. Projects connect to it and pull the artifacts they need.
 
 ## Quick Start
 
 ```bash
-# Create new warehouse
 abc warehouse init my-warehouse
-
-# Navigate to it
 cd my-warehouse
 ```
 
-## Warehouse Structure
+---
 
-The `abc warehouse init` command creates this structure:
+## Required Structure
+
+The `abc warehouse init` command creates the skeleton that Agentic Beacon requires:
 
 ```
 my-warehouse/
-├── contexts/           # Agent configurations
-│   ├── AGENTS.global.md
-│   └── README.md
-├── knowledge/          # Documentation and guides
-│   ├── global/
-│   │   └── README.md
-│   └── README.md
-├── skills/             # Reusable agent workflows
-│   └── README.md
-├── docs/              # Warehouse documentation
-│   └── README.md
-├── README.md          # Warehouse overview
-└── .git/              # Version control (optional)
+├── contexts/
+├── knowledge/
+├── skills/
+├── docs/
+└── README.md
 ```
 
-### Required Structure
+### What `abc warehouse connect` validates
 
-For a valid warehouse, you **must** have:
-- ✅ `contexts/` directory
-- ✅ `knowledge/` directory  
-- ✅ `knowledge/global/` directory
-- ✅ `skills/` directory
-- ✅ `docs/` directory
-- ✅ `contexts/AGENTS.global.md` file
-- ✅ `README.md` file
+When a project connects to a warehouse, it checks exactly five things:
 
-## Organizing Knowledge
+- `contexts/` directory exists
+- `knowledge/` directory exists
+- `skills/` directory exists
+- `docs/` directory exists
+- A `README.md` (or `README` / `README.txt`) file exists at the root
 
-### By Language
+That's it. No naming conventions inside any of those directories, no required files within them, no prescribed subdirectory structure. Everything inside is yours to define.
 
-```
-knowledge/
-├── languages/
-│   ├── python/
-│   │   ├── type-hints.md
-│   │   ├── async-patterns.md
-│   │   ├── fastapi/
-│   │   │   ├── routing.md
-│   │   │   └── dependencies.md
-│   │   └── pytest/
-│   │       └── fixtures.md
-│   ├── typescript/
-│   │   ├── types.md
-│   │   └── react/
-│   │       └── hooks.md
-│   └── go/
-│       └── concurrency.md
-```
+---
 
-### By Domain
+## Organizing Your Content
+
+The inner structure of `knowledge/`, `skills/`, and `contexts/` is **entirely yours to define**. Agentic Beacon imposes no naming conventions, no required subdirectories, and no categorization scheme.
+
+Organize artifacts however your team thinks about them. Some teams organize by topic, some by team, some by project. All of these are valid.
+
+### Knowledge
+
+Knowledge artifacts are markdown files — any content that helps an agent understand how your team works.
 
 ```
 knowledge/
-├── infrastructure/
-│   ├── docker-best-practices.md
-│   ├── kubernetes/
-│   │   └── deployment-patterns.md
-│   └── terraform/
-│       └── modules.md
-├── databases/
-│   ├── postgres-tuning.md
-│   └── redis-patterns.md
-└── security/
-    ├── auth-patterns.md
-    └── secrets-management.md
+├── global/
+│   └── anything-you-want.md
+├── your-own-structure/
+│   └── more-files.md
+└── flat-file.md
 ```
 
-### By Best Practice
+Examples of what teams put here:
+- Architectural decisions and their rationale
+- Coding standards and conventions
+- Framework-specific patterns
+- Security policies
+- Onboarding notes for the codebase
+- "Why we chose X" explanations
 
-```
-knowledge/
-├── best-practices/
-│   ├── code-review.md
-│   ├── tdd-workflow.md
-│   ├── api-design.md
-│   ├── error-handling.md
-│   └── logging-standards.md
-```
+There is no required depth, naming pattern, or subdirectory scheme. The structure you choose determines the glob patterns projects use in `beacon.yaml` to pull specific subsets.
 
-## Organizing Skills
+### Skills
 
-Skills are agent workflows stored as directories:
+Skills are directories with a `SKILL.md` entry point. Each skill is a reusable agent workflow.
 
 ```
 skills/
-├── code-review/
-│   ├── SKILL.md              # Main skill definition
-│   ├── checklist.md          # Review checklist
-│   └── examples.md           # Example reviews
-├── generate-unit-tests/
-│   ├── SKILL.md
-│   └── templates/
-│       ├── pytest-template.md
-│       └── unittest-template.md
-└── api-design/
-    ├── SKILL.md
-    └── rest-api-checklist.md
+└── your-skill-name/
+    ├── SKILL.md             # Required — the agent reads this
+    └── any-supporting-files
 ```
 
-**SKILL.md format:**
-```markdown
-# Skill: Code Review
+The skill name is the directory name. Projects reference it with a glob pattern like `skills/your-skill-name/**/*`.
 
-## Purpose
-Perform thorough code reviews following team standards.
+See [Creating Skills](./creating-skills.md) for how to write effective `SKILL.md` files.
 
-## When to Use
-When reviewing pull requests or code changes.
+### Contexts
 
-## Process
-1. Check code formatting and style
-2. Review logic and algorithms
-3. Verify tests are present
-4. Check for security issues
-5. Provide constructive feedback
-
-## Checklist
-- [ ] Code follows style guide
-- [ ] Tests included and passing
-- [ ] No security vulnerabilities
-- [ ] Documentation updated
-- [ ] Performance considerations addressed
-```
-
-## Organizing Contexts
-
-Contexts provide team and project-specific configurations:
+Contexts are `AGENTS.md`-style files the agent loads at session start.
 
 ```
 contexts/
-├── AGENTS.global.md           # Organization-wide defaults
-├── teams/
-│   ├── backend/
-│   │   └── AGENTS.md         # Backend team standards
-│   ├── frontend/
-│   │   └── AGENTS.md         # Frontend team standards
-│   └── platform/
-│       └── AGENTS.md         # Platform team standards
-└── projects/
-    ├── customer-portal/
-    │   └── AGENTS.md         # Project-specific context
-    └── api-gateway/
-        └── AGENTS.md
+├── global.md         # Convention — name this whatever makes sense
+└── python.md         # Add as many context files as you need
 ```
 
-**AGENTS.md format:**
+Context files can be named anything — `global.md`, `python.md`, `backend-team.md`, whatever reflects their purpose. Projects pick which ones to pull in `beacon.yaml`. `abc warehouse init` creates a starter file called `AGENTS.md` as a starting point.
+
+---
+
+## Writing Your First Context File
+
+`abc warehouse init` creates a starter file at `contexts/AGENTS.md`. Rename it or add more files alongside it — the filename is not enforced by any tooling, so use whatever makes sense for your team (e.g. `global.md`, `python.md`, `backend-team.md`).
+
 ```markdown
-# Backend Team - Agent Context
+# <Org> — Agent Context
 
-## Team Information
-- **Team:** Backend Engineering
-- **Tech Stack:** Python, FastAPI, PostgreSQL
-- **Practices:** TDD, Code Review, CI/CD
+## About This Organization
+Brief description of your org, team, or project.
 
-## Coding Standards
-- Use type hints for all functions
-- Follow PEP 8 style guide
-- 100% test coverage for business logic
-- Document all public APIs
-
-## Development Workflow
-1. Create feature branch
-2. Write tests first (TDD)
-3. Implement feature
-4. Create PR with description
-5. Address review feedback
-6. Merge after approval
-
-## Tools
-- **Testing:** pytest
-- **Linting:** ruff, mypy
-- **Formatting:** black
-- **CI/CD:** GitHub Actions
-```
-
-## Example: Python Team Warehouse
-
-Let's build a complete Python-focused warehouse:
-
-### Step 1: Create Structure
-
-```bash
-abc warehouse init python-team-warehouse
-cd python-team-warehouse
-```
-
-### Step 2: Add Python Knowledge
-
-```bash
-# Create language-specific knowledge
-mkdir -p knowledge/languages/python/{basics,frameworks,testing,tools}
-
-# Basics
-cat > knowledge/languages/python/basics/type-hints.md << 'EOF'
-# Python Type Hints
-
-## Purpose
-Type hints improve code quality and IDE support.
-
-## Basic Usage
-```python
-def greet(name: str) -> str:
-    return f"Hello, {name}"
-```
-
-## Best Practices
-- Always use type hints for function signatures
-- Use Optional for nullable values
-- Use Union for multiple types
-- Import from `typing` module
-EOF
-
-# Frameworks
-cat > knowledge/languages/python/frameworks/fastapi.md << 'EOF'
-# FastAPI Best Practices
-
-## Routing
-- Use APIRouter for modular routes
-- Group related endpoints
-- Use path parameters for IDs
-
-## Example
-```python
-from fastapi import APIRouter
-
-router = APIRouter(prefix="/users")
-
-@router.get("/{user_id}")
-async def get_user(user_id: int):
-    return {"user_id": user_id}
-```
-EOF
-
-# Testing
-cat > knowledge/languages/python/testing/pytest-fixtures.md << 'EOF'
-# Pytest Fixtures
-
-## Purpose
-Fixtures provide reusable test setup.
-
-## Example
-```python
-import pytest
-
-@pytest.fixture
-def db_session():
-    session = create_session()
-    yield session
-    session.close()
-
-def test_user_creation(db_session):
-    user = User(name="Alice")
-    db_session.add(user)
-    db_session.commit()
-    assert user.id is not None
-```
-EOF
-```
-
-### Step 3: Add Skills
-
-```bash
-mkdir -p skills/python/{code-review,test-generation,api-design}
-
-cat > skills/python/code-review/SKILL.md << 'EOF'
-# Skill: Python Code Review
-
-## Purpose
-Review Python code for quality, correctness, and best practices.
-
-## Checklist
-- [ ] Type hints present for all functions
-- [ ] Following PEP 8 style guide
-- [ ] Tests included (pytest)
-- [ ] Docstrings for public functions
-- [ ] No security vulnerabilities
-- [ ] Async patterns used correctly
-- [ ] Error handling appropriate
-- [ ] Performance considerations
-
-## Common Issues
-1. Missing type hints
-2. Bare except clauses
-3. Mutable default arguments
-4. Missing async/await
-5. SQL injection vulnerabilities
-EOF
-
-cat > skills/python/test-generation/SKILL.md << 'EOF'
-# Skill: Generate Python Unit Tests
-
-## Purpose
-Generate comprehensive unit tests using pytest.
-
-## Process
-1. Identify function to test
-2. Determine edge cases
-3. Create pytest test cases
-4. Use fixtures for setup
-5. Assert expected behavior
-
-## Template
-```python
-import pytest
-
-def test_function_name_happy_path():
-    # Arrange
-    input_data = ...
-    
-    # Act
-    result = function_name(input_data)
-    
-    # Assert
-    assert result == expected
-```
-EOF
-```
-
-### Step 4: Add Team Context
-
-```bash
-mkdir -p contexts/teams/backend
-
-cat > contexts/teams/backend/AGENTS.md << 'EOF'
-# Backend Team - Agent Context
-
-## Tech Stack
-- Python 3.11+
-- FastAPI
-- PostgreSQL
-- Redis
-- Docker
+## Core Principles
+- <What matters most to how you work>
+- <Your key engineering values>
 
 ## Standards
-- Type hints mandatory
-- 100% test coverage for business logic
-- Async/await for I/O operations
-- Pydantic models for validation
-- SQLAlchemy for ORM
+- <Language/tooling decisions>
+- <Process requirements>
 
 ## Workflow
-1. TDD - Tests first
-2. PR review required
-3. CI must pass
-4. Deploy via CD pipeline
-EOF
+<How features get built and shipped>
 ```
 
-### Step 5: Create Example Configurations
+Keep it focused on what applies everywhere. Project-specific rules belong in separate context files that projects opt into via `beacon.yaml`.
+
+---
+
+## Example: Building a Warehouse From Scratch
 
 ```bash
-mkdir -p examples
+# 1. Create the structure
+abc warehouse init team-warehouse
+cd team-warehouse
 
-cat > examples/beacon.yaml.api-service << 'EOF'
-# Example beacon.yaml for Python API services
+# 2. Write your global context
+# abc warehouse init already created contexts/AGENTS.md — edit it, or rename it
+cat > contexts/AGENTS.md << 'EOF'
+# Acme Engineering — Agent Context
 
-artifacts:
-  knowledge:
-    - languages/python/basics/type-hints.md
-    - languages/python/frameworks/fastapi.md
-    - languages/python/testing/pytest-fixtures.md
-  
-  skills:
-    - python/code-review
-    - python/test-generation
-  
-  contexts:
-    - teams/backend/AGENTS.md
+## Standards
+- Python 3.12+, type hints required
+- Tests are mandatory for all business logic
+- Conventional commits
+
+## Process
+- TDD — tests before implementation
+- PR review required before merge
 EOF
 
-cat > examples/beacon.yaml.data-pipeline << 'EOF'
-# Example beacon.yaml for data pipelines
+# 3. Add knowledge
+mkdir -p knowledge/global/decisions
+cat > knowledge/global/decisions/testing-strategy.md << 'EOF'
+# Testing Strategy
 
-artifacts:
-  knowledge:
-    - languages/python/basics/type-hints.md
-    - languages/python/libraries/pandas.md
-    - languages/python/testing/pytest-fixtures.md
-  
-  skills:
-    - python/code-review
-    - data/pipeline-testing
-  
-  contexts:
-    - teams/data-platform/AGENTS.md
+We use pytest for all Python testing. Business logic requires 100% coverage.
+Fixtures live in conftest.py. Integration tests are separate from unit tests.
 EOF
-```
 
-### Step 6: Document the Warehouse
+# 4. Add a skill
+mkdir -p skills/code-review
+cat > skills/code-review/SKILL.md << 'EOF'
+# Skill: Code Review
 
-```bash
-cat > README.md << 'EOF'
-# Python Team Warehouse
+## Purpose
+Review code changes for correctness, style, and test coverage.
 
-Shared knowledge, skills, and contexts for the Python engineering team.
-
-## Contents
-
-- **Knowledge:** Python best practices, framework guides, testing patterns
-- **Skills:** Code review, test generation, API design
-- **Contexts:** Team standards and workflows
-
-## Usage
-
-1. Connect to warehouse:
-   ```bash
-   abc warehouse connect --path /path/to/python-team-warehouse
-   ```
-
-2. Create beacon.yaml for your project type:
-   - API Service: `examples/beacon.yaml.api-service`
-   - Data Pipeline: `examples/beacon.yaml.data-pipeline`
-
-3. Sync artifacts:
-   ```bash
-   abc sync
-   ```
-
-## Contributing
-
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for how to add new artifacts.
-
-## Maintenance
-
-- **Owner:** Python Guild
-- **Last Updated:** 2026-03-09
-- **Version:** 1.0.0
+## Process
+1. Read all changed files before commenting
+2. Check correctness — does it do what it claims?
+3. Check tests — are edge cases covered?
+4. Check style — follows team conventions?
+5. Summarize: blockers, suggestions, notes
 EOF
-```
 
-### Step 7: Version Control
-
-```bash
-git init
+# 5. Commit
 git add .
-git commit -m "Initial Python team warehouse"
-git remote add origin git@github.com:yourorg/python-team-warehouse.git
+git commit -m "Initial warehouse"
+git remote add origin git@github.com:yourorg/team-warehouse.git
 git push -u origin main
 ```
 
-## Warehouse Validation
+---
 
-Validate your warehouse structure:
+## Validating Your Warehouse
+
+Connect to it from a test project:
 
 ```bash
-abc warehouse connect --path ./python-team-warehouse
+abc warehouse connect --path ./team-warehouse
 ```
 
-Should output:
+A clean output means the structure is valid:
+
 ```
 ✓ Warehouse structure validated
 ✓ Connected to warehouse
 ```
 
-If validation fails, check:
-- All required directories exist
-- `contexts/AGENTS.global.md` present
-- `README.md` at root
+---
 
-## Maintenance Best Practices
+## Maintenance
 
-### 1. Regular Updates
+### Adding new content
 
-- **Weekly:** Review and merge PRs
-- **Monthly:** Prune outdated content
-- **Quarterly:** Major version releases
-
-### 2. Ownership
-
-Assign owners to sections:
-```
-knowledge/languages/python/  → Python Guild
-knowledge/infrastructure/    → Platform Team
-contexts/teams/backend/      → Backend Lead
-```
-
-### 3. Documentation
-
-Every artifact should have:
-- Clear title and purpose
-- Code examples
-- Last updated date
-- Links to related content
-
-### 4. Testing
-
-Test artifacts with real projects before merging:
-1. Create test beacon.yaml
-2. Sync to test project
-3. Verify with AI agent
-4. Merge if working
-
-### 5. Versioning
-
-Use git tags for versions:
 ```bash
-git tag -a v1.0.0 -m "First stable release"
+cd team-warehouse
+# Add a file wherever makes sense
+echo "# New guide..." > knowledge/global/new-topic.md
+git add . && git commit -m "docs: add new topic guide"
+git push
+```
+
+Team members get it on their next `git pull` + `abc sync`.
+
+### Pruning outdated content
+
+Remove files that are no longer relevant. Projects that referenced them via `abc sync --prune` will have the stale files removed on next sync.
+
+### Versioning
+
+Use git tags to mark stable states:
+
+```bash
+git tag -a v1.0.0 -m "First stable warehouse release"
 git push --tags
 ```
 
-## Common Patterns
-
-### Multi-Language Warehouse
-
-```
-knowledge/
-├── languages/
-│   ├── python/
-│   ├── typescript/
-│   ├── go/
-│   └── rust/
-├── infrastructure/
-└── best-practices/
-```
-
-### Domain-Specific Warehouse
-
-```
-knowledge/
-├── data-engineering/
-│   ├── airflow/
-│   ├── spark/
-│   └── dbt/
-├── ml-engineering/
-│   ├── pytorch/
-│   ├── transformers/
-│   └── mlflow/
-└── platform-engineering/
-    ├── kubernetes/
-    └── terraform/
-```
-
-### Monorepo Organization Warehouse
-
-```
-knowledge/
-├── shared/              # Shared across all teams
-├── services/
-│   ├── api-gateway/
-│   ├── auth-service/
-│   └── user-service/
-└── libraries/
-    ├── common-utils/
-    └── logging-lib/
-```
-
-## Troubleshooting
-
-### Warehouse validation fails
-
-**Check required structure:**
-```bash
-tree -L 2 my-warehouse
-```
-
-Must have all required directories and files.
-
-### Team can't connect
-
-**Ensure consistent location:**
-```bash
-# Document in team README
-git clone git@github.com:org/warehouse.git ~/team-warehouse
-```
-
-### Artifacts not syncing
-
-**Check warehouse path:**
-```bash
-cat .agentic-beacon/config.toml
-```
-
-Path must be valid and accessible.
+---
 
 ## Next Steps
 
-- **[Team Collaboration](./team-collaboration.md)** - Share warehouse with team
-- **[Warehouse Contribution](./warehouse-contribution-guide.md)** - Add new content
-- **[Advanced Organization](./advanced-warehouse-patterns.md)** - Complex structures
-
----
-
-**Related Guides:**
-- [Getting Started](./getting-started.md)
-- [Python Project Setup](./python-project-setup.md)
-- [Team Collaboration](./team-collaboration.md)
+- **[Team Collaboration](./team-collaboration.md)** — Share your warehouse with the team
+- **[Creating Skills](./creating-skills.md)** — Write effective skill definitions
+- **[Getting Started](./getting-started.md)** — Connect a project to this warehouse

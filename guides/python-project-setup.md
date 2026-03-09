@@ -1,253 +1,163 @@
-# Python Project Setup with Agentic Beacon
+# Python Project Setup
 
-This guide shows how to set up Agentic Beacon for Python projects, with examples and best practices.
+This guide shows how to configure Agentic Beacon for a Python project. The specific paths in `beacon.yaml` will depend on how your warehouse is organized — these examples are illustrative, not prescriptive.
 
-## Scenario: Python Backend Microservice
+## Prerequisites
 
-Let's set up artifact management for a FastAPI-based microservice project.
+- A warehouse exists and is accessible (see [Creating a Warehouse](./warehouse-creation.md))
+- You've installed Agentic Beacon: `pip install agentic-beacon`
 
 ## Initial Setup
 
 ```bash
-cd my-fastapi-service
-abc warehouse connect --path ~/org-warehouse
+cd my-python-project
+abc warehouse connect --path ~/team-warehouse
 abc setup --manual
 ```
 
-## Configure for Python
+This creates `.agentic-beacon/beacon.yaml` with an empty template.
 
-Edit `.agentic-beacon/beacon.yaml`:
+---
+
+## Configuring beacon.yaml
+
+Edit `.agentic-beacon/beacon.yaml` to declare which artifacts your Python project needs. The paths are relative to your warehouse root — match them to however your warehouse is actually organized.
 
 ```yaml
+# .agentic-beacon/beacon.yaml
+
 artifacts:
   knowledge:
-    # Python language fundamentals
-    - languages/python/type-hints.md
-    - languages/python/async-patterns.md
-    - languages/python/error-handling.md
-    
-    # Python ecosystem
-    - languages/python/fastapi/**/*.md
-    - languages/python/pydantic/**/*.md
-    - languages/python/sqlalchemy/**/*.md
-    
-    # Testing
-    - languages/python/pytest/**/*.md
-    - best-practices/tdd-workflow.md
-    
-    # Infrastructure
-    - infrastructure/docker-python.md
-    - infrastructure/postgres-best-practices.md
-  
+    # Pull specific files you know you need
+    - knowledge/decisions/coding-standards.md
+    - knowledge/decisions/testing-strategy.md
+
+    # Or pull an entire subtree with a glob
+    - knowledge/python/**/*.md
+
   skills:
-    - python/generate-unit-tests
-    - python/code-review
-    - python/api-design
-  
+    - skills/code-review/**/*
+    - skills/generate-tests/**/*
+
   contexts:
-    - teams/backend/AGENTS.md
-    - projects/microservices/AGENTS.md
+    - contexts/global.md
+    - contexts/backend/AGENTS.md
 ```
 
-## Sync Artifacts
+Then sync:
 
 ```bash
 abc sync
 ```
 
-Expected output:
-```
-Syncing artifacts from warehouse...
+---
 
-✓ Sync complete
-  Copied: 23 files
-  Unchanged: 0 files
-```
+## Typical Python Artifact Needs
 
-## Verify Structure
+Python projects commonly benefit from team knowledge around:
 
-```bash
-tree .agentic-beacon/artifacts/
-```
+- **Type annotation standards** — which patterns to use, what to avoid
+- **Testing approach** — pytest conventions, fixture patterns, coverage expectations
+- **Async patterns** — if using async/await throughout
+- **Framework conventions** — how your team uses FastAPI, SQLAlchemy, Pydantic, etc.
+- **Error handling standards** — exception hierarchy, logging patterns
+- **Dependency management** — how you use uv, pip, virtual environments
 
-```
-.agentic-beacon/artifacts/
-├── knowledge/
-│   ├── languages/
-│   │   └── python/
-│   │       ├── type-hints.md
-│   │       ├── async-patterns.md
-│   │       ├── error-handling.md
-│   │       ├── fastapi/
-│   │       │   ├── routing.md
-│   │       │   ├── dependencies.md
-│   │       │   └── testing.md
-│   │       ├── pydantic/
-│   │       │   └── models.md
-│   │       ├── sqlalchemy/
-│   │       │   └── best-practices.md
-│   │       └── pytest/
-│   │           └── fixtures.md
-│   ├── best-practices/
-│   │   └── tdd-workflow.md
-│   └── infrastructure/
-│       ├── docker-python.md
-│       └── postgres-best-practices.md
-├── skills/
-│   └── python/
-│       ├── generate-unit-tests/
-│       ├── code-review/
-│       └── api-design/
-└── contexts/
-    ├── teams/
-    │   └── backend/
-    │       └── AGENTS.md
-    └── projects/
-        └── microservices/
-            └── AGENTS.md
+These would live as knowledge files in your warehouse at paths your team chooses. Your `beacon.yaml` pulls whichever ones apply to the project.
+
+---
+
+## Selective Artifact Loading
+
+Not every Python project needs the same things. Pull only what's relevant.
+
+**A focused microservice:**
+```yaml
+artifacts:
+  knowledge:
+    - knowledge/decisions/coding-standards.md
+    - knowledge/fastapi-patterns.md
+    - knowledge/testing/pytest-guide.md
+  skills:
+    - skills/code-review/**/*
+  contexts:
+    - contexts/global.md
 ```
 
-## Using with Your AI Agent
+**A data pipeline:**
+```yaml
+artifacts:
+  knowledge:
+    - knowledge/decisions/coding-standards.md
+    - knowledge/data/pipeline-patterns.md
+    - knowledge/data/testing-strategy.md
+  skills:
+    - skills/code-review/**/*
+  contexts:
+    - contexts/global.md
+    - contexts/data-team/AGENTS.md
+```
 
-Your AI agent (Cursor, Copilot, etc.) will now have access to:
+**A minimal setup for a new project:**
+```yaml
+artifacts:
+  knowledge:
+    - knowledge/decisions/coding-standards.md
+  skills: []
+  contexts:
+    - contexts/global.md
+```
 
-1. **Python-specific knowledge** - Type hints, async patterns, FastAPI best practices
-2. **Testing guidance** - pytest fixtures, TDD workflow
-3. **Team context** - Backend team conventions from `AGENTS.md`
-4. **Project-specific skills** - Code review, test generation for Python
+Start minimal and add artifacts as you identify what the agent needs.
 
-## Project-Specific Customization
+---
 
-### Add Project-Specific Knowledge
+## Project-Specific Local Knowledge
 
-You can add project-specific knowledge alongside warehouse artifacts:
+You can keep project-specific knowledge alongside synced artifacts. Create a local directory that you commit to your project repo:
 
 ```bash
 mkdir -p .agentic-beacon/local-knowledge
-echo "# API Rate Limiting Strategy" > .agentic-beacon/local-knowledge/rate-limiting.md
+echo "# Rate Limiting Strategy\n\nThis service uses..." > .agentic-beacon/local-knowledge/rate-limiting.md
 ```
 
-This local knowledge:
-- ✅ Should be committed to git
-- ✅ Is project-specific
-- ✅ Doesn't conflict with synced artifacts
+This is project-specific content that doesn't belong in the shared warehouse:
+- ✅ Commit to git (it's project-specific)
+- ✅ Lives alongside synced artifacts
+- ✅ Not affected by `abc sync` or `abc clean`
 
-### Selective Artifact Loading
+---
 
-If you only need certain Python features:
+## Updating Artifacts
 
-```yaml
-artifacts:
-  knowledge:
-    # Only async-related Python knowledge
-    - languages/python/async-patterns.md
-    - languages/python/asyncio.md
-    - languages/python/fastapi/async-routes.md
-  
-  skills:
-    - python/async-code-review
-  
-  contexts: []
-```
-
-## Common Python Patterns
-
-### Pattern 1: Full Stack Python
-
-```yaml
-artifacts:
-  knowledge:
-    - languages/python/**/*.md
-    - languages/typescript/**/*.md  # For frontend
-    - infrastructure/docker-compose.md
-  
-  skills:
-    - python/backend-review
-    - typescript/frontend-review
-  
-  contexts:
-    - teams/fullstack/AGENTS.md
-```
-
-### Pattern 2: Data Engineering
-
-```yaml
-artifacts:
-  knowledge:
-    - languages/python/pandas/**/*.md
-    - languages/python/pyspark/**/*.md
-    - infrastructure/airflow/**/*.md
-    - infrastructure/delta-lake.md
-  
-  skills:
-    - data/pipeline-review
-    - data/sql-optimization
-  
-  contexts:
-    - teams/data-platform/AGENTS.md
-```
-
-### Pattern 3: ML/AI Development
-
-```yaml
-artifacts:
-  knowledge:
-    - languages/python/pytorch/**/*.md
-    - languages/python/huggingface/**/*.md
-    - ml/training-best-practices.md
-    - ml/model-evaluation.md
-  
-  skills:
-    - ml/model-review
-    - ml/experiment-tracking
-  
-  contexts:
-    - teams/ml-engineering/AGENTS.md
-```
-
-## Updating Dependencies
-
-When new Python best practices are added to the warehouse:
+When your team updates knowledge in the warehouse:
 
 ```bash
-# Update your beacon.yaml
-vim .agentic-beacon/beacon.yaml
-
-# Sync to get new artifacts
-abc sync
+cd ~/team-warehouse && git pull
+cd my-python-project && abc sync
 ```
 
-The sync will:
-- ✅ Copy new files
-- ✅ Update changed files
-- ✅ Skip unchanged files (idempotent)
-- ✅ Keep local modifications (unless you explicitly want to overwrite)
+Unchanged files are skipped. Only updated files are re-copied.
 
-## Testing Setup
+---
 
-Verify your agent has the right context:
+## Verifying the Setup
 
-1. **Ask your agent:** "What Python testing framework should I use?"
-   - Should reference pytest from your artifacts
+Check what was synced and that contexts/skills are in place:
 
-2. **Request code review:**
-   - Agent should apply patterns from your knowledge artifacts
+```bash
+abc status
+```
 
-3. **Generate tests:**
-   - If you have the `generate-unit-tests` skill, agent should follow that workflow
+Test that the agent is using the artifacts by asking it a question that your knowledge artifacts should inform — for example, "How should I write tests for this project?" — and see if the answer reflects your team's standards.
 
-## Integration with Development Tools
+---
 
-### VS Code / Cursor
+## Integration with Dev Tools
 
-The artifacts are automatically available in the workspace. Your agent will:
-- Read `.agentic-beacon/artifacts/` for knowledge
-- Apply team conventions from `contexts/`
-- Use skills when invoked
+### Pre-commit hook
 
-### Pre-commit Hooks
-
-Add a pre-commit hook to ensure artifacts are synced:
+Keep artifacts in sync automatically:
 
 ```yaml
 # .pre-commit-config.yaml
@@ -261,9 +171,7 @@ repos:
         pass_filenames: false
 ```
 
-### CI/CD Integration
-
-In your CI pipeline:
+### CI/CD
 
 ```yaml
 # .github/workflows/ci.yml
@@ -274,114 +182,59 @@ In your CI pipeline:
     abc sync
 ```
 
+---
+
 ## Troubleshooting
 
-### Python-specific artifacts not found
+### Pattern matches nothing
 
-**Problem:** Pattern doesn't match expected files.
+```
+Warning: No files matched pattern: knowledge/python/fastapi.md
+```
 
-**Solution:** Check warehouse structure:
+Check that the path actually exists in your warehouse:
+
 ```bash
-ls ~/org-warehouse/knowledge/languages/python/
+ls /path/to/warehouse/knowledge/
 ```
 
-Adjust your pattern:
-```yaml
-# Wrong - too specific
-- languages/python/fastapi.md
-
-# Right - matches directory structure
-- languages/python/fastapi/*.md
-```
+Adjust the pattern to match the real structure. See [Advanced Patterns](./advanced-patterns.md) for glob syntax.
 
 ### Too many artifacts synced
 
-**Problem:** Glob pattern too broad, syncing unnecessary files.
+Use a more specific pattern:
 
-**Solution:** Be more specific:
 ```yaml
-# Before (syncs everything)
-- languages/python/**/*.md
+# Before: syncs everything under knowledge/
+- knowledge/**/*.md
 
-# After (syncs only needed directories)
-- languages/python/type-hints.md
-- languages/python/fastapi/**/*.md
-- languages/python/pytest/**/*.md
+# After: only the files you need
+- knowledge/decisions/coding-standards.md
+- knowledge/testing/**/*.md
 ```
 
-### Conflicts with team standards
+### Conflicting local edits
 
-**Problem:** Local modifications to team contexts.
+Use `--preserve` to protect local modifications:
 
-**Solution:** Keep team contexts read-only, create local overrides:
 ```bash
-# Don't modify synced contexts
-# .agentic-beacon/artifacts/contexts/teams/backend/AGENTS.md
-
-# Create local project-specific context
-mkdir -p .agentic-beacon/local-contexts
-echo "# Project-specific overrides" > .agentic-beacon/local-contexts/PROJECT.md
+abc sync --preserve
 ```
 
-## Best Practices
+Use `abc delta` to review what differs before deciding whether to keep or discard local changes.
 
-1. **Start minimal** - Add artifacts as you need them
-2. **Use specific patterns** - Avoid wildcards that sync too much
-3. **Separate concerns** - Different beacon.yaml per project type
-4. **Document choices** - Comment your beacon.yaml selections
-5. **Keep local artifacts separate** - Use `local-knowledge/` for project-specific content
-
-## Example: Complete Python Microservice
-
-```yaml
-artifacts:
-  # Core Python
-  knowledge:
-    - languages/python/type-hints.md
-    - languages/python/async-patterns.md
-    - languages/python/error-handling.md
-    
-    # Web framework
-    - languages/python/fastapi/routing.md
-    - languages/python/fastapi/dependencies.md
-    - languages/python/fastapi/testing.md
-    
-    # Data & ORM
-    - languages/python/pydantic/validation.md
-    - languages/python/sqlalchemy/async-orm.md
-    
-    # Testing
-    - languages/python/pytest/fixtures.md
-    - languages/python/pytest/async-tests.md
-    - best-practices/tdd-workflow.md
-    
-    # Infrastructure
-    - infrastructure/docker-python.md
-    - infrastructure/postgres-best-practices.md
-    - infrastructure/redis-patterns.md
-  
-  # Development skills
-  skills:
-    - python/generate-unit-tests
-    - python/code-review
-    - python/api-design
-    - python/async-debugging
-  
-  # Team & project context
-  contexts:
-    - teams/backend/AGENTS.md
-    - projects/microservices/coding-standards.md
-```
+---
 
 ## Next Steps
 
-- **[Team Collaboration](./team-collaboration.md)** - Share configurations across team
-- **[Advanced Patterns](./advanced-patterns.md)** - Complex glob patterns, selective syncing
-- **[Creating Skills](./creating-skills.md)** - Build your own Python-specific skills
+- **[Advanced Patterns](./advanced-patterns.md)** — Glob syntax, sync flags, delta workflow
+- **[Creating Skills](./creating-skills.md)** — Build Python-specific skills for your team
+- **[Team Collaboration](./team-collaboration.md)** — Share configurations across the team
+- **[beacon.yaml Reference](./beacon-yaml-reference.md)** — Full configuration schema
 
 ---
 
 **Related Guides:**
 - [Getting Started](./getting-started.md)
-- [TypeScript Project Setup](./typescript-project-setup.md)
-- [Data Platform Setup](./data-platform-setup.md)
+- [Team Collaboration](./team-collaboration.md)
+- [beacon.yaml Reference](./beacon-yaml-reference.md)

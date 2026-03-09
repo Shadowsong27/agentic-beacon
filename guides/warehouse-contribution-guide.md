@@ -2,7 +2,7 @@
 
 Guide for contributing improvements to your organization's agentic engineering warehouse.
 
-**Last Updated:** 2026-03-06
+**Last Updated:** 2026-03-10
 
 ---
 
@@ -20,17 +20,17 @@ Before contributing back to the warehouse, validate changes in your project:
 
 **For Context Files:**
 ```bash
-# Edit context file in your project
-vim ~/.agentic-context/AGENTS.python.md
+# Edit the synced context file in your project
+vim .agentic-beacon/artifacts/contexts/python.md
 
-# Test with agents in your project
-# Verify agents follow the updated instructions correctly
+# Test with your AI agent — verify it follows the updated instructions
+# When happy, copy your changes back to the warehouse clone
 ```
 
 **For Knowledge Files:**
 ```bash
-# Edit knowledge file
-vim ~/.agentic-context/knowledge/languages/python/lessons/new-lesson.md
+# Edit the synced knowledge file
+vim .agentic-beacon/artifacts/knowledge/languages/python/lessons/new-lesson.md
 
 # Reference from context and test
 # Verify agents can access and use the knowledge
@@ -38,8 +38,8 @@ vim ~/.agentic-context/knowledge/languages/python/lessons/new-lesson.md
 
 **For Skills:**
 ```bash
-# Modify skill in your project
-vim .opencode/skills/my-skill/SKILL.md
+# Modify the synced skill in your project
+vim .agentic-beacon/artifacts/skills/my-skill/SKILL.md
 
 # Test the skill
 /my-skill "test input"
@@ -53,29 +53,20 @@ vim .opencode/skills/my-skill/SKILL.md
 
 Once validated locally, prepare for warehouse contribution:
 
-**Option A: Using CLI Tool (if available)**
 ```bash
-# CLI prepares contribution
-agentic-contribute --context AGENTS.python.md
-agentic-contribute --knowledge python/lessons/new-lesson.md
-agentic-contribute --skill my-skill
-```
-
-**Option B: Manual Preparation**
-```bash
-# Clone warehouse repository
+# Clone warehouse repository (if you don't have it already)
 git clone git@github.com:your-org/your-warehouse.git
 cd your-warehouse
 
 # Create feature branch
 git checkout -b add-python-type-hints-lesson
 
-# Copy files from your project
-cp ~/.agentic-context/knowledge/languages/python/lessons/type-hints.md \
+# Copy your modified files from the project
+cp /path/to/project/.agentic-beacon/artifacts/knowledge/languages/python/lessons/type-hints.md \
    knowledge/languages/python/lessons/
 
-# Update context to reference new knowledge
-vim contexts/AGENTS.python.md
+# Update context to reference new knowledge (if needed)
+vim contexts/python.md
 ```
 
 ---
@@ -87,7 +78,7 @@ vim contexts/AGENTS.python.md
 1. **Clear title** following conventional commits:
    ```
    feat(python): add lesson on type hints best practices
-   fix(context): correct typo in AGENTS.global.md
+   fix(context): correct typo in global.md
    docs(knowledge): improve PostgreSQL decision rationale
    ```
 
@@ -102,7 +93,7 @@ vim contexts/AGENTS.python.md
    - No issues observed
 
    ## Impacted Files
-   - contexts/AGENTS.python.md - added pointer
+   - contexts/python.md - added pointer
    - knowledge/languages/python/lessons/type-hints.md - new lesson
 
    ## Related Issues
@@ -144,15 +135,13 @@ vim contexts/AGENTS.python.md
 
 Once approved and merged:
 
-1. **Automatic distribution** (if CLI exists):
-   - Teams run `agentic-update` to pull latest
-   - CLI copies updated files to `~/.agentic-context/`
+1. **Distribution:** Teams pull the warehouse and re-sync their projects:
+   ```bash
+   cd ~/team-warehouse && git pull
+   cd ~/my-project && abc sync
+   ```
 
-2. **Manual distribution** (if no CLI):
-   - Teams pull warehouse repository
-   - Copy updated files to their projects
-
-3. **Communication:**
+2. **Communication:**
    - Announce significant changes to teams
    - Update CHANGELOG.md in warehouse
    - Tag releases for major updates
@@ -168,7 +157,7 @@ Once approved and merged:
 **Process:**
 ```bash
 # 1. Create context file
-vim contexts/AGENTS.go.md
+vim contexts/go.md
 
 # 2. Create corresponding knowledge directory
 mkdir -p knowledge/languages/go/decisions
@@ -178,7 +167,7 @@ mkdir -p knowledge/languages/go/lessons
 vim knowledge/languages/go/decisions/error-handling.md
 
 # 4. Submit PR
-git add contexts/AGENTS.go.md knowledge/languages/go/
+git add contexts/go.md knowledge/languages/go/
 git commit -m "feat(go): add Go language context and error handling guidance"
 ```
 
@@ -192,7 +181,7 @@ git commit -m "feat(go): add Go language context and error handling guidance"
 vim knowledge/languages/python/lessons/async-await-mistakes.md
 
 # 2. Reference from context
-vim contexts/AGENTS.python.md
+vim contexts/python.md
 # Add: **See:** [Async/await mistakes](...)
 
 # 3. Submit PR

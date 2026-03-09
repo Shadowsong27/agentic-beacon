@@ -109,6 +109,9 @@ Follow the global Python standards from the user's AGENTS.md context:
 - Use examples from `abc init` output
 - Link to proper documentation, don't duplicate
 - Update both README and package-specific docs when needed
+- Warehouse context files use **free descriptive names** — not the `AGENTS.*` prefix
+
+**Read:** [Lesson: Warehouse Context Files Use Free Naming](knowledge/lessons/warehouse-context-free-naming.md)
 
 ---
 

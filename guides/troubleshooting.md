@@ -55,13 +55,11 @@ abc sync
 
 **Solution:**
 
-Check warehouse has:
+Check warehouse has the four required directories and a README:
 ```
 warehouse/
 ├── contexts/
-│   └── AGENTS.global.md  ← Required
 ├── knowledge/
-│   └── global/           ← Required
 ├── skills/
 ├── docs/
 └── README.md             ← Required
@@ -70,8 +68,8 @@ warehouse/
 Fix missing items:
 ```bash
 cd warehouse
-mkdir -p contexts knowledge/global skills docs
-touch contexts/AGENTS.global.md README.md
+mkdir -p contexts knowledge skills docs
+touch README.md
 ```
 
 ## File Sync Issues
@@ -403,43 +401,12 @@ cat .agentic-beacon/artifacts/knowledge/languages/python/type-hints.md
 # If correct, restart agent/IDE
 ```
 
-## Migration from v1.x
-
-### Old commands don't work
-
-**Problem:** Using v1.x commands with v2.0.
-
-**Changes:**
-```bash
-# v1.x
-abc init my-warehouse
-abc setup --warehouse ~/warehouse --all
-
-# v2.0
-abc warehouse init my-warehouse
-abc warehouse connect --path ~/warehouse
-abc setup --manual
-abc sync
-```
-
-### Lost configuration after upgrade
-
-**Problem:** Upgraded to v2.0, previous setup gone.
-
-**Explanation:** v2.0 uses different model (config-based, not direct distribution).
-
-**Migration:**
-1. Connect to warehouse: `abc warehouse connect --path ~/warehouse`
-2. Create beacon.yaml: `abc setup --manual`
-3. Declare what you used: Edit beacon.yaml
-4. Sync: `abc sync`
-
 ## Getting Help
 
 ### Enable verbose logging
 
 ```bash
-abc --verbose sync
+abc sync --verbose
 ```
 
 ### Check debug information
@@ -467,7 +434,7 @@ When reporting issues, include:
 4. Your beacon.yaml (redacted if needed)
 5. Warehouse structure: `tree -L 2 warehouse/`
 
-**GitHub Issues:** https://github.com/yourusername/agentic-beacon/issues
+**GitHub Issues:** https://github.com/Shadowsong27/agentic-beacon/issues
 
 ## Quick Fixes Reference
 

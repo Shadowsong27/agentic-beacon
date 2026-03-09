@@ -1669,8 +1669,8 @@ kubectl rollout restart deployment/cdp-api -n production
 - Changing development workflow
 
 **Never duplicate:**
-- Language standards (belongs in warehouse `AGENTS.python.md`)
-- Organizational policies (belongs in warehouse `AGENTS.global.md`)
+- Language standards (belongs in warehouse language context, e.g. `python.md`)
+- Organizational policies (belongs in warehouse `global.md`)
 - Generic patterns (promote to warehouse instead)
 
 ### Review Frequency

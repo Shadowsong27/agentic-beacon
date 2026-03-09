@@ -10,10 +10,10 @@ A high-level design guide for centralized context, knowledge, and skills managem
 
 ## Table of Contents
 
-1. [Why Centralized Management?](#why-centralized-management)
+1. [Why This Exists: Three Questions](#why-this-exists-three-questions)
 2. [Central Repository Model](#central-repository-model)
    - [Understanding the Two-Tier Structure: Context + Knowledge](#understanding-the-two-tier-structure-context--knowledge)
-3. [Component 1: Contexts (AGENTS.md Organization)](#component-1-contexts-agentsmd-organization)
+3. [Component 1: Contexts (Boot Context Organization)](#component-1-contexts-boot-context-organization)
    - [What Are Contexts?](#what-are-contexts)
    - [Multi-Tier Context Model](#multi-tier-context-model)
    - [Progressive Disclosure Pattern](#progressive-disclosure-pattern)
@@ -41,71 +41,56 @@ A high-level design guide for centralized context, knowledge, and skills managem
 
 ---
 
-## Why Centralized Management?
+## Why This Exists: Three Questions
 
-**The agentic engineering landscape is rapidly evolving.** Vibe coding practices, AI agent capabilities, and collaboration paradigms shift weekly. In this fluid environment, rigid methodologies quickly become outdated. Instead of prescribing how teams should work with AI agents, this guide provides a **minimal, flexible structure** for centralizing reusable knowledge.
+### Q: Why do we need this at all?
 
-**The problem without centralization:**
+As teams adopt AI coding agents, inconsistent practices emerge quickly: each project develops its own conventions, agents receive different instructions, and valuable patterns discovered in one project never reach others. The result is fragmented quality, slow onboarding, and duplicated effort.
 
-As teams adopt AI coding agents, inconsistent practices emerge: each project develops its own conventions, agents receive different instructions, and valuable patterns remain siloed. This fragmentation slows onboarding, creates quality variations, and wastes collective learning.
+The answer is applying **DRY (Don't Repeat Yourself) to agentic knowledge**.
 
-**The solution: Apply DRY (Don't Repeat Yourself) to agentic knowledge.**
+Instead of each project maintaining its own copy of coding standards, agent instructions, and learned patterns, centralize them in a warehouse where:
+- **One update propagates everywhere** — fix a pattern once, all projects benefit
+- **Teams learn collectively** — a lesson discovered in one project is shared with all
+- **Onboarding is instant** — new developers and agents inherit organizational knowledge automatically
+- **Nothing gets lost** — valuable conventions that emerge organically get captured and preserved
 
-Rather than duplicating agent instructions, coding standards, and learned patterns across projects, centralize them in a warehouse where:
-- **One update propagates everywhere** - Fix a pattern once, all projects benefit
-- **Teams learn collectively** - Capture lessons from one project, share with all
-- **Onboarding is instant** - New developers and agents inherit organizational knowledge automatically
-- **Evolution is natural** - Adapt as practices shift without rewriting every project
+---
 
-This approach establishes **standardized collaboration patterns** while remaining flexible enough to evolve with the rapidly changing agentic engineering landscape.
+### Q: Why markdown files instead of a local RAG system?
 
-### Why Simple File-Based Distribution Over RAG?
+The short answer: **the problem doesn't need that solution.**
 
-**Design decision: Keep it simple.** This warehouse uses plain files and Git instead of RAG (Retrieval-Augmented Generation) systems. Here's why:
+RAG (Retrieval-Augmented Generation) is designed for large-scale, unstructured, frequently-changing content where users don't know what they're looking for. A warehouse of organizational standards is none of those things.
 
-**The use case doesn't require RAG complexity:**
-
-Agentic coding operates in a fundamentally different context than production systems:
-- **Speed requirements:** Agents already spend seconds reading code and searching files. Adding milliseconds for file reads is negligible. We don't need microsecond vector search.
-- **Content scale:** Warehouse stores curated organizational standards (~100s of KB), not massive documentation (GBs). RAG is designed for scale we don't have.
-- **Access patterns:** Explicit pointers (e.g., "Read: knowledge/python/lessons/type-annotations.md") work better than semantic search for structured standards.
-- **Update frequency:** Standards evolve slowly (weeks/months), not constantly. No need for continuous reindexing.
-
-**Simple file-based approach advantages:**
-
-| Aspect | File-Based (Our Choice) | RAG-Based |
-|--------|------------------------|-----------|
+| | File-Based (our approach) | RAG-Based |
+|---|---|---|
 | **Setup** | Copy markdown files | Vector DB + embedding pipeline + maintenance |
-| **Dependencies** | Git, filesystem | Chroma/Pinecone/Weaviate, embedding models, vector DB |
+| **Dependencies** | Git, filesystem | Chroma/Pinecone/Weaviate, embedding models |
 | **Adoption barrier** | Very low (everyone knows Git) | High (requires ML/infrastructure expertise) |
 | **Maintenance** | Standard Git workflow | DB maintenance, reindexing, embedding updates |
-| **Speed** | 1-5ms file reads | Sub-millisecond vector search (unnecessary here) |
 | **Versioning** | Native Git history | Custom versioning layer |
 | **Human readability** | Direct markdown editing | Requires retrieval interface |
 | **Contribution** | Standard PR workflow | More complex (embeddings must be regenerated) |
 
-**Progressive disclosure without RAG:**
+The warehouse stores curated, structured standards — typically hundreds of KB, not gigabytes. Agents don't need to *search* for relevant knowledge; context files tell them explicitly what to read and when. This two-tier pointer model (boot context → on-demand knowledge files) achieves the same goal as RAG without the infrastructure overhead.
 
-Our two-tier model provides memory management naturally:
-- **Tier 1 (Boot context):** AGENTS.md files load immediately - kept minimal, scanned quickly
-- **Tier 2 (Knowledge files):** Accessed on-demand via explicit pointers - agents know exactly where to look
+RAG would make sense if the warehouse held thousands of unstructured documents, or if content changed hourly, or if users were doing exploratory search. None of those apply here.
 
-This achieves the same goal as RAG (avoiding context overload) with simpler mechanisms.
+---
 
-**When you WOULD need RAG:**
-- Semantic search across thousands of unstructured documents
-- Finding similar code patterns across millions of lines
-- Content that changes constantly (hourly/daily)
-- Users who don't know what they're looking for (exploratory search)
+### Q: Why keep this lightweight? Won't we need more features eventually?
 
-**Why warehouse doesn't need RAG:**
-- Content is curated and structured (not unstructured documents)
-- Small scale (organizational standards, not documentation websites)
-- Explicit discovery (pointers tell agents exactly where to look)
-- Infrequent updates (standards evolve deliberately)
-- Human review is critical (markdown files are easier to review than embeddings)
+**The agentic engineering landscape is shifting rapidly.** What's best practice today may be superseded in six months — by new agent capabilities, new tool conventions, new paradigms entirely. A heavy framework with strong opinions on structure bakes in assumptions that may not age well.
 
-**Bottom line:** RAG adds complexity without proportional benefit for this use case. Simple, git-based file distribution is faster to adopt, easier to maintain, and sufficient for organizational knowledge management in agentic coding.
+Keeping Agentic Beacon lightweight is a deliberate bet:
+
+- **Low adoption cost** — teams can try it without committing to infrastructure
+- **Easy to abandon or replace** — if something better comes along, the cost of migrating away is minimal (it's just markdown files and a small CLI)
+- **Structure follows the team, not the tool** — the inner organization of your warehouse is entirely up to you; the framework only prescribes the three top-level directories
+- **Works with any agent today** — no custom integrations, no proprietary formats; markdown files work with every coding agent that exists
+
+The goal is to solve the DRY problem for agentic knowledge without creating a new dependency problem. A warehouse is just a Git repo. Artifacts are just markdown files. The CLI is just a sync tool. If the paradigm shifts again, your knowledge doesn't disappear — it's still plain text in a git repository.
 
 ---
 

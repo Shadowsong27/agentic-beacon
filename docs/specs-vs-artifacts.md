@@ -202,6 +202,6 @@ This ensures your warehouse remains a **lean, highly reusable library of "Agenti
 **See Also:**
 - [Local Warehouse Workflow](local-warehouse-workflow.md) - How to sync artifacts from warehouse to project
 - [Warehouse Structure](../README.md) - Understanding warehouse organization
-- [beacon.yaml Configuration](beacon-config-guide.md) - How to declare artifact dependencies
+- [beacon.yaml Reference](../guides/beacon-yaml-reference.md) - How to declare artifact dependencies
 
 **Last Updated:** 2026-03-08

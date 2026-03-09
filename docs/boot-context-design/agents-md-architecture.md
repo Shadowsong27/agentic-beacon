@@ -2,7 +2,7 @@
 
 A guide to understanding when and how to use AGENTS.md files at different organizational levels.
 
-**Last Updated:** 2026-03-07
+**Last Updated:** 2026-03-10
 
 ---
 
@@ -33,24 +33,24 @@ AGENTS.md files serve as **boot context** - the knowledge agents see immediately
                 │  Project Level      │
                 │  Purpose: Project-specific │
                 │  Audience: This codebase   │
-                │  Location: <project>/.opencode/AGENTS.md │
-                └─────────────────────┘
+                 │  Location: <project>/AGENTS.md │
+                 └─────────────────────┘
 ```
 
 ---
 
 ## Tier 1: Warehouse Level (Shared Organizational Knowledge)
 
-**Location:** Central warehouse repository → Distributed to `~/.agentic-context/`
+**Location:** Central warehouse repository → Distributed to `.agentic-beacon/artifacts/` in each project
 
 **Components:**
-- `AGENTS.global.md` (required for all projects)
-- `AGENTS.<language>.md` (optional: Python, TypeScript, Java, etc.)
-- `AGENTS.<domain>.md` (optional: Data Platform, Web App, ML/AI, etc.)
+- `global.md` (required for all projects)
+- Language-specific files (optional: e.g. `python.md`, `typescript.md`, `java.md`)
+- Domain-specific files (optional: e.g. `data-platform.md`, `web-app.md`, `ml-ai.md`)
 
 ### What Goes Here:
 
-#### Global Context (`AGENTS.global.md`)
+#### Global Context (`global.md`)
 - **Technical standards** applicable to all projects
   - Commit conventions (Conventional Commits)
   - Git workflow patterns
@@ -69,17 +69,17 @@ AGENTS.md files serve as **boot context** - the knowledge agents see immediately
 
 **Example:**
 ```markdown
-# In AGENTS.global.md
+# In global.md
 ## Commit Conventions
 
 **Rule:** Use Conventional Commits format for all commits.
 
 **Format:** `<type>(<scope>): <description>`
 
-**Read:** [Conventional commits guide](~/.agentic-context/knowledge/global/decisions/conventional-commits.md)
+**Read:** [Conventional commits guide](.agentic-beacon/artifacts/knowledge/global/decisions/conventional-commits.md)
 ```
 
-#### Language Contexts (`AGENTS.python.md`, etc.)
+#### Language Contexts (`python.md`, etc.)
 - **Language-specific technical standards**
   - Type annotation rules
   - Import patterns
@@ -93,17 +93,17 @@ AGENTS.md files serve as **boot context** - the knowledge agents see immediately
 
 **Example:**
 ```markdown
-# In AGENTS.python.md
+# In python.md
 ## Type Annotations
 
 **Rule:** Use primitive types when available (`list` not `List`).
 
 **Rule:** Only quote types for forward references or circular imports.
 
-**Read:** [Type annotation patterns](~/.agentic-context/knowledge/languages/python/lessons/quoted-type-annotations.md)
+**Read:** [Type annotation patterns](.agentic-beacon/artifacts/knowledge/languages/python/lessons/quoted-type-annotations.md)
 ```
 
-#### Domain Contexts (`AGENTS.data-platform.md`, etc.)
+#### Domain Contexts (`data-platform.md`, etc.)
 - **Domain-specific patterns**
   - Technology stack standards (e.g., PostgreSQL over SQLite)
   - Architectural patterns (e.g., microservices, event-driven)
@@ -116,14 +116,14 @@ AGENTS.md files serve as **boot context** - the knowledge agents see immediately
 
 **Example:**
 ```markdown
-# In AGENTS.data-platform.md
+# In data-platform.md
 ## Airflow Development
 
 **Rule:** Use two-workflow approach (venv for parsing, Docker for execution).
 
-**Rationale:** [See decision doc](~/.agentic-context/knowledge/domains/data-platform/decisions/two-workflow-approach.md)
+**Rationale:** [See decision doc](.agentic-beacon/artifacts/knowledge/domains/data-platform/decisions/two-workflow-approach.md)
 
-**Troubleshooting:** [Debugging checklist](~/.agentic-context/knowledge/domains/data-platform/lessons/airflow-debugging-checklist.md)
+**Troubleshooting:** [Debugging checklist](.agentic-beacon/artifacts/knowledge/domains/data-platform/lessons/airflow-debugging-checklist.md)
 ```
 
 ### What Does NOT Go Here:
@@ -137,13 +137,16 @@ AGENTS.md files serve as **boot context** - the knowledge agents see immediately
 
 Warehouse contexts are distributed via CLI:
 ```bash
-# Select which contexts your project needs
-agentic setup --warehouse ~/your-warehouse --interactive
+# Connect to your warehouse and declare which contexts to use
+abc warehouse connect --path ~/your-warehouse
+abc setup --manual
+# Edit .agentic-beacon/beacon.yaml to list contexts/skills/knowledge
+abc sync
 
-# Result: Contexts copied to ~/.agentic-context/
-# - AGENTS.global.md (always)
-# - AGENTS.python.md (if selected)
-# - AGENTS.data-platform.md (if selected)
+# Result: Artifacts copied to .agentic-beacon/artifacts/
+# - contexts/global.md (always)
+# - contexts/python.md (if declared)
+# - contexts/data-platform.md (if declared)
 ```
 
 ---
@@ -202,7 +205,7 @@ Testing patterns before promoting to warehouse:
 
 **Rationale:** Improves error handling visibility and reduces try-catch blocks
 
-**TODO:** After validation, PR to warehouse AGENTS.python.md
+**TODO:** After validation, PR to warehouse python.md
 ```
 
 ### What Does NOT Go Here:
@@ -255,7 +258,7 @@ If you find yourself keeping technical standards here long-term, that's a sign t
 
 ## Tier 3: Project Level (Project-Specific Knowledge)
 
-**Location:** `<project-root>/.opencode/AGENTS.md`
+**Location:** `<project-root>/AGENTS.md`
 
 **Purpose:** Knowledge specific to THIS codebase that doesn't apply elsewhere.
 
@@ -340,9 +343,9 @@ If you find yourself keeping technical standards here long-term, that's a sign t
 
 ### What Does NOT Go Here:
 
-❌ **Language standards** - Belongs in warehouse (`AGENTS.python.md`)
+❌ **Language standards** - Belongs in warehouse (`python.md`)
 ❌ **Personal preferences** - Belongs in user-level AGENTS.md
-❌ **Organizational policies** - Belongs in warehouse (`AGENTS.global.md`)
+❌ **Organizational policies** - Belongs in warehouse (`global.md`)
 ❌ **Generic patterns** - If it applies to multiple projects, promote to warehouse
 
 ### Example Project-Level AGENTS.md:
@@ -414,15 +417,15 @@ Use this decision tree to determine the appropriate level for any knowledge:
 
 ```
 Is this knowledge UNIVERSAL across all projects?
-├─ YES → Warehouse: AGENTS.global.md
+├─ YES → Warehouse: global.md
 └─ NO ↓
 
 Is this a LANGUAGE-SPECIFIC standard?
-├─ YES → Warehouse: AGENTS.<language>.md
+├─ YES → Warehouse: language context file (e.g. python.md, typescript.md)
 └─ NO ↓
 
 Is this a DOMAIN-SPECIFIC pattern used by multiple projects?
-├─ YES → Warehouse: AGENTS.<domain>.md
+├─ YES → Warehouse: domain context file (e.g. data-platform.md, web-app.md)
 └─ NO ↓
 
 Is this a PERSONAL PREFERENCE for how agents work with you?
@@ -430,7 +433,7 @@ Is this a PERSONAL PREFERENCE for how agents work with you?
 └─ NO ↓
 
 Is this SPECIFIC TO THIS CODEBASE?
-├─ YES → Project Level: <project>/.opencode/AGENTS.md
+├─ YES → Project Level: <project>/AGENTS.md
 └─ NO → Consider if it needs to be documented at all
 ```
 
@@ -462,7 +465,7 @@ Use primitive types when available (list not List).
 Only quote for forward references.
 ```
 
-**Why it's wrong:** This is a technical standard that belongs in warehouse `AGENTS.python.md`. Duplicating it means:
+**Why it's wrong:** This is a technical standard that belongs in warehouse `python.md`. Duplicating it means:
 - Updates don't propagate automatically
 - Maintenance burden increases
 - Standards diverge across projects
@@ -475,7 +478,7 @@ Only quote for forward references.
 
 **Problem:**
 ```markdown
-# In AGENTS.global.md (warehouse)
+# In global.md (warehouse)
 ## Agent Behavior
 Always show me detailed progress updates for tasks taking >10 seconds.
 Use verbose logging by default.
@@ -491,7 +494,7 @@ Use verbose logging by default.
 
 **Problem:**
 ```markdown
-# In AGENTS.data-platform.md (warehouse)
+# In data-platform.md (warehouse)
 ## Service Architecture
 Our user service communicates with auth service via gRPC on port 50051.
 Database connection pooling uses max 20 connections.
@@ -549,8 +552,8 @@ git commit -m "feat: add JSON schema validation standard to Python context"
 **Post-merge:**
 ```bash
 # Update projects to get new standard
-cd project-alpha && agentic update --warehouse ~/warehouse
-cd project-beta && agentic update --warehouse ~/warehouse
+cd project-alpha && abc update
+cd project-beta && abc update
 ```
 
 **Result:** Pattern is now organizational standard, benefits all projects, user-level AGENTS.md stays minimal.
@@ -562,21 +565,21 @@ cd project-beta && agentic update --warehouse ~/warehouse
 When an agent starts a session, contexts are loaded in this order:
 
 ```
-1. Warehouse contexts (~/.agentic-context/)
-   ├─ AGENTS.global.md (always loaded)
-   ├─ AGENTS.<language>.md (if selected)
-   └─ AGENTS.<domain>.md (if selected)
+1. Warehouse contexts (.agentic-beacon/artifacts/contexts/)
+   ├─ global.md (always loaded)
+   ├─ language context file (e.g. python.md, if declared in beacon.yaml)
+   └─ domain context file (e.g. data-platform.md, if declared in beacon.yaml)
    
 2. User-level preferences (~/.config/opencode/AGENTS.md)
    
-3. Project-level context (<project>/.opencode/AGENTS.md)
+3. Project-level context (<project>/AGENTS.md)
 ```
 
 **Precedence:** Later loaded contexts can override earlier ones.
 
 **Example:**
 ```markdown
-# Warehouse AGENTS.global.md
+# Warehouse global.md
 ## Logging
 Default log level: INFO
 

@@ -46,6 +46,21 @@ Instead of duplicating agent instructions, coding standards, and learned pattern
 - **Onboarding is instant** - New developers and agents inherit organizational knowledge automatically
 - **Evolution is natural** - Adapt the structure as practices evolve, without rewriting every project
 
+### Design Philosophy: Intentionally Lightweight
+
+**Why markdown files and Git instead of a database or RAG system?**
+
+Organizational coding standards are curated, structured, and small — typically hundreds of KB, not gigabytes. Agents don't need to search for relevant knowledge; context files tell them explicitly what to read and when. Plain files and Git are sufficient, easier to adopt, and require no infrastructure.
+
+**Why keep the framework itself minimal?**
+
+The agentic engineering landscape is shifting rapidly. What's best practice today may be superseded in months — by new agent capabilities, new tool conventions, or new paradigms entirely. Agentic Beacon is deliberately lightweight so that:
+- Teams can adopt it without committing to heavy infrastructure
+- If something better comes along, the exit cost is low — it's just markdown files
+- The inner structure of your warehouse is yours to decide; the framework only prescribes three top-level directories
+
+> For the full reasoning, see [Why This Exists: Three Questions](./docs/agentic-warehouse-design.md#why-this-exists-three-questions) in the design docs.
+
 ## Framework Architecture
 
 ### Artifact Types

@@ -1,27 +1,27 @@
 # Practical Guides
 
-This directory contains **practical how-to guides** for using Agentic Beacon v2.0. For **conceptual design documentation**, see the [docs/](../docs/) directory.
+This directory contains **practical how-to guides** for using Agentic Beacon. For **conceptual design documentation**, see the [docs/](../docs/) directory.
 
 ---
 
 ## Getting Started
 
-**[🚀 Getting Started Guide](./getting-started.md)** ⭐ **Start here!**
+**[Getting Started Guide](./getting-started.md)** — **Start here!**
 - Your first experience with Agentic Beacon
 - Connect to a warehouse
 - Create beacon.yaml configuration
 - Sync artifacts
 - Understanding the config-based model
 
-**Who should read:** Everyone new to Agentic Beacon v2.0
+**Who should read:** Everyone new to Agentic Beacon
 
 ---
 
 ## Scenario-Based Guides
 
-### Project Setup by Language/Domain
+### Project Setup
 
-**[🐍 Python Project Setup](./python-project-setup.md)**
+**[Python Project Setup](./python-project-setup.md)**
 - Setting up Python backend services
 - FastAPI, pytest, and common Python patterns
 - Project-specific customization
@@ -33,7 +33,7 @@ This directory contains **practical how-to guides** for using Agentic Beacon v2.
 
 ### Team & Organization
 
-**[👥 Team Collaboration](./team-collaboration.md)**
+**[Team Collaboration](./team-collaboration.md)**
 - Creating and sharing a team warehouse
 - Coordination workflows
 - Version control strategies
@@ -42,7 +42,7 @@ This directory contains **practical how-to guides** for using Agentic Beacon v2.
 
 **Who should read:** Team leads, warehouse maintainers
 
-**[🏗️ Creating a Warehouse](./warehouse-creation.md)**
+**[Creating a Warehouse](./warehouse-creation.md)**
 - Warehouse structure and organization
 - Adding knowledge, skills, and contexts
 - Best practices and patterns
@@ -52,33 +52,50 @@ This directory contains **practical how-to guides** for using Agentic Beacon v2.
 
 ---
 
-## Reference & Troubleshooting
+## Reference
 
-**[🔧 Troubleshooting Guide](./troubleshooting.md)**
+**[beacon.yaml Reference](./beacon-yaml-reference.md)**
+- Full schema documentation
+- Knowledge, skills, and contexts configuration
+- Glob pattern rules
+- Validation and lifecycle
+
+**Who should read:** Anyone configuring `beacon.yaml`
+
+**[Advanced Patterns](./advanced-patterns.md)**
+- Glob pattern syntax and examples
+- Sync flags: `--preserve`, `--prune`, `--verbose`
+- The delta workflow: reviewing and contributing changes
+- `abc status`, `abc update`, `abc clean`
+
+**Who should read:** Users who want more control over artifact management
+
+**[Agent-Assisted Setup](./agent-assisted-setup.md)**
+- Using `abc setup --agent-assisted`
+- How the warehouse catalog works
+- Prompting your AI agent to populate `beacon.yaml`
+
+**Who should read:** Users new to a warehouse who want AI help choosing artifacts
+
+**[Creating Skills](./creating-skills.md)**
+- What a skill is and how agents use it
+- Writing `SKILL.md`
+- Adding supporting files
+- Publishing skills to the warehouse
+
+**Who should read:** Warehouse maintainers, engineers adding team workflows
+
+---
+
+## Troubleshooting
+
+**[Troubleshooting Guide](./troubleshooting.md)**
 - Common errors and solutions
 - Configuration issues
 - File sync problems
 - Team collaboration issues
-- Migration from v1.x
 
 **Who should read:** When you encounter issues
-
----
-
-## Legacy Guides (v1.x)
-
-These guides are for the older v1.x direct-distribution model:
-
-**[CLI Quick Start (v1.x)](./cli-quick-start.md)**
-- Old v1.x commands
-- Direct warehouse setup
-- Not applicable to v2.0
-
-**[Warehouse Contribution Guide (v1.x)](./warehouse-contribution-guide.md)**
-- Old contribution workflow
-- Delta command (deprecated in v2.0)
-
-**Status:** Kept for reference during migration period
 
 ---
 
@@ -90,11 +107,20 @@ These guides are for the older v1.x direct-distribution model:
 # Connect to warehouse
 abc warehouse connect --path /path/to/warehouse
 
-# Create configuration
+# Create beacon.yaml (manual)
 abc setup --manual
+
+# Create beacon.yaml (AI-assisted)
+abc setup --agent-assisted
 
 # Sync artifacts
 abc sync
+
+# Check what's configured and synced
+abc status
+
+# Preview local vs warehouse differences
+abc delta
 
 # Get help
 abc --help
@@ -127,22 +153,29 @@ abc warehouse connect --path ~/team-warehouse
 abc sync
 ```
 
+**Review local changes before syncing:**
+```bash
+abc delta              # Summary of differences
+abc delta <file>       # Detailed diff for one file
+abc sync --preserve    # Sync, protecting your local edits
+```
+
 ---
 
 ## Guide Philosophy
 
 **Guides in this folder:**
-- ✅ Step-by-step instructions
-- ✅ Copy-paste command examples
-- ✅ Real-world scenarios
-- ✅ "How do I...?" questions
-- ✅ Troubleshooting solutions
+- Step-by-step instructions
+- Copy-paste command examples
+- Real-world scenarios
+- "How do I...?" questions
+- Troubleshooting solutions
 
 **Design Docs ([docs/](../docs/)):**
-- 📐 Conceptual architecture
-- 📐 Design philosophy  
-- 📐 "Why is it designed this way?" questions
-- 📐 Decision rationale
+- Conceptual architecture
+- Design philosophy
+- "Why is it designed this way?" questions
+- Decision rationale
 
 ---
 
@@ -152,16 +185,3 @@ abc sync
 2. **Having issues?** [Troubleshooting Guide](./troubleshooting.md)
 3. **Still stuck?** Open a GitHub issue
 4. **Want to understand the design?** See [docs/](../docs/)
-
----
-
-## Contributing to Guides
-
-Found something missing or unclear? Guides should be:
-- **Clear:** Step-by-step with commands
-- **Complete:** Cover common scenarios
-- **Current:** Accurate for v2.0
-- **Concise:** Get to the point quickly
-- **Tested:** Commands actually work
-
-Submit improvements via pull request!

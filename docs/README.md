@@ -32,6 +32,18 @@ Files:
 - Two-phase process: Specification → Implementation
 - Reduces ambiguity and improves AI collaboration
 
+**[Specs vs. Artifacts](./specs-vs-artifacts.md)**
+- Clarifies the distinction between project specs and warehouse artifacts
+- When specs should (and should not) live in the warehouse
+- Blueprint vs. building code analogy
+
+### Design Decisions
+
+**[Local Warehouse Workflow](./local-warehouse-workflow.md)**
+- Why snapshot/copy model over symlinks
+- The six-phase workflow (clone → connect → snapshot → iterate → contribute → sync)
+- Design rationale for the distribution approach
+
 ---
 
 ## Practical Guides
@@ -51,6 +63,8 @@ For step-by-step instructions and how-to guides, see:
 | `boot-context-design/agents-md-architecture.md` | Understand three-tier AGENTS.md model | Everyone writing AGENTS.md files |
 | `boot-context-design/project-level-agents-design.md` | Learn how to write effective project AGENTS.md | Project maintainers |
 | `spec-driven-development.md` | Learn structured feature planning | Developers planning features |
+| `specs-vs-artifacts.md` | Understand distinction between specs and artifacts | Everyone |
+| `local-warehouse-workflow.md` | Understand snapshot/copy design rationale | Framework contributors, curious users |
 
 ---
 
