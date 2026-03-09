@@ -1,12 +1,12 @@
-"""TDD Test Cases for Task 2.1: Create WarehouseValidator class with structure validation methods
+"""Test Cases for WarehouseValidator
 
 Test Coverage:
 - TC1: Valid warehouse structure → ValidationResult(valid=True, errors=[])
-- TC2: Missing all required directories → ValidationResult(valid=False, errors=[...list of 5 missing])
+- TC2: Missing all required directories → ValidationResult(valid=False, errors=[...list of 4 missing])
 - TC3: Path doesn't exist → ValidationResult(valid=False, errors=["Path not found"])
 - TC4: Path is file not directory → ValidationResult(valid=False, errors=["Path is not a directory"])
 - TC5: Empty directory → ValidationResult(valid=False) with all missing directories listed
-- TC6: Partial structure (only contexts/) → ValidationResult(valid=False) with 4 missing listed
+- TC6: Partial structure (only contexts/) → ValidationResult(valid=False) with 3 missing listed
 - TC7: Absolute path provided → Validates correctly
 - TC8: Relative path provided → Resolves and validates correctly
 - TC9: Path with spaces and special chars → Handles correctly
@@ -23,14 +23,11 @@ class TestWarehouseValidator:
 
     def test_tc1_valid_warehouse_structure(self, temp_dir):
         """TC1: Valid warehouse structure → ValidationResult(valid=True, errors=[])"""
-        # Create valid warehouse structure
         warehouse = temp_dir / "warehouse"
         (warehouse / "contexts").mkdir(parents=True)
         (warehouse / "knowledge").mkdir(parents=True)
-        (warehouse / "knowledge" / "global").mkdir(parents=True)
         (warehouse / "skills").mkdir(parents=True)
         (warehouse / "docs").mkdir(parents=True)
-        (warehouse / "contexts" / "AGENTS.global.md").write_text("# Global Context")
         (warehouse / "README.md").write_text("# Warehouse")
 
         validator = WarehouseValidator()
@@ -41,7 +38,7 @@ class TestWarehouseValidator:
         assert len(result.errors) == 0
 
     def test_tc2_missing_all_required_directories(self, temp_dir):
-        """TC2: Missing all required directories → ValidationResult(valid=False, errors=[...list of 5 missing])"""
+        """TC2: Missing all required directories → ValidationResult(valid=False, errors=[...list of 4 missing])"""
         warehouse = temp_dir / "empty_warehouse"
         warehouse.mkdir()
 
@@ -49,7 +46,7 @@ class TestWarehouseValidator:
         result = validator.validate(str(warehouse))
 
         assert result.valid is False
-        assert len(result.errors) >= 5  # At least 5 missing directories
+        assert len(result.errors) >= 4  # At least 4 missing directories + README
         # Check for required directories
         error_text = " ".join(result.errors).lower()
         assert "contexts" in error_text
@@ -88,8 +85,8 @@ class TestWarehouseValidator:
         result = validator.validate(str(warehouse))
 
         assert result.valid is False
-        # Should list all missing required directories
-        assert len(result.errors) >= 5
+        # Should list all missing required directories + README
+        assert len(result.errors) >= 4
 
     def test_tc6_partial_structure(self, temp_dir):
         """TC6: Partial structure (only contexts/) → ValidationResult(valid=False) with 4 missing listed"""
@@ -107,10 +104,9 @@ class TestWarehouseValidator:
         """TC7: Absolute path provided → Validates correctly"""
         warehouse = temp_dir / "warehouse"
         (warehouse / "contexts").mkdir(parents=True)
-        (warehouse / "knowledge" / "global").mkdir(parents=True)
+        (warehouse / "knowledge").mkdir(parents=True)
         (warehouse / "skills").mkdir(parents=True)
         (warehouse / "docs").mkdir(parents=True)
-        (warehouse / "contexts" / "AGENTS.global.md").write_text("# Global")
         (warehouse / "README.md").write_text("# Warehouse")
 
         validator = WarehouseValidator()
@@ -124,10 +120,9 @@ class TestWarehouseValidator:
         """TC8: Relative path provided → Resolves and validates correctly"""
         warehouse = temp_dir / "warehouse"
         (warehouse / "contexts").mkdir(parents=True)
-        (warehouse / "knowledge" / "global").mkdir(parents=True)
+        (warehouse / "knowledge").mkdir(parents=True)
         (warehouse / "skills").mkdir(parents=True)
         (warehouse / "docs").mkdir(parents=True)
-        (warehouse / "contexts" / "AGENTS.global.md").write_text("# Global")
         (warehouse / "README.md").write_text("# Warehouse")
 
         validator = WarehouseValidator()
@@ -146,10 +141,9 @@ class TestWarehouseValidator:
         """TC9: Path with spaces and special chars → Handles correctly"""
         warehouse = temp_dir / "my warehouse (v1.0)"
         (warehouse / "contexts").mkdir(parents=True)
-        (warehouse / "knowledge" / "global").mkdir(parents=True)
+        (warehouse / "knowledge").mkdir(parents=True)
         (warehouse / "skills").mkdir(parents=True)
         (warehouse / "docs").mkdir(parents=True)
-        (warehouse / "contexts" / "AGENTS.global.md").write_text("# Global")
         (warehouse / "README.md").write_text("# Warehouse")
 
         validator = WarehouseValidator()
@@ -164,10 +158,9 @@ class TestWarehouseValidator:
         # Create actual warehouse
         actual_warehouse = temp_dir / "actual_warehouse"
         (actual_warehouse / "contexts").mkdir(parents=True)
-        (actual_warehouse / "knowledge" / "global").mkdir(parents=True)
+        (actual_warehouse / "knowledge").mkdir(parents=True)
         (actual_warehouse / "skills").mkdir(parents=True)
         (actual_warehouse / "docs").mkdir(parents=True)
-        (actual_warehouse / "contexts" / "AGENTS.global.md").write_text("# Global")
         (actual_warehouse / "README.md").write_text("# Warehouse")
 
         # Create symlink

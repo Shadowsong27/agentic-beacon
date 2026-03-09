@@ -22,6 +22,9 @@ __pycache__/
 .venv/
 *.egg-info/
 
+# MkDocs build output
+site/
+
 # Logs
 *.log
 logs/
@@ -29,6 +32,9 @@ logs/
 # Environment
 .env
 .env.local
+
+# Claude Code worktrees (ephemeral session state, not project artifacts)
+.claude/worktrees/
 
 # Distributed warehouse content (project-specific)
 .opencode/
