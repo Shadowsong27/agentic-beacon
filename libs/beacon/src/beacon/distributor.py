@@ -118,38 +118,37 @@ class WarehouseDistributor:
     def delta(self) -> dict[str, Any]:
         """
         Compare target .opencode with warehouse to find differences.
-        
+
         Detects:
         - New files in target (potential contributions back to warehouse)
         - Modified files in target (local customizations)
         - Files in warehouse but not in target (missing content)
-        
+
         Returns:
             Dictionary with new_in_target, modified_in_target, missing_in_target lists
         """
-        import hashlib
-        
+
         if not self.opencode_dir.exists():
             raise ValueError(
                 f"No .opencode directory found at {self.opencode_dir}. Run setup first."
             )
-        
+
         logger.info("Comparing target with warehouse")
-        
+
         config = self._read_config()
         contexts = config.get("contexts", [])
         knowledge_scopes = config.get("knowledge_scopes", [])
         skills = config.get("skills", [])
-        
+
         new_in_target = []
         modified_in_target = []
         missing_in_target = []
-        
+
         # Check contexts
         for context in contexts:
             warehouse_file = self.warehouse_root / "contexts" / f"AGENTS.{context}.md"
             target_file = self.opencode_dir / "contexts" / f"AGENTS.{context}.md"
-            
+
             if target_file.exists():
                 if warehouse_file.exists():
                     # Compare hashes
@@ -159,84 +158,90 @@ class WarehouseDistributor:
                     new_in_target.append(f"contexts/AGENTS.{context}.md")
             elif warehouse_file.exists():
                 missing_in_target.append(f"contexts/AGENTS.{context}.md")
-        
+
         # Check knowledge files
         for scope in knowledge_scopes:
             warehouse_dir = self.warehouse_root / "knowledge" / scope
             target_dir = self.opencode_dir / "knowledge" / scope
-            
+
             if not warehouse_dir.exists() or not target_dir.exists():
                 continue
-                
+
             # Get all markdown files in both directories
             warehouse_files = {
-                f.relative_to(warehouse_dir): f 
-                for f in warehouse_dir.rglob("*.md")
+                f.relative_to(warehouse_dir): f for f in warehouse_dir.rglob("*.md")
             }
             target_files = {
-                f.relative_to(target_dir): f 
-                for f in target_dir.rglob("*.md")
+                f.relative_to(target_dir): f for f in target_dir.rglob("*.md")
             }
-            
+
             # Find new files in target
             for rel_path in target_files:
                 if rel_path not in warehouse_files:
                     new_in_target.append(f"knowledge/{scope}/{rel_path}")
-                elif not self._files_identical(warehouse_files[rel_path], target_files[rel_path]):
+                elif not self._files_identical(
+                    warehouse_files[rel_path], target_files[rel_path]
+                ):
                     modified_in_target.append(f"knowledge/{scope}/{rel_path}")
-            
+
             # Find missing files in target
             for rel_path in warehouse_files:
                 if rel_path not in target_files:
                     missing_in_target.append(f"knowledge/{scope}/{rel_path}")
-        
+
         # Check skills
         for skill in skills:
             warehouse_dir = self.warehouse_root / "skills" / skill
             target_dir = self.opencode_dir / "skills" / skill
-            
+
             if not warehouse_dir.exists() or not target_dir.exists():
                 continue
-                
+
             warehouse_files = {
-                f.relative_to(warehouse_dir): f 
-                for f in warehouse_dir.rglob("*") if f.is_file()
+                f.relative_to(warehouse_dir): f
+                for f in warehouse_dir.rglob("*")
+                if f.is_file()
             }
             target_files = {
-                f.relative_to(target_dir): f 
-                for f in target_dir.rglob("*") if f.is_file()
+                f.relative_to(target_dir): f
+                for f in target_dir.rglob("*")
+                if f.is_file()
             }
-            
+
             for rel_path in target_files:
                 if rel_path not in warehouse_files:
                     new_in_target.append(f"skills/{skill}/{rel_path}")
-                elif not self._files_identical(warehouse_files[rel_path], target_files[rel_path]):
+                elif not self._files_identical(
+                    warehouse_files[rel_path], target_files[rel_path]
+                ):
                     modified_in_target.append(f"skills/{skill}/{rel_path}")
-            
+
             for rel_path in warehouse_files:
                 if rel_path not in target_files:
                     missing_in_target.append(f"skills/{skill}/{rel_path}")
-        
+
         result = {
             "new_in_target": new_in_target,
             "modified_in_target": modified_in_target,
             "missing_in_target": missing_in_target,
         }
-        
-        logger.info(f"Delta complete: {len(new_in_target)} new, {len(modified_in_target)} modified, {len(missing_in_target)} missing")
+
+        logger.info(
+            f"Delta complete: {len(new_in_target)} new, {len(modified_in_target)} modified, {len(missing_in_target)} missing"
+        )
         return result
-    
+
     def _files_identical(self, file1: Path, file2: Path) -> bool:
         """Check if two files have identical content using SHA256."""
         import hashlib
-        
+
         def file_hash(path: Path) -> str:
             sha256 = hashlib.sha256()
             with open(path, "rb") as f:
                 for chunk in iter(lambda: f.read(4096), b""):
                     sha256.update(chunk)
             return sha256.hexdigest()
-        
+
         return file_hash(file1) == file_hash(file2)
 
     def _create_directory_structure(self) -> None:

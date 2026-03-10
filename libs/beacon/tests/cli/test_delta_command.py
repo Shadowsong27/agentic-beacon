@@ -3,11 +3,9 @@
 Following TDD workflow for tasks 9.1-9.7.
 """
 
-import os
 import pytest
-from pathlib import Path
-from click.testing import CliRunner
 from beacon.cli import main
+from click.testing import CliRunner
 
 
 @pytest.fixture

@@ -11,8 +11,8 @@
 
 ### 2. Follow Structure
 
-**Contexts:** Brief summary + pointer to knowledge  
-**Knowledge:** Detailed explanation with examples  
+**Contexts:** Brief summary + pointer to knowledge
+**Knowledge:** Detailed explanation with examples
 **Skills:** Step-by-step procedures
 
 ### 3. Test Locally

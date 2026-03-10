@@ -12,16 +12,20 @@ Test Coverage:
 - TC9: File is directory not file → Raises IsADirectoryError
 - TC10: Permission denied reading file → Raises PermissionError with clear message
 """
-import pytest
+
 from pathlib import Path
+
+import pytest
+from beacon.core.exceptions import ValidationError, YAMLParseError
 from beacon.core.settings import BeaconSettings
-from beacon.core.exceptions import YAMLParseError, ValidationError
 
 
 class TestBeaconYAMLParser:
     """Test suite for BeaconSettings.from_yaml() - Task 1.1"""
 
-    def test_tc1_valid_complete_beacon_yaml(self, temp_dir, sample_beacon_yaml_complete):
+    def test_tc1_valid_complete_beacon_yaml(
+        self, temp_dir, sample_beacon_yaml_complete
+    ):
         """TC1: Valid complete beacon.yaml → Returns BeaconSettings with all artifact types populated"""
         beacon_file = temp_dir / "beacon.yaml"
         beacon_file.write_text(sample_beacon_yaml_complete)
@@ -74,8 +78,11 @@ artifacts:
 
         with pytest.raises(YAMLParseError) as exc_info:
             BeaconSettings.from_yaml(str(beacon_file))
-        
-        assert "syntax" in str(exc_info.value).lower() or "parse" in str(exc_info.value).lower()
+
+        assert (
+            "syntax" in str(exc_info.value).lower()
+            or "parse" in str(exc_info.value).lower()
+        )
 
     def test_tc5_missing_artifacts_root_key(self, temp_dir):
         """TC5: Missing artifacts root key → Raises ValidationError "Missing required 'artifacts' section" """
@@ -87,7 +94,7 @@ knowledge:
 
         with pytest.raises(ValidationError) as exc_info:
             BeaconSettings.from_yaml(str(beacon_file))
-        
+
         assert "artifacts" in str(exc_info.value).lower()
 
     def test_tc6_artifact_type_not_a_list(self, temp_dir):
@@ -100,9 +107,12 @@ artifacts:
 
         with pytest.raises(ValidationError) as exc_info:
             BeaconSettings.from_yaml(str(beacon_file))
-        
+
         # Pydantic should complain about type mismatch
-        assert "list" in str(exc_info.value).lower() or "type" in str(exc_info.value).lower()
+        assert (
+            "list" in str(exc_info.value).lower()
+            or "type" in str(exc_info.value).lower()
+        )
 
     def test_tc7_unknown_artifact_type(self, temp_dir):
         """TC7: Unknown artifact type → Raises ValidationError listing unknown type"""
@@ -117,10 +127,12 @@ artifacts:
 
         with pytest.raises(ValidationError) as exc_info:
             BeaconSettings.from_yaml(str(beacon_file))
-        
+
         error_str = str(exc_info.value).lower()
         # Should mention the unknown field
-        assert "unknown" in error_str or "extra" in error_str or "unexpected" in error_str
+        assert (
+            "unknown" in error_str or "extra" in error_str or "unexpected" in error_str
+        )
 
     def test_tc8_file_not_found(self, temp_dir):
         """TC8: File not found → Raises FileNotFoundError with helpful message"""
@@ -128,8 +140,10 @@ artifacts:
 
         with pytest.raises(FileNotFoundError) as exc_info:
             BeaconSettings.from_yaml(str(non_existent_file))
-        
-        assert "non_existent.yaml" in str(exc_info.value) or str(non_existent_file) in str(exc_info.value)
+
+        assert "non_existent.yaml" in str(exc_info.value) or str(
+            non_existent_file
+        ) in str(exc_info.value)
 
     def test_tc9_file_is_directory(self, temp_dir):
         """TC9: File is directory not file → Raises IsADirectoryError"""
@@ -139,20 +153,25 @@ artifacts:
         with pytest.raises(IsADirectoryError):
             BeaconSettings.from_yaml(str(dir_path))
 
-    @pytest.mark.skipif(not hasattr(Path, 'chmod'), reason="chmod not available on this platform")
+    @pytest.mark.skipif(
+        not hasattr(Path, "chmod"), reason="chmod not available on this platform"
+    )
     def test_tc10_permission_denied(self, temp_dir, sample_beacon_yaml_complete):
         """TC10: Permission denied reading file → Raises PermissionError with clear message"""
         beacon_file = temp_dir / "beacon.yaml"
         beacon_file.write_text(sample_beacon_yaml_complete)
-        
+
         # Remove read permissions
         beacon_file.chmod(0o000)
-        
+
         try:
             with pytest.raises(PermissionError) as exc_info:
                 BeaconSettings.from_yaml(str(beacon_file))
-            
-            assert "permission" in str(exc_info.value).lower() or "denied" in str(exc_info.value).lower()
+
+            assert (
+                "permission" in str(exc_info.value).lower()
+                or "denied" in str(exc_info.value).lower()
+            )
         finally:
             # Restore permissions for cleanup
             beacon_file.chmod(0o644)

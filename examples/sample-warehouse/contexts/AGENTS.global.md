@@ -1,6 +1,6 @@
 # Global Context
 
-**Organization:** Example Corp  
+**Organization:** Example Corp
 **Last Updated:** [Date]
 
 ---

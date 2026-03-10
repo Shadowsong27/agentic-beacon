@@ -56,12 +56,12 @@ AGENTS.md files serve as **boot context** - the knowledge agents see immediately
   - Git workflow patterns
   - Code review standards
   - Documentation requirements
-  
+
 - **Universal coding patterns**
   - Session handoff patterns
   - Error handling conventions
   - Logging standards
-  
+
 - **Organizational policies**
   - Security requirements
   - Compliance guidelines
@@ -85,7 +85,7 @@ AGENTS.md files serve as **boot context** - the knowledge agents see immediately
   - Import patterns
   - Naming conventions
   - Language idioms and best practices
-  
+
 - **Common language pitfalls**
   - Agent failure modes specific to this language
   - Performance anti-patterns
@@ -108,7 +108,7 @@ AGENTS.md files serve as **boot context** - the knowledge agents see immediately
   - Technology stack standards (e.g., PostgreSQL over SQLite)
   - Architectural patterns (e.g., microservices, event-driven)
   - Infrastructure patterns (e.g., containerization, CI/CD)
-  
+
 - **Tool-specific conventions**
   - Airflow DAG patterns
   - API design standards
@@ -569,9 +569,9 @@ When an agent starts a session, contexts are loaded in this order:
    ├─ global.md (always loaded)
    ├─ language context file (e.g. python.md, if declared in beacon.yaml)
    └─ domain context file (e.g. data-platform.md, if declared in beacon.yaml)
-   
+
 2. User-level preferences (~/.config/opencode/AGENTS.md)
-   
+
 3. Project-level context (<project>/AGENTS.md)
 ```
 

@@ -1,7 +1,7 @@
 # Decision: Settings Module Structure and Naming Conventions
 
-**Date:** 2026-03-08  
-**Status:** Accepted  
+**Date:** 2026-03-08
+**Status:** Accepted
 **Context:** Agentic Beacon configuration management structure
 
 ## Decision
@@ -44,13 +44,13 @@ libs/beacon/src/beacon/core/
 class WarehouseSettings(BaseSettings):
     """Warehouse connection settings from config.toml."""
     warehouse: WarehouseConfig
-    
+
     @classmethod
     def from_path(cls, local_path: str) -> "WarehouseSettings":
         """Create settings from path and write to file."""
         # Validates, writes TOML, then loads via BaseSettings
         ...
-    
+
     def to_toml(self, path: Path) -> None:
         """Write settings to TOML file."""
         ...
@@ -58,12 +58,12 @@ class WarehouseSettings(BaseSettings):
 class BeaconSettings(BaseModel):
     """Beacon artifact dependencies from beacon.yaml."""
     artifacts: ArtifactsConfig
-    
+
     @classmethod
     def from_yaml(cls, path: Path) -> "BeaconSettings":
         """Load settings from YAML file."""
         ...
-    
+
     def to_yaml(self, path: Path) -> None:
         """Write settings to YAML file."""
         ...

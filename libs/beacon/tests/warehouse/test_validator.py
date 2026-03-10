@@ -12,10 +12,12 @@ Test Coverage:
 - TC9: Path with spaces and special chars → Handles correctly
 - TC10: Symlink to valid warehouse → Follows symlink and validates target
 """
-import pytest
+
 from pathlib import Path
-from beacon.warehouse import WarehouseValidator
+
+import pytest
 from beacon.core.settings import ValidationResult
+from beacon.warehouse import WarehouseValidator
 
 
 class TestWarehouseValidator:
@@ -63,7 +65,10 @@ class TestWarehouseValidator:
 
         assert result.valid is False
         assert len(result.errors) > 0
-        assert any("not found" in err.lower() or "does not exist" in err.lower() for err in result.errors)
+        assert any(
+            "not found" in err.lower() or "does not exist" in err.lower()
+            for err in result.errors
+        )
 
     def test_tc4_path_is_file_not_directory(self, temp_dir):
         """TC4: Path is file not directory → ValidationResult(valid=False, errors=["Path is not a directory"])"""
@@ -74,7 +79,10 @@ class TestWarehouseValidator:
         result = validator.validate(str(file_path))
 
         assert result.valid is False
-        assert any("not a directory" in err.lower() or "not a dir" in err.lower() for err in result.errors)
+        assert any(
+            "not a directory" in err.lower() or "not a dir" in err.lower()
+            for err in result.errors
+        )
 
     def test_tc5_empty_directory(self, temp_dir):
         """TC5: Empty directory → ValidationResult(valid=False) with all missing directories listed"""
@@ -126,9 +134,10 @@ class TestWarehouseValidator:
         (warehouse / "README.md").write_text("# Warehouse")
 
         validator = WarehouseValidator()
-        
+
         # Use relative path
         import os
+
         original_cwd = os.getcwd()
         try:
             os.chdir(temp_dir)
@@ -152,7 +161,9 @@ class TestWarehouseValidator:
         assert isinstance(result, ValidationResult)
         # Should handle paths with spaces and special characters
 
-    @pytest.mark.skipif(not hasattr(Path, 'symlink_to'), reason="symlinks not supported")
+    @pytest.mark.skipif(
+        not hasattr(Path, "symlink_to"), reason="symlinks not supported"
+    )
     def test_tc10_symlink_to_valid_warehouse(self, temp_dir):
         """TC10: Symlink to valid warehouse → Follows symlink and validates target"""
         # Create actual warehouse
@@ -167,7 +178,7 @@ class TestWarehouseValidator:
         symlink = temp_dir / "warehouse_link"
         try:
             symlink.symlink_to(actual_warehouse)
-            
+
             validator = WarehouseValidator()
             result = validator.validate(str(symlink))
 

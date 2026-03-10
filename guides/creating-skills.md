@@ -89,7 +89,7 @@ See `checklist.md` for a per-line item reference.
 ## Output
 A structured review with three sections:
 - **Blockers** — Must be resolved before merge
-- **Suggestions** — Recommended improvements  
+- **Suggestions** — Recommended improvements
 - **Notes** — Observations, questions, praise
 ```
 

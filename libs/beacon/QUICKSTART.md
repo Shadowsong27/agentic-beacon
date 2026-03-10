@@ -174,6 +174,6 @@ abc delta --help
 
 ---
 
-**For deployment guide, see:** [HOMELAB_PUBLISH.md](./HOMELAB_PUBLISH.md)  
-**For complete docs, see:** [README.md](./README.md)  
+**For deployment guide, see:** [HOMELAB_PUBLISH.md](./HOMELAB_PUBLISH.md)
+**For complete docs, see:** [README.md](./README.md)
 **For project status, see:** [PROJECT_COMPLETE.md](./PROJECT_COMPLETE.md)

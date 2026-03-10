@@ -12,18 +12,22 @@ Test Coverage:
 - TC9: Load called multiple times → Idempotent behavior
 - TC10: Settings objects are independent → Can load one without the other
 """
-import pytest
+
 import os
-from pathlib import Path
+
+import pytest
+from beacon.core.exceptions import ValidationError as BeaconValidationError
+from beacon.core.exceptions import YAMLParseError
 from beacon.core.settings import BeaconSettings, WarehouseSettings
-from beacon.core.exceptions import YAMLParseError, ValidationError as BeaconValidationError
 from pydantic_core import ValidationError as PydanticValidationError
 
 
 class TestSettingsSelfReading:
     """Test suite for settings self-reading capabilities - Task 1.3"""
 
-    def test_tc1_warehouse_settings_auto_loads_toml(self, temp_dir, sample_config_toml_valid):
+    def test_tc1_warehouse_settings_auto_loads_toml(
+        self, temp_dir, sample_config_toml_valid
+    ):
         """TC1: WarehouseSettings() → Pydantic loads from config.toml automatically"""
         config_file = temp_dir / ".agentic-beacon" / "config.toml"
         config_file.parent.mkdir(exist_ok=True)
@@ -33,19 +37,21 @@ class TestSettingsSelfReading:
         try:
             os.chdir(temp_dir)
             settings = WarehouseSettings()
-            
+
             assert isinstance(settings, WarehouseSettings)
             assert settings.warehouse.local_path == "/absolute/path/to/warehouse"
         finally:
             os.chdir(original_cwd)
 
-    def test_tc2_beacon_settings_manually_parses_yaml(self, temp_dir, sample_beacon_yaml_complete):
+    def test_tc2_beacon_settings_manually_parses_yaml(
+        self, temp_dir, sample_beacon_yaml_complete
+    ):
         """TC2: BeaconSettings.from_yaml() → Manually parses YAML with validation"""
         beacon_file = temp_dir / "beacon.yaml"
         beacon_file.write_text(sample_beacon_yaml_complete)
 
         settings = BeaconSettings.from_yaml(str(beacon_file))
-        
+
         assert isinstance(settings, BeaconSettings)
         assert len(settings.artifacts.knowledge) > 0
 
@@ -54,7 +60,7 @@ class TestSettingsSelfReading:
         original_cwd = os.getcwd()
         try:
             os.chdir(temp_dir)
-            
+
             with pytest.raises((BeaconValidationError, PydanticValidationError)):
                 WarehouseSettings()
         finally:
@@ -63,7 +69,7 @@ class TestSettingsSelfReading:
     def test_tc4_beacon_yaml_missing_raises_error(self, temp_dir):
         """TC4: beacon.yaml missing → FileNotFoundError from from_yaml()"""
         non_existent = temp_dir / "missing.yaml"
-        
+
         with pytest.raises(FileNotFoundError):
             BeaconSettings.from_yaml(str(non_existent))
 
@@ -76,8 +82,8 @@ class TestSettingsSelfReading:
         original_cwd = os.getcwd()
         try:
             os.chdir(temp_dir)
-            
-            with pytest.raises(Exception):  # TOML parse or validation error
+
+            with pytest.raises(Exception):  # noqa: B017  # TOML parse or validation error
                 WarehouseSettings()
         finally:
             os.chdir(original_cwd)
@@ -122,27 +128,29 @@ class TestSettingsSelfReading:
 
         settings1 = BeaconSettings.from_yaml(str(beacon_file))
         settings2 = BeaconSettings.from_yaml(str(beacon_file))
-        
+
         # Should produce identical results
         assert settings1.artifacts.knowledge == settings2.artifacts.knowledge
         assert settings1.artifacts.skills == settings2.artifacts.skills
         assert settings1.artifacts.contexts == settings2.artifacts.contexts
 
-    def test_tc10_settings_are_independent(self, temp_dir, sample_beacon_yaml_complete, sample_config_toml_valid):
+    def test_tc10_settings_are_independent(
+        self, temp_dir, sample_beacon_yaml_complete, sample_config_toml_valid
+    ):
         """TC10: Settings objects are independent → Can load one without the other"""
         # Create only beacon.yaml
         beacon_file = temp_dir / "beacon.yaml"
         beacon_file.write_text(sample_beacon_yaml_complete)
-        
+
         # Should be able to load beacon without config
         beacon_settings = BeaconSettings.from_yaml(str(beacon_file))
         assert isinstance(beacon_settings, BeaconSettings)
-        
+
         # Create config.toml
         config_file = temp_dir / ".agentic-beacon" / "config.toml"
         config_file.parent.mkdir(exist_ok=True)
         config_file.write_text(sample_config_toml_valid)
-        
+
         # Should be able to load warehouse settings independently
         original_cwd = os.getcwd()
         try:

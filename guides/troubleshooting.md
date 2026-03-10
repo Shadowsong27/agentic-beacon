@@ -189,7 +189,7 @@ cat .agentic-beacon/config.toml
 cd project-a
 abc warehouse connect --path ~/team-warehouse-a
 
-# Project B  
+# Project B
 cd project-b
 abc warehouse connect --path ~/team-warehouse-b
 ```

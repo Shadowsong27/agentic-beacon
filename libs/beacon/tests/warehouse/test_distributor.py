@@ -5,10 +5,10 @@ Regression tests for:
   missing plain AGENTS.md files created by 'abc warehouse init'.
 - Bug #4: warehouse catalog Usage example showed old AGENTS.global.md format.
 """
+
 import pytest
-from pathlib import Path
-from beacon.distributor import WarehouseDistributor
 from beacon.cli import _generate_warehouse_catalog
+from beacon.distributor import WarehouseDistributor
 
 
 @pytest.fixture
@@ -52,9 +52,7 @@ def test_list_contexts_finds_plain_agents_md(warehouse_with_plain_agents_md, tem
 
     result = distributor.list_available()
 
-    assert len(result["contexts"]) == 1, (
-        f"Expected 1 context, got {result['contexts']}"
-    )
+    assert len(result["contexts"]) == 1, f"Expected 1 context, got {result['contexts']}"
     assert "contexts/AGENTS.md" in result["contexts"]
 
 

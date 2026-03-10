@@ -12,10 +12,11 @@ Test Coverage:
 - TC9: All directories present, no README → Lists missing README only
 - TC10: Symlink to required file → Follows symlink and validates target exists
 """
-import pytest
+
 from pathlib import Path
+
+import pytest
 from beacon.warehouse import WarehouseValidator
-from beacon.core.settings import ValidationResult
 
 
 class TestWarehouseFilesValidation:
@@ -83,7 +84,7 @@ class TestWarehouseFilesValidation:
 
         assert result.valid is True
 
-    @pytest.mark.skipif(not hasattr(Path, 'chmod'), reason="chmod not available")
+    @pytest.mark.skipif(not hasattr(Path, "chmod"), reason="chmod not available")
     def test_tc5_context_file_unreadable_still_valid(self, temp_dir):
         """TC5: A context file is unreadable → Validation still passes (existence only)"""
         warehouse = temp_dir / "warehouse"
@@ -166,7 +167,9 @@ class TestWarehouseFilesValidation:
         # No errors about AGENTS.global.md — that is not enforced
         assert not any("AGENTS.global.md" in err for err in result.errors)
 
-    @pytest.mark.skipif(not hasattr(Path, 'symlink_to'), reason="symlinks not supported")
+    @pytest.mark.skipif(
+        not hasattr(Path, "symlink_to"), reason="symlinks not supported"
+    )
     def test_tc10_symlink_to_readme(self, temp_dir):
         """TC10: Symlink to README → Follows symlink and validates target exists"""
         warehouse = temp_dir / "warehouse"

@@ -259,7 +259,7 @@ Context is organized into three tiers:
 
 ### Progressive Disclosure Pattern
 
-Context files should be a **pointer system**, not an encyclopedia. 
+Context files should be a **pointer system**, not an encyclopedia.
 
 **In context files:**
 - 1-2 sentence summary of the pattern or rule

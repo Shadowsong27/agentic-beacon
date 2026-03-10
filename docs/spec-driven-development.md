@@ -2,7 +2,7 @@
 
 A guide for using spec-driven development approaches in agentic engineering.
 
-**Last Updated:** 2026-03-06  
+**Last Updated:** 2026-03-06
 **Status:** Draft / To Be Expanded
 
 ---

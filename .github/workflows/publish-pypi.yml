@@ -139,7 +139,7 @@ jobs:
           echo "**Version**: ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
           echo "**Target**: ${{ steps.pypi_target.outputs.target }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           if [[ "${{ job.status }}" == "success" ]]; then
             echo "### ✅ Publication Successful!" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
@@ -147,13 +147,13 @@ jobs:
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "### 📥 Installation" >> $GITHUB_STEP_SUMMARY
             echo '```bash' >> $GITHUB_STEP_SUMMARY
-            
+
             if [[ "${{ steps.pypi_target.outputs.target }}" == "test" ]]; then
               echo "pip install --index-url https://test.pypi.org/simple/ agentic-beacon" >> $GITHUB_STEP_SUMMARY
             else
               echo "pip install agentic-beacon" >> $GITHUB_STEP_SUMMARY
             fi
-            
+
             echo '```' >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "### 🚀 Quick Start" >> $GITHUB_STEP_SUMMARY
@@ -203,12 +203,12 @@ jobs:
               direction: 'desc',
               per_page: 10
             });
-            
-            const releasePR = prs.data.find(pr => 
-              pr.title.includes('release agentic-beacon') && 
+
+            const releasePR = prs.data.find(pr =>
+              pr.title.includes('release agentic-beacon') &&
               pr.merged_at
             );
-            
+
             if (releasePR) {
               github.rest.issues.createComment({
                 issue_number: releasePR.number,

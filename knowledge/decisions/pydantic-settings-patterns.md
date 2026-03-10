@@ -1,7 +1,7 @@
 # Decision: Pydantic Settings Patterns for Configuration Management
 
-**Date:** 2026-03-08  
-**Status:** Accepted  
+**Date:** 2026-03-08
+**Status:** Accepted
 **Context:** Configuration management standardization
 
 ## Decision
@@ -26,12 +26,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class WarehouseSettings(BaseSettings):
     """Warehouse connection settings from config.toml."""
-    
+
     model_config = SettingsConfigDict(
         toml_file=".agentic-beacon/config.toml",
         extra="ignore",  # Forward compatibility
     )
-    
+
     warehouse: WarehouseConfig
 ```
 
@@ -67,20 +67,20 @@ Use Pydantic BaseModel for nested configuration sections:
 ```python
 class WarehouseConfig(BaseModel):
     """Warehouse configuration section."""
-    
+
     local_path: str = Field(..., description="Absolute path to local warehouse")
-    
+
     @field_validator("local_path")
     @classmethod
     def validate_local_path(cls, v: str) -> str:
         """Validate and normalize path."""
         if not v or not v.strip():
             raise ValueError("local_path cannot be empty")
-        
+
         path = Path(v).expanduser().resolve()
         if not path.is_absolute():
             raise ValueError("local_path must be an absolute path")
-        
+
         return str(path)
 
 class WarehouseSettings(BaseSettings):
@@ -110,19 +110,19 @@ For configurations with non-standard structures (like beacon.yaml with grouped a
 ```python
 class BeaconSettings(BaseModel):
     """Custom structure requiring manual parsing."""
-    
+
     artifacts: ArtifactsConfig
-    
+
     @classmethod
     def from_yaml(cls, path: Path) -> "BeaconSettings":
         """Manual YAML parsing with validation."""
         with open(path) as f:
             data = yaml.safe_load(f)
-        
+
         # Validate structure
         if "artifacts" not in data:
             raise ValidationError("Missing required 'artifacts' section")
-        
+
         # Use Pydantic for validation
         return cls(**data)
 ```
