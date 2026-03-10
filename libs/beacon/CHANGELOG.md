@@ -1,5 +1,38 @@
 # Changelog
 
+## [1.2.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v1.1.0...agentic-beacon@v1.2.0) (2026-03-10)
+
+
+### Features
+
+* **beacon:** implement phase 1 configuration management with pydantic settings ([176fbb3](https://github.com/Shadowsong27/agentic-beacon/commit/176fbb31bd10fbb1f10abb85bf05f7933f731ff3))
+* config-based artifact management (v2.0) ([#4](https://github.com/Shadowsong27/agentic-beacon/issues/4)) ([3968040](https://github.com/Shadowsong27/agentic-beacon/commit/3968040f4598ac9b05365cd55ad619024b261b8e))
+* implement config-based artifact management (v2.0) ([a2526f2](https://github.com/Shadowsong27/agentic-beacon/commit/a2526f2a5134f43a5e997fb215ca5aa6e5dc29b7))
+* implement Phase 2 warehouse validation with TDD ([c336b31](https://github.com/Shadowsong27/agentic-beacon/commit/c336b31c6f3d1185805dc1d4bdfb10f42a1a583e))
+
+
+### Bug Fixes
+
+* correct abc sync knowledge path resolution and update task tracking ([#3](https://github.com/Shadowsong27/agentic-beacon/issues/3)) ([544db47](https://github.com/Shadowsong27/agentic-beacon/commit/544db47ab14e9937f381b1cd662551ed88ee7d75))
+* resolve 4 cli bugs found during e2e testing and add regression c… ([#7](https://github.com/Shadowsong27/agentic-beacon/issues/7)) ([1d24465](https://github.com/Shadowsong27/agentic-beacon/commit/1d244653142ad9a6f94cee7df98b6f4e68463424))
+
+
+### Documentation
+
+* establish project context and clean up repository structure ([d3237aa](https://github.com/Shadowsong27/agentic-beacon/commit/d3237aa0963ca02c14e6eb1e5a73c1c81f1308e5))
+* update installation instructions to recommend uv tool install ([9f54c90](https://github.com/Shadowsong27/agentic-beacon/commit/9f54c900f35ee44c82965c43c458dac0b5017f2d))
+
+
+### Tests
+
+* add comprehensive TDD test suite for Phase 1 (Configuration Management) ([1b5b958](https://github.com/Shadowsong27/agentic-beacon/commit/1b5b95823bb95867fb7988cf35e6bdebb8da8dd7))
+
+
+### Miscellaneous Chores
+
+* add pre-commit hooks with ruff linting and formatting ([#8](https://github.com/Shadowsong27/agentic-beacon/issues/8)) ([d96130e](https://github.com/Shadowsong27/agentic-beacon/commit/d96130ee8af973da3c3ec08cea26b0b4a15ffb0e))
+* make AGENTS.md the SSOT and tidy repo tooling ([#6](https://github.com/Shadowsong27/agentic-beacon/issues/6)) ([15e02bf](https://github.com/Shadowsong27/agentic-beacon/commit/15e02bffa1d5dfb25eb4e0d5e2a30fb26089af7f))
+
 ## [2.0.0] (Unreleased)
 
 ### ⚠ BREAKING CHANGES
