@@ -60,6 +60,7 @@ jobs:
     permissions:
       contents: read
       id-token: write  # For trusted publishing
+      issues: write    # For creating release comments on PRs
 
     steps:
       - name: Checkout code
