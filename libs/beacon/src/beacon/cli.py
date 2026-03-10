@@ -411,24 +411,18 @@ def _create_beacon_template(path: Path) -> None:
 artifacts:
   knowledge: []
     # Examples:
-    # - languages/python/**/*.md
-    # - infrastructure/docker-standards.md
+    # - knowledge/languages/python/**/*.md
+    # - knowledge/infrastructure/docker-standards.md
 
   skills: []
     # Examples:
-    # - code-review/SKILL.md
-    # - generate-unit-tests/SKILL.md
-
-  skills: []
-    # Skill directory name in warehouse skills/ directory
-    # Examples:
-    # - code-review/SKILL.md
-    # - generate-unit-tests/SKILL.md
+    # - skills/code-review/SKILL.md
+    # - skills/generate-unit-tests/SKILL.md
 
   contexts: []
     # Examples:
-    # - AGENTS.global.md
-    # - teams/backend/AGENTS.md
+    # - contexts/AGENTS.md
+    # - contexts/teams/backend/AGENTS.md
 """
     path.write_text(template)
 
@@ -521,12 +515,12 @@ def _generate_warehouse_catalog(warehouse_path: Path) -> str:
         "```yaml",
         "artifacts:",
         "  knowledge:",
-        "    - languages/python/**/*.md  # Glob pattern",
-        "    - infrastructure/docker-standards.md  # Specific file",
+        "    - knowledge/languages/python/**/*.md  # Glob pattern",
+        "    - knowledge/infrastructure/docker-standards.md  # Specific file",
         "  skills:",
-        "    - code-review/SKILL.md",
+        "    - skills/code-review/SKILL.md",
         "  contexts:",
-        "    - AGENTS.global.md",
+        "    - contexts/AGENTS.md",
         "```",
         "",
         "Then run `abc sync` to download the artifacts.",
@@ -1057,7 +1051,7 @@ def status(*, project: Optional[Path]) -> None:
             table = Table(title="Configured Contexts")
             table.add_column("Context", style="cyan")
             for ctx in beacon_settings.artifacts.contexts:
-                synced = (artifacts_dir / "contexts" / f"AGENTS.{ctx}.md").exists()
+                synced = (artifacts_dir / ctx).exists()
                 status_str = "[green]✓[/green]" if synced else "[red]✗[/red]"
                 table.add_row(f"{status_str} {ctx}")
             console.print(table)
@@ -1075,7 +1069,7 @@ def status(*, project: Optional[Path]) -> None:
             table = Table(title="Configured Skills")
             table.add_column("Skill", style="yellow")
             for skill in beacon_settings.artifacts.skills:
-                synced = (artifacts_dir / "skills" / skill).exists()
+                synced = (artifacts_dir / skill).exists()
                 status_str = "[green]✓[/green]" if synced else "[red]✗[/red]"
                 table.add_row(f"{status_str} {skill}")
             console.print(table)

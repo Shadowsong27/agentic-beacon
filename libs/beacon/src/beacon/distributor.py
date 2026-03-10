@@ -313,15 +313,15 @@ class WarehouseDistributor:
         return count
 
     def _list_contexts(self, contexts_dir: Path) -> list[str]:
-        """List available context files."""
+        """List available context files as paths relative to warehouse root."""
         if not contexts_dir.exists():
             return []
 
         contexts = []
-        for file in contexts_dir.glob("AGENTS.*.md"):
-            # Extract context name from AGENTS.<name>.md
-            name = file.stem.replace("AGENTS.", "")
-            contexts.append(name)
+        for file in sorted(contexts_dir.rglob("*.md")):
+            if not file.name.startswith("."):
+                rel = file.relative_to(contexts_dir.parent)
+                contexts.append(str(rel))
 
         return sorted(contexts)
 

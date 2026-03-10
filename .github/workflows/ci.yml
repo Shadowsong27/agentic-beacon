@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches-ignore:
+      - main
+      - 'release/**'
+    paths:
+      - 'libs/beacon/**'
+      - 'pyproject.toml'
+      - '.github/workflows/ci.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'libs/beacon/**'
+      - 'pyproject.toml'
+      - '.github/workflows/ci.yml'
+
+env:
+  UV_VERSION: "0.5.18"
+
+jobs:
+  # ------------------------------------------------------------------
+  # Unit tests — runs on every feat branch push and every PR
+  # ------------------------------------------------------------------
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: "libs/beacon/pyproject.toml"
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Run unit tests
+        run: uv run pytest -m "not integration" -q
+
+      - name: Publish summary
+        if: always()
+        run: |
+          echo "## Unit Tests" >> $GITHUB_STEP_SUMMARY
+          echo "**Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+
+  # ------------------------------------------------------------------
+  # E2E tests — runs only on PRs to main, after unit tests pass
+  # ------------------------------------------------------------------
+  e2e-tests:
+    name: E2E Integration Tests
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: "libs/beacon/pyproject.toml"
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Run e2e integration tests
+        run: uv run pytest -m integration -v
+
+      - name: Publish summary
+        if: always()
+        run: |
+          echo "## E2E Integration Tests" >> $GITHUB_STEP_SUMMARY
+          echo "**Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY

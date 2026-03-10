@@ -23,3 +23,6 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["libs/beacon/tests"]
+markers = [
+    "integration: end-to-end tests that exercise the full CLI workflow (run with -m integration)",
+]
