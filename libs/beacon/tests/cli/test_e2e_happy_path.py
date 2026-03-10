@@ -41,6 +41,7 @@ def e2e_warehouse(tmp_path):
             "--org", "Test Org",
             "--languages", "python",
             "--no-interactive",
+            "--no-git",
         ],
     )
     assert result.exit_code == 0, f"warehouse init failed:\n{result.output}"
