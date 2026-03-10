@@ -8,11 +8,12 @@ Following TDD workflow for tasks 8.1-8.6:
 - Task 8.6: Color output support
 """
 
-import os
 import pytest
-from pathlib import Path
-from beacon.core.delta import DeltaComparator, DeltaStatus, ComparisonResult, DeltaSummary
-
+from beacon.core.delta import (
+    ComparisonResult,
+    DeltaComparator,
+    DeltaStatus,
+)
 
 # ========== Task 8.1: DeltaComparator Class Creation ==========
 
@@ -169,6 +170,7 @@ def test_hash_file_is_directory(valid_warehouse, temp_dir):
 def test_hash_is_sha256(valid_warehouse, temp_dir):
     """TC11: Hash algorithm is SHA256 → Verify specific algorithm used."""
     import hashlib
+
     test_file = temp_dir / "test.md"
     test_file.write_text("test content")
 
@@ -328,7 +330,9 @@ def test_summary_filter_properties(valid_warehouse, temp_dir):
     (valid_warehouse / "knowledge" / "missing.md").write_text("warehouse only")
 
     comparator = DeltaComparator(valid_warehouse, artifacts_dir)
-    summary = comparator.compare_all(["knowledge/same.md", "knowledge/modified.md", "knowledge/missing.md"])
+    summary = comparator.compare_all(
+        ["knowledge/same.md", "knowledge/modified.md", "knowledge/missing.md"]
+    )
 
     assert len(summary.identical) == 1
     assert len(summary.modified) == 1

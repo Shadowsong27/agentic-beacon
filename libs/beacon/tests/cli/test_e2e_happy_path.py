@@ -14,12 +14,11 @@ unit tests:
     pytest -m "not integration"    # only unit tests (default CI run)
     pytest                         # everything
 """
-import pytest
-from pathlib import Path
-from click.testing import CliRunner
-import yaml
 
+import pytest
+import yaml
 from beacon.cli import main
+from click.testing import CliRunner
 
 pytestmark = pytest.mark.integration
 
@@ -36,10 +35,15 @@ def e2e_warehouse(tmp_path):
     result = runner.invoke(
         main,
         [
-            "warehouse", "init", "my-warehouse",
-            "--path", str(tmp_path),
-            "--org", "Test Org",
-            "--languages", "python",
+            "warehouse",
+            "init",
+            "my-warehouse",
+            "--path",
+            str(tmp_path),
+            "--org",
+            "Test Org",
+            "--languages",
+            "python",
             "--no-interactive",
             "--no-git",
         ],
@@ -77,6 +81,7 @@ def e2e_project(tmp_path, e2e_warehouse, monkeypatch):
 # Step 1 — warehouse init creates the expected structure
 # ---------------------------------------------------------------------------
 
+
 def test_e2e_warehouse_init_creates_structure(e2e_warehouse):
     """warehouse init produces contexts/, knowledge/, skills/, docs/, README.md."""
     assert (e2e_warehouse / "contexts").is_dir()
@@ -90,6 +95,7 @@ def test_e2e_warehouse_init_creates_structure(e2e_warehouse):
 # ---------------------------------------------------------------------------
 # Step 2 — abc list shows all three sections including Contexts
 # ---------------------------------------------------------------------------
+
 
 def test_e2e_list_shows_contexts(e2e_project):
     project_dir, warehouse, runner = e2e_project
@@ -107,6 +113,7 @@ def test_e2e_list_shows_contexts(e2e_project):
 # Step 3 — warehouse connect
 # ---------------------------------------------------------------------------
 
+
 def test_e2e_warehouse_connect(e2e_project):
     project_dir, warehouse, runner = e2e_project
 
@@ -123,6 +130,7 @@ def test_e2e_warehouse_connect(e2e_project):
 # ---------------------------------------------------------------------------
 # Step 4 — setup --manual produces clean beacon.yaml template
 # ---------------------------------------------------------------------------
+
 
 def test_e2e_setup_manual_template(e2e_project):
     project_dir, warehouse, runner = e2e_project
@@ -143,6 +151,7 @@ def test_e2e_setup_manual_template(e2e_project):
     raw = beacon_yaml.read_text()
     # No duplicate keys (Bug #1 regression)
     import re
+
     assert len(re.findall(r"^\s{2}skills:", raw, re.MULTILINE)) == 1
     # Context comments use current path format (Bug #1/#4 regression)
     assert "AGENTS.global.md" not in raw
@@ -152,6 +161,7 @@ def test_e2e_setup_manual_template(e2e_project):
 # ---------------------------------------------------------------------------
 # Step 5 — sync copies all declared artifacts
 # ---------------------------------------------------------------------------
+
 
 def test_e2e_sync_copies_artifacts(e2e_project):
     project_dir, warehouse, runner = e2e_project
@@ -227,6 +237,7 @@ def test_e2e_sync_glob_pattern(e2e_project):
 # Step 6 — status shows ✓ for synced contexts and skills
 # ---------------------------------------------------------------------------
 
+
 def test_e2e_status_shows_check_marks_for_synced(e2e_project):
     """status correctly shows ✓ for synced items (Bug #2 regression)."""
     project_dir, warehouse, runner = e2e_project
@@ -254,6 +265,7 @@ def test_e2e_status_shows_check_marks_for_synced(e2e_project):
 # ---------------------------------------------------------------------------
 # Step 7 — delta detects no changes, then detects a local modification
 # ---------------------------------------------------------------------------
+
 
 def test_e2e_delta_clean(e2e_project):
     project_dir, warehouse, runner = e2e_project
@@ -290,7 +302,14 @@ def test_e2e_delta_detects_modification(e2e_project):
     runner.invoke(main, ["sync"])
 
     # Locally modify a synced artifact
-    synced = project_dir / ".agentic-beacon" / "artifacts" / "knowledge" / "python" / "standards.md"
+    synced = (
+        project_dir
+        / ".agentic-beacon"
+        / "artifacts"
+        / "knowledge"
+        / "python"
+        / "standards.md"
+    )
     synced.write_text(synced.read_text() + "- Local addition\n")
 
     result = runner.invoke(main, ["delta"])
@@ -303,6 +322,7 @@ def test_e2e_delta_detects_modification(e2e_project):
 # ---------------------------------------------------------------------------
 # Step 8 — sync --preserve skips locally modified file
 # ---------------------------------------------------------------------------
+
 
 def test_e2e_sync_preserve(e2e_project):
     project_dir, warehouse, runner = e2e_project
@@ -318,7 +338,14 @@ def test_e2e_sync_preserve(e2e_project):
     )
     runner.invoke(main, ["sync"])
 
-    synced = project_dir / ".agentic-beacon" / "artifacts" / "knowledge" / "python" / "standards.md"
+    synced = (
+        project_dir
+        / ".agentic-beacon"
+        / "artifacts"
+        / "knowledge"
+        / "python"
+        / "standards.md"
+    )
     synced.write_text(synced.read_text() + "- Local addition\n")
     original_content = synced.read_text()
 
@@ -332,6 +359,7 @@ def test_e2e_sync_preserve(e2e_project):
 # ---------------------------------------------------------------------------
 # Step 9 — sync --prune removes artifacts dropped from beacon.yaml
 # ---------------------------------------------------------------------------
+
 
 def test_e2e_sync_prune(e2e_project):
     project_dir, warehouse, runner = e2e_project
@@ -361,15 +389,30 @@ def test_e2e_sync_prune(e2e_project):
 
     assert result.exit_code == 0
     assert "Pruned: 1" in result.output
-    dropped = project_dir / ".agentic-beacon" / "artifacts" / "knowledge" / "decisions" / "use-uv.md"
+    dropped = (
+        project_dir
+        / ".agentic-beacon"
+        / "artifacts"
+        / "knowledge"
+        / "decisions"
+        / "use-uv.md"
+    )
     assert not dropped.exists()
-    kept = project_dir / ".agentic-beacon" / "artifacts" / "knowledge" / "python" / "standards.md"
+    kept = (
+        project_dir
+        / ".agentic-beacon"
+        / "artifacts"
+        / "knowledge"
+        / "python"
+        / "standards.md"
+    )
     assert kept.exists()
 
 
 # ---------------------------------------------------------------------------
 # Step 10 — update pulls in an upstream warehouse change
 # ---------------------------------------------------------------------------
+
 
 def test_e2e_update_picks_up_upstream_change(e2e_project):
     project_dir, warehouse, runner = e2e_project
@@ -394,13 +437,21 @@ def test_e2e_update_picks_up_upstream_change(e2e_project):
     assert result.exit_code == 0
     assert "Updated: 1" in result.output
 
-    synced = project_dir / ".agentic-beacon" / "artifacts" / "knowledge" / "python" / "standards.md"
+    synced = (
+        project_dir
+        / ".agentic-beacon"
+        / "artifacts"
+        / "knowledge"
+        / "python"
+        / "standards.md"
+    )
     assert "No bare excepts" in synced.read_text()
 
 
 # ---------------------------------------------------------------------------
 # Step 11 — clean removes the artifacts directory
 # ---------------------------------------------------------------------------
+
 
 def test_e2e_clean(e2e_project):
     project_dir, warehouse, runner = e2e_project

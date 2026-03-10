@@ -2,7 +2,7 @@
 
 import subprocess
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 from loguru import logger
 
@@ -23,8 +23,8 @@ class WarehouseInitializer:
         self,
         *,
         org_name: str = "Your Organization",
-        languages: Optional[list[str]] = None,
-        domains: Optional[list[str]] = None,
+        languages: list[str] | None = None,
+        domains: list[str] | None = None,
         init_git: bool = True,
     ) -> dict[str, Any]:
         """
@@ -254,8 +254,8 @@ abc setup --warehouse ~/warehouse --all
 
 ### 2. Follow Structure
 
-**Contexts:** Brief summary + pointer to knowledge  
-**Knowledge:** Detailed explanation with examples  
+**Contexts:** Brief summary + pointer to knowledge
+**Knowledge:** Detailed explanation with examples
 **Skills:** Step-by-step procedures
 
 ### 3. Test Locally

@@ -8,10 +8,7 @@ Following TDD workflow for tasks 11.1-11.5:
 - Task 11.5: Append without destroying content
 """
 
-import pytest
-from pathlib import Path
-from beacon.core.gitignore import GitignoreManager, GITIGNORE_ENTRIES, SECTION_HEADER
-
+from beacon.core.gitignore import SECTION_HEADER, GitignoreManager
 
 # ========== Task 11.1 & 11.4: Create/update .gitignore with config.toml ==========
 
@@ -175,7 +172,9 @@ def test_proper_newline_separation(temp_dir):
 
     content = gitignore.read_text()
     # Should not have node_modules/ directly followed by # Agentic Beacon
-    assert "node_modules/\n\n" in content or "node_modules/\n# Agentic Beacon" in content
+    assert (
+        "node_modules/\n\n" in content or "node_modules/\n# Agentic Beacon" in content
+    )
 
 
 def test_comments_preserved(temp_dir):

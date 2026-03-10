@@ -180,10 +180,10 @@ After testing in homelab:
 
 ## Configuration Summary
 
-**Package Name:** `beacon`  
-**Version:** `0.1.0`  
-**Python Required:** `>=3.12`  
-**License:** MIT  
+**Package Name:** `beacon`
+**Version:** `0.1.0`
+**Python Required:** `>=3.12`
+**License:** MIT
 **Repository:** https://github.com/Shadowsong27/agentic-engineering-warehouse-template
 
 **Installation:**

@@ -46,7 +46,7 @@ When implementing tasks with TDD test cases, there's a temptation to mark tasks 
    - Leave audit trail in git commit message
 
    **Path C: Skip with justification**
-   - Use `@pytest.mark.skip(reason="...")` 
+   - Use `@pytest.mark.skip(reason="...")`
    - Document in tasks.md:
      ```markdown
      - [x] Task 1.X Description

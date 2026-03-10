@@ -93,10 +93,10 @@ my-project/
 artifacts:
   knowledge:
     - backend/api-design-rules.md     # The "How" - rules for APIs
-  
+
   skills:
     - generate-api-client             # The "Tool" - generate client code
-  
+
   contexts:
     - specs/core-auth-api.yaml        # The shared "What" - auth API spec
 ```
@@ -172,11 +172,11 @@ artifacts:
     - backend/api-security-rules.md      # How: Handle sensitive data
     - backend/error-handling-patterns.md # How: Return error responses
     - payments/pci-compliance-rules.md   # How: PCI-DSS requirements
-  
+
   skills:
     - generate-api-tests                  # Tool: Generate test suites
     - security-audit                      # Tool: Check for vulnerabilities
-  
+
   contexts:
     - specs/stripe-api-contract.yaml     # Shared: Stripe integration spec
 ```

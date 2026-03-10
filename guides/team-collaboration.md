@@ -104,11 +104,11 @@ artifacts:
     - languages/python/pytest/**/*.md
     - best-practices/api-design.md
     - infrastructure/docker-python.md
-  
+
   skills:
     - python/code-review
     - python/generate-unit-tests
-  
+
   contexts:
     - teams/backend/AGENTS.md
     - projects/api-services/standards.md
@@ -134,9 +134,9 @@ artifacts:
   knowledge:
     - languages/python/type-hints.md
     - best-practices/code-review.md
-  
+
   skills: []
-  
+
   contexts:
     - teams/backend/AGENTS.md
 ```
@@ -149,10 +149,10 @@ artifacts:
     - languages/python/pytest/**/*.md
     - best-practices/code-review.md
     - best-practices/tdd-workflow.md
-  
+
   skills:
     - python/generate-unit-tests
-  
+
   contexts:
     - teams/backend/AGENTS.md
 ```
@@ -283,7 +283,7 @@ knowledge:
   - languages/python/pydantic-v2.md
 ```
 
-**Testing:** 
+**Testing:**
 - [ ] Used in at least one project
 - [ ] Team review completed
 - [ ] Examples validated

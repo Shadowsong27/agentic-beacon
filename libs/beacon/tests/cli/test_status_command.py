@@ -3,10 +3,10 @@
 Regression tests for:
 - Bug #2: status showed ✗ for synced contexts and skills due to wrong path construction
 """
+
 import pytest
-from pathlib import Path
-from click.testing import CliRunner
 from beacon.cli import main
+from click.testing import CliRunner
 
 
 @pytest.fixture
@@ -86,7 +86,9 @@ def test_status_shows_check_for_synced_skill(connected_project):
     assert "✓" in result.output
 
 
-def test_status_shows_cross_for_unsynced_context(valid_warehouse, temp_dir, monkeypatch):
+def test_status_shows_cross_for_unsynced_context(
+    valid_warehouse, temp_dir, monkeypatch
+):
     """Status shows ✗ for a context declared in beacon.yaml but not yet synced."""
     runner = CliRunner()
 

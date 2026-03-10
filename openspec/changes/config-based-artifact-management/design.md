@@ -78,11 +78,11 @@ artifacts:
     - languages/python/**/*.md          # Supports glob patterns
     - infrastructure/docker-standards.md
     - company-guidelines/git-commit-style.md
-  
+
   skills:
     - code-review
     - generate-unit-tests
-  
+
   contexts:
     - backend-microservice
 ```
@@ -412,7 +412,7 @@ $ abc delta knowledge/languages/python/fastapi-rules.md
 
 **Pre-release:**
 1. Update all internal examples and documentation to use `abc warehouse init`
-2. Update `examples/sample-warehouse/` generation scripts  
+2. Update `examples/sample-warehouse/` generation scripts
 3. Implement "project-setup" skill for agent-assisted beacon.yaml population
 4. Test three setup workflows (agent-assisted, copy, manual) on multiple platforms
 5. Create comprehensive documentation on config-based artifact management

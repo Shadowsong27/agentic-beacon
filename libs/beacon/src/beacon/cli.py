@@ -2,17 +2,16 @@
 
 import sys
 from pathlib import Path
-from typing import List, Optional
 
 import click
 from loguru import logger
 from rich.console import Console
 from rich.table import Table
 
-from .core.settings import WarehouseSettings, BeaconSettings, validate_beacon_directory
-from .core.sync import SyncEngine
 from .core.delta import DeltaComparator, DeltaStatus
 from .core.gitignore import GitignoreManager
+from .core.settings import BeaconSettings, WarehouseSettings
+from .core.sync import SyncEngine
 from .distributor import WarehouseDistributor
 from .initializer import WarehouseInitializer
 from .warehouse import WarehouseValidator
@@ -20,7 +19,7 @@ from .warehouse import WarehouseValidator
 console = Console()
 
 
-def find_warehouse_root() -> Optional[Path]:
+def find_warehouse_root() -> Path | None:
     """
     Find warehouse root by looking for warehouse markers.
 
@@ -117,10 +116,10 @@ def warehouse() -> None:
 def init(
     *,
     name: str,
-    path: Optional[Path],
-    org: Optional[str],
-    languages: Optional[str],
-    domains: Optional[str],
+    path: Path | None,
+    org: str | None,
+    languages: str | None,
+    domains: str | None,
     no_git: bool,
     no_interactive: bool,
 ) -> None:
@@ -168,8 +167,12 @@ def init(
 
     # Set defaults
     org = org or "Your Organization"
-    languages_list = [lang.strip() for lang in (languages or "").split(",") if lang.strip()]
-    domains_list = [domain.strip() for domain in (domains or "").split(",") if domain.strip()]
+    languages_list = [
+        lang.strip() for lang in (languages or "").split(",") if lang.strip()
+    ]
+    domains_list = [
+        domain.strip() for domain in (domains or "").split(",") if domain.strip()
+    ]
 
     # Create initializer and init warehouse
     try:
@@ -182,7 +185,9 @@ def init(
         )
 
         # Display results
-        console.print("\n[bold green]✓ Warehouse initialized successfully![/bold green]\n")
+        console.print(
+            "\n[bold green]✓ Warehouse initialized successfully![/bold green]\n"
+        )
         console.print(f"  [blue]Location:[/blue] {result['warehouse_path']}")
         console.print(f"  [blue]Organization:[/blue] {org}")
 
@@ -192,7 +197,7 @@ def init(
         if domains_list:
             console.print(f"  [blue]Domains:[/blue] {', '.join(domains_list)}")
 
-        if result['git_initialized']:
+        if result["git_initialized"]:
             console.print("  [blue]Git:[/blue] Initialized with initial commit")
 
         # Next steps
@@ -217,7 +222,7 @@ def init(
     type=click.Path(path_type=Path),
     help="Path to local warehouse directory",
 )
-def connect(*, path: Optional[Path]) -> None:
+def connect(*, path: Path | None) -> None:
     """
     Connect project to a local warehouse.
 
@@ -262,7 +267,9 @@ def connect(*, path: Optional[Path]) -> None:
         console.print("\n[red bold]✗ Invalid warehouse structure[/red bold]\n")
         for error in validation_result.errors:
             console.print(f"  [red]✗[/red] {error}")
-        console.print("\n[dim]See examples/sample-warehouse for a valid warehouse structure[/dim]")
+        console.print(
+            "\n[dim]See examples/sample-warehouse for a valid warehouse structure[/dim]"
+        )
         sys.exit(1)
 
     console.print("[green]✓[/green] Warehouse structure validated")
@@ -273,7 +280,7 @@ def connect(*, path: Optional[Path]) -> None:
 
     # Save connection configuration
     try:
-        settings = WarehouseSettings.from_path(warehouse_path)
+        WarehouseSettings.from_path(warehouse_path)
         console.print("[green]✓[/green] Connection saved")
 
         # Update .gitignore
@@ -282,7 +289,7 @@ def connect(*, path: Optional[Path]) -> None:
             console.print("[green]✓[/green] Updated .gitignore")
 
         # Success message
-        console.print(f"\n[bold green]✓ Connected to warehouse[/bold green]")
+        console.print("\n[bold green]✓ Connected to warehouse[/bold green]")
         console.print(f"  [blue]Location:[/blue] {warehouse_path}")
 
         # Next steps
@@ -323,7 +330,9 @@ def setup(*, manual: bool, agent_assisted: bool) -> None:
     """
     # Validate mutually exclusive flags
     if manual and agent_assisted:
-        console.print("[red]Error:[/red] --manual and --agent-assisted are mutually exclusive")
+        console.print(
+            "[red]Error:[/red] --manual and --agent-assisted are mutually exclusive"
+        )
         sys.exit(1)
 
     # Check for .agentic-beacon directory
@@ -358,9 +367,15 @@ def setup(*, manual: bool, agent_assisted: bool) -> None:
     else:
         # Interactive mode
         console.print("\n[bold]Setup Project Configuration[/bold]")
-        console.print("[dim]Choose how to configure artifacts for this project:[/dim]\n")
-        console.print("  1. [cyan]Agent-assisted[/cyan] - Install project-setup skill for AI agent")
-        console.print("  2. [green]Manual[/green] - Create empty template to edit yourself")
+        console.print(
+            "[dim]Choose how to configure artifacts for this project:[/dim]\n"
+        )
+        console.print(
+            "  1. [cyan]Agent-assisted[/cyan] - Install project-setup skill for AI agent"
+        )
+        console.print(
+            "  2. [green]Manual[/green] - Create empty template to edit yourself"
+        )
         console.print("  3. [yellow]Skip[/yellow] - Configure later\n")
 
         choice = click.prompt(
@@ -442,7 +457,9 @@ def _install_project_setup_skill(beacon_dir: Path) -> None:
         warehouse_path = Path(settings.warehouse.local_path)
 
         if not warehouse_path.exists():
-            console.print("[yellow]Warning:[/yellow] Warehouse path not found, skipping catalog generation")
+            console.print(
+                "[yellow]Warning:[/yellow] Warehouse path not found, skipping catalog generation"
+            )
             return
 
         # Generate warehouse catalog
@@ -484,7 +501,9 @@ def _generate_warehouse_catalog(warehouse_path: Path) -> str:
 
         lines.append(f"## {section_name}")
         lines.append("")
-        lines.append(f"Paths are relative to warehouse root. Use in beacon.yaml under `artifacts.{section_dir}`.")
+        lines.append(
+            f"Paths are relative to warehouse root. Use in beacon.yaml under `artifacts.{section_dir}`."
+        )
         lines.append("")
 
         # Scan for files
@@ -507,25 +526,27 @@ def _generate_warehouse_catalog(warehouse_path: Path) -> str:
 
         lines.append("")
 
-    lines.extend([
-        "## Usage",
-        "",
-        "Add paths to your `.agentic-beacon/beacon.yaml` file:",
-        "",
-        "```yaml",
-        "artifacts:",
-        "  knowledge:",
-        "    - knowledge/languages/python/**/*.md  # Glob pattern",
-        "    - knowledge/infrastructure/docker-standards.md  # Specific file",
-        "  skills:",
-        "    - skills/code-review/SKILL.md",
-        "  contexts:",
-        "    - contexts/AGENTS.md",
-        "```",
-        "",
-        "Then run `abc sync` to download the artifacts.",
-        "",
-    ])
+    lines.extend(
+        [
+            "## Usage",
+            "",
+            "Add paths to your `.agentic-beacon/beacon.yaml` file:",
+            "",
+            "```yaml",
+            "artifacts:",
+            "  knowledge:",
+            "    - knowledge/languages/python/**/*.md  # Glob pattern",
+            "    - knowledge/infrastructure/docker-standards.md  # Specific file",
+            "  skills:",
+            "    - skills/code-review/SKILL.md",
+            "  contexts:",
+            "    - contexts/AGENTS.md",
+            "```",
+            "",
+            "Then run `abc sync` to download the artifacts.",
+            "",
+        ]
+    )
 
     return "\n".join(lines)
 
@@ -555,7 +576,9 @@ def _extract_description(file_path: Path) -> str:
 @main.command()
 @click.option("--preserve", is_flag=True, help="Skip files with local modifications")
 @click.option("--prune", is_flag=True, help="Remove artifacts no longer in beacon.yaml")
-@click.option("--verbose", "verbose_flag", is_flag=True, help="Show detailed sync output")
+@click.option(
+    "--verbose", "verbose_flag", is_flag=True, help="Show detailed sync output"
+)
 def sync(*, preserve: bool, prune: bool, verbose_flag: bool) -> None:
     """
     Sync artifacts from warehouse to project.
@@ -597,9 +620,13 @@ def sync(*, preserve: bool, prune: bool, verbose_flag: bool) -> None:
 
         # Validate warehouse still exists
         if not warehouse_path.exists():
-            console.print(f"[red]Error:[/red] Warehouse path no longer exists: {warehouse_path}")
+            console.print(
+                f"[red]Error:[/red] Warehouse path no longer exists: {warehouse_path}"
+            )
             console.print("The warehouse may have been moved or deleted.")
-            console.print("Run 'abc warehouse connect --path <warehouse>' to reconnect.")
+            console.print(
+                "Run 'abc warehouse connect --path <warehouse>' to reconnect."
+            )
             sys.exit(1)
 
         # Load beacon.yaml
@@ -607,13 +634,15 @@ def sync(*, preserve: bool, prune: bool, verbose_flag: bool) -> None:
 
         # Check if there are any artifacts to sync
         total_artifacts = (
-            len(beacon_settings.artifacts.knowledge) +
-            len(beacon_settings.artifacts.skills) +
-            len(beacon_settings.artifacts.contexts)
+            len(beacon_settings.artifacts.knowledge)
+            + len(beacon_settings.artifacts.skills)
+            + len(beacon_settings.artifacts.contexts)
         )
 
         if total_artifacts == 0:
-            console.print("[yellow]No artifacts configured in beacon.yaml. Nothing to sync.[/yellow]")
+            console.print(
+                "[yellow]No artifacts configured in beacon.yaml. Nothing to sync.[/yellow]"
+            )
             sys.exit(0)
 
         # Create artifacts directory
@@ -622,8 +651,7 @@ def sync(*, preserve: bool, prune: bool, verbose_flag: bool) -> None:
 
         # Initialize sync engine
         sync_engine = SyncEngine(
-            warehouse_path=warehouse_path,
-            artifacts_path=artifacts_dir
+            warehouse_path=warehouse_path, artifacts_path=artifacts_dir
         )
 
         # Collect all artifact paths (expanding globs)
@@ -638,12 +666,18 @@ def sync(*, preserve: bool, prune: bool, verbose_flag: bool) -> None:
                     try:
                         matches = sync_engine.expand_glob(pattern)
                         if not matches:
-                            console.print(f"  [yellow]Warning:[/yellow] No files matched pattern: {pattern}")
+                            console.print(
+                                f"  [yellow]Warning:[/yellow] No files matched pattern: {pattern}"
+                            )
                         elif verbose_flag:
-                            console.print(f"  Pattern '{pattern}' matched {len(matches)} files")
+                            console.print(
+                                f"  Pattern '{pattern}' matched {len(matches)} files"
+                            )
                         artifact_paths.extend(matches)
                     except Exception as e:
-                        console.print(f"  [red]Error:[/red] Invalid glob pattern '{pattern}': {e}")
+                        console.print(
+                            f"  [red]Error:[/red] Invalid glob pattern '{pattern}': {e}"
+                        )
                         sys.exit(1)
                 else:
                     artifact_paths.append(pattern)
@@ -665,14 +699,18 @@ def sync(*, preserve: bool, prune: bool, verbose_flag: bool) -> None:
         gitignore_mgr.ensure_entries()
 
         # Display summary
-        console.print(f"\n[bold green]✓ Sync complete[/bold green]")
+        console.print("\n[bold green]✓ Sync complete[/bold green]")
         console.print(f"  [blue]Copied:[/blue] {summary.copied} files")
         console.print(f"  [blue]Unchanged:[/blue] {summary.skipped} files")
         if summary.preserved > 0:
-            console.print(f"  [yellow]Preserved:[/yellow] {summary.preserved} locally modified files")
+            console.print(
+                f"  [yellow]Preserved:[/yellow] {summary.preserved} locally modified files"
+            )
             console.print("  [dim]Use 'abc delta' to review local changes.[/dim]")
         if summary.pruned > 0:
-            console.print(f"  [yellow]Pruned:[/yellow] {summary.pruned} artifacts no longer in beacon.yaml")
+            console.print(
+                f"  [yellow]Pruned:[/yellow] {summary.pruned} artifacts no longer in beacon.yaml"
+            )
         if summary.errors > 0:
             console.print(f"  [red]Errors:[/red] {summary.errors} files")
 
@@ -685,7 +723,7 @@ def sync(*, preserve: bool, prune: bool, verbose_flag: bool) -> None:
 @main.command()
 @click.argument("file", required=False, type=str)
 @click.option("--no-color", is_flag=True, help="Disable color output in diffs")
-def delta(*, file: Optional[str], no_color: bool) -> None:
+def delta(*, file: str | None, no_color: bool) -> None:
     """
     Compare local artifacts against warehouse.
 
@@ -723,8 +761,12 @@ def delta(*, file: Optional[str], no_color: bool) -> None:
         warehouse_path = Path(warehouse_settings.warehouse.local_path)
 
         if not warehouse_path.exists():
-            console.print(f"[red]Error:[/red] Warehouse path no longer exists: {warehouse_path}")
-            console.print("Run 'abc warehouse connect --path <warehouse>' to reconnect.")
+            console.print(
+                f"[red]Error:[/red] Warehouse path no longer exists: {warehouse_path}"
+            )
+            console.print(
+                "Run 'abc warehouse connect --path <warehouse>' to reconnect."
+            )
             sys.exit(1)
 
         artifacts_dir = beacon_dir / "artifacts"
@@ -748,12 +790,16 @@ def delta(*, file: Optional[str], no_color: bool) -> None:
         sys.exit(1)
 
 
-def _show_delta_summary(comparator: DeltaComparator, beacon_settings: BeaconSettings) -> None:
+def _show_delta_summary(
+    comparator: DeltaComparator, beacon_settings: BeaconSettings
+) -> None:
     """Show summary of all artifact differences."""
     summary = comparator.compare_from_config(beacon_settings)
 
     if not summary.has_differences:
-        console.print("[green]No differences found. Local artifacts match warehouse.[/green]")
+        console.print(
+            "[green]No differences found. Local artifacts match warehouse.[/green]"
+        )
         return
 
     # Show differences
@@ -768,7 +814,7 @@ def _show_delta_summary(comparator: DeltaComparator, beacon_settings: BeaconSett
             console.print(f"  [red][Missing][/red]  {result.path}")
 
     # Summary counts
-    console.print(f"\n[bold]Summary:[/bold]")
+    console.print("\n[bold]Summary:[/bold]")
     if summary.modified:
         console.print(f"  [yellow]Modified:[/yellow] {len(summary.modified)} files")
     if summary.added:
@@ -780,9 +826,13 @@ def _show_delta_summary(comparator: DeltaComparator, beacon_settings: BeaconSett
 
     # Tips
     if summary.missing:
-        console.print("\n[dim]Tip: Run 'abc sync' to download missing artifacts from warehouse.[/dim]")
+        console.print(
+            "\n[dim]Tip: Run 'abc sync' to download missing artifacts from warehouse.[/dim]"
+        )
     if summary.modified:
-        console.print("[dim]Tip: Run 'abc delta <file>' to see detailed diff for a modified file.[/dim]")
+        console.print(
+            "[dim]Tip: Run 'abc delta <file>' to see detailed diff for a modified file.[/dim]"
+        )
 
 
 def _show_detailed_diff(
@@ -795,7 +845,9 @@ def _show_detailed_diff(
     # Check if file is tracked in beacon.yaml
     all_paths = _collect_artifact_paths(comparator, beacon_settings)
     if file_path not in all_paths:
-        console.print(f"[red]Error:[/red] File '{file_path}' is not tracked in beacon.yaml.")
+        console.print(
+            f"[red]Error:[/red] File '{file_path}' is not tracked in beacon.yaml."
+        )
         console.print("Only artifacts declared in beacon.yaml can be compared.")
         sys.exit(1)
 
@@ -803,16 +855,22 @@ def _show_detailed_diff(
     result = comparator.compare_file(file_path)
 
     if result.status == DeltaStatus.IDENTICAL:
-        console.print(f"[green]No differences found.[/green] Local and warehouse versions of '{file_path}' are identical.")
+        console.print(
+            f"[green]No differences found.[/green] Local and warehouse versions of '{file_path}' are identical."
+        )
         return
 
     if result.status == DeltaStatus.MISSING:
-        console.print(f"[red][Missing][/red] '{file_path}' has not been synced locally.")
+        console.print(
+            f"[red][Missing][/red] '{file_path}' has not been synced locally."
+        )
         console.print("[dim]Run 'abc sync' to download it.[/dim]")
         return
 
     if result.status == DeltaStatus.ADDED:
-        console.print(f"[green][Added][/green] '{file_path}' exists locally but not in warehouse.")
+        console.print(
+            f"[green][Added][/green] '{file_path}' exists locally but not in warehouse."
+        )
         return
 
     # Show detailed diff
@@ -824,7 +882,9 @@ def _show_detailed_diff(
         console.print("[dim]No differences to display.[/dim]")
 
 
-def _collect_artifact_paths(comparator: DeltaComparator, beacon_settings: BeaconSettings) -> set:
+def _collect_artifact_paths(
+    comparator: DeltaComparator, beacon_settings: BeaconSettings
+) -> set:
     """Collect all artifact paths from beacon.yaml, expanding globs."""
     sync_engine = SyncEngine(
         warehouse_path=comparator.warehouse_path,
@@ -847,9 +907,11 @@ def _collect_artifact_paths(comparator: DeltaComparator, beacon_settings: Beacon
 
 @main.command(name="init", hidden=True)
 @click.argument("name", required=False)
-def deprecated_init(name: Optional[str] = None) -> None:
+def deprecated_init(name: str | None = None) -> None:
     """Deprecated: Use 'abc warehouse init' instead."""
-    console.print("[red]Error:[/red] 'abc init' has been moved to 'abc warehouse init'.")
+    console.print(
+        "[red]Error:[/red] 'abc init' has been moved to 'abc warehouse init'."
+    )
     console.print("\n[bold]New command:[/bold]")
     if name:
         console.print(f"  abc warehouse init {name}")
@@ -875,14 +937,14 @@ def update(*, project: Path | None) -> None:
         sys.exit(1)
 
     if not (beacon_dir / "beacon.yaml").exists():
-        console.print(f"[red]Error:[/red] No beacon.yaml found.")
+        console.print("[red]Error:[/red] No beacon.yaml found.")
         console.print("Run 'abc setup' to create artifact configuration.")
         sys.exit(1)
 
-    console.print(f"[blue]Updating artifacts from warehouse...[/blue]")
+    console.print("[blue]Updating artifacts from warehouse...[/blue]")
 
     try:
-        from .core.settings import WarehouseSettings, BeaconSettings
+        from .core.settings import BeaconSettings, WarehouseSettings
         from .core.sync import SyncEngine
 
         warehouse_settings = WarehouseSettings()
@@ -892,7 +954,9 @@ def update(*, project: Path | None) -> None:
         artifacts_dir = beacon_dir / "artifacts"
         artifacts_dir.mkdir(exist_ok=True)
 
-        sync_engine = SyncEngine(warehouse_path=warehouse_path, artifacts_path=artifacts_dir)
+        sync_engine = SyncEngine(
+            warehouse_path=warehouse_path, artifacts_path=artifacts_dir
+        )
 
         artifact_paths: list[str] = []
 
@@ -908,7 +972,9 @@ def update(*, project: Path | None) -> None:
         for skill_name in beacon_settings.artifacts.skills:
             skill_dir = warehouse_path / "skills" / skill_name
             if skill_dir.exists() and skill_dir.is_dir():
-                artifact_paths.extend(sync_engine.expand_glob(f"skills/{skill_name}/**/*"))
+                artifact_paths.extend(
+                    sync_engine.expand_glob(f"skills/{skill_name}/**/*")
+                )
             else:
                 artifact_paths.append(f"skills/{skill_name}")
 
@@ -929,9 +995,11 @@ def update(*, project: Path | None) -> None:
                 error_count += 1
                 console.print(f"  [red]✗[/red] {artifact_path}: {result.error_message}")
 
-        console.print(f"\n[bold green]✓ Update complete![/bold green]")
+        console.print("\n[bold green]✓ Update complete![/bold green]")
         console.print(f"  [blue]Updated:[/blue] {overwritten_count} files")
-        console.print(f"  [blue]New:[/blue] {copied_count - overwritten_count if copied_count > overwritten_count else 0} files")
+        console.print(
+            f"  [blue]New:[/blue] {copied_count - overwritten_count if copied_count > overwritten_count else 0} files"
+        )
         if error_count > 0:
             console.print(f"  [red]Errors:[/red] {error_count} files")
 
@@ -947,7 +1015,7 @@ def update(*, project: Path | None) -> None:
     type=click.Path(exists=True, file_okay=False, path_type=Path),
     help="Path to warehouse repository (auto-detected if not provided)",
 )
-def list_cmd(*, warehouse: Optional[Path]) -> None:
+def list_cmd(*, warehouse: Path | None) -> None:
     """List available warehouse content."""
     warehouse_root = warehouse or find_warehouse_root()
     if not warehouse_root:
@@ -995,7 +1063,7 @@ def list_cmd(*, warehouse: Optional[Path]) -> None:
     help="Path to project root (auto-detected if not provided)",
 )
 @click.confirmation_option(prompt="Are you sure you want to remove synced artifacts?")
-def clean(*, project: Optional[Path]) -> None:
+def clean(*, project: Path | None) -> None:
     """Remove synced artifacts from project (.agentic-beacon/artifacts/)."""
     import shutil
 
@@ -1015,7 +1083,7 @@ def clean(*, project: Optional[Path]) -> None:
     type=click.Path(exists=True, file_okay=False, path_type=Path),
     help="Path to project root (auto-detected if not provided)",
 )
-def status(*, project: Optional[Path]) -> None:
+def status(*, project: Path | None) -> None:
     """Show current warehouse installation status."""
     project_root = project or find_project_root()
     beacon_dir = project_root / ".agentic-beacon"
@@ -1032,19 +1100,23 @@ def status(*, project: Optional[Path]) -> None:
     if config_file.exists():
         try:
             from .core.settings import WarehouseSettings
+
             warehouse_settings = WarehouseSettings()
-            console.print(f"[blue]Warehouse:[/blue] {warehouse_settings.warehouse.local_path}")
+            console.print(
+                f"[blue]Warehouse:[/blue] {warehouse_settings.warehouse.local_path}"
+            )
         except Exception:
             console.print(f"[blue]Config:[/blue] {config_file}")
 
     if not artifacts_dir.exists():
-        console.print(f"\n[yellow]No artifacts synced yet.[/yellow]")
+        console.print("\n[yellow]No artifacts synced yet.[/yellow]")
         console.print("Run 'abc sync' to download artifacts from warehouse.")
         sys.exit(0)
 
     # Show beacon.yaml configuration
     if beacon_yaml.exists():
         from .core.settings import BeaconSettings
+
         beacon_settings = BeaconSettings.from_yaml(beacon_yaml)
 
         if beacon_settings.artifacts.contexts:
@@ -1077,6 +1149,7 @@ def status(*, project: Optional[Path]) -> None:
 
     # Count synced files
     import os
+
     file_count = sum(len(files) for _, _, files in os.walk(str(artifacts_dir)))
     console.print(f"[blue]Artifacts location:[/blue] {artifacts_dir}")
     console.print(f"[blue]Total synced files:[/blue] {file_count}")
@@ -1090,7 +1163,9 @@ def _interactive_select(
         return []
 
     console.print(f"\n[bold]{prompt}[/bold]")
-    console.print("[dim]Enter numbers separated by commas, or 'all' for all options[/dim]")
+    console.print(
+        "[dim]Enter numbers separated by commas, or 'all' for all options[/dim]"
+    )
 
     for i, option in enumerate(options, 1):
         console.print(f"  {i}. {option}")

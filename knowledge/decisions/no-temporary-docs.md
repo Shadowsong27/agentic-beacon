@@ -1,7 +1,7 @@
 # Decision: No Temporary Documentation in Repository
 
-**Date:** 2026-03-07  
-**Status:** Active  
+**Date:** 2026-03-07
+**Status:** Active
 **Context:** Agentic Beacon Framework
 
 ---

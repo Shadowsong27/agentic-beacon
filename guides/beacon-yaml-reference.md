@@ -19,10 +19,10 @@ artifacts:
   knowledge:
     - <pattern-or-path>
     - <pattern-or-path>
-  
+
   skills:
     - <pattern-or-path>
-  
+
   contexts:
     - <pattern-or-path>
 ```

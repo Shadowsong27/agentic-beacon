@@ -1,6 +1,6 @@
 # Fact: Release Workflow
 
-**Last Updated:** 2026-03-07  
+**Last Updated:** 2026-03-07
 **Context:** Agentic Beacon Framework
 
 ---

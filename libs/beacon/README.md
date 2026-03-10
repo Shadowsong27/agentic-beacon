@@ -306,7 +306,7 @@ agentic status
 
 # Output:
 # Installation: /Users/you/my-project/.opencode
-# 
+#
 # Installed Contexts
 # ┌─────────┐
 # │ Context │

@@ -321,10 +321,10 @@ src/
    ```bash
    # Start PostgreSQL and Redis
    docker-compose up -d postgres redis
-   
+
    # Run migrations
    alembic upgrade head
-   
+
    # Seed test data (optional)
    python scripts/seed_test_data.py
    ```
@@ -522,10 +522,10 @@ def test_get_customer_not_found():
     mock_repo = Mock()
     mock_repo.find_by_id.return_value = None
     service = CustomerService(repository=mock_repo)
-    
+
     # Act
     result = service.get_customer("nonexistent")
-    
+
     # Assert
     assert result.is_err()
     assert result.unwrap_err() == CustomerError.NOT_FOUND
@@ -543,10 +543,10 @@ def test_create_customer(db_session):
     # Arrange
     repo = CustomerRepository(session=db_session)
     customer = Customer(email="test@example.com", name="Test User")
-    
+
     # Act
     created = repo.create(customer)
-    
+
     # Assert
     assert created.id is not None
     found = repo.find_by_id(created.id)
@@ -572,19 +572,19 @@ class Settings(BaseSettings):
     # Database
     database_url: str
     database_pool_size: int = 10
-    
+
     # Redis
     redis_url: str
-    
+
     # External APIs
     salesforce_client_id: str
     salesforce_client_secret: str
     stripe_api_key: str
-    
+
     # Application
     environment: str = "development"
     log_level: str = "INFO"
-    
+
     class Config:
         env_file = ".env"
 
@@ -837,7 +837,7 @@ curl http://localhost:8000/health
 
 **Symptoms:**
 ```
-sqlalchemy.exc.OperationalError: (psycopg2.OperationalError) 
+sqlalchemy.exc.OperationalError: (psycopg2.OperationalError)
 could not connect to server: Connection refused
 ```
 
@@ -852,10 +852,10 @@ could not connect to server: Connection refused
    ```bash
    # Check current value
    echo $DATABASE_URL
-   
+
    # Should be (for local dev):
    # postgresql://cdp:cdp@localhost:5432/cdp
-   
+
    # Fix in .env file
    ```
 
@@ -869,7 +869,7 @@ could not connect to server: Connection refused
    ```bash
    # Find what's using port 5432
    lsof -i :5432
-   
+
    # Kill it or change docker-compose port
    ```
 
@@ -918,7 +918,7 @@ salesforce.exceptions.AuthenticationFailed: 401 Unauthorized
    # Check environment variables
    echo $SALESFORCE_CLIENT_ID
    echo $SALESFORCE_CLIENT_SECRET
-   
+
    # Should match Salesforce Connected App credentials
    ```
 
@@ -975,7 +975,7 @@ curl -X POST http://localhost:8000/webhooks/stripe \
    ```bash
    # Use ngrok to expose local server
    ngrok http 8000
-   
+
    # Configure webhook URL to ngrok URL
    # https://abcd1234.ngrok.io/webhooks/stripe
    ```
@@ -988,7 +988,7 @@ curl -X POST http://localhost:8000/webhooks/stripe \
    ```bash
    # Check webhook secret is correct
    echo $STRIPE_WEBHOOK_SECRET
-   
+
    # Should match Stripe dashboard → Developers → Webhooks → Signing secret
    ```
 
@@ -1217,7 +1217,7 @@ from src.models.event import Event
 
 class CustomerFactory:
     """Factory for creating test customers."""
-    
+
     @staticmethod
     def create(
         email: str = "test@example.com",
@@ -1225,7 +1225,7 @@ class CustomerFactory:
         **kwargs
     ) -> Customer:
         return Customer(email=email, name=name, **kwargs)
-    
+
     @staticmethod
     def create_batch(count: int) -> list[Customer]:
         return [
@@ -1238,7 +1238,7 @@ class CustomerFactory:
 
 class EventFactory:
     """Factory for creating test events."""
-    
+
     @staticmethod
     def create(
         customer_id: str,
@@ -1262,7 +1262,7 @@ def test_customer_segmentation(db_session):
     for customer in customers:
         db_session.add(customer)
     db_session.commit()
-    
+
     # Test segmentation logic
     segment = segment_service.create_segment(criteria={...})
     assert len(segment.customers) > 0
@@ -1283,14 +1283,14 @@ def test_get_customer_not_found():
     # Create mock repository
     mock_repo = Mock()
     mock_repo.find_by_id.return_value = None
-    
+
     # Inject mock into service
     service = CustomerService(repository=mock_repo)
-    
+
     # Test
     result = service.get_customer("nonexistent")
     assert result.is_err()
-    
+
     # Verify mock was called
     mock_repo.find_by_id.assert_called_once_with("nonexistent")
 ```
@@ -1311,15 +1311,15 @@ def test_salesforce_sync(mock_get, db_session):
         ]
     }
     mock_get.return_value.status_code = 200
-    
+
     # Test with mocked external API
     client = SalesforceClient()
     result = client.sync_customers()
-    
+
     # Verify results
     assert len(result) == 1
     assert result[0].email == "test@example.com"
-    
+
     # Verify API was called
     mock_get.assert_called_once()
 ```
@@ -1403,7 +1403,7 @@ pytest -n auto
    ```bash
    # Start test database
    docker-compose -f docker-compose.test.yml up -d
-   
+
    # Run integration tests
    pytest -m integration
    ```
@@ -1412,7 +1412,7 @@ pytest -n auto
    ```bash
    # Deploy to staging
    ./scripts/deploy-staging.sh
-   
+
    # Run E2E tests against staging
    pytest -m e2e --base-url=https://staging.api.yourcompany.com
    ```

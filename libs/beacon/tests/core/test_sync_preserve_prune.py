@@ -3,10 +3,7 @@
 Following TDD workflow for tasks 6.6-6.8.
 """
 
-import pytest
-from pathlib import Path
-from beacon.core.sync import SyncEngine, SyncSummary
-
+from beacon.core.sync import SyncEngine
 
 # ========== Task 6.6: --preserve flag ==========
 
@@ -27,7 +24,9 @@ def test_preserve_skips_modified_local(valid_warehouse, temp_dir):
     assert result.success
     assert result.action == "preserved"
     # Local content should be unchanged
-    assert (artifacts_dir / "knowledge" / "doc.md").read_text() == "local modified version"
+    assert (
+        artifacts_dir / "knowledge" / "doc.md"
+    ).read_text() == "local modified version"
 
 
 def test_preserve_copies_new_files(valid_warehouse, temp_dir):
@@ -132,7 +131,7 @@ def test_verbose_logs_operations(valid_warehouse, temp_dir):
 
     engine = SyncEngine(valid_warehouse, artifacts_dir)
     log_messages = []
-    summary = engine.sync_all(
+    engine.sync_all(
         artifact_paths=["knowledge/doc.md"],
         verbose=True,
         log_fn=lambda msg: log_messages.append(msg),
@@ -156,7 +155,10 @@ def test_verbose_false_minimal_logs(valid_warehouse, temp_dir):
     )
 
     # Only error messages in log
-    assert all("Error" in msg for msg in summary.log_messages) or len(summary.log_messages) == 0
+    assert (
+        all("Error" in msg for msg in summary.log_messages)
+        or len(summary.log_messages) == 0
+    )
 
 
 # ========== sync_all Summary ==========
@@ -179,7 +181,11 @@ def test_sync_all_counts(valid_warehouse, temp_dir):
 
     engine = SyncEngine(valid_warehouse, artifacts_dir)
     summary = engine.sync_all(
-        artifact_paths=["knowledge/new.md", "knowledge/same.md", "knowledge/missing.md"],
+        artifact_paths=[
+            "knowledge/new.md",
+            "knowledge/same.md",
+            "knowledge/missing.md",
+        ],
     )
 
     assert summary.copied == 1

@@ -10,7 +10,6 @@ from pathlib import Path
 
 from loguru import logger
 
-
 # Entries that should be in .gitignore
 GITIGNORE_ENTRIES = [
     ".agentic-beacon/config.toml",
@@ -87,11 +86,13 @@ class GitignoreManager:
 
         try:
             self.gitignore_path.write_text(new_content, encoding="utf-8")
-            logger.debug("Updated .gitignore with {} entries: {}", len(missing_entries), missing_entries)
+            logger.debug(
+                "Updated .gitignore with {} entries: {}",
+                len(missing_entries),
+                missing_entries,
+            )
         except PermissionError as e:
-            raise PermissionError(
-                f"Cannot write to {self.gitignore_path}: {e}"
-            ) from e
+            raise PermissionError(f"Cannot write to {self.gitignore_path}: {e}") from e
 
         return True
 

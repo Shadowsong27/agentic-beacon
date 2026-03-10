@@ -1,6 +1,6 @@
 # Lesson: Updating Warehouse Structure
 
-**Last Updated:** 2026-03-07  
+**Last Updated:** 2026-03-07
 **Context:** Agentic Beacon Framework
 
 ---
@@ -36,11 +36,11 @@ If `abc init` output changes, follow this systematic update process:
    ```bash
    # Test init
    abc init test-warehouse --org "Test" --languages python
-   
+
    # Test setup
    cd test-project
    abc setup --warehouse test-warehouse --all
-   
+
    # Verify structure is correct
    ls -la .opencode/
    ```

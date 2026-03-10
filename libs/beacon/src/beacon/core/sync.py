@@ -6,9 +6,10 @@ from warehouse to project's .agentic-beacon/artifacts/ directory.
 
 import hashlib
 import shutil
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Literal
+from typing import Literal
 
 from loguru import logger
 from pydantic import BaseModel
@@ -60,7 +61,11 @@ class SyncEngine:
         """Normalize paths to Path objects."""
         self.warehouse_path = Path(self.warehouse_path)
         self.artifacts_path = Path(self.artifacts_path)
-        logger.debug("SyncEngine initialized: warehouse={}, artifacts={}", self.warehouse_path, self.artifacts_path)
+        logger.debug(
+            "SyncEngine initialized: warehouse={}, artifacts={}",
+            self.warehouse_path,
+            self.artifacts_path,
+        )
 
     def copy_file(self, relative_path: str, preserve: bool = False) -> SyncResult:
         """Copy a single file from warehouse to artifacts directory.
@@ -82,7 +87,7 @@ class SyncEngine:
                 success=False,
                 action="error",
                 source_path=source_file,
-                error_message=f"Source file not found: {source_file}"
+                error_message=f"Source file not found: {source_file}",
             )
 
         # Check if destination exists and is unchanged (idempotent check)
@@ -93,7 +98,7 @@ class SyncEngine:
                     success=True,
                     action="skipped",
                     source_path=source_file,
-                    dest_path=dest_file
+                    dest_path=dest_file,
                 )
 
             # File differs - check preserve flag
@@ -103,7 +108,7 @@ class SyncEngine:
                     success=True,
                     action="preserved",
                     source_path=source_file,
-                    dest_path=dest_file
+                    dest_path=dest_file,
                 )
 
         # Create parent directories and copy file
@@ -122,7 +127,7 @@ class SyncEngine:
                 success=True,
                 action="copied",
                 source_path=source_file,
-                dest_path=dest_file
+                dest_path=dest_file,
             )
         except PermissionError as e:
             logger.debug("Permission denied copying {}: {}", relative_path, e)
@@ -130,7 +135,7 @@ class SyncEngine:
                 success=False,
                 action="error",
                 source_path=source_file,
-                error_message=f"Permission denied: {e}"
+                error_message=f"Permission denied: {e}",
             )
         except OSError as e:
             logger.debug("OS error copying {}: {}", relative_path, e)
@@ -138,7 +143,7 @@ class SyncEngine:
                 success=False,
                 action="error",
                 source_path=source_file,
-                error_message=str(e)
+                error_message=str(e),
             )
 
     def sync_all(
@@ -262,7 +267,7 @@ class SyncEngine:
             Hex digest of file hash
         """
         sha256 = hashlib.sha256()
-        with open(file_path, 'rb') as f:
+        with open(file_path, "rb") as f:
             while chunk := f.read(8192):
                 sha256.update(chunk)
         return sha256.hexdigest()

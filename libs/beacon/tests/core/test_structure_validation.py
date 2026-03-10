@@ -12,10 +12,10 @@ Test Coverage:
 - TC9: Mixed valid and invalid types → ValidationResult lists only invalid ones
 - TC10: Artifact paths with invalid characters → ValidationResult(valid=False) with path validation errors
 """
-import pytest
-from beacon.core.settings import BeaconSettings, BeaconYamlValidator
-from beacon.core.exceptions import ValidationError
 
+import pytest
+from beacon.core.exceptions import ValidationError
+from beacon.core.settings import BeaconSettings, BeaconYamlValidator
 
 # Create validator instance for tests
 validator = BeaconYamlValidator()
@@ -36,10 +36,10 @@ artifacts:
   contexts:
     - context1.md
 """)
-        
+
         settings = BeaconSettings.from_yaml(str(beacon_file))
         result = validator.validate_structure(settings)
-        
+
         assert result.valid is True
         assert len(result.errors) == 0
 
@@ -51,10 +51,10 @@ artifacts:
   knowledge:
     - file1.md
 """)
-        
+
         settings = BeaconSettings.from_yaml(str(beacon_file))
         result = validator.validate_structure(settings)
-        
+
         assert result.valid is True
 
     def test_tc3_unknown_artifact_type(self, temp_dir):
@@ -67,12 +67,15 @@ artifacts:
   plugins:
     - plugin1.md
 """)
-        
+
         # Should fail during parsing with ValidationError
         with pytest.raises(ValidationError) as exc_info:
             BeaconSettings.from_yaml(str(beacon_file))
-        
-        assert "plugins" in str(exc_info.value).lower() or "extra" in str(exc_info.value).lower()
+
+        assert (
+            "plugins" in str(exc_info.value).lower()
+            or "extra" in str(exc_info.value).lower()
+        )
 
     def test_tc4_non_string_item(self, temp_dir):
         """TC4: Artifact type with non-string item → ValidationResult(valid=False)"""
@@ -82,11 +85,14 @@ artifacts:
   knowledge:
     - 12345
 """)
-        
+
         with pytest.raises(ValidationError) as exc_info:
             BeaconSettings.from_yaml(str(beacon_file))
-        
-        assert "str" in str(exc_info.value).lower() or "string" in str(exc_info.value).lower()
+
+        assert (
+            "str" in str(exc_info.value).lower()
+            or "string" in str(exc_info.value).lower()
+        )
 
     def test_tc5_nested_list(self, temp_dir):
         """TC5: Artifact type with nested list → ValidationResult(valid=False)"""
@@ -94,10 +100,10 @@ artifacts:
         beacon_file.write_text("""
 artifacts:
   knowledge:
-    - 
+    -
       - nested.md
 """)
-        
+
         with pytest.raises(ValidationError):
             BeaconSettings.from_yaml(str(beacon_file))
 
@@ -109,20 +115,23 @@ artifacts:
   knowledge:
     key: value
 """)
-        
+
         with pytest.raises(ValidationError) as exc_info:
             BeaconSettings.from_yaml(str(beacon_file))
-        
-        assert "list" in str(exc_info.value).lower() or "array" in str(exc_info.value).lower()
+
+        assert (
+            "list" in str(exc_info.value).lower()
+            or "array" in str(exc_info.value).lower()
+        )
 
     def test_tc7_empty_lists(self, temp_dir, sample_beacon_yaml_empty):
         """TC7: Empty lists for all types → ValidationResult(valid=True)"""
         beacon_file = temp_dir / "beacon.yaml"
         beacon_file.write_text(sample_beacon_yaml_empty)
-        
+
         settings = BeaconSettings.from_yaml(str(beacon_file))
         result = validator.validate_structure(settings)
-        
+
         assert result.valid is True
 
     def test_tc8_multiple_unknown_types(self, temp_dir):
@@ -135,14 +144,16 @@ artifacts:
   extensions:
     - ext1.md
 """)
-        
+
         with pytest.raises(ValidationError) as exc_info:
             BeaconSettings.from_yaml(str(beacon_file))
-        
+
         # Should mention the unknown fields
         error_str = str(exc_info.value).lower()
         # At least one of the unknown types should be mentioned
-        assert "plugins" in error_str or "extensions" in error_str or "extra" in error_str
+        assert (
+            "plugins" in error_str or "extensions" in error_str or "extra" in error_str
+        )
 
     def test_tc9_mixed_valid_and_invalid(self, temp_dir):
         """TC9: Mixed valid and invalid types → ValidationResult lists only invalid ones"""
@@ -154,11 +165,14 @@ artifacts:
   invalid_type:
     - invalid.md
 """)
-        
+
         with pytest.raises(ValidationError) as exc_info:
             BeaconSettings.from_yaml(str(beacon_file))
-        
-        assert "invalid_type" in str(exc_info.value).lower() or "extra" in str(exc_info.value).lower()
+
+        assert (
+            "invalid_type" in str(exc_info.value).lower()
+            or "extra" in str(exc_info.value).lower()
+        )
 
     def test_tc10_invalid_path_characters(self, temp_dir):
         """TC10: Artifact paths with invalid characters → ValidationResult(valid=False)"""
@@ -171,7 +185,7 @@ artifacts:
     - valid/path/file.md
     - also-valid_file.md
 """)
-        
+
         # These should actually be valid paths
         settings = BeaconSettings.from_yaml(str(beacon_file))
         result = validator.validate_structure(settings)

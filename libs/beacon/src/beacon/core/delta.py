@@ -16,14 +16,16 @@ from pydantic import BaseModel
 
 class DeltaStatus(Enum):
     """Status of a compared artifact."""
+
     IDENTICAL = "identical"
     MODIFIED = "modified"
-    ADDED = "added"       # Exists locally but not in warehouse
-    MISSING = "missing"   # In beacon.yaml but not synced locally
+    ADDED = "added"  # Exists locally but not in warehouse
+    MISSING = "missing"  # In beacon.yaml but not synced locally
 
 
 class ComparisonResult(BaseModel):
     """Result of comparing a single artifact."""
+
     path: str
     status: DeltaStatus
     local_hash: str | None = None
@@ -35,6 +37,7 @@ class ComparisonResult(BaseModel):
 @dataclass
 class DeltaSummary:
     """Summary of all artifact comparisons."""
+
     results: list[ComparisonResult] = field(default_factory=list)
 
     @property
@@ -77,10 +80,16 @@ class DeltaComparator:
         """
         self.warehouse_path = Path(self.warehouse_path).resolve()
         self.artifacts_path = Path(self.artifacts_path).resolve()
-        logger.debug("DeltaComparator initialized: warehouse={}, artifacts={}", self.warehouse_path, self.artifacts_path)
+        logger.debug(
+            "DeltaComparator initialized: warehouse={}, artifacts={}",
+            self.warehouse_path,
+            self.artifacts_path,
+        )
 
         if not self.warehouse_path.is_dir():
-            raise ValueError(f"Warehouse path is not a valid directory: {self.warehouse_path}")
+            raise ValueError(
+                f"Warehouse path is not a valid directory: {self.warehouse_path}"
+            )
 
     def compute_hash(self, file_path: Path | str) -> str:
         """Compute SHA256 hash of a file.
@@ -107,7 +116,7 @@ class DeltaComparator:
         actual_path = file_path.resolve()
 
         sha256 = hashlib.sha256()
-        with open(actual_path, 'rb') as f:
+        with open(actual_path, "rb") as f:
             while chunk := f.read(8192):
                 sha256.update(chunk)
         return sha256.hexdigest()
@@ -126,7 +135,12 @@ class DeltaComparator:
 
         local_exists = local_file.is_file()
         warehouse_exists = warehouse_file.is_file()
-        logger.debug("Comparing {}: local_exists={}, warehouse_exists={}", relative_path, local_exists, warehouse_exists)
+        logger.debug(
+            "Comparing {}: local_exists={}, warehouse_exists={}",
+            relative_path,
+            local_exists,
+            warehouse_exists,
+        )
 
         if not local_exists and not warehouse_exists:
             return ComparisonResult(
@@ -278,7 +292,8 @@ class DeltaComparator:
             return f"Error reading files: {e}"
 
         diff = difflib.unified_diff(
-            lines1, lines2,
+            lines1,
+            lines2,
             fromfile=f"warehouse/{file1.name}",
             tofile=f"local/{file2.name}",
             lineterm="",

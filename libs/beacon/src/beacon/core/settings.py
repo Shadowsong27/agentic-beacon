@@ -9,7 +9,6 @@ Uses Pydantic Settings for type-safe configuration.
 
 import os
 from pathlib import Path
-from typing import ClassVar, Optional
 
 import yaml
 from pydantic import BaseModel, Field, field_validator
@@ -26,7 +25,6 @@ from .exceptions import (
     YAMLParseError,
 )
 
-
 # ========== Beacon.yaml Settings Models ==========
 
 
@@ -40,7 +38,7 @@ class ArtifactsConfig(BaseModel):
 
 class BeaconSettings(BaseModel):
     """Beacon.yaml settings structure.
-    
+
     This is not a BaseSettings subclass because beacon.yaml has a custom structure
     that requires manual parsing and validation.
     """
@@ -74,7 +72,7 @@ class BeaconSettings(BaseModel):
             raise IsADirectoryError(f"Expected file, found directory: {path}")
 
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 data = yaml.safe_load(f)
         except PermissionError as e:
             raise PermissionError(f"Cannot read file {path}: {e}") from e
@@ -133,10 +131,10 @@ class BeaconSettings(BaseModel):
             PermissionError: If cannot write to path
         """
         path = Path(path)
-        
+
         # Ensure parent directory exists
         path.parent.mkdir(parents=True, exist_ok=True)
-        
+
         # Create beacon config structure
         config_dict = {"artifacts": self.artifacts.model_dump()}
 
@@ -224,10 +222,10 @@ class WarehouseConfig(BaseModel):
 
 class WarehouseSettings(BaseSettings):
     """Warehouse connection settings from config.toml.
-    
+
     Uses Pydantic Settings with TOML file support for type-safe configuration.
     This class acts as both the settings container and the reader.
-    
+
     Note: The warehouse field is loaded automatically from config.toml via
     Pydantic Settings. When instantiating without arguments, the TOML file
     is read and the field is populated. Type checkers may show a warning
@@ -252,8 +250,8 @@ class WarehouseSettings(BaseSettings):
     ) -> tuple[PydanticBaseSettingsSource, ...]:
         """
         Customize settings sources to use TOML config file only.
-        
-        No environment variables for config.toml settings since this is 
+
+        No environment variables for config.toml settings since this is
         project-specific local configuration.
         """
         return (
@@ -266,30 +264,29 @@ class WarehouseSettings(BaseSettings):
     @classmethod
     def from_path(cls, local_path: str | Path) -> "WarehouseSettings":
         """Create warehouse settings from a warehouse path and write to default location.
-        
+
         Args:
             local_path: Path to warehouse
-            
+
         Returns:
             WarehouseSettings instance
         """
         # Validate and normalize path
         config = WarehouseConfig(local_path=str(local_path))
-        
+
         # Write to default location
         beacon_dir = Path(".agentic-beacon")
         beacon_dir.mkdir(parents=True, exist_ok=True)
-        
+
         toml_path = beacon_dir / "config.toml"
         toml_content = f"""[warehouse]
 local_path = "{config.local_path}"
 """
         with open(toml_path, "w", encoding="utf-8") as f:
             f.write(toml_content)
-        
+
         # Now load via BaseSettings
         return cls()  # type: ignore[call-arg]  # warehouse populated from TOML file
-
 
     def to_toml(self, path: str | Path) -> None:
         """Write warehouse settings to TOML file.
@@ -301,7 +298,7 @@ local_path = "{config.local_path}"
             PermissionError: If cannot write to path
         """
         path = Path(path)
-        
+
         # Ensure parent directory exists
         path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -337,7 +334,7 @@ def validate_beacon_directory(base_dir: str | Path = ".") -> Path:
         PermissionError: If directory exists but is unreadable
     """
     config_dir = Path(base_dir).resolve() / ".agentic-beacon"
-    
+
     if not config_dir.exists():
         raise DirectoryNotFoundError(
             f"Project not initialized. .agentic-beacon directory not found at {config_dir}. "
@@ -345,9 +342,7 @@ def validate_beacon_directory(base_dir: str | Path = ".") -> Path:
         )
 
     if not config_dir.is_dir():
-        raise NotADirectoryError(
-            f"Expected directory, found file: {config_dir}"
-        )
+        raise NotADirectoryError(f"Expected directory, found file: {config_dir}")
 
     # Check if directory is readable
     if not os.access(config_dir, os.R_OK):
