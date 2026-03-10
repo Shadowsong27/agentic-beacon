@@ -206,7 +206,43 @@ Artifacts are copied into `.agentic-beacon/artifacts/`, preserving their directo
 ✓ Sync complete
   Copied: 8 files
   Unchanged: 0 files
+
+Next Steps:
+  Contexts were synced but won't load automatically.
+  Register them in your agent's config file:
+  ...
 ```
+
+### Step 6: Wire contexts into your agent
+
+**This step is required.** Syncing copies files to disk, but your AI agent won't load them unless they're registered in its config file.
+
+For each context file synced (e.g. `contexts/global.md` → `.agentic-beacon/artifacts/contexts/global.md`), add a reference:
+
+**Claude Code (`CLAUDE.md`):**
+```markdown
+## Warehouse Contexts (via agentic-beacon)
+
+@.agentic-beacon/artifacts/contexts/global.md
+@.agentic-beacon/artifacts/contexts/python.md
+```
+
+**OpenCode (`opencode.json`):**
+```json
+{
+  "instructions": [
+    ".agentic-beacon/artifacts/contexts/global.md",
+    ".agentic-beacon/artifacts/contexts/python.md"
+  ]
+}
+```
+
+**Generic agents (`AGENTS.md`):**
+```markdown
+@.agentic-beacon/artifacts/contexts/global.md
+```
+
+Commit these changes so teammates get the same contexts automatically after running `abc sync`.
 
 ### What gets committed to git
 

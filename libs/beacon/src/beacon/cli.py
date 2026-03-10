@@ -714,6 +714,20 @@ def sync(*, preserve: bool, prune: bool, verbose_flag: bool) -> None:
         if summary.errors > 0:
             console.print(f"  [red]Errors:[/red] {summary.errors} files")
 
+        # Remind users to wire contexts into their agent config
+        if beacon_settings.artifacts.contexts and summary.copied > 0:
+            console.print("\n[bold]Next Steps:[/bold]")
+            console.print(
+                "  Contexts were synced but won't load automatically.\n"
+                "  Register them in your agent's config file:\n"
+                "\n"
+                "  [bold]CLAUDE.md / AGENTS.md[/bold] — add a line for each context:\n"
+                "    @.agentic-beacon/artifacts/contexts/<name>.md\n"
+                "\n"
+                '  [bold]opencode.json[/bold] — add to "instructions" array:\n'
+                '    ".agentic-beacon/artifacts/contexts/<name>.md"'
+            )
+
     except Exception as e:
         console.print(f"\n[red]Error:[/red] Sync failed: {e}")
         logger.exception("Sync failed")
