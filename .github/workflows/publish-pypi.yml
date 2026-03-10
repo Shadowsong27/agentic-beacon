@@ -19,12 +19,48 @@ env:
   UV_VERSION: "0.5.18"
 
 jobs:
+  # ------------------------------------------------------------------
+  # E2E tests — must pass before the package is published
+  # ------------------------------------------------------------------
+  e2e-tests:
+    name: E2E Integration Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: "libs/beacon/pyproject.toml"
+
+      - name: Install dependencies
+        run: uv sync --group dev
+
+      - name: Run e2e integration tests
+        run: uv run pytest -m integration -v
+
+      - name: Publish summary
+        if: always()
+        run: |
+          echo "## E2E Integration Tests" >> $GITHUB_STEP_SUMMARY
+          echo "**Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+
+  # ------------------------------------------------------------------
+  # Publish — only runs if e2e tests pass
+  # ------------------------------------------------------------------
   publish:
+    needs: e2e-tests
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write  # For trusted publishing
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4

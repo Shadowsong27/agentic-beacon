@@ -229,6 +229,63 @@ def test_template_comments_are_valid(valid_warehouse, temp_dir, monkeypatch):
     assert content is not None
 
 
+# ========== Regression: Bug #1 — duplicate skills key ==========
+
+
+def test_template_has_no_duplicate_artifact_keys(valid_warehouse, temp_dir, monkeypatch):
+    """Regression #1: beacon.yaml template must not have duplicate YAML keys.
+
+    A duplicate 'skills' key caused the first block to be silently discarded
+    by YAML parsers, and confused users reading the file.
+    """
+    runner = CliRunner()
+
+    project_dir = temp_dir / "project"
+    project_dir.mkdir()
+    monkeypatch.chdir(project_dir)
+
+    runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
+    runner.invoke(main, ["setup", "--manual"])
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    raw_text = beacon_yaml.read_text()
+
+    # Count how many times each top-level artifact key appears as a YAML key
+    import re
+    knowledge_count = len(re.findall(r"^\s{2}knowledge:", raw_text, re.MULTILINE))
+    skills_count = len(re.findall(r"^\s{2}skills:", raw_text, re.MULTILINE))
+    contexts_count = len(re.findall(r"^\s{2}contexts:", raw_text, re.MULTILINE))
+
+    assert knowledge_count == 1, f"Expected 1 'knowledge:' key, found {knowledge_count}"
+    assert skills_count == 1, f"Expected 1 'skills:' key, found {skills_count}"
+    assert contexts_count == 1, f"Expected 1 'contexts:' key, found {contexts_count}"
+
+
+def test_template_context_comments_use_full_path(valid_warehouse, temp_dir, monkeypatch):
+    """Regression #1/#4: Context examples in template use full path (contexts/AGENTS.md).
+
+    Old stale examples showed 'AGENTS.global.md' (old naming convention, no prefix),
+    which would lead users/agents to fill in beacon.yaml incorrectly.
+    """
+    runner = CliRunner()
+
+    project_dir = temp_dir / "project"
+    project_dir.mkdir()
+    monkeypatch.chdir(project_dir)
+
+    runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
+    runner.invoke(main, ["setup", "--manual"])
+
+    raw_text = (project_dir / ".agentic-beacon" / "beacon.yaml").read_text()
+
+    assert "AGENTS.global.md" not in raw_text, (
+        "Template must not reference old 'AGENTS.global.md' naming convention"
+    )
+    assert "contexts/AGENTS.md" in raw_text, (
+        "Template should show 'contexts/AGENTS.md' as a context example"
+    )
+
+
 def test_template_roundtrip_parses_correctly(valid_warehouse, temp_dir, monkeypatch):
     """TC10: Template can be loaded and re-saved without corruption."""
     runner = CliRunner()

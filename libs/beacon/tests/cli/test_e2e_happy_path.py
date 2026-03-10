@@ -1,0 +1,425 @@
+"""End-to-end integration test: full CLI happy path.
+
+Runs the complete user workflow in a single chained test:
+  warehouse init → list → warehouse connect → setup → sync →
+  status → delta → sync --preserve → sync --prune → update → clean
+
+This test is the automated equivalent of the manual e2e walkthrough done
+before each release. If this test passes, the core user journey works.
+
+All tests are marked `integration` so they can be run independently of the
+unit tests:
+
+    pytest -m integration          # only e2e tests
+    pytest -m "not integration"    # only unit tests (default CI run)
+    pytest                         # everything
+"""
+import pytest
+from pathlib import Path
+from click.testing import CliRunner
+import yaml
+
+from beacon.cli import main
+
+pytestmark = pytest.mark.integration
+
+
+@pytest.fixture
+def e2e_warehouse(tmp_path):
+    """
+    A warehouse initialised via 'abc warehouse init', then populated with
+    a small set of real artifacts so every sync/delta scenario has content.
+    """
+    runner = CliRunner()
+
+    # --- init ---
+    result = runner.invoke(
+        main,
+        [
+            "warehouse", "init", "my-warehouse",
+            "--path", str(tmp_path),
+            "--org", "Test Org",
+            "--languages", "python",
+            "--no-interactive",
+        ],
+    )
+    assert result.exit_code == 0, f"warehouse init failed:\n{result.output}"
+
+    wh = tmp_path / "my-warehouse"
+
+    # Add real artifacts so sync has something to copy
+    (wh / "knowledge" / "python").mkdir(parents=True, exist_ok=True)
+    (wh / "knowledge" / "python" / "standards.md").write_text(
+        "# Python Standards\n- Use type annotations\n"
+    )
+    (wh / "knowledge" / "decisions").mkdir(parents=True, exist_ok=True)
+    (wh / "knowledge" / "decisions" / "use-uv.md").write_text(
+        "# Decision: Use uv\nWe use uv for package management.\n"
+    )
+    skill_dir = wh / "skills" / "code-review"
+    skill_dir.mkdir(parents=True, exist_ok=True)
+    (skill_dir / "SKILL.md").write_text("# Skill: Code Review\n")
+
+    return wh
+
+
+@pytest.fixture
+def e2e_project(tmp_path, e2e_warehouse, monkeypatch):
+    """A project directory wired up to e2e_warehouse, ready for workflow steps."""
+    project_dir = tmp_path / "my-project"
+    project_dir.mkdir()
+    monkeypatch.chdir(project_dir)
+    return project_dir, e2e_warehouse, CliRunner()
+
+
+# ---------------------------------------------------------------------------
+# Step 1 — warehouse init creates the expected structure
+# ---------------------------------------------------------------------------
+
+def test_e2e_warehouse_init_creates_structure(e2e_warehouse):
+    """warehouse init produces contexts/, knowledge/, skills/, docs/, README.md."""
+    assert (e2e_warehouse / "contexts").is_dir()
+    assert (e2e_warehouse / "knowledge").is_dir()
+    assert (e2e_warehouse / "skills").is_dir()
+    assert (e2e_warehouse / "docs").is_dir()
+    assert (e2e_warehouse / "README.md").exists()
+    assert (e2e_warehouse / "contexts" / "AGENTS.md").exists()
+
+
+# ---------------------------------------------------------------------------
+# Step 2 — abc list shows all three sections including Contexts
+# ---------------------------------------------------------------------------
+
+def test_e2e_list_shows_contexts(e2e_project):
+    project_dir, warehouse, runner = e2e_project
+
+    result = runner.invoke(main, ["list", "--warehouse", str(warehouse)])
+
+    assert result.exit_code == 0
+    assert "Contexts" in result.output
+    assert "contexts/AGENTS.md" in result.output
+    assert "Knowledge" in result.output
+    assert "Skills" in result.output
+
+
+# ---------------------------------------------------------------------------
+# Step 3 — warehouse connect
+# ---------------------------------------------------------------------------
+
+def test_e2e_warehouse_connect(e2e_project):
+    project_dir, warehouse, runner = e2e_project
+
+    result = runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
+
+    assert result.exit_code == 0
+    assert "Connected" in result.output
+
+    config = project_dir / ".agentic-beacon" / "config.toml"
+    assert config.exists()
+    assert str(warehouse) in config.read_text()
+
+
+# ---------------------------------------------------------------------------
+# Step 4 — setup --manual produces clean beacon.yaml template
+# ---------------------------------------------------------------------------
+
+def test_e2e_setup_manual_template(e2e_project):
+    project_dir, warehouse, runner = e2e_project
+    runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
+
+    result = runner.invoke(main, ["setup", "--manual"])
+
+    assert result.exit_code == 0
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    assert beacon_yaml.exists()
+
+    # Must be valid YAML with exactly one of each artifact key
+    parsed = yaml.safe_load(beacon_yaml.read_text())
+    assert parsed["artifacts"]["knowledge"] == []
+    assert parsed["artifacts"]["skills"] == []
+    assert parsed["artifacts"]["contexts"] == []
+
+    raw = beacon_yaml.read_text()
+    # No duplicate keys (Bug #1 regression)
+    import re
+    assert len(re.findall(r"^\s{2}skills:", raw, re.MULTILINE)) == 1
+    # Context comments use current path format (Bug #1/#4 regression)
+    assert "AGENTS.global.md" not in raw
+    assert "contexts/AGENTS.md" in raw
+
+
+# ---------------------------------------------------------------------------
+# Step 5 — sync copies all declared artifacts
+# ---------------------------------------------------------------------------
+
+def test_e2e_sync_copies_artifacts(e2e_project):
+    project_dir, warehouse, runner = e2e_project
+    runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n"
+        "  knowledge:\n"
+        "    - knowledge/python/standards.md\n"
+        "    - knowledge/decisions/use-uv.md\n"
+        "  skills:\n"
+        "    - skills/code-review/SKILL.md\n"
+        "  contexts:\n"
+        "    - contexts/AGENTS.md\n"
+    )
+
+    result = runner.invoke(main, ["sync"])
+
+    assert result.exit_code == 0
+    assert "Copied: 4" in result.output
+
+    artifacts = project_dir / ".agentic-beacon" / "artifacts"
+    assert (artifacts / "knowledge" / "python" / "standards.md").exists()
+    assert (artifacts / "knowledge" / "decisions" / "use-uv.md").exists()
+    assert (artifacts / "skills" / "code-review" / "SKILL.md").exists()
+    assert (artifacts / "contexts" / "AGENTS.md").exists()
+
+
+def test_e2e_sync_is_idempotent(e2e_project):
+    project_dir, warehouse, runner = e2e_project
+    runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n"
+        "  knowledge:\n"
+        "    - knowledge/python/standards.md\n"
+        "  skills: []\n"
+        "  contexts: []\n"
+    )
+
+    runner.invoke(main, ["sync"])
+    result = runner.invoke(main, ["sync"])
+
+    assert result.exit_code == 0
+    assert "Unchanged: 1" in result.output
+    assert "Copied: 0" in result.output
+
+
+def test_e2e_sync_glob_pattern(e2e_project):
+    project_dir, warehouse, runner = e2e_project
+    runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n"
+        "  knowledge:\n"
+        "    - knowledge/**/*.md\n"
+        "  skills: []\n"
+        "  contexts: []\n"
+    )
+
+    result = runner.invoke(main, ["sync"])
+
+    assert result.exit_code == 0
+    artifacts = project_dir / ".agentic-beacon" / "artifacts"
+    assert (artifacts / "knowledge" / "python" / "standards.md").exists()
+    assert (artifacts / "knowledge" / "decisions" / "use-uv.md").exists()
+
+
+# ---------------------------------------------------------------------------
+# Step 6 — status shows ✓ for synced contexts and skills
+# ---------------------------------------------------------------------------
+
+def test_e2e_status_shows_check_marks_for_synced(e2e_project):
+    """status correctly shows ✓ for synced items (Bug #2 regression)."""
+    project_dir, warehouse, runner = e2e_project
+    runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n"
+        "  knowledge: []\n"
+        "  skills:\n"
+        "    - skills/code-review/SKILL.md\n"
+        "  contexts:\n"
+        "    - contexts/AGENTS.md\n"
+    )
+    runner.invoke(main, ["sync"])
+
+    result = runner.invoke(main, ["status"])
+
+    assert result.exit_code == 0
+    assert "✗ contexts/AGENTS.md" not in result.output
+    assert "✗ skills/code-review/SKILL.md" not in result.output
+    assert "✓" in result.output
+
+
+# ---------------------------------------------------------------------------
+# Step 7 — delta detects no changes, then detects a local modification
+# ---------------------------------------------------------------------------
+
+def test_e2e_delta_clean(e2e_project):
+    project_dir, warehouse, runner = e2e_project
+    runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n"
+        "  knowledge:\n"
+        "    - knowledge/python/standards.md\n"
+        "  skills: []\n"
+        "  contexts: []\n"
+    )
+    runner.invoke(main, ["sync"])
+
+    result = runner.invoke(main, ["delta"])
+
+    assert result.exit_code == 0
+    assert "No differences" in result.output
+
+
+def test_e2e_delta_detects_modification(e2e_project):
+    project_dir, warehouse, runner = e2e_project
+    runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n"
+        "  knowledge:\n"
+        "    - knowledge/python/standards.md\n"
+        "  skills: []\n"
+        "  contexts: []\n"
+    )
+    runner.invoke(main, ["sync"])
+
+    # Locally modify a synced artifact
+    synced = project_dir / ".agentic-beacon" / "artifacts" / "knowledge" / "python" / "standards.md"
+    synced.write_text(synced.read_text() + "- Local addition\n")
+
+    result = runner.invoke(main, ["delta"])
+
+    assert result.exit_code == 0
+    assert "Modified" in result.output
+    assert "knowledge/python/standards.md" in result.output
+
+
+# ---------------------------------------------------------------------------
+# Step 8 — sync --preserve skips locally modified file
+# ---------------------------------------------------------------------------
+
+def test_e2e_sync_preserve(e2e_project):
+    project_dir, warehouse, runner = e2e_project
+    runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n"
+        "  knowledge:\n"
+        "    - knowledge/python/standards.md\n"
+        "  skills: []\n"
+        "  contexts: []\n"
+    )
+    runner.invoke(main, ["sync"])
+
+    synced = project_dir / ".agentic-beacon" / "artifacts" / "knowledge" / "python" / "standards.md"
+    synced.write_text(synced.read_text() + "- Local addition\n")
+    original_content = synced.read_text()
+
+    result = runner.invoke(main, ["sync", "--preserve"])
+
+    assert result.exit_code == 0
+    assert "Preserved: 1" in result.output
+    assert synced.read_text() == original_content  # unchanged
+
+
+# ---------------------------------------------------------------------------
+# Step 9 — sync --prune removes artifacts dropped from beacon.yaml
+# ---------------------------------------------------------------------------
+
+def test_e2e_sync_prune(e2e_project):
+    project_dir, warehouse, runner = e2e_project
+    runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n"
+        "  knowledge:\n"
+        "    - knowledge/python/standards.md\n"
+        "    - knowledge/decisions/use-uv.md\n"
+        "  skills: []\n"
+        "  contexts: []\n"
+    )
+    runner.invoke(main, ["sync"])
+
+    # Drop one artifact
+    beacon_yaml.write_text(
+        "artifacts:\n"
+        "  knowledge:\n"
+        "    - knowledge/python/standards.md\n"
+        "  skills: []\n"
+        "  contexts: []\n"
+    )
+
+    result = runner.invoke(main, ["sync", "--prune"])
+
+    assert result.exit_code == 0
+    assert "Pruned: 1" in result.output
+    dropped = project_dir / ".agentic-beacon" / "artifacts" / "knowledge" / "decisions" / "use-uv.md"
+    assert not dropped.exists()
+    kept = project_dir / ".agentic-beacon" / "artifacts" / "knowledge" / "python" / "standards.md"
+    assert kept.exists()
+
+
+# ---------------------------------------------------------------------------
+# Step 10 — update pulls in an upstream warehouse change
+# ---------------------------------------------------------------------------
+
+def test_e2e_update_picks_up_upstream_change(e2e_project):
+    project_dir, warehouse, runner = e2e_project
+    runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n"
+        "  knowledge:\n"
+        "    - knowledge/python/standards.md\n"
+        "  skills: []\n"
+        "  contexts: []\n"
+    )
+    runner.invoke(main, ["sync"])
+
+    # Simulate an upstream change in the warehouse
+    standards = warehouse / "knowledge" / "python" / "standards.md"
+    standards.write_text(standards.read_text() + "- No bare excepts\n")
+
+    result = runner.invoke(main, ["update"])
+
+    assert result.exit_code == 0
+    assert "Updated: 1" in result.output
+
+    synced = project_dir / ".agentic-beacon" / "artifacts" / "knowledge" / "python" / "standards.md"
+    assert "No bare excepts" in synced.read_text()
+
+
+# ---------------------------------------------------------------------------
+# Step 11 — clean removes the artifacts directory
+# ---------------------------------------------------------------------------
+
+def test_e2e_clean(e2e_project):
+    project_dir, warehouse, runner = e2e_project
+    runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n"
+        "  knowledge:\n"
+        "    - knowledge/python/standards.md\n"
+        "  skills: []\n"
+        "  contexts: []\n"
+    )
+    runner.invoke(main, ["sync"])
+    assert (project_dir / ".agentic-beacon" / "artifacts").exists()
+
+    result = runner.invoke(main, ["clean", "--yes"])
+
+    assert result.exit_code == 0
+    assert not (project_dir / ".agentic-beacon" / "artifacts").exists()
+    # config.toml and beacon.yaml should remain
+    assert (project_dir / ".agentic-beacon" / "config.toml").exists()
+    assert (project_dir / ".agentic-beacon" / "beacon.yaml").exists()
