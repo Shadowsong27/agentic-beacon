@@ -714,10 +714,11 @@ def sync(*, preserve: bool, prune: bool, verbose_flag: bool) -> None:
         if summary.errors > 0:
             console.print(f"  [red]Errors:[/red] {summary.errors} files")
 
-        # Remind users to wire contexts into their agent config
+        # Post-sync reminders
+        next_steps = []
+
         if beacon_settings.artifacts.contexts and summary.copied > 0:
-            console.print("\n[bold]Next Steps:[/bold]")
-            console.print(
+            next_steps.append(
                 "  Contexts were synced but won't load automatically.\n"
                 "  Register them in your agent's config file:\n"
                 "\n"
@@ -727,6 +728,17 @@ def sync(*, preserve: bool, prune: bool, verbose_flag: bool) -> None:
                 '  [bold]opencode.json[/bold] — add to "instructions" array:\n'
                 '    ".agentic-beacon/artifacts/contexts/<name>.md"'
             )
+
+        if beacon_settings.artifacts.skills and summary.copied > 0:
+            next_steps.append(
+                "  Skills were synced but aren't registered as agent commands yet.\n"
+                "  Run: [bold]abc skill install --all[/bold]"
+            )
+
+        if next_steps:
+            console.print("\n[bold]Next Steps:[/bold]")
+            for step in next_steps:
+                console.print(step)
 
     except Exception as e:
         console.print(f"\n[red]Error:[/red] Sync failed: {e}")
@@ -914,6 +926,198 @@ def _collect_artifact_paths(
             else:
                 paths.add(pattern)
     return paths
+
+
+# ========== Skill Commands ==========
+
+
+@main.group()
+def skill() -> None:
+    """Skill management commands."""
+    pass
+
+
+@skill.command(name="install")
+@click.argument("skill_name", required=False, metavar="SKILL_NAME")
+@click.option("--all", "install_all", is_flag=True, help="Install all synced skills")
+@click.option(
+    "--agent",
+    type=click.Choice(["opencode", "claudecode"], case_sensitive=False),
+    help="Target agent tool (auto-detected if not specified)",
+)
+def skill_install(
+    *,
+    skill_name: str | None,
+    install_all: bool,
+    agent: str | None,
+) -> None:
+    """
+    Register synced skills as slash commands for your agent tool.
+
+    Reads skills from .agentic-beacon/artifacts/skills/ and creates the
+    agent-specific command stubs needed for the agent to discover them.
+
+    Example:
+        abc skill install record-knowledge
+        abc skill install record-knowledge --agent claudecode
+        abc skill install --all
+        abc skill install --all --agent opencode
+    """
+    if not skill_name and not install_all:
+        console.print("[red]Error:[/red] Provide a skill name or use --all.")
+        console.print("  abc skill install <name>")
+        console.print("  abc skill install --all")
+        sys.exit(1)
+
+    if skill_name and install_all:
+        console.print("[red]Error:[/red] SKILL_NAME and --all are mutually exclusive.")
+        sys.exit(1)
+
+    beacon_dir = Path.cwd() / ".agentic-beacon"
+    if not beacon_dir.exists():
+        console.print("[red]Error:[/red] No .agentic-beacon directory found.")
+        console.print("Run 'abc warehouse connect' to connect to a warehouse first.")
+        sys.exit(1)
+
+    artifacts_skills_dir = beacon_dir / "artifacts" / "skills"
+    if not artifacts_skills_dir.exists():
+        console.print("[red]Error:[/red] No synced skills found.")
+        console.print("Run 'abc sync' to sync skills from the warehouse first.")
+        sys.exit(1)
+
+    # Resolve target agents
+    project_root = Path.cwd()
+    agents = _detect_agents(project_root) if not agent else [agent.lower()]
+
+    if not agents:
+        console.print(
+            "[red]Error:[/red] Could not detect an agent tool in this project."
+        )
+        console.print(
+            "Use --agent opencode or --agent claudecode to specify one explicitly."
+        )
+        sys.exit(1)
+
+    # Resolve skills to install
+    if install_all:
+        skill_dirs = [d for d in artifacts_skills_dir.iterdir() if d.is_dir()]
+        if not skill_dirs:
+            console.print("[yellow]No synced skills found to install.[/yellow]")
+            sys.exit(0)
+        skills_to_install = [d.name for d in skill_dirs]
+    else:
+        skill_dir = artifacts_skills_dir / skill_name  # type: ignore[arg-type]
+        if not skill_dir.exists():
+            console.print(
+                f"[red]Error:[/red] Skill '{skill_name}' not found in synced artifacts."
+            )
+            console.print("Run 'abc sync' to sync it from the warehouse first.")
+            sys.exit(1)
+        skills_to_install = [skill_name]  # type: ignore[list-item]
+
+    # Install
+    installed: list[str] = []
+    errors: list[str] = []
+
+    for name in skills_to_install:
+        skill_md_path = artifacts_skills_dir / name / "SKILL.md"
+        if not skill_md_path.exists():
+            errors.append(f"{name}: SKILL.md not found in artifacts")
+            continue
+        content = skill_md_path.read_text(encoding="utf-8")
+        description = _extract_skill_description(content)
+
+        for target_agent in agents:
+            try:
+                if target_agent == "opencode":
+                    _install_skill_opencode(project_root, name, content, description)
+                else:
+                    _install_skill_claudecode(project_root, name, content)
+                installed.append(f"{name} ({target_agent})")
+            except Exception as e:
+                errors.append(f"{name} ({target_agent}): {e}")
+
+    # Report
+    if installed:
+        console.print("\n[bold green]✓ Skills installed[/bold green]")
+        for entry in installed:
+            console.print(f"  [green]✓[/green] {entry}")
+    if errors:
+        console.print("\n[bold red]Errors[/bold red]")
+        for entry in errors:
+            console.print(f"  [red]✗[/red] {entry}")
+
+    if installed and not errors:
+        _print_skill_next_steps(agents)
+
+    if errors:
+        sys.exit(1)
+
+
+def _detect_agents(project_root: Path) -> list[str]:
+    """Detect which agent tools are configured in the project."""
+    agents = []
+    if (project_root / "opencode.json").exists():
+        agents.append("opencode")
+    if (project_root / ".claude").exists():
+        agents.append("claudecode")
+    return agents
+
+
+def _extract_skill_description(content: str) -> str:
+    """Extract description value from SKILL.md YAML frontmatter."""
+    if not content.startswith("---"):
+        return ""
+    try:
+        end = content.index("---", 3)
+        for line in content[3:end].splitlines():
+            if line.startswith("description:"):
+                return line.split(":", 1)[1].strip()
+    except ValueError:
+        pass
+    return ""
+
+
+def _install_skill_opencode(
+    project_root: Path, skill_name: str, content: str, description: str
+) -> None:
+    """Install a skill for OpenCode: skill file + thin command stub."""
+    # Copy full skill to .opencode/skills/<name>/SKILL.md
+    skill_dest = project_root / ".opencode" / "skills" / skill_name
+    skill_dest.mkdir(parents=True, exist_ok=True)
+    (skill_dest / "SKILL.md").write_text(content)
+
+    # Create thin command stub in .opencode/command/<name>.md
+    command_dir = project_root / ".opencode" / "command"
+    command_dir.mkdir(parents=True, exist_ok=True)
+    stub = (
+        f"---\ndescription: {description}\n---\n\n"
+        f"Use the **skill** tool to load and execute the `{skill_name}` skill "
+        f"with any provided arguments.\n"
+    )
+    (command_dir / f"{skill_name}.md").write_text(stub)
+
+
+def _install_skill_claudecode(
+    project_root: Path, skill_name: str, content: str
+) -> None:
+    """Install a skill for Claude Code: copy SKILL.md to .claude/skills/<name>/."""
+    dest = project_root / ".claude" / "skills" / skill_name
+    dest.mkdir(parents=True, exist_ok=True)
+    (dest / "SKILL.md").write_text(content)
+
+
+def _print_skill_next_steps(agents: list[str]) -> None:
+    """Print agent-specific guidance after install."""
+    console.print("\n[bold]Next Steps:[/bold]")
+    if "opencode" in agents:
+        console.print(
+            "  [bold]OpenCode[/bold] — restart your session to pick up new commands"
+        )
+    if "claudecode" in agents:
+        console.print(
+            "  [bold]Claude Code[/bold] — skills are available as /skill-name in new sessions"
+        )
 
 
 # ========== Legacy Commands ==========
