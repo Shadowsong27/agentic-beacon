@@ -8,14 +8,14 @@ on:
     paths:
       - 'libs/beacon/**'
       - 'pyproject.toml'
-      - '.github/workflows/ci.yml'
+      - '.github/workflows/**'
   pull_request:
     branches:
       - main
     paths:
       - 'libs/beacon/**'
       - 'pyproject.toml'
-      - '.github/workflows/ci.yml'
+      - '.github/workflows/**'
 
 env:
   UV_VERSION: "0.5.18"
