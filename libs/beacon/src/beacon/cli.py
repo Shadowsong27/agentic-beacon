@@ -580,7 +580,10 @@ def _extract_description(file_path: Path) -> str:
 @click.option(
     "--verbose", "verbose_flag", is_flag=True, help="Show detailed sync output"
 )
-def sync(*, preserve: bool, prune: bool, verbose_flag: bool) -> None:
+@click.option(
+    "--dry-run", is_flag=True, help="Preview what would be synced without copying"
+)
+def sync(*, preserve: bool, prune: bool, verbose_flag: bool, dry_run: bool) -> None:
     """
     Sync artifacts from warehouse to project.
 
@@ -592,6 +595,7 @@ def sync(*, preserve: bool, prune: bool, verbose_flag: bool) -> None:
         abc sync --preserve   # Skip locally modified files
         abc sync --prune      # Remove artifacts not in beacon.yaml
         abc sync --verbose    # Show detailed output
+        abc sync --dry-run    # Preview without copying
     """
     # Check for .agentic-beacon directory
     beacon_dir = Path.cwd() / ".agentic-beacon"
@@ -655,6 +659,9 @@ def sync(*, preserve: bool, prune: bool, verbose_flag: bool) -> None:
             warehouse_path=warehouse_path, artifacts_path=artifacts_dir
         )
 
+        if dry_run:
+            console.print("[dim]Dry run — no files will be copied or pruned.[/dim]\n")
+
         # Collect all artifact paths (expanding globs)
         artifact_paths = []
         console.print("\n[blue]Syncing artifacts from warehouse...[/blue]\n")
@@ -692,28 +699,41 @@ def sync(*, preserve: bool, prune: bool, verbose_flag: bool) -> None:
             preserve=preserve,
             prune=prune,
             verbose=verbose_flag,
-            log_fn=log_fn if verbose_flag else None,
+            dry_run=dry_run,
+            log_fn=log_fn if (verbose_flag or dry_run) else None,
         )
 
-        # Update .gitignore
-        gitignore_mgr = GitignoreManager(Path.cwd())
-        gitignore_mgr.ensure_entries()
+        # Update .gitignore (only when actually syncing)
+        if not dry_run:
+            gitignore_mgr = GitignoreManager(Path.cwd())
+            gitignore_mgr.ensure_entries()
 
         # Display summary
-        console.print("\n[bold green]✓ Sync complete[/bold green]")
-        console.print(f"  [blue]Copied:[/blue] {summary.copied} files")
+        action_word = "Would copy" if dry_run else "Copied"
+        done_label = "Dry run complete" if dry_run else "Sync complete"
+        console.print(f"\n[bold green]✓ {done_label}[/bold green]")
+        console.print(f"  [blue]{action_word}:[/blue] {summary.copied} files")
         console.print(f"  [blue]Unchanged:[/blue] {summary.skipped} files")
         if summary.preserved > 0:
             console.print(
-                f"  [yellow]Preserved:[/yellow] {summary.preserved} locally modified files"
+                f"  [yellow]{'Would preserve' if dry_run else 'Preserved'}:[/yellow] "
+                f"{summary.preserved} locally modified files"
             )
-            console.print("  [dim]Use 'abc delta' to review local changes.[/dim]")
+            if not dry_run:
+                console.print("  [dim]Use 'abc delta' to review local changes.[/dim]")
         if summary.pruned > 0:
             console.print(
-                f"  [yellow]Pruned:[/yellow] {summary.pruned} artifacts no longer in beacon.yaml"
+                f"  [yellow]{'Would prune' if dry_run else 'Pruned'}:[/yellow] "
+                f"{summary.pruned} artifacts no longer in beacon.yaml"
             )
         if summary.errors > 0:
             console.print(f"  [red]Errors:[/red] {summary.errors} files")
+
+        if dry_run:
+            console.print(
+                "\n  [dim]Run without --dry-run to apply these changes.[/dim]"
+            )
+            return
 
         # Post-sync reminders
         next_steps = []
@@ -937,6 +957,53 @@ def _collect_artifact_paths(
     return paths
 
 
+def _infer_artifact_type(file_path: str) -> str | None:
+    """Infer artifact type from a relative path prefix.
+
+    Returns "knowledge", "skills", "contexts", or None if unrecognisable.
+    """
+    first_part = Path(file_path).parts[0] if Path(file_path).parts else ""
+    if first_part in ("knowledge", "skills", "contexts"):
+        return first_part
+    return None
+
+
+def _register_in_beacon_yaml(
+    beacon_settings: BeaconSettings, beacon_yaml: Path, file_path: str
+) -> bool:
+    """Add an explicit path to beacon.yaml under the appropriate artifact type.
+
+    Returns True if the file was added (i.e. it wasn't already listed explicitly).
+    """
+    artifact_type = _infer_artifact_type(file_path)
+    if artifact_type is None:
+        return False
+
+    current_list: list[str] = getattr(beacon_settings.artifacts, artifact_type)
+    if file_path not in current_list:
+        current_list.append(file_path)
+        beacon_settings.to_yaml(beacon_yaml)
+        return True
+    return False
+
+
+def _find_untracked_local_files(
+    comparator: DeltaComparator,
+    beacon_settings: BeaconSettings,
+    artifacts_dir: Path,
+) -> list[str]:
+    """Return local artifact files that are not covered by any beacon.yaml pattern."""
+    tracked = _collect_artifact_paths(comparator, beacon_settings)
+    untracked: list[str] = []
+    if artifacts_dir.exists():
+        for file_path in sorted(artifacts_dir.rglob("*")):
+            if file_path.is_file():
+                rel = str(file_path.relative_to(artifacts_dir))
+                if rel not in tracked:
+                    untracked.append(rel)
+    return untracked
+
+
 # ========== Contribute Command ==========
 
 
@@ -1026,6 +1093,7 @@ def contribute(*, file: str | None, contribute_all: bool, dry_run: bool) -> None
             _contribute_single(
                 comparator,
                 beacon_settings,
+                beacon_yaml,
                 warehouse_path,
                 artifacts_dir,
                 file,
@@ -1033,7 +1101,12 @@ def contribute(*, file: str | None, contribute_all: bool, dry_run: bool) -> None
             )
         else:
             _contribute_all(
-                comparator, beacon_settings, warehouse_path, artifacts_dir, dry_run
+                comparator,
+                beacon_settings,
+                beacon_yaml,
+                warehouse_path,
+                artifacts_dir,
+                dry_run,
             )
 
     except Exception as e:
@@ -1045,23 +1118,40 @@ def contribute(*, file: str | None, contribute_all: bool, dry_run: bool) -> None
 def _contribute_single(
     comparator: DeltaComparator,
     beacon_settings: BeaconSettings,
+    beacon_yaml: Path,
     warehouse_path: Path,
     artifacts_dir: Path,
     file_path: str,
     dry_run: bool,
 ) -> None:
-    """Contribute a single artifact back to the warehouse."""
-    all_paths = _collect_artifact_paths(comparator, beacon_settings)
-    if file_path not in all_paths:
-        console.print(f"[red]Error:[/red] '{file_path}' is not tracked in beacon.yaml.")
-        console.print("Only artifacts declared in beacon.yaml can be contributed.")
-        sys.exit(1)
+    """Contribute a single artifact back to the warehouse.
 
+    If the file is not yet tracked in beacon.yaml, it will be auto-registered
+    (inferred from path prefix: knowledge/, skills/, or contexts/).
+    """
     local_path = artifacts_dir / file_path
     if not local_path.exists():
-        console.print(f"[red]Error:[/red] '{file_path}' has not been synced locally.")
-        console.print("Run 'abc sync' to download it first.")
+        console.print(f"[red]Error:[/red] '{file_path}' does not exist locally.")
+        console.print(
+            "Create the file in .agentic-beacon/artifacts/ first, then contribute it."
+        )
         sys.exit(1)
+
+    all_paths = _collect_artifact_paths(comparator, beacon_settings)
+    is_untracked = file_path not in all_paths
+
+    if is_untracked:
+        artifact_type = _infer_artifact_type(file_path)
+        if artifact_type is None:
+            console.print(
+                f"[red]Error:[/red] '{file_path}' is not tracked in beacon.yaml "
+                f"and its type cannot be inferred."
+            )
+            console.print(
+                "Path must start with knowledge/, skills/, or contexts/ "
+                "to be auto-registered."
+            )
+            sys.exit(1)
 
     result = comparator.compare_file(file_path)
     if result.status == DeltaStatus.IDENTICAL:
@@ -1073,21 +1163,33 @@ def _contribute_single(
 
     _copy_to_warehouse(local_path, warehouse_path / file_path, file_path, dry_run)
     if not dry_run:
+        if is_untracked and _register_in_beacon_yaml(
+            beacon_settings, beacon_yaml, file_path
+        ):
+            console.print(f"  [dim]Registered in beacon.yaml:[/dim] {file_path}")
         _print_contribute_next_steps(warehouse_path, [file_path])
 
 
 def _contribute_all(
     comparator: DeltaComparator,
     beacon_settings: BeaconSettings,
+    beacon_yaml: Path,
     warehouse_path: Path,
     artifacts_dir: Path,
     dry_run: bool,
 ) -> None:
-    """Contribute all modified and added artifacts back to the warehouse."""
+    """Contribute all modified and added artifacts back to the warehouse.
+
+    Also discovers and contributes local files not yet tracked in beacon.yaml,
+    registering them automatically.
+    """
     summary = comparator.compare_from_config(beacon_settings)
     contributable = summary.modified + summary.added
 
-    if not contributable:
+    # Also find local files not covered by any beacon.yaml pattern
+    untracked = _find_untracked_local_files(comparator, beacon_settings, artifacts_dir)
+
+    if not contributable and not untracked:
         console.print(
             "[green]Nothing to contribute.[/green] "
             "All local artifacts match the warehouse."
@@ -1095,6 +1197,8 @@ def _contribute_all(
         return
 
     contributed = []
+
+    # Contribute tracked modified/added files
     for result in contributable:
         local_path = artifacts_dir / result.path
         if not local_path.exists():
@@ -1107,6 +1211,22 @@ def _contribute_all(
         )
         if not dry_run:
             contributed.append(result.path)
+
+    # Contribute untracked local files and register them in beacon.yaml
+    for rel_path in untracked:
+        artifact_type = _infer_artifact_type(rel_path)
+        if artifact_type is None:
+            console.print(
+                f"  [yellow]Skipping[/yellow] {rel_path} "
+                "(cannot infer artifact type — path must start with knowledge/, skills/, or contexts/)"
+            )
+            continue
+        local_path = artifacts_dir / rel_path
+        _copy_to_warehouse(local_path, warehouse_path / rel_path, rel_path, dry_run)
+        if not dry_run:
+            contributed.append(rel_path)
+            if _register_in_beacon_yaml(beacon_settings, beacon_yaml, rel_path):
+                console.print(f"  [dim]Registered in beacon.yaml:[/dim] {rel_path}")
 
     if not dry_run and contributed:
         _print_contribute_next_steps(warehouse_path, contributed)

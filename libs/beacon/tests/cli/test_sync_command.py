@@ -190,3 +190,94 @@ def test_sync_with_empty_beacon_yaml(valid_warehouse, temp_dir, monkeypatch):
         "no artifacts" in result.output.lower()
         or "nothing to sync" in result.output.lower()
     )
+
+
+# ========== --dry-run flag ==========
+
+
+def test_sync_dry_run_does_not_copy_files(valid_warehouse, temp_dir, monkeypatch):
+    """--dry-run previews what would be copied without actually copying."""
+    runner = CliRunner()
+
+    project_dir = temp_dir / "project"
+    project_dir.mkdir()
+    monkeypatch.chdir(project_dir)
+
+    (valid_warehouse / "knowledge" / "tip.md").write_text("# Tip")
+
+    runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
+    runner.invoke(main, ["setup", "--manual"])
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n  knowledge:\n    - knowledge/tip.md\n  skills: []\n  contexts: []\n"
+    )
+
+    result = runner.invoke(main, ["sync", "--dry-run"])
+
+    assert result.exit_code == 0
+    assert "dry" in result.output.lower() or "would" in result.output.lower()
+    # File must NOT have been copied
+    assert not (
+        project_dir / ".agentic-beacon" / "artifacts" / "knowledge" / "tip.md"
+    ).exists()
+
+
+def test_sync_dry_run_reports_would_copy_count(valid_warehouse, temp_dir, monkeypatch):
+    """--dry-run summary shows how many files would be copied."""
+    runner = CliRunner()
+
+    project_dir = temp_dir / "project"
+    project_dir.mkdir()
+    monkeypatch.chdir(project_dir)
+
+    knowledge = valid_warehouse / "knowledge"
+    (knowledge / "a.md").write_text("A")
+    (knowledge / "b.md").write_text("B")
+
+    runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
+    runner.invoke(main, ["setup", "--manual"])
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n  knowledge:\n    - knowledge/a.md\n    - knowledge/b.md\n"
+        "  skills: []\n  contexts: []\n"
+    )
+
+    result = runner.invoke(main, ["sync", "--dry-run"])
+
+    assert result.exit_code == 0
+    # Should report 2 files would be copied
+    assert "2" in result.output
+
+
+def test_sync_dry_run_with_prune_reports_would_prune(
+    valid_warehouse, temp_dir, monkeypatch
+):
+    """--dry-run --prune shows which files would be removed without removing them."""
+    runner = CliRunner()
+
+    project_dir = temp_dir / "project"
+    project_dir.mkdir()
+    monkeypatch.chdir(project_dir)
+
+    (valid_warehouse / "knowledge" / "keep.md").write_text("keep")
+
+    runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
+    runner.invoke(main, ["setup", "--manual"])
+
+    # Set up beacon.yaml tracking only "keep.md"
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n  knowledge:\n    - knowledge/keep.md\n  skills: []\n  contexts: []\n"
+    )
+
+    # Manually plant a stale file in artifacts
+    artifacts_dir = project_dir / ".agentic-beacon" / "artifacts" / "knowledge"
+    artifacts_dir.mkdir(parents=True)
+    (artifacts_dir / "stale.md").write_text("stale")
+
+    result = runner.invoke(main, ["sync", "--dry-run", "--prune"])
+
+    assert result.exit_code == 0
+    assert "would" in result.output.lower() or "prune" in result.output.lower()
+    # Stale file must still exist (dry run)
+    assert (artifacts_dir / "stale.md").exists()

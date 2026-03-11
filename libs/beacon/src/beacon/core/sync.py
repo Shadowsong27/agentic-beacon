@@ -146,12 +146,37 @@ class SyncEngine:
                 error_message=str(e),
             )
 
+    def _check_file_action(self, relative_path: str, preserve: bool = False) -> str:
+        """Determine what action would be taken for a file without copying.
+
+        Args:
+            relative_path: Relative path from warehouse root
+            preserve: Whether preserve flag is set
+
+        Returns:
+            One of "copied", "skipped", "preserved", or "error"
+        """
+        source_file = self.warehouse_path / relative_path
+        dest_file = self.artifacts_path / relative_path
+
+        if not source_file.exists():
+            return "error"
+
+        if dest_file.exists():
+            if self._files_identical(source_file, dest_file):
+                return "skipped"
+            if preserve:
+                return "preserved"
+
+        return "copied"
+
     def sync_all(
         self,
         artifact_paths: list[str],
         preserve: bool = False,
         prune: bool = False,
         verbose: bool = False,
+        dry_run: bool = False,
         log_fn: Callable[[str], None] | None = None,
     ) -> SyncSummary:
         """Sync all artifacts from a list of paths.
@@ -161,6 +186,7 @@ class SyncEngine:
             preserve: If True, skip locally modified files
             prune: If True, remove artifacts not in the list
             verbose: If True, log detailed operations
+            dry_run: If True, preview actions without copying or pruning
             log_fn: Optional callback for log messages
 
         Returns:
@@ -175,24 +201,33 @@ class SyncEngine:
 
         # Sync each artifact
         for path in artifact_paths:
-            if verbose:
+            if verbose or dry_run:
                 log(f"Syncing: {path}")
 
-            result = self.copy_file(path, preserve=preserve)
+            if dry_run:
+                action = self._check_file_action(path, preserve=preserve)
+                result = SyncResult(
+                    success=action != "error",
+                    action=action,  # type: ignore[arg-type]
+                )
+            else:
+                result = self.copy_file(path, preserve=preserve)
             summary.results.append(result)
 
             if result.action == "copied":
                 summary.copied += 1
-                if verbose:
-                    log(f"  Copied: {path}")
+                if verbose or dry_run:
+                    log(f"  {'Would copy' if dry_run else 'Copied'}: {path}")
             elif result.action == "skipped":
                 summary.skipped += 1
-                if verbose:
+                if verbose or dry_run:
                     log(f"  Unchanged: {path}")
             elif result.action == "preserved":
                 summary.preserved += 1
-                if verbose:
-                    log(f"  Preserved (local changes): {path}")
+                if verbose or dry_run:
+                    log(
+                        f"  {'Would preserve' if dry_run else 'Preserved'} (local changes): {path}"
+                    )
             elif result.action == "error":
                 summary.errors += 1
                 log(f"  Error: {path} - {result.error_message}")
@@ -204,18 +239,25 @@ class SyncEngine:
                 if file_path.is_file():
                     rel_path = str(file_path.relative_to(self.artifacts_path))
                     if rel_path not in synced_set:
-                        try:
-                            file_path.unlink()
+                        if dry_run:
                             summary.pruned += 1
-                            logger.debug("Pruned: {}", rel_path)
-                            if verbose:
-                                log(f"  Pruned: {rel_path}")
-                        except OSError as e:
-                            summary.errors += 1
-                            log(f"  Error pruning {rel_path}: {e}")
+                            logger.debug("Would prune: {}", rel_path)
+                            if verbose or dry_run:
+                                log(f"  Would prune: {rel_path}")
+                        else:
+                            try:
+                                file_path.unlink()
+                                summary.pruned += 1
+                                logger.debug("Pruned: {}", rel_path)
+                                if verbose:
+                                    log(f"  Pruned: {rel_path}")
+                            except OSError as e:
+                                summary.errors += 1
+                                log(f"  Error pruning {rel_path}: {e}")
 
-            # Clean up empty directories after pruning
-            self._cleanup_empty_dirs(self.artifacts_path)
+            if not dry_run:
+                # Clean up empty directories after pruning
+                self._cleanup_empty_dirs(self.artifacts_path)
 
         return summary
 
