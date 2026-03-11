@@ -337,3 +337,75 @@ def test_summary_filter_properties(valid_warehouse, temp_dir):
     assert len(summary.identical) == 1
     assert len(summary.modified) == 1
     assert len(summary.missing) == 1
+
+
+# ========== Bug fix: compare_from_config detects locally-added files ==========
+
+
+def test_compare_from_config_detects_added_file_via_glob(valid_warehouse, temp_dir):
+    """compare_from_config finds locally-added files that match a glob pattern
+    but don't exist in the warehouse (previously invisible to delta)."""
+    from beacon.core.settings import BeaconSettings
+
+    artifacts_dir = temp_dir / "artifacts"
+    (artifacts_dir / "knowledge").mkdir(parents=True)
+
+    # This file only exists locally — not in the warehouse
+    (artifacts_dir / "knowledge" / "new-lesson.md").write_text("# New Lesson\n")
+
+    beacon_yaml = temp_dir / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n  knowledge:\n    - knowledge/**/*.md\n  skills: []\n  contexts: []\n"
+    )
+    settings = BeaconSettings.from_yaml(beacon_yaml)
+
+    comparator = DeltaComparator(valid_warehouse, artifacts_dir)
+    summary = comparator.compare_from_config(settings)
+
+    added_paths = [r.path for r in summary.added]
+    assert "knowledge/new-lesson.md" in added_paths
+
+
+def test_compare_from_config_detects_added_skill_via_glob(valid_warehouse, temp_dir):
+    """compare_from_config detects a locally-added skill file via glob."""
+    from beacon.core.settings import BeaconSettings
+
+    artifacts_dir = temp_dir / "artifacts"
+    skill_dir = artifacts_dir / "skills" / "my-skill"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("# Skill: My Skill\n")
+
+    beacon_yaml = temp_dir / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n  knowledge: []\n  skills:\n    - skills/**/*\n  contexts: []\n"
+    )
+    settings = BeaconSettings.from_yaml(beacon_yaml)
+
+    comparator = DeltaComparator(valid_warehouse, artifacts_dir)
+    summary = comparator.compare_from_config(settings)
+
+    added_paths = [r.path for r in summary.added]
+    assert "skills/my-skill/SKILL.md" in added_paths
+
+
+def test_compare_from_config_no_duplicates_for_modified(valid_warehouse, temp_dir):
+    """A MODIFIED file present in both warehouse and local is not double-counted."""
+    from beacon.core.settings import BeaconSettings
+
+    artifacts_dir = temp_dir / "artifacts"
+    (artifacts_dir / "knowledge").mkdir(parents=True)
+    (valid_warehouse / "knowledge" / "shared.md").write_text("original")
+    (artifacts_dir / "knowledge" / "shared.md").write_text("modified")
+
+    beacon_yaml = temp_dir / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n  knowledge:\n    - knowledge/**/*.md\n  skills: []\n  contexts: []\n"
+    )
+    settings = BeaconSettings.from_yaml(beacon_yaml)
+
+    comparator = DeltaComparator(valid_warehouse, artifacts_dir)
+    summary = comparator.compare_from_config(settings)
+
+    assert len(summary.results) == 1
+    assert summary.results[0].path == "knowledge/shared.md"
+    assert len(summary.modified) == 1

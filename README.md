@@ -34,6 +34,7 @@ The `abc` CLI provides practical tools for:
 - **Connection** - Link projects to warehouses (`abc warehouse connect`)
 - **Distribution** - Sync artifacts to projects (`abc sync`)
 - **Skill Installation** - Register synced skills as slash commands in your agent (`abc skill install`)
+- **Contribution** - Copy agent-improved artifacts back to the warehouse (`abc contribute`)
 - **Discovery** - Find local changes that could benefit other teams (`abc delta`)
 - **Management** - Track installed content and maintain sync (`abc status`, `abc update`, `abc clean`)
 
@@ -194,6 +195,7 @@ agentic-beacon/
 ### Practical Guides (guides/)
 - **[Getting Started](./guides/getting-started.md)** - Full onboarding walkthrough
 - **[Warehouse Creation](./guides/warehouse-creation.md)** - Creating and structuring a warehouse
+- **[Contributing Back](./guides/warehouse-contribution-guide.md)** - Copy agent improvements back to the warehouse
 - **[beacon.yaml Reference](./guides/beacon-yaml-reference.md)** - Full configuration schema
 - **[Team Collaboration](./guides/team-collaboration.md)** - Multi-team workflows
 - **[Advanced Patterns](./guides/advanced-patterns.md)** - Glob patterns, sync flags, delta workflow
@@ -212,6 +214,7 @@ agentic-beacon/
 | `abc setup` | Create `beacon.yaml` (manual or agent-assisted) |
 | `abc sync` | Sync artifacts declared in `beacon.yaml` to the project |
 | `abc skill install` | Register synced skills as slash commands for your agent |
+| `abc contribute` | Copy local artifact changes back to the warehouse |
 | `abc status` | Show current connection and sync status |
 | `abc delta` | Compare synced artifacts with warehouse (find local changes) |
 | `abc update` | Re-sync and overwrite local artifacts from warehouse |
@@ -232,8 +235,8 @@ agentic-beacon/
 3. **Configure**: `abc setup --manual` then edit `beacon.yaml`
 4. **Sync**: `abc sync`
 5. **Install skills**: `abc skill install --all` to register skills as agent slash commands
-6. **Stay current**: `abc update` after warehouse changes
-7. **Contribute**: Use `abc delta` to find new patterns worth sharing back
+6. **Contribute**: `abc contribute --all` to share agent improvements back to the warehouse
+7. **Stay current**: `abc update` after warehouse changes
 
 ## 🔧 Technical Details
 

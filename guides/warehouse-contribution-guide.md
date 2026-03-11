@@ -1,294 +1,169 @@
-# Warehouse Contribution Guide
+# Contributing Back to the Warehouse
 
-Guide for contributing improvements to your organization's agentic engineering warehouse.
-
-**Last Updated:** 2026-03-10
+When your agent improves a synced artifact — a context file, a knowledge document, or a skill — those improvements live in `.agentic-beacon/artifacts/` and are gitignored by default. Use `abc contribute` to copy them back to the warehouse so the whole team benefits.
 
 ---
 
-## Overview
+## The Contribution Workflow
 
-This guide is for teams contributing to their **organization's warehouse instance** (created from this template), not the template repository itself.
+### 1. Your agent edits a synced artifact
 
----
+Agents often edit artifacts in place during a session. For example:
 
-## Contribution Workflow
-
-### 1. Test Locally in Your Project
-
-Before contributing back to the warehouse, validate changes in your project:
-
-**For Context Files:**
-```bash
-# Edit the synced context file in your project
-vim .agentic-beacon/artifacts/contexts/python.md
-
-# Test with your AI agent — verify it follows the updated instructions
-# When happy, copy your changes back to the warehouse clone
+```
+.agentic-beacon/artifacts/knowledge/python/type-hints.md   ← agent improved this
+.agentic-beacon/artifacts/skills/code-review/SKILL.md       ← agent refined this
 ```
 
-**For Knowledge Files:**
-```bash
-# Edit the synced knowledge file
-vim .agentic-beacon/artifacts/knowledge/languages/python/lessons/new-lesson.md
+These changes are local-only. To share them, you need to contribute them back.
 
-# Reference from context and test
-# Verify agents can access and use the knowledge
-```
-
-**For Skills:**
-```bash
-# Modify the synced skill in your project
-vim .agentic-beacon/artifacts/skills/my-skill/SKILL.md
-
-# Test the skill
-/my-skill "test input"
-
-# Verify it works as expected
-```
-
----
-
-### 2. Prepare Contribution
-
-Once validated locally, prepare for warehouse contribution:
+### 2. Review what changed
 
 ```bash
-# Clone warehouse repository (if you don't have it already)
-git clone git@github.com:your-org/your-warehouse.git
-cd your-warehouse
-
-# Create feature branch
-git checkout -b add-python-type-hints-lesson
-
-# Copy your modified files from the project
-cp /path/to/project/.agentic-beacon/artifacts/knowledge/languages/python/lessons/type-hints.md \
-   knowledge/languages/python/lessons/
-
-# Update context to reference new knowledge (if needed)
-vim contexts/python.md
+abc delta
 ```
 
----
+Shows a summary of all differences between your local artifacts and the warehouse:
 
-### 3. Create Pull Request
+```
+Delta Summary
+──────────────────────────────────────
+MODIFIED  knowledge/python/type-hints.md
+MODIFIED  skills/code-review/SKILL.md
+ADDED     knowledge/python/new-lesson.md
+```
 
-**What to include in PR:**
+Inspect a specific file:
 
-1. **Clear title** following conventional commits:
-   ```
-   feat(python): add lesson on type hints best practices
-   fix(context): correct typo in global.md
-   docs(knowledge): improve PostgreSQL decision rationale
-   ```
+```bash
+abc delta knowledge/python/type-hints.md
+```
 
-2. **Description with context:**
-   ```markdown
-   ## Summary
-   Adds lesson on Python type hints based on recurring agent mistakes.
+### 3. Contribute changes back
 
-   ## Testing
-   - Tested in project X for 2 weeks
-   - Agents now correctly avoid quoted type annotations
-   - No issues observed
+Copy a single file back to the warehouse:
 
-   ## Impacted Files
-   - contexts/python.md - added pointer
-   - knowledge/languages/python/lessons/type-hints.md - new lesson
+```bash
+abc contribute knowledge/python/type-hints.md
+```
 
-   ## Related Issues
-   Closes #42
-   ```
+Or contribute everything that changed at once:
 
-3. **Documentation updates:**
-   - Update skills/README.md if adding new skill
-   - Update knowledge/README.md if adding new knowledge structure
-   - Add examples if introducing new patterns
+```bash
+abc contribute --all
+```
 
----
+Preview before committing:
 
-### 4. Review Process
+```bash
+abc contribute --all --dry-run
+```
 
-**For warehouse maintainers:**
+`abc contribute` copies the files and prints the exact git commands to run next.
 
-1. **Validation checklist:**
-   - [ ] Follows warehouse structure conventions
-   - [ ] Knowledge files in correct scope (global/languages/domains)
-   - [ ] Context references are correct paths
-   - [ ] No project-specific details leaked into generic content
-   - [ ] Examples are generic and reusable
+### 4. Commit in the warehouse
 
-2. **Quality checks:**
-   - [ ] Markdown formatting correct
-   - [ ] No broken links
-   - [ ] Code examples tested
-   - [ ] Follows progressive disclosure (context brief, knowledge detailed)
+```bash
+cd ~/team-warehouse
+git diff                    # Review what changed
+git add .
+git commit -m "feat(python): improve type hints guide with 3.10+ syntax"
+git push
+```
 
-3. **Testing (if infrastructure exists):**
-   - [ ] CI validates markdown syntax
-   - [ ] CI checks for broken links
-   - [ ] Skills tested against test projects
+### 5. Teammates pick it up
 
----
-
-### 5. Merge and Distribution
-
-Once approved and merged:
-
-1. **Distribution:** Teams pull the warehouse and re-sync their projects:
-   ```bash
-   cd ~/team-warehouse && git pull
-   cd ~/my-project && abc sync
-   ```
-
-2. **Communication:**
-   - Announce significant changes to teams
-   - Update CHANGELOG.md in warehouse
-   - Tag releases for major updates
+```bash
+cd ~/team-warehouse && git pull
+cd my-project && abc sync
+```
 
 ---
 
 ## Contribution Types
 
-### Adding New Context
+### Improving an existing artifact
 
-**When:** Your team uses a new language/domain not in warehouse
+The most common case — your agent refines a context, knowledge file, or skill during a session.
 
-**Process:**
 ```bash
-# 1. Create context file
-vim contexts/go.md
-
-# 2. Create corresponding knowledge directory
-mkdir -p knowledge/languages/go/decisions
-mkdir -p knowledge/languages/go/lessons
-
-# 3. Add initial knowledge files
-vim knowledge/languages/go/decisions/error-handling.md
-
-# 4. Submit PR
-git add contexts/go.md knowledge/languages/go/
-git commit -m "feat(go): add Go language context and error handling guidance"
+abc delta                                      # See what changed
+abc contribute knowledge/python/type-hints.md  # Contribute the change
+cd ~/team-warehouse
+git commit -m "docs(python): clarify type hint guidance"
 ```
 
-### Adding Knowledge to Existing Context
+### Adding a new artifact
 
-**When:** You discover a pattern/lesson worth sharing
+If your agent created a new file that should live in the warehouse:
 
-**Process:**
+1. Add it to `beacon.yaml` so it's tracked
+2. Run `abc sync` (to register it)
+3. Run `abc contribute knowledge/python/new-lesson.md`
+
+Or just use `--all` which picks up both `MODIFIED` and `ADDED` files.
+
+### Adding a new skill
+
 ```bash
-# 1. Add knowledge file in correct scope
-vim knowledge/languages/python/lessons/async-await-mistakes.md
+# 1. Create the skill directory in the warehouse
+mkdir -p ~/team-warehouse/skills/generate-tests
+# Write SKILL.md into the warehouse directly — no need to contribute
 
-# 2. Reference from context
-vim contexts/python.md
-# Add: **See:** [Async/await mistakes](...)
+# 2. Declare it in beacon.yaml
+# artifacts:
+#   skills:
+#     - skills/generate-tests/**/*
 
-# 3. Submit PR
-git commit -m "feat(python): add async/await common mistakes lesson"
-```
-
-### Adding New Skill
-
-**When:** You create a reusable workflow
-
-**Process:**
-```bash
-# 1. Create skill directory
-mkdir -p skills/code-review
-
-# 2. Add SKILL.md and supporting files
-vim skills/code-review/SKILL.md
-vim skills/code-review/templates/review-checklist.md
-
-# 3. Update skills catalog
-vim skills/README.md
-# Add entry for code-review skill
-
-# 4. Submit PR
-git commit -m "feat(skills): add code review workflow skill"
-```
-
-### Updating Existing Content
-
-**When:** Improving or correcting existing content
-
-**Process:**
-```bash
-# 1. Make changes
-vim knowledge/global/decisions/conventional-commits.md
-
-# 2. Document what changed and why
-git commit -m "docs(global): clarify conventional commits scope usage
-
-- Add examples for optional scope
-- Clarify when scope is recommended vs required
-- Based on team feedback from 3 projects"
+# 3. Sync and install
+abc sync
+abc skill install generate-tests
 ```
 
 ---
 
-## Best Practices
+## Contribution Checklist
 
-### Keep It Generic
+Before committing to the warehouse:
 
-**❌ Bad (project-specific):**
+- [ ] Tested the artifact in a real project — agent actually used it correctly
+- [ ] Content is generic — no project-specific paths, credentials, or names
+- [ ] No broken references or links
+- [ ] Commit message describes **why** the change helps (not just what changed)
+
+---
+
+## Pull Request Workflow (for team warehouses)
+
+If your warehouse uses PRs rather than direct push:
+
+```bash
+cd ~/team-warehouse
+git checkout -b improve-python-type-hints
+git add .
+git commit -m "feat(python): add str | None guidance for Python 3.10+"
+git push -u origin improve-python-type-hints
+# Open PR on GitHub/GitLab
+```
+
+**PR description template:**
+
 ```markdown
-## Database Connection
+## Summary
+<What changed and why it helps agents>
 
-Our production database is at db.acme.com:5432
-Use the `ACME_DB_PASSWORD` environment variable
+## Testing
+- Tested in [project name] for [duration]
+- Agents now correctly [specific behavior]
+
+## Impacted Files
+- knowledge/python/type-hints.md
 ```
-
-**✅ Good (generic and reusable):**
-```markdown
-## Database Connection
-
-**Fact:** Database connection details should be in environment variables
-
-**Pattern:**
-- Host: `DATABASE_HOST`
-- Port: `DATABASE_PORT`
-- Password: `DATABASE_PASSWORD`
-```
-
-### Follow Pointer Conventions
-
-**Proactive pointers** (`Read:`):
-- Critical patterns affecting every file
-- Common failure modes
-- Standards requiring internalization
-
-**Reactive pointers** (`See:`):
-- Troubleshooting guides
-- Detailed explanations
-- Reference material for edge cases
-
-### Test Thoroughly
-
-Before contributing:
-- [ ] Tested in at least one real project
-- [ ] Verified agents use the content correctly
-- [ ] Checked for no unintended side effects
-- [ ] Validated all links and references work
-
-### Document Context
-
-In your PR description, explain:
-- **Why** this is needed (problem it solves)
-- **How** you tested it (which projects, duration)
-- **Impact** on existing content (breaking changes?)
 
 ---
 
-## Getting Help
+## Next Steps
 
-**For questions about contributing:**
-- Check warehouse documentation
-- Ask in team chat/channel
-- Contact warehouse maintainers
-
-**For issues with the template structure:**
-- See [Template Repository](https://github.com/Shadowsong27/agentic-engineering-warehouse-template)
-
----
+- **[Getting Started](./getting-started.md)** — Sync workflow overview
+- **[Advanced Patterns](./advanced-patterns.md)** — `abc delta` in depth
+- **[Creating Skills](./creating-skills.md)** — Writing effective SKILL.md files
