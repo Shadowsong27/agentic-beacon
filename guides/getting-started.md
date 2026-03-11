@@ -213,7 +213,31 @@ Next Steps:
   ...
 ```
 
-### Step 6: Wire contexts into your agent
+### Step 6: Install skills as agent slash commands
+
+If your `beacon.yaml` includes skills, register them so your agent can invoke them with `/skill-name`:
+
+```bash
+# Auto-detect your agent (Claude Code or OpenCode) and install all skills
+abc skill install --all
+
+# Or install a specific skill
+abc skill install code-review
+
+# Or specify the agent explicitly
+abc skill install --all --agent claudecode
+abc skill install --all --agent opencode
+```
+
+**What this does:**
+- **Claude Code** — copies `SKILL.md` to `.claude/skills/<name>/SKILL.md` (committed to git, shared with teammates)
+- **OpenCode** — copies the full skill to `.opencode/skills/<name>/SKILL.md` and creates a thin command stub at `.opencode/command/<name>.md`
+
+After installation, invoke the skill in your agent with `/code-review` (or whatever the skill name is).
+
+> **Auto-detection:** `abc skill install` detects your agent automatically if `opencode.json` or `.claude/` exists in your project. Use `--agent` to specify explicitly if both are present.
+
+### Step 7: Wire contexts into your agent
 
 **This step is required.** Syncing copies files to disk, but your AI agent won't load them unless they're registered in its config file.
 

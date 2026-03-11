@@ -242,7 +242,7 @@ git commit -m "feat: add generate-tests skill"
 git push
 ```
 
-### Step 4: Declare it in your project
+### Step 4: Declare it in your project and sync
 
 ```yaml
 # .agentic-beacon/beacon.yaml
@@ -255,26 +255,42 @@ artifacts:
 abc sync
 ```
 
+### Step 5: Install as an agent slash command
+
+Syncing copies the skill files to disk — but to invoke the skill with a slash command, you need to register it with your agent:
+
+```bash
+abc skill install generate-tests
+```
+
+Or install everything at once:
+
+```bash
+abc skill install --all
+```
+
+This makes the skill available as `/generate-tests` in Claude Code or OpenCode. The agent auto-detects which tool you're using based on the presence of `.claude/` or `opencode.json`.
+
 ---
 
 ## Invoking a Skill
 
-Skills are invoked by asking your AI agent to use them. The exact syntax depends on your agent:
+After running `abc skill install`, invoke the skill directly in your agent:
 
-**OpenCode / Claude:**
+**Claude Code:**
 ```
 /generate-tests src/services/user_service.py
 ```
 
-**Cursor / Copilot:**
+**OpenCode:**
 ```
-Use the generate-tests skill to write tests for UserService.create_user()
+/generate-tests src/services/user_service.py
 ```
 
-**General prompt:**
+**Generic agents (Cursor, Copilot, etc.) — reference the file directly:**
 ```
+Use the generate-tests skill to write tests for UserService.create_user()
 Follow the skill at .agentic-beacon/artifacts/skills/generate-tests/SKILL.md
-to write tests for this function: [paste function]
 ```
 
 ---
