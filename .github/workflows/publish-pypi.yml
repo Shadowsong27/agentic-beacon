@@ -59,8 +59,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write  # For trusted publishing
-      issues: write    # For creating release comments on PRs
+      id-token: write       # For trusted publishing
+      pull-requests: write  # For creating release comments on PRs
 
     steps:
       - name: Checkout code
