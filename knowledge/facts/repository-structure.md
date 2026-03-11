@@ -19,8 +19,9 @@ agentic-beacon/
 │   ├── lessons/
 │   └── facts/
 ├── libs/beacon/          # CLI source code
-├── skills/               # Project skills
-│   └── record-knowledge/ # Skill to capture new knowledge
+│   └── src/beacon/data/skills/  # Bundled skills (SSOT for distributed skills)
+│       └── record-knowledge/
+├── skills/               # Project skills README only (no bundled skills here)
 ├── AGENTS.md             # Project-level agent context
 ├── opencode.json         # Context loading configuration
 └── README.md             # Framework overview
@@ -42,9 +43,10 @@ agentic-beacon/
   - Organized by type (decisions, lessons, facts)
 
 **Skills:**
-- `skills/` - Project-specific skills for development workflows
+- `libs/beacon/src/beacon/data/skills/` - SSOT for all bundled/distributed skills
   - `record-knowledge/` - Skill to capture new knowledge systematically
-  - NOT example skills for warehouses (those are in examples/)
+  - These are bundled into the package and copied into every new warehouse by `abc init`
+- `skills/` - Contains only a README; no skill files live here
 
 **Configuration:**
 - `AGENTS.md` - Project context loaded on session start

@@ -145,7 +145,7 @@ Follow the global Python standards from the user's AGENTS.md context:
 
 **Example:** `/record-knowledge We use Release-Please for automated versioning based on conventional commits`
 
-**Read:** [Skill: Record Knowledge](skills/record-knowledge/SKILL.md)
+**Read:** [Skill: Record Knowledge](libs/beacon/src/beacon/data/skills/record-knowledge/SKILL.md)
 
 ---
 

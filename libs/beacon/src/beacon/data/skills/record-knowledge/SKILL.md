@@ -182,16 +182,21 @@ Examine the user's description and determine:
 
 ### Step 3: Ask User for Context File
 
+First, infer the most likely context file from the current session:
+- If an `AGENTS.md` (or similar context file) is already loaded in the session, default to that file
+- If multiple context files are loaded, prefer the most specific one (project-level over global)
+- If none can be inferred, fall back to `AGENTS.md`
+
 **Question to user:**
 ```
 Where should I add a pointer to this knowledge?
 
 Options:
-1. AGENTS.md (default - project context)
+1. [Inferred file from current context] (default)
 2. Skip - don't add to any context file yet
 3. Custom path - specify another file
 
-Default: AGENTS.md
+Default: [inferred file, or AGENTS.md if none detected]
 ```
 
 ### Step 4: Update Context File
