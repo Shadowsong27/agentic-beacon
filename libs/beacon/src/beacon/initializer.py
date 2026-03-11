@@ -6,6 +6,8 @@ from typing import Any
 
 from loguru import logger
 
+_DATA_DIR = Path(__file__).parent / "data"
+
 
 class WarehouseInitializer:
     """Handles creation of new warehouse repositories."""
@@ -53,6 +55,7 @@ class WarehouseInitializer:
         self._create_skills()
         self._create_docs(org_name)
         self._create_root_files(org_name)
+        self._install_bundled_skills()
 
         # Initialize git if requested
         if init_git:
@@ -382,6 +385,22 @@ venv/
 logs/
 """
         (self.warehouse_path / ".gitignore").write_text(gitignore)
+
+    def _install_bundled_skills(self) -> None:
+        """Add abc-provided skills to the warehouse skills directory."""
+        bundled_skills_dir = _DATA_DIR / "skills"
+        for skill_dir in bundled_skills_dir.iterdir():
+            if not skill_dir.is_dir():
+                continue
+            skill_md = skill_dir / "SKILL.md"
+            if not skill_md.exists():
+                continue
+            content = skill_md.read_text(encoding="utf-8")
+            dest_dir = self.warehouse_path / "skills" / skill_dir.name
+            dest_dir.mkdir(parents=True, exist_ok=True)
+            (dest_dir / "SKILL.md").write_text(content)
+
+        logger.info("Bundled skills installed")
 
     def _init_git(self) -> None:
         """Initialize git repository with initial commit."""
