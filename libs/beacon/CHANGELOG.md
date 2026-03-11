@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.3.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v1.2.0...agentic-beacon@v1.3.0) (2026-03-11)
+
+
+### Features
+
+* add abc contribute command and fix delta to detect locally-added files ([#16](https://github.com/Shadowsong27/agentic-beacon/issues/16)) ([d20aeae](https://github.com/Shadowsong27/agentic-beacon/commit/d20aeae55d7cb5311d7d77671e9f7d93ba7d0fce))
+* add abc skill install command to register skills as agent commands ([#14](https://github.com/Shadowsong27/agentic-beacon/issues/14)) ([fc8d97a](https://github.com/Shadowsong27/agentic-beacon/commit/fc8d97a017cd9c527be0dc6878fa143b505f7604))
+* bundle record-knowledge skill into every new warehouse on abc init ([#13](https://github.com/Shadowsong27/agentic-beacon/issues/13)) ([58e4aaf](https://github.com/Shadowsong27/agentic-beacon/commit/58e4aaf6e7a041e218f40d6d19bd2ecd30328771))
+
+
+### Documentation
+
+* document required context wiring step after abc sync ([bd26b4c](https://github.com/Shadowsong27/agentic-beacon/commit/bd26b4c9778c92604c07a7b283b31cbc590a3517)), closes [#9](https://github.com/Shadowsong27/agentic-beacon/issues/9)
+
 ## [1.2.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v1.1.0...agentic-beacon@v1.2.0) (2026-03-10)
 
 
