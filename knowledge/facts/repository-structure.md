@@ -45,6 +45,7 @@ agentic-beacon/
 - `skills/` - Project-specific skills for development workflows
   - `record-knowledge/` - Skill to capture new knowledge systematically
   - NOT example skills for warehouses (those are in examples/)
+  - Each skill is wired up in `.claude/skills/` (Claude Code) and `.opencode/command/` (OpenCode)
 
 **Configuration:**
 - `AGENTS.md` - Project context loaded on session start
