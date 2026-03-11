@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v1.3.0...agentic-beacon@v1.4.0) (2026-03-11)
+
+
+### Features
+
+* **contribute:** auto-register untracked artifacts in beacon.yaml after contribution ([d4ec6e9](https://github.com/Shadowsong27/agentic-beacon/commit/d4ec6e946076feec1ee2a325c507d453aee359c9))
+
 ## [1.3.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v1.2.0...agentic-beacon@v1.3.0) (2026-03-11)
 
 
