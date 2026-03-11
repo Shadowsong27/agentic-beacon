@@ -214,6 +214,9 @@ class DeltaComparator:
     def compare_from_config(self, beacon_settings) -> DeltaSummary:
         """Compare only artifacts listed in beacon.yaml.
 
+        Detects MODIFIED, IDENTICAL, and MISSING files (those in the warehouse)
+        as well as ADDED files (those that exist locally but not in the warehouse).
+
         Args:
             beacon_settings: Parsed BeaconSettings object
 
@@ -223,7 +226,8 @@ class DeltaComparator:
         from .sync import SyncEngine
 
         # Collect all artifact paths, expanding globs
-        artifact_paths = []
+        seen: set[str] = set()
+        artifact_paths: list[str] = []
         sync_engine = SyncEngine(
             warehouse_path=self.warehouse_path,
             artifacts_path=self.artifacts_path,
@@ -233,10 +237,25 @@ class DeltaComparator:
             patterns = getattr(beacon_settings.artifacts, artifact_type)
             for pattern in patterns:
                 if "*" in pattern or "?" in pattern or "[" in pattern:
-                    matches = sync_engine.expand_glob(pattern)
-                    artifact_paths.extend(matches)
+                    # Glob the warehouse — finds MODIFIED/IDENTICAL/MISSING candidates
+                    for rel_path in sync_engine.expand_glob(pattern):
+                        if rel_path not in seen:
+                            seen.add(rel_path)
+                            artifact_paths.append(rel_path)
+
+                    # Also glob the local artifacts dir — catches ADDED files that
+                    # only exist locally and would be invisible to a warehouse-only glob
+                    if self.artifacts_path.exists():
+                        for match in self.artifacts_path.glob(pattern):
+                            if match.is_file():
+                                rel_path = str(match.relative_to(self.artifacts_path))
+                                if rel_path not in seen:
+                                    seen.add(rel_path)
+                                    artifact_paths.append(rel_path)
                 else:
-                    artifact_paths.append(pattern)
+                    if pattern not in seen:
+                        seen.add(pattern)
+                        artifact_paths.append(pattern)
 
         return self.compare_all(artifact_paths)
 

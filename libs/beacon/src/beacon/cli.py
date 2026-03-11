@@ -1,5 +1,6 @@
 """CLI interface for Beacon - Distribute knowledge contexts for AI development."""
 
+import shutil
 import sys
 from pathlib import Path
 
@@ -911,21 +912,234 @@ def _show_detailed_diff(
 def _collect_artifact_paths(
     comparator: DeltaComparator, beacon_settings: BeaconSettings
 ) -> set:
-    """Collect all artifact paths from beacon.yaml, expanding globs."""
+    """Collect all artifact paths from beacon.yaml, expanding globs.
+
+    Globs both the warehouse and local artifacts directory so that locally-added
+    files (not yet in the warehouse) are included.
+    """
     sync_engine = SyncEngine(
         warehouse_path=comparator.warehouse_path,
         artifacts_path=comparator.artifacts_path,
     )
-    paths = set()
+    paths: set[str] = set()
     for artifact_type in ["knowledge", "skills", "contexts"]:
         patterns = getattr(beacon_settings.artifacts, artifact_type)
         for pattern in patterns:
             if "*" in pattern or "?" in pattern or "[" in pattern:
-                matches = sync_engine.expand_glob(pattern)
-                paths.update(matches)
+                paths.update(sync_engine.expand_glob(pattern))
+                # Also glob local artifacts to catch ADDED files
+                if comparator.artifacts_path.exists():
+                    for match in comparator.artifacts_path.glob(pattern):
+                        if match.is_file():
+                            paths.add(str(match.relative_to(comparator.artifacts_path)))
             else:
                 paths.add(pattern)
     return paths
+
+
+# ========== Contribute Command ==========
+
+
+@main.command()
+@click.argument("file", required=False, type=str)
+@click.option(
+    "--all",
+    "contribute_all",
+    is_flag=True,
+    help="Contribute all modified and added artifacts",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Preview what would be contributed without copying",
+)
+def contribute(*, file: str | None, contribute_all: bool, dry_run: bool) -> None:
+    """Copy local artifact changes back to the warehouse for sharing.
+
+    After editing synced artifacts and verifying they work with your agent,
+    use this command to copy them back to the warehouse so the whole team
+    benefits from the improvements.
+
+    Examples:
+
+        abc contribute knowledge/python/type-hints.md   # Single file
+
+        abc contribute --all                            # All modified/added
+
+        abc contribute --all --dry-run                  # Preview only
+    """
+    if not file and not contribute_all:
+        console.print(
+            "[red]Error:[/red] Specify a file or use --all to contribute all changes."
+        )
+        console.print("\nExamples:")
+        console.print("  abc contribute knowledge/python/type-hints.md")
+        console.print("  abc contribute --all")
+        sys.exit(1)
+
+    if file and contribute_all:
+        console.print("[red]Error:[/red] Cannot use both a file argument and --all.")
+        sys.exit(1)
+
+    beacon_dir = Path.cwd() / ".agentic-beacon"
+    if not beacon_dir.exists():
+        console.print("[red]Error:[/red] No .agentic-beacon directory found.")
+        console.print("Run 'abc warehouse connect' to connect to a warehouse first.")
+        sys.exit(1)
+
+    config_file = beacon_dir / "config.toml"
+    if not config_file.exists():
+        console.print("[red]Error:[/red] No warehouse connected.")
+        console.print("Run 'abc warehouse connect --path <warehouse>' first.")
+        sys.exit(1)
+
+    beacon_yaml = beacon_dir / "beacon.yaml"
+    if not beacon_yaml.exists():
+        console.print("[red]Error:[/red] No beacon.yaml found.")
+        console.print("Run 'abc setup' to create artifact configuration.")
+        sys.exit(1)
+
+    try:
+        warehouse_settings = WarehouseSettings()
+        warehouse_path = Path(warehouse_settings.warehouse.local_path)
+
+        if not warehouse_path.exists():
+            console.print(
+                f"[red]Error:[/red] Warehouse path no longer exists: {warehouse_path}"
+            )
+            console.print(
+                "Run 'abc warehouse connect --path <warehouse>' to reconnect."
+            )
+            sys.exit(1)
+
+        artifacts_dir = beacon_dir / "artifacts"
+        beacon_settings = BeaconSettings.from_yaml(beacon_yaml)
+        comparator = DeltaComparator(
+            warehouse_path=warehouse_path,
+            artifacts_path=artifacts_dir,
+        )
+
+        if dry_run:
+            console.print("[dim]Dry run — no files will be copied.[/dim]\n")
+
+        if file:
+            _contribute_single(
+                comparator,
+                beacon_settings,
+                warehouse_path,
+                artifacts_dir,
+                file,
+                dry_run,
+            )
+        else:
+            _contribute_all(
+                comparator, beacon_settings, warehouse_path, artifacts_dir, dry_run
+            )
+
+    except Exception as e:
+        console.print(f"\n[red]Error:[/red] Contribute failed: {e}")
+        logger.exception("Contribute failed")
+        sys.exit(1)
+
+
+def _contribute_single(
+    comparator: DeltaComparator,
+    beacon_settings: BeaconSettings,
+    warehouse_path: Path,
+    artifacts_dir: Path,
+    file_path: str,
+    dry_run: bool,
+) -> None:
+    """Contribute a single artifact back to the warehouse."""
+    all_paths = _collect_artifact_paths(comparator, beacon_settings)
+    if file_path not in all_paths:
+        console.print(f"[red]Error:[/red] '{file_path}' is not tracked in beacon.yaml.")
+        console.print("Only artifacts declared in beacon.yaml can be contributed.")
+        sys.exit(1)
+
+    local_path = artifacts_dir / file_path
+    if not local_path.exists():
+        console.print(f"[red]Error:[/red] '{file_path}' has not been synced locally.")
+        console.print("Run 'abc sync' to download it first.")
+        sys.exit(1)
+
+    result = comparator.compare_file(file_path)
+    if result.status == DeltaStatus.IDENTICAL:
+        console.print(
+            f"[yellow]Nothing to contribute.[/yellow] "
+            f"'{file_path}' is identical to the warehouse version."
+        )
+        return
+
+    _copy_to_warehouse(local_path, warehouse_path / file_path, file_path, dry_run)
+    if not dry_run:
+        _print_contribute_next_steps(warehouse_path, [file_path])
+
+
+def _contribute_all(
+    comparator: DeltaComparator,
+    beacon_settings: BeaconSettings,
+    warehouse_path: Path,
+    artifacts_dir: Path,
+    dry_run: bool,
+) -> None:
+    """Contribute all modified and added artifacts back to the warehouse."""
+    summary = comparator.compare_from_config(beacon_settings)
+    contributable = summary.modified + summary.added
+
+    if not contributable:
+        console.print(
+            "[green]Nothing to contribute.[/green] "
+            "All local artifacts match the warehouse."
+        )
+        return
+
+    contributed = []
+    for result in contributable:
+        local_path = artifacts_dir / result.path
+        if not local_path.exists():
+            console.print(
+                f"  [yellow]Skipping[/yellow] {result.path} (not found locally — run 'abc sync')"
+            )
+            continue
+        _copy_to_warehouse(
+            local_path, warehouse_path / result.path, result.path, dry_run
+        )
+        if not dry_run:
+            contributed.append(result.path)
+
+    if not dry_run and contributed:
+        _print_contribute_next_steps(warehouse_path, contributed)
+
+
+def _copy_to_warehouse(
+    local_path: Path, dest_path: Path, display_path: str, dry_run: bool
+) -> None:
+    """Copy a local artifact to the warehouse, creating parent dirs as needed."""
+    if dry_run:
+        console.print(f"  [dim]Would contribute:[/dim] {display_path}")
+        return
+    dest_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(local_path, dest_path)
+    console.print(f"  [green]✓[/green] {display_path}")
+
+
+def _print_contribute_next_steps(warehouse_path: Path, contributed: list[str]) -> None:
+    """Print post-contribute git workflow."""
+    count = len(contributed)
+    console.print(
+        f"\n[bold green]✓ Contributed {count} file{'s' if count != 1 else ''} to warehouse[/bold green]"
+    )
+    console.print(f"  Warehouse: [dim]{warehouse_path}[/dim]\n")
+    console.print("[bold]Next Steps — commit the changes in your warehouse:[/bold]")
+    console.print(f"\n  cd {warehouse_path}")
+    console.print("  git diff                    # Review what changed")
+    console.print("  git add .")
+    console.print('  git commit -m "feat: <describe your improvements>"')
+    console.print("  git push\n")
+    console.print("[dim]Teammates get the changes on their next:[/dim]")
+    console.print("  cd ~/team-warehouse && git pull")
+    console.print("  cd my-project && abc sync")
 
 
 # ========== Skill Commands ==========
