@@ -82,7 +82,7 @@ skills/
 
 The skill name is the directory name. Projects reference it with a glob pattern like `skills/your-skill-name/**/*`.
 
-`abc warehouse init` pre-populates `skills/record-knowledge/` — a skill for capturing decisions, lessons, and facts into the knowledge base. Projects that sync it can use `/record-knowledge` to record knowledge directly from the agent.
+`abc warehouse init` pre-populates `skills/record-knowledge/` — a skill for capturing decisions, lessons, and facts into the knowledge base. Projects that sync it and run `abc skill install record-knowledge` can use `/record-knowledge` to record knowledge directly from the agent.
 
 See [Creating Skills](./creating-skills.md) for how to write effective `SKILL.md` files.
 

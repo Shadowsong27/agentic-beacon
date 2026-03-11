@@ -33,6 +33,7 @@ The `abc` CLI provides practical tools for:
 - **Initialization** - Create new warehouses with proper structure (`abc warehouse init`)
 - **Connection** - Link projects to warehouses (`abc warehouse connect`)
 - **Distribution** - Sync artifacts to projects (`abc sync`)
+- **Skill Installation** - Register synced skills as slash commands in your agent (`abc skill install`)
 - **Discovery** - Find local changes that could benefit other teams (`abc delta`)
 - **Management** - Track installed content and maintain sync (`abc status`, `abc update`, `abc clean`)
 
@@ -171,8 +172,7 @@ agentic-beacon/
 │   ├── lessons/
 │   └── facts/
 ├── libs/beacon/          # CLI source code
-├── skills/               # Project-specific skills
-│   └── record-knowledge/
+├── skills/               # Project-specific skills (README only)
 ├── AGENTS.md             # Project context (uses progressive disclosure)
 ├── opencode.json         # Context loading configuration
 └── README.md             # This file
@@ -211,6 +211,7 @@ agentic-beacon/
 | `abc warehouse connect` | Connect a project to a warehouse |
 | `abc setup` | Create `beacon.yaml` (manual or agent-assisted) |
 | `abc sync` | Sync artifacts declared in `beacon.yaml` to the project |
+| `abc skill install` | Register synced skills as slash commands for your agent |
 | `abc status` | Show current connection and sync status |
 | `abc delta` | Compare synced artifacts with warehouse (find local changes) |
 | `abc update` | Re-sync and overwrite local artifacts from warehouse |
@@ -230,8 +231,9 @@ agentic-beacon/
 2. **Connect**: `abc warehouse connect --path ~/your-warehouse`
 3. **Configure**: `abc setup --manual` then edit `beacon.yaml`
 4. **Sync**: `abc sync`
-5. **Stay current**: `abc update` after warehouse changes
-6. **Contribute**: Use `abc delta` to find new patterns worth sharing back
+5. **Install skills**: `abc skill install --all` to register skills as agent slash commands
+6. **Stay current**: `abc update` after warehouse changes
+7. **Contribute**: Use `abc delta` to find new patterns worth sharing back
 
 ## 🔧 Technical Details
 
