@@ -13,13 +13,15 @@ cd my-warehouse
 
 ## Required Structure
 
-The `abc warehouse init` command creates the skeleton that Agentic Beacon requires:
+The `abc warehouse init` command creates the skeleton that Agentic Beacon requires, plus bundles in the `record-knowledge` skill as a ready-to-use starting point:
 
 ```
 my-warehouse/
 ├── contexts/
 ├── knowledge/
 ├── skills/
+│   └── record-knowledge/   # Bundled by abc — ready to sync to projects
+│       └── SKILL.md
 ├── docs/
 └── README.md
 ```
@@ -79,6 +81,8 @@ skills/
 ```
 
 The skill name is the directory name. Projects reference it with a glob pattern like `skills/your-skill-name/**/*`.
+
+`abc warehouse init` pre-populates `skills/record-knowledge/` — a skill for capturing decisions, lessons, and facts into the knowledge base. Projects that sync it can use `/record-knowledge` to record knowledge directly from the agent.
 
 See [Creating Skills](./creating-skills.md) for how to write effective `SKILL.md` files.
 
