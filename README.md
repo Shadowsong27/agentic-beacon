@@ -129,6 +129,15 @@ uv tool install agentic-beacon
 abc --help
 ```
 
+**Install from a downloaded zip/tarball (offline or private distribution)**
+```bash
+# From a .tar.gz or .whl file downloaded from GitHub Releases
+uv tool install "agentic-beacon @ /path/to/agentic_beacon-1.4.1.tar.gz"
+
+# Verify installation
+abc --help
+```
+
 **Alternative methods:**
 ```bash
 # Using pipx (isolated environment)
