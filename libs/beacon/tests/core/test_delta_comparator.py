@@ -388,6 +388,31 @@ def test_compare_from_config_detects_added_skill_via_glob(valid_warehouse, temp_
     assert "skills/my-skill/SKILL.md" in added_paths
 
 
+def test_compare_from_config_detects_missing_skill_via_glob(valid_warehouse, temp_dir):
+    """compare_from_config detects a warehouse skill not yet synced locally via glob."""
+    from beacon.core.settings import BeaconSettings
+
+    # Skill exists in warehouse but not in local artifacts
+    skill_dir = valid_warehouse / "skills" / "opsx-handoff"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("# Skill: opsx-handoff\n")
+
+    artifacts_dir = temp_dir / "artifacts"
+    artifacts_dir.mkdir()
+
+    beacon_yaml = temp_dir / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n  knowledge: []\n  skills:\n    - skills/**/*\n  contexts: []\n"
+    )
+    settings = BeaconSettings.from_yaml(beacon_yaml)
+
+    comparator = DeltaComparator(valid_warehouse, artifacts_dir)
+    summary = comparator.compare_from_config(settings)
+
+    missing_paths = [r.path for r in summary.missing]
+    assert "skills/opsx-handoff/SKILL.md" in missing_paths
+
+
 def test_compare_from_config_no_duplicates_for_modified(valid_warehouse, temp_dir):
     """A MODIFIED file present in both warehouse and local is not double-counted."""
     from beacon.core.settings import BeaconSettings

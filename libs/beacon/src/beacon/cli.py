@@ -842,8 +842,11 @@ def _show_delta_summary(
 ) -> None:
     """Show summary of all artifact differences."""
     summary = comparator.compare_from_config(beacon_settings)
+    untracked = _find_untracked_local_files(
+        comparator, beacon_settings, comparator.artifacts_path
+    )
 
-    if not summary.has_differences:
+    if not summary.has_differences and not untracked:
         console.print(
             "[green]No differences found. Local artifacts match warehouse.[/green]"
         )
@@ -860,12 +863,18 @@ def _show_delta_summary(
         elif result.status == DeltaStatus.MISSING:
             console.print(f"  [red][Missing][/red]  {result.path}")
 
+    for rel_path in untracked:
+        console.print(
+            f"  [green][Added][/green]    {rel_path} [dim](not in beacon.yaml)[/dim]"
+        )
+
     # Summary counts
     console.print("\n[bold]Summary:[/bold]")
     if summary.modified:
         console.print(f"  [yellow]Modified:[/yellow] {len(summary.modified)} files")
-    if summary.added:
-        console.print(f"  [green]Added:[/green] {len(summary.added)} files")
+    total_added = len(summary.added) + len(untracked)
+    if total_added:
+        console.print(f"  [green]Added:[/green] {total_added} files")
     if summary.missing:
         console.print(f"  [red]Missing:[/red] {len(summary.missing)} files")
     if summary.identical:
@@ -879,6 +888,10 @@ def _show_delta_summary(
     if summary.modified:
         console.print(
             "[dim]Tip: Run 'abc delta <file>' to see detailed diff for a modified file.[/dim]"
+        )
+    if untracked:
+        console.print(
+            "[dim]Tip: Run 'abc contribute --all' to push untracked local artifacts to the warehouse.[/dim]"
         )
 
 

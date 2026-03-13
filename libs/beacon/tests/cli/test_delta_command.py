@@ -90,6 +90,34 @@ def test_delta_no_beacon_yaml(temp_dir, valid_warehouse, monkeypatch):
     assert "No beacon.yaml found" in result.output
 
 
+def test_delta_shows_untracked_local_skill(temp_dir, valid_warehouse, monkeypatch):
+    """abc delta shows a locally-present skill not registered in beacon.yaml as Added."""
+    project = temp_dir / "project"
+    project.mkdir()
+    beacon_dir = project / ".agentic-beacon"
+    beacon_dir.mkdir()
+    (beacon_dir / "config.toml").write_text(
+        f'[warehouse]\nlocal_path = "{valid_warehouse}"\n'
+    )
+    # beacon.yaml has NO skills entries
+    (beacon_dir / "beacon.yaml").write_text(
+        "artifacts:\n  knowledge: []\n  skills: []\n  contexts: []\n"
+    )
+
+    # Create opsx-handoff skill locally (untracked — not in beacon.yaml, not in warehouse)
+    skill_dir = beacon_dir / "artifacts" / "skills" / "opsx-handoff"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("# opsx-handoff\n")
+
+    runner = CliRunner()
+    monkeypatch.chdir(project)
+    result = runner.invoke(main, ["delta"])
+
+    assert result.exit_code == 0
+    assert "opsx-handoff" in result.output
+    assert "Added" in result.output
+
+
 def test_delta_no_beacon_dir(temp_dir, monkeypatch):
     """No .agentic-beacon directory → Error."""
     project = temp_dir / "project"
