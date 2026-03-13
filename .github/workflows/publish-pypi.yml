@@ -168,6 +168,12 @@ jobs:
             echo "Check the logs above for details." >> $GITHUB_STEP_SUMMARY
           fi
 
+      - name: Upload build artifacts for bundling
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: libs/beacon/dist/
+
       - name: Create release comment
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/') && job.status == 'success'
         uses: actions/github-script@v7
@@ -218,3 +224,70 @@ jobs:
                 body: body
               });
             }
+
+  # ------------------------------------------------------------------
+  # Offline bundles — build per-platform wheel bundles and attach to
+  # the GitHub release so users can install without PyPI access.
+  # ------------------------------------------------------------------
+  bundle:
+    needs: publish
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/heads/release/')
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-x86_64
+          - os: macos-latest
+            platform: macos-arm64
+          - os: windows-latest
+            platform: windows-x86_64
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write   # needed to upload release assets
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Get package version
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(grep '^version = ' libs/beacon/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Download wheels (package + all dependencies)
+        shell: bash
+        run: |
+          mkdir -p offline-bundle
+          uvx pip download "agentic-beacon==${{ steps.version.outputs.version }}" \
+            --only-binary=:all: \
+            -d ./offline-bundle/
+
+      - name: Create bundle zip
+        shell: bash
+        run: |
+          BUNDLE="agentic_beacon-${{ steps.version.outputs.version }}-bundle-${{ matrix.platform }}.zip"
+          python3 -c "
+          import zipfile, os
+          bundle_dir = './offline-bundle'
+          with zipfile.ZipFile('$BUNDLE', 'w', zipfile.ZIP_DEFLATED) as zf:
+              for f in os.listdir(bundle_dir):
+                  zf.write(os.path.join(bundle_dir, f), f)
+          print(f'Created $BUNDLE')
+          "
+          echo "BUNDLE=$BUNDLE" >> $GITHUB_ENV
+
+      - name: Upload bundle to GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "agentic-beacon@v${{ steps.version.outputs.version }}" \
+            "${{ env.BUNDLE }}" \
+            --clobber

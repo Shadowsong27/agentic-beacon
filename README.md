@@ -131,22 +131,21 @@ abc --help
 
 **Offline / private install (no PyPI access required)**
 
-This is a two-step process: download the bundle once on a machine with internet, then install anywhere.
+Each release ships a pre-built bundle zip for the three major platforms. The zip contains the package and all its dependencies as wheels — no internet needed on the target machine.
 
+1. Go to the [GitHub Releases page](https://github.com/Shadowsong27/agentic-beacon/releases) and download the bundle zip matching your OS:
+   - `agentic_beacon-X.Y.Z-bundle-linux-x86_64.zip`
+   - `agentic_beacon-X.Y.Z-bundle-macos-arm64.zip`
+   - `agentic_beacon-X.Y.Z-bundle-windows-x86_64.zip`
+
+2. Unzip and install:
 ```bash
-# Step 1 — on a machine WITH internet access, download the package + all dependencies as wheels
-#           (requires uvx, which ships with uv)
-mkdir agentic-beacon-bundle
-uvx pip download agentic-beacon==1.4.1 --only-binary=:all: -d ./agentic-beacon-bundle/
+unzip agentic_beacon-X.Y.Z-bundle-<platform>.zip -d abc-bundle
+uv tool install agentic-beacon --no-index --find-links ./abc-bundle/
 
-# Step 2 — on the target machine (offline), install from the local bundle
-uv tool install agentic-beacon --no-index --find-links ./agentic-beacon-bundle/
-
-# Verify installation
+# Verify
 abc --version
 ```
-
-> **Note:** The bundle directory contains platform-specific wheels. Re-run Step 1 on the same OS/architecture as the target machine, or omit `--only-binary=:all:` to include source distributions (requires a C compiler on the target).
 
 **Alternative methods:**
 ```bash
