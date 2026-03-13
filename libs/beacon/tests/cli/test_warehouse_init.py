@@ -174,6 +174,19 @@ def test_init_idempotent_second_run(runner, tmp_path):
 def test_init_skips_git_init_when_git_exists(runner, tmp_path):
     """When .git already exists, git init is skipped but files are staged."""
     subprocess.run(["git", "init"], cwd=tmp_path, check=True, capture_output=True)
+    # Configure git identity so commit doesn't fail in CI environments
+    subprocess.run(
+        ["git", "config", "user.email", "test@example.com"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test User"],
+        cwd=tmp_path,
+        check=True,
+        capture_output=True,
+    )
 
     result = runner.invoke(
         main,
