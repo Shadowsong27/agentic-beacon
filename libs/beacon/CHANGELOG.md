@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.1](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v1.4.0...agentic-beacon@v1.4.1) (2026-03-13)
+
+
+### Bug Fixes
+
+* **delta:** show untracked local skills in abc delta output ([#18](https://github.com/Shadowsong27/agentic-beacon/issues/18)) ([3afabfd](https://github.com/Shadowsong27/agentic-beacon/commit/3afabfd39401bad33b26a9645792568daa459ae6))
+
 ## [1.4.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v1.3.0...agentic-beacon@v1.4.0) (2026-03-11)
 
 
