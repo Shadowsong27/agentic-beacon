@@ -129,14 +129,24 @@ uv tool install agentic-beacon
 abc --help
 ```
 
-**Install from a downloaded zip/tarball (offline or private distribution)**
+**Offline / private install (no PyPI access required)**
+
+This is a two-step process: download the bundle once on a machine with internet, then install anywhere.
+
 ```bash
-# From a .tar.gz or .whl file downloaded from GitHub Releases
-uv tool install "agentic-beacon @ /path/to/agentic_beacon-1.4.1.tar.gz"
+# Step 1 — on a machine WITH internet access, download the package + all dependencies as wheels
+#           (requires uvx, which ships with uv)
+mkdir agentic-beacon-bundle
+uvx pip download agentic-beacon==1.4.1 --only-binary=:all: -d ./agentic-beacon-bundle/
+
+# Step 2 — on the target machine (offline), install from the local bundle
+uv tool install agentic-beacon --no-index --find-links ./agentic-beacon-bundle/
 
 # Verify installation
-abc --help
+abc --version
 ```
+
+> **Note:** The bundle directory contains platform-specific wheels. Re-run Step 1 on the same OS/architecture as the target machine, or omit `--only-binary=:all:` to include source distributions (requires a C compiler on the target).
 
 **Alternative methods:**
 ```bash
