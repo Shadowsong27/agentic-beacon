@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v1.4.1...agentic-beacon@v1.5.0) (2026-03-13)
+
+
+### Features
+
+* allow abc warehouse init to run in an existing directory ([#20](https://github.com/Shadowsong27/agentic-beacon/issues/20)) ([c8385ba](https://github.com/Shadowsong27/agentic-beacon/commit/c8385baaa0417f70ad01a23e0252fc8f5022d7eb))
+
 ## [1.4.1](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v1.4.0...agentic-beacon@v1.4.1) (2026-03-13)
 
 
