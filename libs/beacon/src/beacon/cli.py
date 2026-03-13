@@ -83,7 +83,7 @@ def warehouse() -> None:
 
 
 @warehouse.command()
-@click.argument("name", type=str)
+@click.argument("name", type=str, required=False, default=None)
 @click.option(
     "--path",
     type=click.Path(path_type=Path),
@@ -116,7 +116,7 @@ def warehouse() -> None:
 )
 def init(
     *,
-    name: str,
+    name: str | None,
     path: Path | None,
     org: str | None,
     languages: str | None,
@@ -128,19 +128,37 @@ def init(
     Initialize a new warehouse repository.
 
     Creates a complete warehouse structure with contexts, knowledge, and skills.
+    When NAME is omitted, the warehouse is initialised in the current directory
+    (useful when the repo already exists, e.g. freshly cloned from GitHub).
+    Existing files are always preserved — only missing files are created.
 
     Example:
-        abc warehouse init my-warehouse
+        abc warehouse init                          # initialise in current dir
+        abc warehouse init my-warehouse             # create new subdirectory
         abc warehouse init my-warehouse --org "Acme Corp" --languages python,typescript
     """
-    # Determine warehouse path
-    warehouse_path = (path or Path.cwd()) / name
+    base_path = path or Path.cwd()
 
     # Interactive prompts if not disabled
     if not no_interactive:
-        console.print("\n[bold]Initialize New Warehouse[/bold]")
-        console.print(f"[dim]Creating warehouse at: {warehouse_path}[/dim]\n")
+        # If name was not supplied, ask whether to init in-place or under a subdir
+        if name is None:
+            console.print("\n[bold]Initialize New Warehouse[/bold]")
+            use_current = click.confirm(
+                f"Initialize warehouse in current directory ({base_path})?",
+                default=True,
+            )
+            if not use_current:
+                name = click.prompt("Warehouse directory name", type=str)
 
+        warehouse_path = base_path / name if name else base_path
+        console.print(f"[dim]Initializing warehouse at: {warehouse_path}[/dim]\n")
+
+    else:
+        warehouse_path = base_path / name if name else base_path
+
+    # Interactive prompts for metadata (when not disabled)
+    if not no_interactive:
         if not org:
             org = click.prompt(
                 "Organization name",
@@ -186,9 +204,14 @@ def init(
         )
 
         # Display results
-        console.print(
-            "\n[bold green]✓ Warehouse initialized successfully![/bold green]\n"
-        )
+        if result["in_place"]:
+            console.print(
+                "\n[bold green]✓ Warehouse initialized in current directory![/bold green]\n"
+            )
+        else:
+            console.print(
+                "\n[bold green]✓ Warehouse initialized successfully![/bold green]\n"
+            )
         console.print(f"  [blue]Location:[/blue] {result['warehouse_path']}")
         console.print(f"  [blue]Organization:[/blue] {org}")
 
@@ -203,10 +226,14 @@ def init(
 
         # Next steps
         console.print("\n[bold]Next Steps:[/bold]")
-        console.print(f"  1. cd {warehouse_path}")
-        console.print("  2. Customize contexts, knowledge, and skills")
-        console.print("  3. git remote add origin <your-repo-url>")
-        console.print("  4. git push -u origin main")
+        if not result["in_place"]:
+            console.print(f"  1. cd {warehouse_path}")
+            step = 2
+        else:
+            step = 1
+        console.print(f"  {step}. Customize contexts, knowledge, and skills")
+        console.print(f"  {step + 1}. git remote add origin <your-repo-url>")
+        console.print(f"  {step + 2}. git push -u origin main")
 
     except ValueError as e:
         console.print(f"[red]Error:[/red] {e}")

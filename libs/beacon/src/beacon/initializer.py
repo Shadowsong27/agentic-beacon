@@ -32,6 +32,10 @@ class WarehouseInitializer:
         """
         Initialize a new warehouse repository.
 
+        When the target directory already exists (e.g. a freshly cloned empty
+        repo), initialization proceeds in-place: existing files are left
+        untouched and only missing files are created.
+
         Args:
             org_name: Organization name for documentation
             languages: Ignored — inner knowledge structure is user-defined
@@ -39,12 +43,14 @@ class WarehouseInitializer:
             init_git: Whether to initialize git repository
 
         Returns:
-            Result dictionary with created paths
+            Result dictionary with created paths and ``in_place`` flag
         """
-        if self.warehouse_path.exists():
-            raise ValueError(f"Directory already exists: {self.warehouse_path}")
+        in_place = self.warehouse_path.exists()
 
-        logger.info(f"Initializing warehouse at {self.warehouse_path}")
+        logger.info(
+            f"Initializing warehouse at {self.warehouse_path} "
+            f"({'in-place' if in_place else 'new directory'})"
+        )
 
         # Create directory structure
         self._create_structure()
@@ -64,18 +70,26 @@ class WarehouseInitializer:
         result = {
             "warehouse_path": str(self.warehouse_path),
             "git_initialized": init_git,
+            "in_place": in_place,
         }
 
         logger.info(f"Warehouse initialized successfully: {result}")
         return result
 
     def _create_structure(self) -> None:
-        """Create required directory structure."""
-        self.warehouse_path.mkdir(parents=True)
-        (self.warehouse_path / "contexts").mkdir()
-        (self.warehouse_path / "knowledge").mkdir()
-        (self.warehouse_path / "skills").mkdir()
-        (self.warehouse_path / "docs").mkdir()
+        """Create required directory structure (skips dirs that already exist)."""
+        self.warehouse_path.mkdir(parents=True, exist_ok=True)
+        (self.warehouse_path / "contexts").mkdir(exist_ok=True)
+        (self.warehouse_path / "knowledge").mkdir(exist_ok=True)
+        (self.warehouse_path / "skills").mkdir(exist_ok=True)
+        (self.warehouse_path / "docs").mkdir(exist_ok=True)
+
+    def _write_if_missing(self, path: Path, content: str) -> None:
+        """Write *content* to *path* only when the file does not already exist."""
+        if not path.exists():
+            path.write_text(content)
+        else:
+            logger.debug(f"Skipping existing file: {path}")
 
     def _create_contexts(self, org_name: str) -> None:
         """Create starter context file."""
@@ -98,7 +112,9 @@ Add your team's rules, conventions, and workflow here.
 Replace this placeholder with your organization's actual standards.
 See the Agentic Beacon documentation for guidance on writing effective context files.
 """
-        (self.warehouse_path / "contexts" / "AGENTS.md").write_text(global_context)
+        self._write_if_missing(
+            self.warehouse_path / "contexts" / "AGENTS.md", global_context
+        )
 
     def _create_knowledge(self) -> None:
         """Create starter knowledge file."""
@@ -116,7 +132,9 @@ Examples of what teams put here:
 There are no required subdirectories or naming conventions.
 Organize knowledge however makes sense for your team.
 """
-        (self.warehouse_path / "knowledge" / "README.md").write_text(placeholder)
+        self._write_if_missing(
+            self.warehouse_path / "knowledge" / "README.md", placeholder
+        )
 
     def _create_skills(self) -> None:
         """Create skills structure."""
@@ -185,7 +203,9 @@ Teams install skills to their projects:
 abc setup --skill deploy-production
 ```
 """
-        (self.warehouse_path / "skills" / "README.md").write_text(skills_readme)
+        self._write_if_missing(
+            self.warehouse_path / "skills" / "README.md", skills_readme
+        )
 
     def _create_docs(self, org_name: str) -> None:
         """Create documentation files."""
@@ -242,7 +262,9 @@ abc setup --warehouse ~/warehouse --all
 - Document new patterns as lessons
 - Keep facts current with infrastructure changes
 """
-        (self.warehouse_path / "docs" / "architecture.md").write_text(architecture_doc)
+        self._write_if_missing(
+            self.warehouse_path / "docs" / "architecture.md", architecture_doc
+        )
 
         contribution_guide = f"""# Contributing to {org_name} Warehouse
 
@@ -287,8 +309,8 @@ beacon status
 
 Contact the platform team or open an issue.
 """
-        (self.warehouse_path / "docs" / "contribution-guide.md").write_text(
-            contribution_guide
+        self._write_if_missing(
+            self.warehouse_path / "docs" / "contribution-guide.md", contribution_guide
         )
 
     def _create_root_files(self, org_name: str) -> None:
@@ -355,7 +377,7 @@ This warehouse is maintained by {org_name}'s Platform Team.
 - **Questions:** Contact platform-team@example.com
 - **Issues:** Open an issue in this repository
 """
-        (self.warehouse_path / "README.md").write_text(readme)
+        self._write_if_missing(self.warehouse_path / "README.md", readme)
 
         gitignore = """# Editor and IDE
 .vscode/
@@ -384,10 +406,10 @@ venv/
 *.log
 logs/
 """
-        (self.warehouse_path / ".gitignore").write_text(gitignore)
+        self._write_if_missing(self.warehouse_path / ".gitignore", gitignore)
 
     def _install_bundled_skills(self) -> None:
-        """Add abc-provided skills to the warehouse skills directory."""
+        """Add abc-provided skills to the warehouse skills directory (skips existing)."""
         bundled_skills_dir = _DATA_DIR / "skills"
         for skill_dir in bundled_skills_dir.iterdir():
             if not skill_dir.is_dir():
@@ -398,19 +420,25 @@ logs/
             content = skill_md.read_text(encoding="utf-8")
             dest_dir = self.warehouse_path / "skills" / skill_dir.name
             dest_dir.mkdir(parents=True, exist_ok=True)
-            (dest_dir / "SKILL.md").write_text(content)
+            self._write_if_missing(dest_dir / "SKILL.md", content)
 
         logger.info("Bundled skills installed")
 
     def _init_git(self) -> None:
-        """Initialize git repository with initial commit."""
+        """Initialize git repository with initial commit.
+
+        Skips ``git init`` when the directory already has a ``.git`` folder
+        (e.g. a freshly cloned empty repo), but still stages and commits any
+        newly created files.
+        """
         try:
-            subprocess.run(
-                ["git", "init"],
-                cwd=self.warehouse_path,
-                check=True,
-                capture_output=True,
-            )
+            if not (self.warehouse_path / ".git").exists():
+                subprocess.run(
+                    ["git", "init"],
+                    cwd=self.warehouse_path,
+                    check=True,
+                    capture_output=True,
+                )
             subprocess.run(
                 ["git", "add", "."],
                 cwd=self.warehouse_path,
