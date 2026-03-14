@@ -1,5 +1,6 @@
 """CLI interface for Beacon - Distribute knowledge contexts for AI development."""
 
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -141,21 +142,24 @@ def init(
 
     # Interactive prompts if not disabled
     if not no_interactive:
-        # If name was not supplied, ask whether to init in-place or under a subdir
-        if name is None:
-            console.print("\n[bold]Initialize New Warehouse[/bold]")
-            use_current = click.confirm(
-                f"Initialize warehouse in current directory ({base_path})?",
-                default=True,
-            )
-            if not use_current:
-                name = click.prompt("Warehouse directory name", type=str)
+        console.print("\n[bold]Initialize New Warehouse[/bold]")
 
-        warehouse_path = base_path / name if name else base_path
-        console.print(f"[dim]Initializing warehouse at: {warehouse_path}[/dim]\n")
+        if name is None:
+            # Prompt for the full path; default to CWD so user can see and edit it
+            raw = click.prompt(
+                "Where should the warehouse be created?",
+                default=str(base_path),
+                type=str,
+            )
+            warehouse_path = Path(os.path.expandvars(raw)).expanduser().resolve()
+        else:
+            warehouse_path = (base_path / name).expanduser().resolve()
+
+        console.print(f"[dim]Will create: {warehouse_path}[/dim]\n")
 
     else:
-        warehouse_path = base_path / name if name else base_path
+        raw = str(base_path / name) if name else str(base_path)
+        warehouse_path = Path(os.path.expandvars(raw)).expanduser().resolve()
 
     # Interactive prompts for metadata (when not disabled)
     if not no_interactive:
