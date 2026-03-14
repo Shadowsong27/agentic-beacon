@@ -28,6 +28,30 @@ This is the same DRY problem that version control solved for code — except it 
 
 Agentic Beacon is a **framework** for collaborative AI-assisted development that solves a fundamental problem: **how to share and evolve agentic engineering practices across teams.**
 
+### How It Works
+
+There are two moving parts:
+
+**Warehouse** — a single git repository owned by your team or organisation. It holds the shared source of truth: contexts, knowledge, and skills. You create one warehouse per team and commit it like any other repo.
+
+**Beacon** — a per-project connector. When you run `abc warehouse connect` in a project, it creates a `.agentic-beacon/` directory containing:
+- `beacon.yaml` — declares which warehouse artifacts this project needs
+- `artifacts/` — a local snapshot of those artifacts, populated by `abc sync`
+
+The flow is:
+
+```
+Warehouse (shared git repo)                 Your project
+────────────────────────────                ────────────────────────────────
+contexts/                   ── abc sync ──► .agentic-beacon/artifacts/
+knowledge/                                  opencode.json / AGENTS.md (wired)
+skills/
+```
+
+`abc sync` reads `beacon.yaml`, copies the declared artifacts into `.agentic-beacon/artifacts/`, and wires contexts and skills into your agent config automatically. Your agent reads from the local snapshot — no live connection to the warehouse required during coding sessions.
+
+When a session produces something worth sharing — a better pattern, a new lesson — `abc contribute` copies it back to the warehouse so every project benefits next sync.
+
 ### The Framework Components
 
 **1. 📐 Methodology - Artifact Standardization**
@@ -35,7 +59,7 @@ Agentic Beacon is a **framework** for collaborative AI-assisted development that
 Defines three core artifact types that should be centralized and distributed:
 
 - 📄 **Contexts** - Boot instructions and coding standards loaded on agent session start
-- 🧠 **Knowledge** - Atomic decisions, lessons, and facts organized by scope (global/language/domain)
+- 🧠 **Knowledge** - Atomic decisions, lessons, and facts
 - ⚡ **Skills** - Reusable workflows, procedures, and specialized instructions
 
 These artifacts form a **warehouse** - a single source of truth for your organization's agentic practices.
@@ -84,9 +108,9 @@ The agentic engineering landscape is shifting rapidly. What's best practice toda
 📄 **Contexts** - Instructions loaded at agent boot time
 - Global standards applicable to all projects
 - Language-specific conventions (Python, TypeScript, etc.)
-- Domain-specific patterns (data platforms, web services, etc.)
+- Any other grouping that makes sense for your team
 
-🧠 **Knowledge** - Atomic information units organized hierarchically
+🧠 **Knowledge** - Atomic information units
 - Decisions: Technical choices and rationale
 - Lessons: Learnings from agent failures and successes
 - Facts: Established configurations and references
@@ -98,33 +122,30 @@ The agentic engineering landscape is shifting rapidly. What's best practice toda
 
 ### Warehouse Structure
 
-The framework defines three top-level directories and creates a starter structure with `abc warehouse init`. **The internal layout within each directory is not prescribed** — this is a suggested starting point. Teams should organize their knowledge, skills, and contexts in whatever way makes sense for them.
+The framework defines three top-level directories (`contexts/`, `knowledge/`, `skills/`) and creates a starter structure with `abc warehouse init`. **The internal layout within each directory is entirely yours to decide** — the example below is one suggested starting point, not a prescription.
 
 ```
 my-warehouse/              # Created by: abc warehouse init my-warehouse
 ├── contexts/              # Boot context files (loaded via opencode.json)
-│   ├── global.md          # Required: Universal standards for all projects
-│   ├── python.md          # Optional: Python-specific standards
-│   └── data-platform.md   # Optional: Domain-specific patterns
+│   ├── global.md          # e.g. universal standards for all projects
+│   ├── python.md          # e.g. language-specific standards
+│   └── data-platform.md   # e.g. any grouping that fits your team
 │
 ├── knowledge/             # Atomic knowledge (facts, decisions, lessons)
-│   ├── global/            # Universal knowledge (all projects)
+│   ├── global/            # e.g. universal knowledge
 │   │   ├── decisions/
 │   │   ├── lessons/
 │   │   └── facts/
-│   ├── languages/         # Language-specific knowledge
+│   ├── languages/         # e.g. language-specific knowledge
 │   │   └── python/
-│   │       ├── decisions/
-│   │       └── lessons/
-│   └── domains/           # Domain-specific knowledge
-│       └── data-platform/
-│           ├── decisions/
-│           ├── lessons/
-│           └── facts/
-│
+│   └── domains/           # e.g. grouping by problem area — but organise
+│       └── data-platform/ #     however suits your team (by service, tribe,
+│                          #     tech stack, etc.)
 └── skills/                # Reusable workflows and procedures
     └── README.md          # Skills catalog
 ```
+
+> **On "domains":** The `domains/` grouping in the example above is one way to organise knowledge — by business or technical problem area (e.g. `data-platform`, `web-services`). It is not a required concept. Use it, rename it, or replace it entirely with whatever structure your team finds natural.
 
 **Naming convention:**
 - **Warehouse contexts:** Simple filenames (e.g., `global.md`, `python.md`)
@@ -175,19 +196,55 @@ uvx --from agentic-beacon abc warehouse init my-warehouse
 
 ### Quick Start
 
+**Scenario A — Starting fresh (no warehouse exists yet)**
+
 ```bash
-# Install
 uv tool install agentic-beacon
 
-# Connect your project to a warehouse
+# 1. Create your team warehouse
+abc warehouse init my-org-warehouse
+cd my-org-warehouse
+# add your contexts, knowledge, and skills, then push to git
+
+# 2. In each project, connect to the warehouse
+cd ~/my-project
 abc warehouse connect --path ~/my-org-warehouse
 
-# Create your artifact config and sync
-abc setup --manual   # then edit .agentic-beacon/beacon.yaml
+# 3. Declare what you need and sync
+abc setup --manual   # creates .agentic-beacon/beacon.yaml — edit to declare artifacts
+abc sync             # copies artifacts into the project and wires your agent config
+```
+
+**Scenario B — Warehouse already exists (joining your team's setup)**
+
+```bash
+uv tool install agentic-beacon
+
+# 1. Clone the warehouse locally
+git clone git@github.com:your-org/warehouse.git ~/my-org-warehouse
+
+# 2. In your project, connect and sync
+cd ~/my-project
+abc warehouse connect --path ~/my-org-warehouse
+abc setup --manual   # edit .agentic-beacon/beacon.yaml to declare what you need
 abc sync
 ```
 
-See **[Getting Started](./guides/getting-started.md)** for the full walkthrough, including how to create a warehouse from scratch.
+See **[Getting Started](./guides/getting-started.md)** for the full walkthrough.
+
+### Day-to-day Workflow
+
+After initial setup, the ongoing loop is straightforward:
+
+```
+1. abc sync          — pull the latest artifacts from the warehouse into your project
+2. code with agent   — agent uses the synced contexts, knowledge, and skills
+3. abc delta         — see what has drifted locally (agent-suggested changes, improvements)
+4. abc contribute    — promote valuable local changes back to the warehouse
+5. repeat            — every project stays current; improvements flow in both directions
+```
+
+Add new knowledge, skills, or contexts directly to the warehouse repo and commit — the next `abc sync` in any connected project picks them up.
 
 ### What This Repository Contains
 
