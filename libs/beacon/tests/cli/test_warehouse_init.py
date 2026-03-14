@@ -215,3 +215,73 @@ def test_init_result_in_place_flag_false_for_new_dir(tmp_path):
     initializer = WarehouseInitializer(warehouse_path=new_dir)
     result = initializer.init(init_git=False)
     assert result["in_place"] is False
+
+
+# ---------------------------------------------------------------------------
+# Path expansion: interactive prompt
+# ---------------------------------------------------------------------------
+
+
+def test_init_interactive_expands_tilde(runner, tmp_path, monkeypatch):
+    """Interactive path prompt expands ~ to the user home directory."""
+    monkeypatch.chdir(tmp_path)
+    # expanduser() reads $HOME on Unix
+    monkeypatch.setenv("HOME", str(tmp_path))
+    target = tmp_path / "tilde-warehouse"
+
+    result = runner.invoke(
+        main,
+        ["warehouse", "init", "--no-git"],
+        input="~/tilde-warehouse\nTest Org\npython\n\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    assert target.exists(), f"Expected {target} to be created"
+    assert "will create" in result.output.lower()
+
+
+def test_init_interactive_expands_env_var(runner, tmp_path, monkeypatch):
+    """Interactive path prompt expands $HOME and other env vars."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    target = tmp_path / "env-warehouse"
+
+    result = runner.invoke(
+        main,
+        ["warehouse", "init", "--no-git"],
+        input="$HOME/env-warehouse\nTest Org\npython\n\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    assert target.exists(), f"Expected {target} to be created"
+
+
+def test_init_interactive_shows_resolved_path(runner, tmp_path, monkeypatch):
+    """'Will create: <absolute path>' is shown before initialising."""
+    monkeypatch.chdir(tmp_path)
+    target = tmp_path / "shown-warehouse"
+
+    result = runner.invoke(
+        main,
+        ["warehouse", "init", "--no-git"],
+        input=f"{target}\nTest Org\npython\n\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "will create" in result.output.lower()
+    assert str(target) in result.output
+
+
+def test_init_creates_parent_dirs_automatically(runner, tmp_path, monkeypatch):
+    """mkdir -p: nested path is created even if parents don't exist."""
+    monkeypatch.chdir(tmp_path)
+    target = tmp_path / "nested" / "deep" / "warehouse"
+
+    result = runner.invoke(
+        main,
+        ["warehouse", "init", "--no-git"],
+        input=f"{target}\nTest Org\npython\n\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    assert target.exists()
