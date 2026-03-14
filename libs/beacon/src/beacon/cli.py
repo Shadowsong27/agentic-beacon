@@ -1,5 +1,6 @@
 """CLI interface for Beacon - Distribute knowledge contexts for AI development."""
 
+import json
 import os
 import shutil
 import sys
@@ -766,31 +767,60 @@ def sync(*, preserve: bool, prune: bool, verbose_flag: bool, dry_run: bool) -> N
             )
             return
 
-        # Post-sync reminders
-        next_steps = []
+        # Post-sync wiring
+        project_root = Path.cwd()
+        wiring_notes: list[str] = []
 
-        if beacon_settings.artifacts.contexts and summary.copied > 0:
-            next_steps.append(
-                "  Contexts were synced but won't load automatically.\n"
-                "  Register them in your agent's config file:\n"
-                "\n"
-                "  [bold]CLAUDE.md / AGENTS.md[/bold] — add a line for each context:\n"
-                "    @.agentic-beacon/artifacts/contexts/<name>.md\n"
-                "\n"
-                '  [bold]opencode.json[/bold] — add to "instructions" array:\n'
-                '    ".agentic-beacon/artifacts/contexts/<name>.md"'
+        if beacon_settings.artifacts.contexts:
+            oc_added = _wire_contexts_opencode(project_root, artifacts_dir)
+            if oc_added:
+                console.print(
+                    f"\n[green]✓[/green] Wired {len(oc_added)} context(s) into opencode.json"
+                )
+
+            cc_added = _wire_contexts_claudecode(project_root, artifacts_dir)
+            if cc_added:
+                console.print(
+                    f"[green]✓[/green] Wired {len(cc_added)} context(s) into CLAUDE.md"
+                )
+
+            # If no agent config exists at all, surface manual instructions
+            has_opencode = (project_root / "opencode.json").exists()
+            has_claude = any(
+                p.exists()
+                for p in [
+                    project_root / ".claude" / "CLAUDE.md",
+                    project_root / "CLAUDE.md",
+                ]
             )
+            if not has_opencode and not has_claude:
+                contexts_dir = artifacts_dir / "contexts"
+                if contexts_dir.exists() and any(contexts_dir.rglob("*.md")):
+                    wiring_notes.append(
+                        "  Contexts synced — wire them into your agent config:\n"
+                        '  [bold]opencode.json[/bold] → add to "instructions" array:\n'
+                        '    ".agentic-beacon/artifacts/contexts/<name>.md"\n'
+                        "  [bold]CLAUDE.md[/bold] → add a line per context:\n"
+                        "    @.agentic-beacon/artifacts/contexts/<name>.md"
+                    )
 
-        if beacon_settings.artifacts.skills and summary.copied > 0:
-            next_steps.append(
-                "  Skills were synced but aren't registered as agent commands yet.\n"
-                "  Run: [bold]abc skill install --all[/bold]"
+        if beacon_settings.artifacts.skills:
+            wired_skills, wire_errors = _wire_skills_post_sync(
+                project_root, artifacts_dir
             )
+            if wired_skills:
+                console.print(
+                    f"[green]✓[/green] Installed {len(wired_skills)} skill(s) "
+                    f"({', '.join(wired_skills)})"
+                )
+            if wire_errors:
+                for err in wire_errors:
+                    console.print(f"  [yellow]⚠[/yellow] Skill wiring: {err}")
 
-        if next_steps:
-            console.print("\n[bold]Next Steps:[/bold]")
-            for step in next_steps:
-                console.print(step)
+        if wiring_notes:
+            console.print("\n[bold]Manual wiring required:[/bold]")
+            for note in wiring_notes:
+                console.print(note)
 
     except Exception as e:
         console.print(f"\n[red]Error:[/red] Sync failed: {e}")
@@ -1430,6 +1460,138 @@ def skill_install(
 
     if errors:
         sys.exit(1)
+
+
+def _wire_contexts_opencode(project_root: Path, artifacts_dir: Path) -> list[str]:
+    """Append synced context paths to opencode.json instructions.
+
+    Returns the list of paths that were newly added (empty if nothing changed
+    or opencode.json does not exist).
+    """
+    opencode_json = project_root / "opencode.json"
+    if not opencode_json.exists():
+        return []
+
+    contexts_dir = artifacts_dir / "contexts"
+    if not contexts_dir.exists():
+        return []
+
+    ctx_files = sorted(contexts_dir.rglob("*.md"))
+    if not ctx_files:
+        return []
+
+    try:
+        data = json.loads(opencode_json.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return []
+
+    instructions: list[str] = data.get("instructions", [])
+    added: list[str] = []
+
+    for ctx_file in ctx_files:
+        rel_path = str(ctx_file.relative_to(project_root))
+        if rel_path not in instructions:
+            instructions.append(rel_path)
+            added.append(rel_path)
+
+    if added:
+        data["instructions"] = instructions
+        opencode_json.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+    return added
+
+
+def _wire_contexts_claudecode(project_root: Path, artifacts_dir: Path) -> list[str]:
+    """Append synced context @-references to CLAUDE.md.
+
+    Checks .claude/CLAUDE.md then root CLAUDE.md. Returns the list of paths
+    that were newly added (empty if nothing changed or no CLAUDE.md found).
+    """
+    claude_md = next(
+        (
+            p
+            for p in [
+                project_root / ".claude" / "CLAUDE.md",
+                project_root / "CLAUDE.md",
+            ]
+            if p.exists()
+        ),
+        None,
+    )
+    if claude_md is None:
+        return []
+
+    contexts_dir = artifacts_dir / "contexts"
+    if not contexts_dir.exists():
+        return []
+
+    ctx_files = sorted(contexts_dir.rglob("*.md"))
+    if not ctx_files:
+        return []
+
+    existing = claude_md.read_text(encoding="utf-8")
+    lines_to_append: list[str] = []
+    added: list[str] = []
+
+    for ctx_file in ctx_files:
+        rel_path = str(ctx_file.relative_to(project_root))
+        ref = f"@{rel_path}"
+        if ref not in existing:
+            lines_to_append.append(ref)
+            added.append(rel_path)
+
+    if lines_to_append:
+        separator = "\n" if existing.endswith("\n") else "\n\n"
+        claude_md.write_text(
+            existing + separator + "\n".join(lines_to_append) + "\n",
+            encoding="utf-8",
+        )
+
+    return added
+
+
+def _wire_skills_post_sync(
+    project_root: Path, artifacts_dir: Path
+) -> tuple[list[str], list[str]]:
+    """Install all synced skills for detected agents.
+
+    Returns (installed, errors) where each entry is '<skill> (<agent>)'.
+    Silently skips if no agents are detected.
+    """
+    agents = _detect_agents(project_root)
+    if not agents:
+        return [], []
+
+    skills_dir = artifacts_dir / "skills"
+    if not skills_dir.exists():
+        return [], []
+
+    skill_dirs = sorted(d for d in skills_dir.iterdir() if d.is_dir())
+    if not skill_dirs:
+        return [], []
+
+    installed: list[str] = []
+    errors: list[str] = []
+
+    for skill_dir in skill_dirs:
+        skill_md = skill_dir / "SKILL.md"
+        if not skill_md.exists():
+            continue
+        content = skill_md.read_text(encoding="utf-8")
+        description = _extract_skill_description(content)
+        name = skill_dir.name
+
+        for agent in agents:
+            try:
+                if agent == "opencode":
+                    _install_skill_opencode(project_root, name, content, description)
+                else:
+                    _install_skill_claudecode(project_root, name, content)
+                installed.append(f"{name} ({agent})")
+            except Exception as e:
+                errors.append(f"{name} ({agent}): {e}")
+
+    return installed, errors
 
 
 def _detect_agents(project_root: Path) -> list[str]:
