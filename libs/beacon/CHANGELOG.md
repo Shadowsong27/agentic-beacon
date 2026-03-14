@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.5.1](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v1.5.0...agentic-beacon@v1.5.1) (2026-03-14)
+
+
+### Bug Fixes
+
+* onboarding clarity and sync auto-wiring ([#25](https://github.com/Shadowsong27/agentic-beacon/issues/25)) ([74d2cdd](https://github.com/Shadowsong27/agentic-beacon/commit/74d2cdd721f3fc9843e5cf39d02fd91a3a7cde84))
+
+
+### Documentation
+
+* update warehouse init README template with current CLI commands and offline install ([2f07f12](https://github.com/Shadowsong27/agentic-beacon/commit/2f07f12143ca4c559f2aac3bd2a51b4c76ad1a7a))
+
 ## [1.5.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v1.4.1...agentic-beacon@v1.5.0) (2026-03-13)
 
 
