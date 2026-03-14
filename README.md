@@ -8,8 +8,6 @@ Agentic Beacon provides:
 
 > **Opinionated Framework:** Agentic Beacon takes a **specific stance** on how to organize and distribute agentic artifacts. This is not a universal standard - it's an opinionated approach based on DRY principles, file-based simplicity, and centralized collaboration. The agentic engineering landscape is rapidly evolving, and this framework provides one possible solution. Evaluate whether this approach fits your team's needs and adapt accordingly.
 
-> **Built for OpenCode:** This design was developed with [OpenCode](https://opencode.ai) usage in mind. While we keep patterns as generic as possible, the experience with other AI coding agents may differ. The core concepts (centralized context, progressive disclosure, DRY) remain applicable across tools. If you use a different coding agent and hit limitations or have ideas for improving compatibility, [open an issue](https://github.com/Shadowsong27/agentic-beacon/issues) — contributions are very welcome.
-
 ## The Problem
 
 When a team starts using AI coding agents, each developer independently figures out how to prompt their agent — what context to provide, what coding standards to enforce, what patterns to follow. This knowledge lives in individual `AGENTS.md` files, system prompts, and personal configs that are never shared.
