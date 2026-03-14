@@ -43,12 +43,14 @@ The flow is:
 ```
 Warehouse (shared git repo)                 Your project
 ────────────────────────────                ────────────────────────────────
-contexts/                   ── abc sync ──► .agentic-beacon/artifacts/
-knowledge/                                  opencode.json / AGENTS.md (wired)
-skills/
+knowledge/    ── abc sync ──►  .agentic-beacon/artifacts/knowledge/
+contexts/     ── abc sync ──►  .agentic-beacon/artifacts/contexts/
+                                opencode.json / AGENTS.md (wired)
+skills/       ── abc sync ──►  .opencode/skills/<name>/   (agent-readable)
+                                .opencode/command/<name>/  (slash command)
 ```
 
-`abc sync` reads `beacon.yaml`, copies the declared artifacts into `.agentic-beacon/artifacts/`, and wires contexts and skills into your agent config automatically. Your agent reads from the local snapshot — no live connection to the warehouse required during coding sessions.
+`abc sync` reads `beacon.yaml` and does the full job: copies knowledge and contexts into `.agentic-beacon/artifacts/` and wires them into your agent config, then installs skills into your agent's skill and command folders so they are immediately usable. No live connection to the warehouse is required during coding sessions.
 
 When a session produces something worth sharing — a better pattern, a new lesson — `abc contribute` copies it back to the warehouse so every project benefits next sync.
 
@@ -71,7 +73,7 @@ The `abc` CLI provides practical tools for:
 - **Initialization** - Create new warehouses with proper structure (`abc warehouse init`)
 - **Connection** - Link projects to warehouses (`abc warehouse connect`)
 - **Distribution** - Sync artifacts to projects (`abc sync`)
-- **Skill Installation** - Register synced skills as slash commands in your agent (`abc skill install`)
+- **Skill Installation** - Wire skills into your agent as slash commands (done automatically by `abc sync`; use `abc install skills/<name>` for individual installs)
 - **Contribution** - Copy agent-improved artifacts back to the warehouse (`abc contribute`)
 - **Discovery** - Find local changes that could benefit other teams (`abc delta`)
 - **Management** - Track installed content and maintain sync (`abc status`, `abc update`, `abc clean`)
@@ -301,8 +303,8 @@ agentic-beacon/
 | `abc warehouse init` | Initialize a new warehouse repository |
 | `abc warehouse connect` | Connect a project to a warehouse |
 | `abc setup` | Create `beacon.yaml` (manual or agent-assisted) |
-| `abc sync` | Sync artifacts declared in `beacon.yaml` to the project |
-| `abc skill install` | Register synced skills as slash commands for your agent |
+| `abc sync` | Sync and wire all artifacts declared in `beacon.yaml` (knowledge, contexts, skills) |
+| `abc install <artifact>` | Sync and wire a single artifact (e.g. `abc install skills/code-reviewer`) |
 | `abc contribute` | Copy local artifact changes back to the warehouse |
 | `abc status` | Show current connection and sync status |
 | `abc delta` | Compare synced artifacts with warehouse (find local changes) |
@@ -322,9 +324,8 @@ agentic-beacon/
 1. **Install**: `uv tool install agentic-beacon`
 2. **Connect**: `abc warehouse connect --path ~/your-warehouse`
 3. **Configure**: `abc setup --manual` then edit `beacon.yaml`
-4. **Sync**: `abc sync`
-5. **Install skills**: `abc skill install --all` to register skills as agent slash commands
-6. **Contribute**: `abc contribute --all` to share agent improvements back to the warehouse
+4. **Sync**: `abc sync` — copies and wires all artifacts (knowledge, contexts, skills) in one step
+5. **Contribute**: `abc contribute --all` to share agent improvements back to the warehouse
 7. **Stay current**: `abc update` after warehouse changes
 
 ## 🔧 Technical Details

@@ -257,25 +257,19 @@ abc sync
 
 ### Step 5: Install as an agent slash command
 
-Syncing copies the skill files to disk — but to invoke the skill with a slash command, you need to register it with your agent:
+`abc sync` wires skills automatically — no separate step needed. To install a single skill:
 
 ```bash
-abc skill install generate-tests
+abc install skills/generate-tests
 ```
 
-Or install everything at once:
-
-```bash
-abc skill install --all
-```
-
-This makes the skill available as `/generate-tests` in Claude Code or OpenCode. The agent auto-detects which tool you're using based on the presence of `.claude/` or `opencode.json`.
+This makes the skill available as `/generate-tests` in your agent.
 
 ---
 
 ## Invoking a Skill
 
-After running `abc skill install`, invoke the skill directly in your agent:
+After syncing, invoke the skill directly in your agent:
 
 **Claude Code:**
 ```

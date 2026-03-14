@@ -18,8 +18,8 @@ abc warehouse connect --path ~/path/to/this-warehouse
 abc setup --manual   # then edit .agentic-beacon/beacon.yaml
 abc sync
 
-# 4. (Optional) Register skills as agent slash commands
-abc skill install --all
+# Skills are wired automatically by abc sync
+# To install a single skill: abc install skills/<name>
 ```
 
 ### For Contributors
@@ -60,8 +60,8 @@ uv tool install agentic-beacon --no-index --find-links ./abc-bundle/
 |---------|-------------|
 | `abc warehouse connect` | Connect a project to this warehouse |
 | `abc setup` | Create `beacon.yaml` for a project |
-| `abc sync` | Sync declared artifacts to the project |
-| `abc skill install` | Register synced skills as agent slash commands |
+| `abc sync` | Sync and wire all declared artifacts (knowledge, contexts, skills) |
+| `abc install skills/<name>` | Install a single skill |
 | `abc list` | Show available content in the warehouse |
 | `abc status` | Show connection and sync status |
 | `abc delta` | Find local changes not yet contributed back |
