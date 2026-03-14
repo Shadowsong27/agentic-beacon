@@ -115,9 +115,9 @@ mkdir -p ~/team-warehouse/skills/generate-tests
 #   skills:
 #     - skills/generate-tests/**/*
 
-# 3. Sync and install
+# 3. Sync (wires skills automatically)
 abc sync
-abc skill install generate-tests
+# Or to install a single skill: abc install skills/generate-tests
 ```
 
 ---
