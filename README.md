@@ -10,6 +10,20 @@ Agentic Beacon provides:
 
 > **Built for OpenCode:** This design was developed with [OpenCode](https://opencode.ai) usage in mind. While we keep patterns as generic as possible, the experience with other AI coding agents may differ. The core concepts (centralized context, progressive disclosure, DRY) remain applicable across tools. If you use a different coding agent and hit limitations or have ideas for improving compatibility, [open an issue](https://github.com/Shadowsong27/agentic-beacon/issues) — contributions are very welcome.
 
+## The Problem
+
+When a team starts using AI coding agents, each developer independently figures out how to prompt their agent — what context to provide, what coding standards to enforce, what patterns to follow. This knowledge lives in individual `AGENTS.md` files, system prompts, and personal configs that are never shared.
+
+The result:
+
+- **Reinvention at every project.** The same context files get written from scratch for each new repo, with slight variations that accumulate over time.
+- **Knowledge stays siloed.** When one developer discovers the right way to phrase a Python convention, or learns that a certain agent pattern causes issues, that lesson never leaves their laptop.
+- **Context drift.** Copy-pasted `AGENTS.md` files diverge. Projects that started identical now describe conflicting standards. No one knows which is authoritative.
+- **Painful onboarding.** New team members (and new agents) start with nothing. The organization's accumulated agentic knowledge isn't anywhere they can find it.
+- **No feedback loop.** When an agent session produces a better approach, there's no workflow to promote that improvement back to the rest of the team.
+
+This is the same DRY problem that version control solved for code — except it hasn't been solved yet for agentic engineering artifacts.
+
 ## What is Agentic Beacon?
 
 Agentic Beacon is a **framework** for collaborative AI-assisted development that solves a fundamental problem: **how to share and evolve agentic engineering practices across teams.**
