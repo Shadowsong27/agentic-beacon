@@ -22,14 +22,6 @@ Project-level instructions for AI agents working on the Agentic Beacon framework
 
 ## Development Guidelines
 
-### Override Model
-
-**Decision:** Project-local overrides live in `.agentic-beacon/overrides/`, mirroring `artifacts/` structure. `abc sync` always owns `artifacts/` and never touches `overrides/`. `--preserve` flag is removed.
-
-**Read:** [Decision: Override Model](knowledge/decisions/override-model.md)
-
----
-
 ### Configuration Management Patterns
 
 **Decision:** Use Pydantic Settings patterns with consistent terminology
