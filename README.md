@@ -52,6 +52,29 @@ skills/       ── abc sync ──►  .opencode/skills/<name>/   (agent-reada
 
 `abc sync` reads `beacon.yaml` and does the full job: copies knowledge and contexts into `.agentic-beacon/artifacts/` and wires them into your agent config, then installs skills into your agent's skill and command folders so they are immediately usable. No live connection to the warehouse is required during coding sessions.
 
+**Example — after `abc sync` with OpenCode:**
+
+`opencode.json` (auto-updated):
+```json
+{
+  "instructions": [
+    ".agentic-beacon/artifacts/contexts/global.md",
+    ".agentic-beacon/artifacts/contexts/python.md"
+  ]
+}
+```
+
+`.opencode/command/code-review.md` (slash command stub, auto-created):
+```markdown
+---
+description: Run a structured code review
+---
+
+Use the **skill** tool to load and execute the `code-review` skill with any provided arguments.
+```
+
+OpenCode picks up the contexts automatically on session start, and `/code-review` becomes available as a slash command immediately.
+
 When a session produces something worth sharing — a better pattern, a new lesson — `abc contribute` copies it back to the warehouse so every project benefits next sync.
 
 ### The Framework Components
