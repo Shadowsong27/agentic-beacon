@@ -828,6 +828,136 @@ def sync(*, preserve: bool, prune: bool, verbose_flag: bool, dry_run: bool) -> N
         sys.exit(1)
 
 
+@main.command(name="install")
+@click.argument("artifact", metavar="ARTIFACT")
+@click.option(
+    "--agent",
+    type=click.Choice(["opencode", "claudecode"], case_sensitive=False),
+    help="Target agent tool (auto-detected if not specified)",
+)
+def install_artifact(*, artifact: str, agent: str | None) -> None:
+    """Pull and wire a single artifact from the warehouse.
+
+    ARTIFACT is a path relative to the warehouse root. Type is inferred
+    from the leading path component.
+
+    Example:
+        abc install skills/code-reviewer
+        abc install contexts/python
+        abc install knowledge/decisions/coding-standards.md
+    """
+    beacon_dir = Path.cwd() / ".agentic-beacon"
+    if not beacon_dir.exists():
+        console.print("[red]Error:[/red] No .agentic-beacon directory found.")
+        console.print("Run 'abc warehouse connect' to connect to a warehouse first.")
+        sys.exit(1)
+
+    try:
+        warehouse_settings = WarehouseSettings()
+        warehouse_path = Path(warehouse_settings.warehouse.local_path)
+    except Exception as e:
+        console.print(f"[red]Error:[/red] Could not load warehouse settings: {e}")
+        sys.exit(1)
+
+    if not warehouse_path.exists():
+        console.print(f"[red]Error:[/red] Warehouse not found at {warehouse_path}")
+        sys.exit(1)
+
+    artifact = artifact.rstrip("/")
+    artifacts_dir = beacon_dir / "artifacts"
+    engine = SyncEngine(warehouse_path=warehouse_path, artifacts_path=artifacts_dir)
+
+    # Resolve which files to copy
+    source = warehouse_path / artifact
+    if source.is_file():
+        files_to_copy = [artifact]
+    elif source.is_dir():
+        files_to_copy = engine.expand_glob(f"{artifact}/**/*")
+    elif (warehouse_path / f"{artifact}.md").exists():
+        files_to_copy = [f"{artifact}.md"]
+        artifact = f"{artifact}.md"
+    else:
+        console.print(f"[red]Error:[/red] Artifact not found in warehouse: {artifact}")
+        sys.exit(1)
+
+    if not files_to_copy:
+        console.print(f"[red]Error:[/red] No files found for: {artifact}")
+        sys.exit(1)
+
+    # Copy files from warehouse to artifacts
+    copy_errors: list[str] = []
+    copied = 0
+    for path in files_to_copy:
+        result = engine.copy_file(path)
+        if result.success:
+            if result.action == "copied":
+                copied += 1
+        else:
+            copy_errors.append(f"{path}: {result.error_message}")
+
+    if copy_errors:
+        for err in copy_errors:
+            console.print(f"[red]✗[/red] {err}")
+        sys.exit(1)
+
+    # Infer type and wire
+    artifact_type = Path(artifact).parts[0] if Path(artifact).parts else ""
+    project_root = Path.cwd()
+    agents = _detect_agents(project_root) if not agent else [agent.lower()]
+
+    if artifact_type == "skills":
+        # Skill name is the directory directly under skills/
+        skill_name = (
+            Path(artifact).parts[1]
+            if len(Path(artifact).parts) > 1
+            else Path(artifact).stem
+        )
+        skill_md = artifacts_dir / "skills" / skill_name / "SKILL.md"
+        if skill_md.exists() and agents:
+            content = skill_md.read_text(encoding="utf-8")
+            description = _extract_skill_description(content)
+            for target_agent in agents:
+                if target_agent == "opencode":
+                    _install_skill_opencode(
+                        project_root, skill_name, content, description
+                    )
+                else:
+                    _install_skill_claudecode(project_root, skill_name, content)
+            console.print(f"[green]✓[/green] Installed skill: {skill_name}")
+            _print_skill_next_steps(agents)
+        elif skill_md.exists():
+            console.print(
+                "[green]✓[/green] Skill copied (no agent detected for wiring)"
+            )
+        else:
+            console.print(
+                f"[green]✓[/green] Artifact copied ({len(files_to_copy)} file(s))"
+            )
+
+    elif artifact_type == "contexts":
+        wired_opencode = _wire_contexts_opencode(project_root, artifacts_dir)
+        wired_claudecode = _wire_contexts_claudecode(project_root, artifacts_dir)
+        if wired_opencode or wired_claudecode:
+            console.print("[green]✓[/green] Context copied and wired into agent config")
+        else:
+            console.print(
+                "[green]✓[/green] Context copied (no agent config found to wire)"
+            )
+
+    elif artifact_type == "knowledge":
+        console.print(
+            f"[green]✓[/green] Knowledge artifact installed ({len(files_to_copy)} file(s))"
+        )
+
+    else:
+        console.print(
+            f"[green]✓[/green] Artifact installed ({len(files_to_copy)} file(s))"
+        )
+
+    if copied:
+        console.print(f"  [dim]{copied} file(s) newly copied[/dim]")
+
+
 @main.command()
 @click.argument("file", required=False, type=str)
 @click.option("--no-color", is_flag=True, help="Disable color output in diffs")
@@ -1337,129 +1467,6 @@ def _print_contribute_next_steps(warehouse_path: Path, contributed: list[str]) -
 
 
 # ========== Skill Commands ==========
-
-
-@main.group()
-def skill() -> None:
-    """Skill management commands."""
-    pass
-
-
-@skill.command(name="install")
-@click.argument("skill_name", required=False, metavar="SKILL_NAME")
-@click.option("--all", "install_all", is_flag=True, help="Install all synced skills")
-@click.option(
-    "--agent",
-    type=click.Choice(["opencode", "claudecode"], case_sensitive=False),
-    help="Target agent tool (auto-detected if not specified)",
-)
-def skill_install(
-    *,
-    skill_name: str | None,
-    install_all: bool,
-    agent: str | None,
-) -> None:
-    """
-    Register synced skills as slash commands for your agent tool.
-
-    Reads skills from .agentic-beacon/artifacts/skills/ and creates the
-    agent-specific command stubs needed for the agent to discover them.
-
-    Example:
-        abc skill install record-knowledge
-        abc skill install record-knowledge --agent claudecode
-        abc skill install --all
-        abc skill install --all --agent opencode
-    """
-    if not skill_name and not install_all:
-        console.print("[red]Error:[/red] Provide a skill name or use --all.")
-        console.print("  abc skill install <name>")
-        console.print("  abc skill install --all")
-        sys.exit(1)
-
-    if skill_name and install_all:
-        console.print("[red]Error:[/red] SKILL_NAME and --all are mutually exclusive.")
-        sys.exit(1)
-
-    beacon_dir = Path.cwd() / ".agentic-beacon"
-    if not beacon_dir.exists():
-        console.print("[red]Error:[/red] No .agentic-beacon directory found.")
-        console.print("Run 'abc warehouse connect' to connect to a warehouse first.")
-        sys.exit(1)
-
-    artifacts_skills_dir = beacon_dir / "artifacts" / "skills"
-    if not artifacts_skills_dir.exists():
-        console.print("[red]Error:[/red] No synced skills found.")
-        console.print("Run 'abc sync' to sync skills from the warehouse first.")
-        sys.exit(1)
-
-    # Resolve target agents
-    project_root = Path.cwd()
-    agents = _detect_agents(project_root) if not agent else [agent.lower()]
-
-    if not agents:
-        console.print(
-            "[red]Error:[/red] Could not detect an agent tool in this project."
-        )
-        console.print(
-            "Use --agent opencode or --agent claudecode to specify one explicitly."
-        )
-        sys.exit(1)
-
-    # Resolve skills to install
-    if install_all:
-        skill_dirs = [d for d in artifacts_skills_dir.iterdir() if d.is_dir()]
-        if not skill_dirs:
-            console.print("[yellow]No synced skills found to install.[/yellow]")
-            sys.exit(0)
-        skills_to_install = [d.name for d in skill_dirs]
-    else:
-        skill_dir = artifacts_skills_dir / skill_name  # type: ignore[arg-type]
-        if not skill_dir.exists():
-            console.print(
-                f"[red]Error:[/red] Skill '{skill_name}' not found in synced artifacts."
-            )
-            console.print("Run 'abc sync' to sync it from the warehouse first.")
-            sys.exit(1)
-        skills_to_install = [skill_name]  # type: ignore[list-item]
-
-    # Install
-    installed: list[str] = []
-    errors: list[str] = []
-
-    for name in skills_to_install:
-        skill_md_path = artifacts_skills_dir / name / "SKILL.md"
-        if not skill_md_path.exists():
-            errors.append(f"{name}: SKILL.md not found in artifacts")
-            continue
-        content = skill_md_path.read_text(encoding="utf-8")
-        description = _extract_skill_description(content)
-
-        for target_agent in agents:
-            try:
-                if target_agent == "opencode":
-                    _install_skill_opencode(project_root, name, content, description)
-                else:
-                    _install_skill_claudecode(project_root, name, content)
-                installed.append(f"{name} ({target_agent})")
-            except Exception as e:
-                errors.append(f"{name} ({target_agent}): {e}")
-
-    # Report
-    if installed:
-        console.print("\n[bold green]✓ Skills installed[/bold green]")
-        for entry in installed:
-            console.print(f"  [green]✓[/green] {entry}")
-    if errors:
-        console.print("\n[bold red]Errors[/bold red]")
-        for entry in errors:
-            console.print(f"  [red]✗[/red] {entry}")
-
-    if installed and not errors:
-        _print_skill_next_steps(agents)
-
-    if errors:
-        sys.exit(1)
 
 
 def _wire_contexts_opencode(project_root: Path, artifacts_dir: Path) -> list[str]:
