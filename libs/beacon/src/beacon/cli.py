@@ -13,7 +13,7 @@ from rich.table import Table
 
 from .core.delta import DeltaComparator, DeltaStatus
 from .core.gitignore import GitignoreManager
-from .core.settings import BeaconSettings, WarehouseSettings
+from .core.settings import ArtifactsConfig, BeaconSettings, WarehouseSettings
 from .core.sync import SyncEngine
 from .distributor import WarehouseDistributor
 from .initializer import WarehouseInitializer
@@ -900,6 +900,9 @@ def install_artifact(*, artifact: str, agent: str | None) -> None:
             console.print(f"[red]✗[/red] {err}")
         sys.exit(1)
 
+    # Update beacon.yaml so future abc sync stays idempotent
+    _update_beacon_yaml(beacon_dir, files_to_copy)
+
     # Infer type and wire
     artifact_type = Path(artifact).parts[0] if Path(artifact).parts else ""
     project_root = Path.cwd()
@@ -1467,6 +1470,34 @@ def _print_contribute_next_steps(warehouse_path: Path, contributed: list[str]) -
 
 
 # ========== Skill Commands ==========
+
+
+def _update_beacon_yaml(beacon_dir: Path, files: list[str]) -> None:
+    """Add installed file paths to beacon.yaml, creating it if absent."""
+    beacon_yaml = beacon_dir / "beacon.yaml"
+
+    if beacon_yaml.exists():
+        try:
+            settings = BeaconSettings.from_yaml(beacon_yaml)
+        except Exception:
+            return  # Don't corrupt a file we can't parse
+    else:
+        settings = BeaconSettings(artifacts=ArtifactsConfig())
+
+    for path in files:
+        parts = Path(path).parts
+        artifact_type = parts[0] if parts else ""
+        if artifact_type == "skills":
+            if path not in settings.artifacts.skills:
+                settings.artifacts.skills.append(path)
+        elif artifact_type == "contexts":
+            if path not in settings.artifacts.contexts:
+                settings.artifacts.contexts.append(path)
+        elif artifact_type == "knowledge":
+            if path not in settings.artifacts.knowledge:
+                settings.artifacts.knowledge.append(path)
+
+    settings.to_yaml(beacon_yaml)
 
 
 def _wire_contexts_opencode(project_root: Path, artifacts_dir: Path) -> list[str]:

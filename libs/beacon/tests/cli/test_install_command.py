@@ -3,6 +3,7 @@
 import json
 
 import pytest
+import yaml
 from beacon.cli import main
 from click.testing import CliRunner
 
@@ -193,6 +194,55 @@ def test_install_knowledge_copies_to_artifacts(connected_project):
     )
     assert knowledge.exists()
     assert knowledge.read_text() == SAMPLE_KNOWLEDGE_MD
+
+
+# ---------------------------------------------------------------------------
+# beacon.yaml update
+# ---------------------------------------------------------------------------
+
+
+def test_install_creates_beacon_yaml_when_absent(connected_project):
+    runner = CliRunner()
+    result = runner.invoke(main, ["install", "skills/code-reviewer"])
+
+    assert result.exit_code == 0, result.output
+    beacon_yaml = connected_project / ".agentic-beacon" / "beacon.yaml"
+    assert beacon_yaml.exists()
+    data = yaml.safe_load(beacon_yaml.read_text())
+    assert "skills/code-reviewer/SKILL.md" in data["artifacts"]["skills"]
+
+
+def test_install_updates_existing_beacon_yaml(connected_project):
+    beacon_yaml = connected_project / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n  skills: []\n  contexts: []\n  knowledge: []\n"
+    )
+
+    runner = CliRunner()
+    runner.invoke(main, ["install", "contexts/python.md"])
+
+    data = yaml.safe_load(beacon_yaml.read_text())
+    assert "contexts/python.md" in data["artifacts"]["contexts"]
+
+
+def test_install_beacon_yaml_is_idempotent(connected_project):
+    runner = CliRunner()
+    runner.invoke(main, ["install", "skills/code-reviewer"])
+    runner.invoke(main, ["install", "skills/code-reviewer"])
+
+    beacon_yaml = connected_project / ".agentic-beacon" / "beacon.yaml"
+    data = yaml.safe_load(beacon_yaml.read_text())
+    skill_entries = [e for e in data["artifacts"]["skills"] if "code-reviewer" in e]
+    assert len(skill_entries) == 1
+
+
+def test_install_knowledge_added_to_beacon_yaml(connected_project):
+    runner = CliRunner()
+    runner.invoke(main, ["install", "knowledge/decisions/use-pydantic.md"])
+
+    beacon_yaml = connected_project / ".agentic-beacon" / "beacon.yaml"
+    data = yaml.safe_load(beacon_yaml.read_text())
+    assert "knowledge/decisions/use-pydantic.md" in data["artifacts"]["knowledge"]
 
 
 # ---------------------------------------------------------------------------
