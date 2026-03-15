@@ -22,28 +22,6 @@ from .warehouse import WarehouseValidator
 console = Console()
 
 
-def find_warehouse_root() -> Path | None:
-    """
-    Find warehouse root by looking for warehouse markers.
-
-    Returns:
-        Path to warehouse root or None if not found
-    """
-    current = Path.cwd()
-
-    # Check current directory and parents
-    for path in [current, *current.parents]:
-        # Check for warehouse markers
-        if (
-            (path / "contexts").exists()
-            and (path / "knowledge").exists()
-            and (path / "skills").exists()
-        ):
-            return path
-
-    return None
-
-
 def find_project_root() -> Path:
     """
     Find project root (current directory or first parent with .git).
@@ -80,7 +58,7 @@ def main(*, verbose: bool) -> None:
 
 @main.group()
 def warehouse() -> None:
-    """Warehouse management commands (init, connect)."""
+    """Warehouse management commands (init, connect, list)."""
     pass
 
 
@@ -334,6 +312,79 @@ def connect(*, path: Path | None) -> None:
         console.print(f"\n[red]Error:[/red] Failed to save connection: {e}")
         logger.exception("Connection failed")
         sys.exit(1)
+
+
+@warehouse.command(name="list")
+@click.argument(
+    "artifact_type",
+    required=False,
+    type=click.Choice(["knowledge", "skills", "contexts"], case_sensitive=False),
+    default=None,
+)
+def warehouse_list(*, artifact_type: str | None) -> None:
+    """List artifacts available in the connected warehouse.
+
+    ARTIFACT_TYPE filters output to a single type. Omit to show all.
+
+    Example:
+        abc warehouse list
+        abc warehouse list knowledge
+        abc warehouse list skills
+        abc warehouse list contexts
+    """
+    beacon_dir = Path.cwd() / ".agentic-beacon"
+    config_file = beacon_dir / "config.toml"
+
+    if not config_file.exists():
+        console.print("[red]Error:[/red] No warehouse connected.")
+        console.print("Run 'abc warehouse connect --path <warehouse>' first.")
+        sys.exit(1)
+
+    try:
+        warehouse_settings = WarehouseSettings()
+        warehouse_path = Path(warehouse_settings.warehouse.local_path)
+    except Exception as e:
+        console.print(f"[red]Error:[/red] Failed to read warehouse connection: {e}")
+        sys.exit(1)
+
+    if not warehouse_path.exists():
+        console.print(
+            f"[red]Error:[/red] Warehouse path no longer exists: {warehouse_path}"
+        )
+        console.print("Run 'abc warehouse connect --path <warehouse>' to reconnect.")
+        sys.exit(1)
+
+    distributor = WarehouseDistributor(
+        warehouse_root=warehouse_path, target_root=Path.cwd()
+    )
+    available = distributor.list_available()
+
+    types_to_show = (
+        [artifact_type] if artifact_type else ["contexts", "knowledge", "skills"]
+    )
+
+    section_config = {
+        "contexts": ("Available Contexts", "cyan", "Context"),
+        "knowledge": ("Available Knowledge", "green", "Scope"),
+        "skills": ("Available Skills", "yellow", "Skill"),
+    }
+
+    any_shown = False
+    for section in types_to_show:
+        items = available.get(section, [])
+        if items:
+            title, color, col_name = section_config[section]
+            table = Table(title=title)
+            table.add_column(col_name, style=color)
+            for item in items:
+                table.add_row(item)
+            console.print(table)
+            console.print()
+            any_shown = True
+
+    if not any_shown:
+        label = artifact_type or "artifacts"
+        console.print(f"[yellow]No {label} found in warehouse.[/yellow]")
 
 
 # ========== Client Commands (top-level) ==========
@@ -1806,50 +1857,71 @@ def update(*, project: Path | None) -> None:
 
 
 @main.command(name="list")
-@click.option(
-    "--warehouse",
-    type=click.Path(exists=True, file_okay=False, path_type=Path),
-    help="Path to warehouse repository (auto-detected if not provided)",
+@click.argument(
+    "artifact_type",
+    required=False,
+    type=click.Choice(["knowledge", "skills", "contexts"], case_sensitive=False),
+    default=None,
 )
-def list_cmd(*, warehouse: Path | None) -> None:
-    """List available warehouse content."""
-    warehouse_root = warehouse or find_warehouse_root()
-    if not warehouse_root:
-        console.print(
-            "[red]Error:[/red] Could not find warehouse root. Specify --warehouse."
-        )
+def list_cmd(*, artifact_type: str | None) -> None:
+    """List artifacts synced to the current project.
+
+    ARTIFACT_TYPE filters output to a single type. Omit to show all.
+
+    Reads from .agentic-beacon/artifacts/. Run 'abc sync' first to populate.
+
+    Example:
+        abc list
+        abc list knowledge
+        abc list skills
+        abc list contexts
+    """
+    beacon_dir = Path.cwd() / ".agentic-beacon"
+    artifacts_dir = beacon_dir / "artifacts"
+
+    if not artifacts_dir.exists():
+        console.print("[red]Error:[/red] No synced artifacts found.")
+        console.print("Run 'abc sync' to download artifacts from the warehouse.")
         sys.exit(1)
 
-    distributor = WarehouseDistributor(
-        warehouse_root=warehouse_root, target_root=Path.cwd()
+    types_to_show = (
+        [artifact_type] if artifact_type else ["contexts", "knowledge", "skills"]
     )
-    available = distributor.list_available()
 
-    # Display contexts
-    if available["contexts"]:
-        table = Table(title="Available Contexts")
-        table.add_column("Context", style="cyan")
-        for context in available["contexts"]:
-            table.add_row(context)
-        console.print(table)
-        console.print()
+    section_config = {
+        "contexts": ("Synced Contexts", "cyan", "Context"),
+        "knowledge": ("Synced Knowledge", "green", "File"),
+        "skills": ("Synced Skills", "yellow", "Skill"),
+    }
 
-    # Display knowledge
-    if available["knowledge"]:
-        table = Table(title="Available Knowledge Scopes")
-        table.add_column("Scope", style="green")
-        for scope in available["knowledge"]:
-            table.add_row(scope)
-        console.print(table)
-        console.print()
+    any_shown = False
+    for section in types_to_show:
+        section_dir = artifacts_dir / section
+        if not section_dir.exists():
+            continue
 
-    # Display skills
-    if available["skills"]:
-        table = Table(title="Available Skills")
-        table.add_column("Skill", style="yellow")
-        for skill in available["skills"]:
-            table.add_row(skill)
-        console.print(table)
+        files = sorted(
+            str(f.relative_to(artifacts_dir))
+            for f in section_dir.rglob("*")
+            if f.is_file() and not f.name.startswith(".")
+        )
+
+        if files:
+            title, color, col_name = section_config[section]
+            table = Table(title=title)
+            table.add_column(col_name, style=color)
+            for item in files:
+                table.add_row(item)
+            console.print(table)
+            console.print()
+            any_shown = True
+
+    if not any_shown:
+        label = artifact_type or "artifacts"
+        console.print(
+            f"[yellow]No {label} found in .agentic-beacon/artifacts/.[/yellow]"
+        )
+        console.print("Run 'abc sync' to download artifacts from the warehouse.")
 
 
 @main.command()

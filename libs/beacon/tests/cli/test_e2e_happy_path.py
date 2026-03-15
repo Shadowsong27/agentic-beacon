@@ -98,14 +98,18 @@ def test_e2e_warehouse_init_installs_record_knowledge(e2e_warehouse):
 
 
 # ---------------------------------------------------------------------------
-# Step 2 — abc list shows all three sections including Contexts
+# Step 2 — abc warehouse list shows all three sections including Contexts
 # ---------------------------------------------------------------------------
 
 
-def test_e2e_list_shows_contexts(e2e_project):
+def test_e2e_warehouse_list_shows_contexts(e2e_project):
     project_dir, warehouse, runner = e2e_project
 
-    result = runner.invoke(main, ["list", "--warehouse", str(warehouse)])
+    # Connect first so warehouse list can read config.toml
+    connect = runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
+    assert connect.exit_code == 0, f"connect failed:\n{connect.output}"
+
+    result = runner.invoke(main, ["warehouse", "list"])
 
     assert result.exit_code == 0
     assert "Contexts" in result.output
