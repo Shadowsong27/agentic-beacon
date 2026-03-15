@@ -199,63 +199,26 @@ Paths are relative to the warehouse root. Glob patterns are supported. See [beac
 abc sync
 ```
 
-Artifacts are copied into `.agentic-beacon/artifacts/`, preserving their directory structure from the warehouse.
+Artifacts are copied into `.agentic-beacon/artifacts/` and wired into your agent config automatically.
 
-**Expected output:**
-```
-✓ Sync complete
-  Copied: 8 files
-  Unchanged: 0 files
+`abc sync` does the full job in one step:
+- **Contexts** — appended to `opencode.json` instructions or `CLAUDE.md` (whichever exists)
+- **Skills** — installed into `.opencode/skills/` + `.opencode/command/` (or `.claude/skills/`)
+- **Knowledge** — copied to artifacts, no further wiring needed
 
-Next Steps:
-  Contexts were synced but won't load automatically.
-  Register them in your agent's config file:
-  ...
-```
+> **First run on a new project?** If you don't have an `opencode.json` or `CLAUDE.md` yet, create one first — even an empty `opencode.json` (`{}`) is enough for sync to wire contexts into it automatically.
 
-### Step 6: Skills are wired automatically
+### Step 6: Invoke skills
 
-`abc sync` handles skill wiring as part of the sync — no separate step needed. For each skill declared in `beacon.yaml`, it installs into both:
-
-- `.opencode/skills/<name>/` — agent-readable skill file
-- `.opencode/command/<name>/` — slash command invocation
-
-After syncing, invoke any skill directly in your agent with `/skill-name`.
-
-To install a single skill without a full sync:
+After syncing, any skill declared in `beacon.yaml` is available as a slash command immediately. To install a single skill without a full sync:
 
 ```bash
 abc install skills/code-review
 ```
 
-### Step 7: Wire contexts into your agent
+This copies the skill from the warehouse, wires it for your agent, and adds it to `beacon.yaml` so future syncs stay idempotent.
 
-**This step is required.** Syncing copies files to disk, but your AI agent won't load them unless they're registered in its config file.
-
-For each context file synced (e.g. `contexts/global.md` → `.agentic-beacon/artifacts/contexts/global.md`), add a reference:
-
-**Claude Code (`CLAUDE.md`):**
-```markdown
-## Warehouse Contexts (via agentic-beacon)
-
-@.agentic-beacon/artifacts/contexts/global.md
-@.agentic-beacon/artifacts/contexts/python.md
-```
-
-**OpenCode (`opencode.json`):**
-```json
-{
-  "instructions": [
-    ".agentic-beacon/artifacts/contexts/global.md",
-    ".agentic-beacon/artifacts/contexts/python.md"
-  ]
-}
-```
-
-**Generic agents (`AGENTS.md`):**
-```markdown
-@.agentic-beacon/artifacts/contexts/global.md
-```
+### Step 7: Commit your config changes
 
 Commit these changes so teammates get the same contexts automatically after running `abc sync`.
 

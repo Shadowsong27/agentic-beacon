@@ -158,7 +158,8 @@ An empty `knowledge` or `skills` list is valid — those artifact types simply w
 |---------|------------------------|
 | `abc setup --manual` | Creates an empty template |
 | `abc setup --agent-assisted` | Creates template + `warehouse-catalog.md` to help fill it |
-| `abc sync` | Reads `beacon.yaml`, copies matching files |
+| `abc install <artifact>` | Copies and wires one artifact, then adds it to `beacon.yaml` |
+| `abc sync` | Reads `beacon.yaml`, copies and wires all matching artifacts |
 | `abc sync --prune` | Reads `beacon.yaml`, removes files no longer listed |
 | `abc delta` | Reads `beacon.yaml` to determine which files to compare |
 | `abc update` | Reads `beacon.yaml`, force-overwrites all files |
