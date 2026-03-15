@@ -77,52 +77,15 @@ When a session produces something worth sharing — a better pattern, a new less
 
 ### The Framework Components
 
-**1. 📐 Methodology - Artifact Standardization**
+Three artifact types form the core of a warehouse:
 
-Defines three core artifact types that should be centralized and distributed:
-
-- 📄 **Contexts** - Boot instructions and coding standards loaded on agent session start
+- 📄 **Contexts** - Boot instructions and coding standards loaded at agent session start
 - 🧠 **Knowledge** - Atomic decisions, lessons, and facts
-- ⚡ **Skills** - Reusable workflows, procedures, and specialized instructions
+- ⚡ **Skills** - Reusable workflows and procedures available as slash commands
 
-These artifacts form a **warehouse** - a single source of truth for your organization's agentic practices.
+The `abc` CLI handles the rest: initializing warehouses, connecting projects, syncing artifacts, and contributing improvements back. Everything is plain markdown files in Git — no infrastructure required.
 
-**2. 💻 CLI Tooling - Warehouse Operations**
-
-The `abc` CLI provides practical tools for:
-
-- **Initialization** - Create new warehouses with proper structure (`abc warehouse init`)
-- **Connection** - Link projects to warehouses (`abc warehouse connect`)
-- **Distribution** - Sync artifacts to projects (`abc sync`)
-- **Skill Installation** - Wire skills into your agent as slash commands (done automatically by `abc sync`; use `abc install skills/<name>` for individual installs)
-- **Contribution** - Copy agent-improved artifacts back to the warehouse (`abc contribute`)
-- **Discovery** - Find local changes that could benefit other teams (`abc delta`)
-- **Management** - Track installed content and maintain sync (`abc status`, `abc update`, `abc clean`)
-
-### 🔁 Core Principle: Don't Repeat Yourself (DRY)
-
-**DRY for agentic knowledge** - the fundamental philosophy behind this framework.
-
-Instead of duplicating agent instructions, coding standards, and learned patterns across multiple projects, centralize them in a warehouse where:
-- **One update propagates everywhere** - Fix a pattern once, all projects benefit
-- **Teams learn collectively** - Capture lessons from one project, share with all
-- **Onboarding is instant** - New developers and agents inherit organizational knowledge automatically
-- **Evolution is natural** - Adapt the structure as practices evolve, without rewriting every project
-
-### 🪶 Design Philosophy: Intentionally Lightweight
-
-**Why markdown files and Git instead of a database or RAG system?**
-
-Organizational coding standards are curated, structured, and small — typically hundreds of KB, not gigabytes. Agents don't need to search for relevant knowledge; context files tell them explicitly what to read and when. Plain files and Git are sufficient, easier to adopt, and require no infrastructure.
-
-**Why keep the framework itself minimal?**
-
-The agentic engineering landscape is shifting rapidly. What's best practice today may be superseded in months — by new agent capabilities, new tool conventions, or new paradigms entirely. Agentic Beacon is deliberately lightweight so that:
-- Teams can adopt it without committing to heavy infrastructure
-- If something better comes along, the exit cost is low — it's just markdown files
-- The inner structure of your warehouse is yours to decide; the framework only prescribes three top-level directories
-
-> For the full reasoning, see [Why This Exists: Three Questions](./docs/agentic-warehouse-design.md#why-this-exists-three-questions) in the design docs.
+> For a deeper look at the design rationale, see [Agentic Warehouse Design](./docs/agentic-warehouse-design.md).
 
 ## 🏗️ Framework Architecture
 
@@ -332,30 +295,6 @@ agentic-beacon/
 | `abc update` | Re-sync and overwrite local artifacts from warehouse |
 | `abc list` | List available content in the connected warehouse |
 | `abc clean` | Remove synced artifacts from the project |
-
-## 🏢 For Organizations
-
-1. **Initialize warehouse**: `abc warehouse init` to create structure
-2. **Customize**: Add your organization's contexts, knowledge, and skills
-3. **Share**: Teams install `agentic-beacon` and use `abc warehouse connect` in projects
-4. **Optional**: Host internally on private PyPI (see [Private Deployment Guide](./libs/beacon/PRIVATE_DEPLOYMENT.md))
-
-## 👥 For Teams
-
-1. **Install**: `uv tool install agentic-beacon`
-2. **Connect**: `abc warehouse connect --path ~/your-warehouse`
-3. **Configure**: `abc setup --manual` then edit `beacon.yaml`
-4. **Sync**: `abc sync` — copies and wires all artifacts (knowledge, contexts, skills) in one step
-5. **Contribute**: `abc contribute --all` to share agent improvements back to the warehouse
-7. **Stay current**: `abc update` after warehouse changes
-
-## 🔧 Technical Details
-
-- **Package Name:** `agentic-beacon`
-- **CLI Command:** `abc`
-- **Python Required:** `>=3.12`
-- **License:** MIT
-- **Dependencies:** click, rich, pyyaml, loguru
 
 ---
 
