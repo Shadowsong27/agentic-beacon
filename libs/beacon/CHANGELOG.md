@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.0.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v1.6.0...agentic-beacon@v2.0.0) (2026-03-15)
+
+
+### ⚠ BREAKING CHANGES
+
+* redesign list operations — abc list <type> and abc warehouse list <type> ([#28](https://github.com/Shadowsong27/agentic-beacon/issues/28))
+
+### Features
+
+* redesign list operations — abc list &lt;type&gt; and abc warehouse list &lt;type&gt; ([#28](https://github.com/Shadowsong27/agentic-beacon/issues/28)) ([fdea11a](https://github.com/Shadowsong27/agentic-beacon/commit/fdea11a1a043418ecd8cc37c288958d6ab1c1bf7))
+
 ## [1.6.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v1.5.1...agentic-beacon@v1.6.0) (2026-03-15)
 
 
