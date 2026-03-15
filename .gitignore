@@ -42,3 +42,6 @@ logs/
 .opencode/
 libs/beacon/uv.lock
 uv.lock
+
+# Agentic Beacon
+.agentic-beacon/
