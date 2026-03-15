@@ -261,12 +261,22 @@ jobs:
           VERSION=$(grep '^version = ' libs/beacon/pyproject.toml | sed 's/version = "\(.*\)"/\1/')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
+      - name: Download pre-built wheel from publish job
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
       - name: Download wheels (package + all dependencies)
         shell: bash
         run: |
           mkdir -p offline-bundle
+          # Use the pre-built wheel via --find-links so pip doesn't need PyPI
+          # for the main package (avoids indexing delay). Dependencies still
+          # come from PyPI.
           uvx pip download "agentic-beacon==${{ steps.version.outputs.version }}" \
             --only-binary=:all: \
+            --find-links ./dist/ \
             -d ./offline-bundle/
 
       - name: Create bundle zip
