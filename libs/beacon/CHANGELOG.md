@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.6.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v1.5.1...agentic-beacon@v1.6.0) (2026-03-15)
+
+
+### Features
+
+* abc install updates beacon.yaml for idempotent future syncs ([d89427d](https://github.com/Shadowsong27/agentic-beacon/commit/d89427d173d6aa1c5678f5a7d553769a144a1fc9))
+* add abc install &lt;artifact&gt; command, remove abc skill install ([a41461a](https://github.com/Shadowsong27/agentic-beacon/commit/a41461a34fa420b38cb4f0de3adf248c5e748722))
+
 ## [1.5.1](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v1.5.0...agentic-beacon@v1.5.1) (2026-03-14)
 
 
