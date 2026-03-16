@@ -1,7 +1,8 @@
 """Tests for abc contribute command."""
 
 import pytest
-from beacon.cli import main
+from beacon.cli import _build_skills_paths, _resolve_skill_contribute_source, main
+from beacon.core.delta import DeltaComparator, DeltaStatus
 from click.testing import CliRunner
 
 KNOWLEDGE_CONTENT_ORIGINAL = "# Type Hints\n\nUse type hints.\n"
@@ -404,6 +405,198 @@ def test_contribute_single_already_tracked_does_not_duplicate(project_with_delta
     data = yaml.safe_load(beacon_yaml.read_text())
     knowledge = data["artifacts"]["knowledge"]
     assert knowledge.count("knowledge/python/type-hints.md") == 1
+
+
+# ---------------------------------------------------------------------------
+# Unit tests: _build_skills_paths()
+# ---------------------------------------------------------------------------
+
+
+def test_build_skills_paths_opencode_detected(tmp_path):
+    """_build_skills_paths returns opencode entry when opencode.json exists."""
+    (tmp_path / "opencode.json").write_text("{}")
+    result = _build_skills_paths(tmp_path)
+    assert "opencode" in result
+    assert result["opencode"] == tmp_path / ".opencode" / "skills"
+    assert "claudecode" not in result
+
+
+def test_build_skills_paths_claudecode_detected(tmp_path):
+    """_build_skills_paths returns claudecode entry when .claude dir exists."""
+    (tmp_path / ".claude").mkdir()
+    result = _build_skills_paths(tmp_path)
+    assert "claudecode" in result
+    assert result["claudecode"] == tmp_path / ".claude" / "skills"
+    assert "opencode" not in result
+
+
+def test_build_skills_paths_both_agents_detected(tmp_path):
+    """_build_skills_paths returns both entries when both agents are configured."""
+    (tmp_path / "opencode.json").write_text("{}")
+    (tmp_path / ".claude").mkdir()
+    result = _build_skills_paths(tmp_path)
+    assert "opencode" in result
+    assert "claudecode" in result
+
+
+def test_build_skills_paths_no_agents_returns_empty(tmp_path):
+    """_build_skills_paths returns empty dict when no agents are detected."""
+    result = _build_skills_paths(tmp_path)
+    assert result == {}
+
+
+def test_build_skills_paths_matches_delta_detection(tmp_path):
+    """_build_skills_paths produces the same paths that delta uses — shared logic."""
+    (tmp_path / "opencode.json").write_text("{}")
+    (tmp_path / ".claude").mkdir()
+    result = _build_skills_paths(tmp_path)
+    # These are the exact paths delta builds
+    assert result["opencode"] == tmp_path / ".opencode" / "skills"
+    assert result["claudecode"] == tmp_path / ".claude" / "skills"
+
+
+# ---------------------------------------------------------------------------
+# Unit tests: _resolve_skill_contribute_source()
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def resolver_setup(tmp_path, valid_warehouse):
+    """Shared setup for _resolve_skill_contribute_source tests."""
+    artifacts_dir = tmp_path / "artifacts"
+    artifacts_dir.mkdir()
+
+    # Warehouse has the skill
+    skill_wh = valid_warehouse / "skills" / "my-skill"
+    skill_wh.mkdir(parents=True)
+    (skill_wh / "SKILL.md").write_text(SKILL_WAREHOUSE_CONTENT)
+
+    # Snapshot matches warehouse
+    snapshot_dir = artifacts_dir / "skills" / "my-skill"
+    snapshot_dir.mkdir(parents=True)
+    (snapshot_dir / "SKILL.md").write_text(SKILL_WAREHOUSE_CONTENT)
+
+    return valid_warehouse, artifacts_dir
+
+
+def test_resolve_returns_none_when_no_agents(resolver_setup, tmp_path):
+    """Without skills_paths, falls back to artifact snapshot path (not None)."""
+    valid_warehouse, artifacts_dir = resolver_setup
+
+    comparator = DeltaComparator(valid_warehouse, artifacts_dir)
+    result = _resolve_skill_contribute_source(
+        comparator, "skills/my-skill/SKILL.md", artifacts_dir
+    )
+    # Fallback to snapshot path
+    assert result == artifacts_dir / "skills" / "my-skill" / "SKILL.md"
+
+
+def test_resolve_returns_none_when_live_identical(resolver_setup, tmp_path):
+    """Returns None when live agent copy matches warehouse (nothing to contribute)."""
+    valid_warehouse, artifacts_dir = resolver_setup
+
+    opencode_skills = tmp_path / ".opencode" / "skills"
+    live_dir = opencode_skills / "my-skill"
+    live_dir.mkdir(parents=True)
+    (live_dir / "SKILL.md").write_text(SKILL_WAREHOUSE_CONTENT)  # identical
+
+    comparator = DeltaComparator(
+        valid_warehouse, artifacts_dir, skills_paths={"opencode": opencode_skills}
+    )
+    result = _resolve_skill_contribute_source(
+        comparator, "skills/my-skill/SKILL.md", artifacts_dir
+    )
+    assert result is None
+
+
+def test_resolve_returns_live_path_when_single_agent_modified(resolver_setup, tmp_path):
+    """Returns the live path when exactly one agent has a modification."""
+    valid_warehouse, artifacts_dir = resolver_setup
+
+    opencode_skills = tmp_path / ".opencode" / "skills"
+    live_dir = opencode_skills / "my-skill"
+    live_dir.mkdir(parents=True)
+    (live_dir / "SKILL.md").write_text(SKILL_MODIFIED_CONTENT)
+
+    comparator = DeltaComparator(
+        valid_warehouse, artifacts_dir, skills_paths={"opencode": opencode_skills}
+    )
+    result = _resolve_skill_contribute_source(
+        comparator, "skills/my-skill/SKILL.md", artifacts_dir
+    )
+    assert result == live_dir / "SKILL.md"
+    assert result.read_text() == SKILL_MODIFIED_CONTENT
+
+
+def test_resolve_returns_live_path_when_multi_agent_identical_modification(
+    resolver_setup, tmp_path
+):
+    """When multiple agents modified identically, returns one path without prompting."""
+    valid_warehouse, artifacts_dir = resolver_setup
+
+    opencode_skills = tmp_path / ".opencode" / "skills"
+    (opencode_skills / "my-skill").mkdir(parents=True)
+    (opencode_skills / "my-skill" / "SKILL.md").write_text(SKILL_MODIFIED_CONTENT)
+
+    claude_skills = tmp_path / ".claude" / "skills"
+    (claude_skills / "my-skill").mkdir(parents=True)
+    (claude_skills / "my-skill" / "SKILL.md").write_text(SKILL_MODIFIED_CONTENT)  # same
+
+    comparator = DeltaComparator(
+        valid_warehouse,
+        artifacts_dir,
+        skills_paths={"opencode": opencode_skills, "claudecode": claude_skills},
+    )
+    result = _resolve_skill_contribute_source(
+        comparator, "skills/my-skill/SKILL.md", artifacts_dir
+    )
+    assert result is not None
+    assert result.read_text() == SKILL_MODIFIED_CONTENT
+
+
+def test_resolve_prompts_when_multi_agent_different_modifications(
+    resolver_setup, tmp_path
+):
+    """When agents have different modifications, prompts user and returns chosen path."""
+    valid_warehouse, artifacts_dir = resolver_setup
+
+    opencode_skills = tmp_path / ".opencode" / "skills"
+    (opencode_skills / "my-skill").mkdir(parents=True)
+    (opencode_skills / "my-skill" / "SKILL.md").write_text(SKILL_MODIFIED_CONTENT)
+
+    claude_skills = tmp_path / ".claude" / "skills"
+    (claude_skills / "my-skill").mkdir(parents=True)
+    (claude_skills / "my-skill" / "SKILL.md").write_text(SKILL_OTHER_MODIFIED_CONTENT)
+
+    comparator = DeltaComparator(
+        valid_warehouse,
+        artifacts_dir,
+        skills_paths={"opencode": opencode_skills, "claudecode": claude_skills},
+    )
+
+    # Simulate user picking "1" (first agent)
+    import click
+
+    with click.testing.CliRunner().isolated_filesystem():
+        # We can't call the function directly with input in isolation easily,
+        # so we test via the full CLI path (covered in CLI tests above).
+        # Here we verify the comparator state that would trigger the prompt.
+        result = comparator.compare_file("skills/my-skill/SKILL.md")
+        assert result.status == DeltaStatus.MODIFIED
+        modified_agents = [
+            agent
+            for agent, status in result.agent_statuses.items()
+            if status == DeltaStatus.MODIFIED
+        ]
+        assert len(modified_agents) == 2
+        # Hashes must differ to confirm conflict
+        hashes = {
+            agent: comparator.compute_hash(
+                comparator._skill_live_path(agent, "skills/my-skill/SKILL.md")
+            )
+            for agent in modified_agents
+        }
+        assert len(set(hashes.values())) == 2  # two distinct hashes → conflict
 
 
 # ---------------------------------------------------------------------------

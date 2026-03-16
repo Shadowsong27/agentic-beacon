@@ -622,3 +622,185 @@ def test_e2e_clean(e2e_project):
     # config.toml and beacon.yaml should remain
     assert (project_dir / ".agentic-beacon" / "config.toml").exists()
     assert (project_dir / ".agentic-beacon" / "beacon.yaml").exists()
+
+
+# ---------------------------------------------------------------------------
+# Steps 7b — contribute correctly pushes skill changes back to warehouse
+# from the live agent directory, not the stale artifact snapshot
+# ---------------------------------------------------------------------------
+
+
+def test_e2e_contribute_skill_live_modification_goes_to_warehouse(e2e_project):
+    """Full workflow: sync → edit live skill → contribute → warehouse updated.
+
+    This is the core scenario: user syncs, tweaks the installed skill in
+    their agent folder, then contributes it back. Without the fix, contribute
+    would copy the stale snapshot (identical to warehouse) and silently do nothing.
+    """
+    project_dir, warehouse, runner = e2e_project
+    runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
+
+    (project_dir / "opencode.json").write_text("{}")
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n"
+        "  knowledge: []\n"
+        "  skills:\n"
+        "    - skills/code-review/SKILL.md\n"
+        "  contexts: []\n"
+    )
+    runner.invoke(main, ["sync"])
+
+    # Edit the live agent copy
+    live_skill = project_dir / ".opencode" / "skills" / "code-review" / "SKILL.md"
+    original = live_skill.read_text()
+    live_skill.write_text(original + "\n## Local Guardrail\nNo foo.\n")
+
+    result = runner.invoke(main, ["contribute", "skills/code-review/SKILL.md"])
+
+    assert result.exit_code == 0, result.output
+    # Warehouse now contains the live version
+    warehouse_skill = warehouse / "skills" / "code-review" / "SKILL.md"
+    assert "Local Guardrail" in warehouse_skill.read_text()
+
+
+def test_e2e_contribute_skill_regression_stale_snapshot(e2e_project):
+    """Regression: contribute does not silently skip when snapshot matches warehouse.
+
+    Snapshot == warehouse (unchanged) but live dir has edits.
+    Old behaviour: reported 'Nothing to contribute'. Fix: reads live dir.
+    """
+    project_dir, warehouse, runner = e2e_project
+    runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
+
+    (project_dir / "opencode.json").write_text("{}")
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n"
+        "  knowledge: []\n"
+        "  skills:\n"
+        "    - skills/code-review/SKILL.md\n"
+        "  contexts: []\n"
+    )
+    runner.invoke(main, ["sync"])
+
+    # Edit only the live dir, leave the snapshot alone
+    live_skill = project_dir / ".opencode" / "skills" / "code-review" / "SKILL.md"
+    live_skill.write_text("# Completely replaced\n")
+
+    # Confirm snapshot still matches warehouse
+    snapshot = (
+        project_dir
+        / ".agentic-beacon"
+        / "artifacts"
+        / "skills"
+        / "code-review"
+        / "SKILL.md"
+    )
+    warehouse_content = (warehouse / "skills" / "code-review" / "SKILL.md").read_text()
+    assert snapshot.read_text() == warehouse_content
+
+    result = runner.invoke(main, ["contribute", "skills/code-review/SKILL.md"])
+
+    assert result.exit_code == 0, result.output
+    assert "nothing to contribute" not in result.output.lower(), (
+        "Should not skip — live dir has changes"
+    )
+    assert (warehouse / "skills" / "code-review" / "SKILL.md").read_text() == (
+        "# Completely replaced\n"
+    )
+
+
+def test_e2e_contribute_all_skill_live_modification(e2e_project):
+    """abc contribute --all picks up live-dir skill changes."""
+    project_dir, warehouse, runner = e2e_project
+    runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
+
+    (project_dir / "opencode.json").write_text("{}")
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n"
+        "  knowledge:\n"
+        "    - knowledge/python/standards.md\n"
+        "  skills:\n"
+        "    - skills/code-review/SKILL.md\n"
+        "  contexts: []\n"
+    )
+    runner.invoke(main, ["sync"])
+
+    # Edit the live skill only (knowledge snapshot left alone)
+    live_skill = project_dir / ".opencode" / "skills" / "code-review" / "SKILL.md"
+    live_skill.write_text(live_skill.read_text() + "\n## Extra\n")
+
+    result = runner.invoke(main, ["contribute", "--all"])
+
+    assert result.exit_code == 0, result.output
+    assert "code-review" in result.output or "✓" in result.output
+    assert "Extra" in (warehouse / "skills" / "code-review" / "SKILL.md").read_text()
+
+
+def test_e2e_contribute_skill_identical_live_is_noop(e2e_project):
+    """abc contribute <skill> reports nothing to contribute when live matches warehouse."""
+    project_dir, warehouse, runner = e2e_project
+    runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
+
+    (project_dir / "opencode.json").write_text("{}")
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n"
+        "  knowledge: []\n"
+        "  skills:\n"
+        "    - skills/code-review/SKILL.md\n"
+        "  contexts: []\n"
+    )
+    runner.invoke(main, ["sync"])
+    # Live dir is untouched after sync — identical to warehouse
+
+    result = runner.invoke(main, ["contribute", "skills/code-review/SKILL.md"])
+
+    assert result.exit_code == 0
+    assert "nothing to contribute" in result.output.lower()
+
+
+def test_e2e_contribute_skill_multi_agent_conflict_prompts(e2e_project):
+    """With two agents holding different edits, contribute prompts the user."""
+    project_dir, warehouse, runner = e2e_project
+    runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
+
+    # Both agents configured
+    (project_dir / "opencode.json").write_text("{}")
+    (project_dir / ".claude").mkdir()
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n"
+        "  knowledge: []\n"
+        "  skills:\n"
+        "    - skills/code-review/SKILL.md\n"
+        "  contexts: []\n"
+    )
+    runner.invoke(main, ["sync"])
+
+    # Each agent has a different edit
+    oc_skill = project_dir / ".opencode" / "skills" / "code-review" / "SKILL.md"
+    oc_skill.write_text(oc_skill.read_text() + "\n## OpenCode edit\n")
+
+    cc_skill = project_dir / ".claude" / "skills" / "code-review" / "SKILL.md"
+    cc_skill.write_text(cc_skill.read_text() + "\n## Claude edit\n")
+
+    # User picks option 1 (opencode)
+    result = runner.invoke(
+        main, ["contribute", "skills/code-review/SKILL.md"], input="1\n"
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "conflict" in result.output.lower()
+    # Warehouse gets the opencode version
+    assert (
+        "OpenCode edit"
+        in (warehouse / "skills" / "code-review" / "SKILL.md").read_text()
+    )
