@@ -72,10 +72,15 @@ Examine the user's description and determine:
 - Be descriptive but concise
 - Example: `use-pydantic-for-data-carriers.md`
 
-**File location:**
-- Decisions: `knowledge/decisions/<name>.md`
-- Lessons: `knowledge/lessons/<name>.md`
-- Facts: `knowledge/facts/<name>.md`
+**File location (on disk in an Agentic Beacon project):**
+- Decisions: `.agentic-beacon/artifacts/knowledge/decisions/<name>.md`
+- Lessons: `.agentic-beacon/artifacts/knowledge/lessons/<name>.md`
+- Facts: `.agentic-beacon/artifacts/knowledge/facts/<name>.md`
+
+**Warehouse-relative reference (for context pointers):**
+- `knowledge/decisions/<name>.md`
+- `knowledge/lessons/<name>.md`
+- `knowledge/facts/<name>.md`
 
 **File format:**
 
@@ -226,7 +231,7 @@ Report to user:
 ✅ Knowledge recorded successfully!
 
 Type: [Decision|Lesson|Fact]
-File: knowledge/[type]/[filename].md
+File: .agentic-beacon/artifacts/knowledge/[type]/[filename].md
 Context updated: [Yes - AGENTS.md | No | Custom file]
 
 You can now reference this knowledge with:
@@ -246,7 +251,7 @@ You can now reference this knowledge with:
 
 **Agent:**
 1. Analyzes: This is a **decision** (key phrase: "decided not to")
-2. Creates: `knowledge/decisions/no-temporary-docs.md`
+2. Creates: `.agentic-beacon/artifacts/knowledge/decisions/no-temporary-docs.md`
 3. Asks: "Where should I add a pointer?" → User: "AGENTS.md"
 4. Updates: Adds pointer in AGENTS.md under "Development Guidelines"
 5. Confirms: "✅ Knowledge recorded successfully!"
@@ -260,7 +265,7 @@ You can now reference this knowledge with:
 
 **Agent:**
 1. Analyzes: This is a **lesson** (key phrase: "always", pattern description)
-2. Creates: `knowledge/lessons/updating-warehouse-structure.md`
+2. Creates: `.agentic-beacon/artifacts/knowledge/lessons/updating-warehouse-structure.md`
 3. Asks: "Where should I add a pointer?" → User: "AGENTS.md"
 4. Updates: Adds pointer in AGENTS.md under "Common Patterns"
 5. Confirms: "✅ Knowledge recorded successfully!"
@@ -274,7 +279,7 @@ You can now reference this knowledge with:
 
 **Agent:**
 1. Analyzes: This is a **fact** (key phrase: "is located", descriptive)
-2. Creates: `knowledge/facts/cli-development-workflow.md`
+2. Creates: `.agentic-beacon/artifacts/knowledge/facts/cli-development-workflow.md`
 3. Asks: "Where should I add a pointer?" → User: "Skip"
 4. Skips context update
 5. Confirms: "✅ Knowledge recorded successfully! (No context update)"
