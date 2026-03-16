@@ -1064,9 +1064,21 @@ def delta(*, file: str | None, no_color: bool) -> None:
         artifacts_dir = beacon_dir / "artifacts"
         beacon_settings = BeaconSettings.from_yaml(beacon_yaml)
 
+        # Build skills_paths: map each detected agent to its live skills directory.
+        # Skills are physically copied there during sync — that's the file agents read.
+        project_root = Path.cwd()
+        agents = _detect_agents(project_root)
+        skills_paths: dict[str, Path] = {}
+        for agent in agents:
+            if agent == "opencode":
+                skills_paths["opencode"] = project_root / ".opencode" / "skills"
+            elif agent == "claudecode":
+                skills_paths["claudecode"] = project_root / ".claude" / "skills"
+
         comparator = DeltaComparator(
             warehouse_path=warehouse_path,
             artifacts_path=artifacts_dir,
+            skills_paths=skills_paths,
         )
 
         if file:
@@ -1102,7 +1114,14 @@ def _show_delta_summary(
 
     for result in summary.results:
         if result.status == DeltaStatus.MODIFIED:
-            console.print(f"  [yellow][Modified][/yellow] {result.path}")
+            if result.is_skill and result.agent_statuses:
+                # Show per-agent breakdown for skills
+                agent_detail = _format_skill_agent_statuses(result.agent_statuses)
+                console.print(
+                    f"  [yellow][Modified][/yellow] {result.path} [dim]({agent_detail})[/dim]"
+                )
+            else:
+                console.print(f"  [yellow][Modified][/yellow] {result.path}")
         elif result.status == DeltaStatus.ADDED:
             console.print(f"  [green][Added][/green]    {result.path}")
         elif result.status == DeltaStatus.MISSING:
@@ -1185,6 +1204,26 @@ def _show_detailed_diff(
         console.print(diff_output)
     else:
         console.print("[dim]No differences to display.[/dim]")
+
+
+def _format_skill_agent_statuses(agent_statuses: dict) -> str:
+    """Format per-agent skill statuses for display.
+
+    e.g. "opencode: modified, claudecode: identical"
+    """
+    from beacon.core.delta import DeltaStatus
+
+    label = {
+        DeltaStatus.MODIFIED: "modified",
+        DeltaStatus.MISSING: "missing",
+        DeltaStatus.ADDED: "added",
+        DeltaStatus.IDENTICAL: "identical",
+    }
+    parts = [
+        f"{agent}: {label.get(status, status.value)}"
+        for agent, status in agent_statuses.items()
+    ]
+    return ", ".join(parts)
 
 
 def _collect_artifact_paths(

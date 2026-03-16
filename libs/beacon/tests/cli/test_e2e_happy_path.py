@@ -329,6 +329,144 @@ def test_e2e_delta_detects_modification(e2e_project):
 
 
 # ---------------------------------------------------------------------------
+# Steps 7a — delta correctly handles skills via live agent directories
+# ---------------------------------------------------------------------------
+
+
+def test_e2e_delta_skill_clean_after_sync(e2e_project):
+    """After abc sync, delta reports skill as identical (live dir matches warehouse)."""
+    project_dir, warehouse, runner = e2e_project
+    runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
+
+    # Configure an opencode project
+    (project_dir / "opencode.json").write_text("{}")
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n"
+        "  knowledge: []\n"
+        "  skills:\n"
+        "    - skills/code-review/SKILL.md\n"
+        "  contexts: []\n"
+    )
+    sync_result = runner.invoke(main, ["sync"])
+    assert sync_result.exit_code == 0
+
+    # Verify the live skill was installed
+    assert (project_dir / ".opencode" / "skills" / "code-review" / "SKILL.md").exists()
+
+    result = runner.invoke(main, ["delta"])
+
+    assert result.exit_code == 0
+    assert "No differences" in result.output
+
+
+def test_e2e_delta_skill_detects_live_modification(e2e_project):
+    """abc delta detects a modification made directly to the live agent skill file."""
+    project_dir, warehouse, runner = e2e_project
+    runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
+
+    (project_dir / "opencode.json").write_text("{}")
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n"
+        "  knowledge: []\n"
+        "  skills:\n"
+        "    - skills/code-review/SKILL.md\n"
+        "  contexts: []\n"
+    )
+    runner.invoke(main, ["sync"])
+
+    # Edit the live agent copy (simulates a user adding a guardrail locally)
+    live_skill = project_dir / ".opencode" / "skills" / "code-review" / "SKILL.md"
+    live_skill.write_text(live_skill.read_text() + "\n## Local Guardrail\nNo foo.\n")
+
+    result = runner.invoke(main, ["delta"])
+
+    assert result.exit_code == 0
+    assert "Modified" in result.output
+    assert "skills/code-review/SKILL.md" in result.output
+
+
+def test_e2e_delta_skill_snapshot_identical_but_live_modified(e2e_project):
+    """Regression: delta catches live skill drift even when snapshot still matches warehouse.
+
+    This is the exact bug scenario: snapshot == warehouse but live != warehouse.
+    The old code would report 'No differences'. The fix makes it report Modified.
+    """
+    project_dir, warehouse, runner = e2e_project
+    runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
+
+    (project_dir / "opencode.json").write_text("{}")
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n"
+        "  knowledge: []\n"
+        "  skills:\n"
+        "    - skills/code-review/SKILL.md\n"
+        "  contexts: []\n"
+    )
+    runner.invoke(main, ["sync"])
+
+    # Corrupt the live skill but leave the snapshot untouched
+    live_skill = project_dir / ".opencode" / "skills" / "code-review" / "SKILL.md"
+    live_skill.write_text("# Completely replaced\n")
+
+    # Confirm snapshot is still identical to warehouse
+    snapshot = (
+        project_dir
+        / ".agentic-beacon"
+        / "artifacts"
+        / "skills"
+        / "code-review"
+        / "SKILL.md"
+    )
+    warehouse_content = (warehouse / "skills" / "code-review" / "SKILL.md").read_text()
+    assert snapshot.read_text() == warehouse_content
+
+    result = runner.invoke(main, ["delta"])
+
+    assert result.exit_code == 0
+    assert "Modified" in result.output, (
+        "Expected 'Modified' — delta should detect live drift, not just snapshot drift"
+    )
+
+
+def test_e2e_delta_skill_per_agent_detail_in_output(e2e_project):
+    """With both opencode and claudecode present, delta shows per-agent breakdown."""
+    project_dir, warehouse, runner = e2e_project
+    runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
+
+    # Both agents configured
+    (project_dir / "opencode.json").write_text("{}")
+    (project_dir / ".claude").mkdir()
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n"
+        "  knowledge: []\n"
+        "  skills:\n"
+        "    - skills/code-review/SKILL.md\n"
+        "  contexts: []\n"
+    )
+    runner.invoke(main, ["sync"])
+
+    # Edit only the opencode live copy
+    oc_skill = project_dir / ".opencode" / "skills" / "code-review" / "SKILL.md"
+    oc_skill.write_text(oc_skill.read_text() + "\n## Extra\n")
+
+    result = runner.invoke(main, ["delta"])
+
+    assert result.exit_code == 0
+    assert "Modified" in result.output
+    # Per-agent breakdown should appear
+    assert "opencode" in result.output
+    assert "claudecode" in result.output
+
+
+# ---------------------------------------------------------------------------
 # Step 8 — sync --preserve skips locally modified file
 # ---------------------------------------------------------------------------
 
