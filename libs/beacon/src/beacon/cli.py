@@ -1489,15 +1489,22 @@ def _resolve_skill_contribute_source(
     agent_list = list(candidates.keys())
     for i, agent in enumerate(agent_list, 1):
         live_path = candidates[agent]
-        console.print(f"  [{i}] {agent}  ({live_path})")
+        console.print(f"  [{i}] {agent}")
+        console.print(f"      [dim]{live_path}[/dim]")
 
     console.print()
-    choice = click.prompt(
-        "Which version should be contributed to the warehouse?",
-        type=click.Choice([str(i) for i in range(1, len(agent_list) + 1)]),
-        show_choices=True,
-    )
-    chosen_agent = agent_list[int(choice) - 1]
+    valid = [str(i) for i in range(1, len(agent_list) + 1)]
+    while True:
+        raw = click.prompt(
+            f"Which version to contribute to the warehouse? ({'/'.join(valid)})",
+            default="",
+            show_default=False,
+        ).strip()
+        if raw in valid:
+            break
+        console.print(f"  [red]Invalid choice.[/red] Enter {' or '.join(valid)}.")
+
+    chosen_agent = agent_list[int(raw) - 1]
     console.print(f"  Using [bold]{chosen_agent}[/bold] version.\n")
     return candidates[chosen_agent]
 
