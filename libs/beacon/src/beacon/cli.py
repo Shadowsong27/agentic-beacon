@@ -1012,6 +1012,22 @@ def install_artifact(*, artifact: str, agent: str | None) -> None:
         console.print(f"  [dim]{copied} file(s) newly copied[/dim]")
 
 
+def _build_skills_paths(project_root: Path) -> dict[str, Path]:
+    """Return a mapping of agent name → live skills directory for detected agents.
+
+    This is the shared detection logic used by both `abc delta` and
+    `abc contribute` so both commands always compare/read from the same
+    live agent locations.
+    """
+    skills_paths: dict[str, Path] = {}
+    for agent in _detect_agents(project_root):
+        if agent == "opencode":
+            skills_paths["opencode"] = project_root / ".opencode" / "skills"
+        elif agent == "claudecode":
+            skills_paths["claudecode"] = project_root / ".claude" / "skills"
+    return skills_paths
+
+
 @main.command()
 @click.argument("file", required=False, type=str)
 @click.option("--no-color", is_flag=True, help="Disable color output in diffs")
@@ -1064,21 +1080,12 @@ def delta(*, file: str | None, no_color: bool) -> None:
         artifacts_dir = beacon_dir / "artifacts"
         beacon_settings = BeaconSettings.from_yaml(beacon_yaml)
 
-        # Build skills_paths: map each detected agent to its live skills directory.
-        # Skills are physically copied there during sync — that's the file agents read.
+        # Build skills_paths via shared helper — same logic used by contribute.
         project_root = Path.cwd()
-        agents = _detect_agents(project_root)
-        skills_paths: dict[str, Path] = {}
-        for agent in agents:
-            if agent == "opencode":
-                skills_paths["opencode"] = project_root / ".opencode" / "skills"
-            elif agent == "claudecode":
-                skills_paths["claudecode"] = project_root / ".claude" / "skills"
-
         comparator = DeltaComparator(
             warehouse_path=warehouse_path,
             artifacts_path=artifacts_dir,
-            skills_paths=skills_paths,
+            skills_paths=_build_skills_paths(project_root),
         )
 
         if file:
@@ -1378,9 +1385,11 @@ def contribute(*, file: str | None, contribute_all: bool, dry_run: bool) -> None
 
         artifacts_dir = beacon_dir / "artifacts"
         beacon_settings = BeaconSettings.from_yaml(beacon_yaml)
+        project_root = Path.cwd()
         comparator = DeltaComparator(
             warehouse_path=warehouse_path,
             artifacts_path=artifacts_dir,
+            skills_paths=_build_skills_paths(project_root),
         )
 
         if dry_run:
@@ -1412,6 +1421,87 @@ def contribute(*, file: str | None, contribute_all: bool, dry_run: bool) -> None
         sys.exit(1)
 
 
+def _resolve_skill_contribute_source(
+    comparator: DeltaComparator,
+    relative_path: str,
+    artifacts_dir: Path,
+) -> Path | None:
+    """Resolve which file to read when contributing a skill back to the warehouse.
+
+    Skills live in agent-specific directories (.opencode/skills/, .claude/skills/).
+    We need to decide which copy to contribute when multiple agents are present.
+
+    Rules:
+    - No agents configured → fall back to artifact snapshot (backward compat).
+    - One agent modified → use that agent's copy.
+    - Multiple agents modified with identical content → use any (they agree).
+    - Multiple agents modified with different content → prompt user to choose.
+    - No agent has a modified copy (IDENTICAL/MISSING/ADDED) → return None,
+      letting the caller decide (IDENTICAL means nothing to contribute).
+
+    Returns the absolute Path of the file to copy, or None if nothing to contribute.
+    Exits with an error message if the user cancels the prompt.
+    """
+    if not comparator.skills_paths:
+        # No agents detected — fall back to artifact snapshot
+        return artifacts_dir / relative_path
+
+    result = comparator.compare_file(relative_path)
+
+    # Collect agents whose live copy differs from warehouse
+    modified_agents = [
+        agent
+        for agent, status in result.agent_statuses.items()
+        if status == DeltaStatus.MODIFIED
+    ]
+
+    if not modified_agents:
+        # Nothing modified in any live dir — nothing to contribute
+        return None
+
+    # Build the candidate paths for modified agents
+    candidates: dict[str, Path] = {}
+    for agent in modified_agents:
+        live_path = comparator._skill_live_path(agent, relative_path)
+        if live_path.exists():
+            candidates[agent] = live_path
+
+    if not candidates:
+        return None
+
+    if len(candidates) == 1:
+        return next(iter(candidates.values()))
+
+    # Multiple agents have modified versions — check if they are identical
+    hashes = {
+        agent: comparator.compute_hash(path) for agent, path in candidates.items()
+    }
+    unique_hashes = set(hashes.values())
+
+    if len(unique_hashes) == 1:
+        # All modified copies are identical — pick the first one
+        return next(iter(candidates.values()))
+
+    # Genuinely different versions across agents — prompt the user
+    console.print(
+        f"\n[yellow]Conflict:[/yellow] '{relative_path}' has been modified differently across agents:\n"
+    )
+    agent_list = list(candidates.keys())
+    for i, agent in enumerate(agent_list, 1):
+        live_path = candidates[agent]
+        console.print(f"  [{i}] {agent}  ({live_path})")
+
+    console.print()
+    choice = click.prompt(
+        "Which version should be contributed to the warehouse?",
+        type=click.Choice([str(i) for i in range(1, len(agent_list) + 1)]),
+        show_choices=True,
+    )
+    chosen_agent = agent_list[int(choice) - 1]
+    console.print(f"  Using [bold]{chosen_agent}[/bold] version.\n")
+    return candidates[chosen_agent]
+
+
 def _contribute_single(
     comparator: DeltaComparator,
     beacon_settings: BeaconSettings,
@@ -1425,14 +1515,31 @@ def _contribute_single(
 
     If the file is not yet tracked in beacon.yaml, it will be auto-registered
     (inferred from path prefix: knowledge/, skills/, or contexts/).
+
+    For skills: reads from the live agent directory rather than the artifact
+    snapshot, matching the same source that abc delta inspects.
     """
-    local_path = artifacts_dir / file_path
-    if not local_path.exists():
-        console.print(f"[red]Error:[/red] '{file_path}' does not exist locally.")
-        console.print(
-            "Create the file in .agentic-beacon/artifacts/ first, then contribute it."
+    is_skill = file_path.startswith("skills/") and bool(comparator.skills_paths)
+
+    if is_skill:
+        # Resolve the live agent source (may prompt user if multiple agents conflict)
+        local_path = _resolve_skill_contribute_source(
+            comparator, file_path, artifacts_dir
         )
-        sys.exit(1)
+        if local_path is None:
+            console.print(
+                f"[yellow]Nothing to contribute.[/yellow] "
+                f"'{file_path}' is identical to the warehouse version across all agents."
+            )
+            return
+    else:
+        local_path = artifacts_dir / file_path
+        if not local_path.exists():
+            console.print(f"[red]Error:[/red] '{file_path}' does not exist locally.")
+            console.print(
+                "Create the file in .agentic-beacon/artifacts/ first, then contribute it."
+            )
+            sys.exit(1)
 
     all_paths = _collect_artifact_paths(comparator, beacon_settings)
     is_untracked = file_path not in all_paths
@@ -1450,13 +1557,14 @@ def _contribute_single(
             )
             sys.exit(1)
 
-    result = comparator.compare_file(file_path)
-    if result.status == DeltaStatus.IDENTICAL:
-        console.print(
-            f"[yellow]Nothing to contribute.[/yellow] "
-            f"'{file_path}' is identical to the warehouse version."
-        )
-        return
+    if not is_skill:
+        result = comparator.compare_file(file_path)
+        if result.status == DeltaStatus.IDENTICAL:
+            console.print(
+                f"[yellow]Nothing to contribute.[/yellow] "
+                f"'{file_path}' is identical to the warehouse version."
+            )
+            return
 
     _copy_to_warehouse(local_path, warehouse_path / file_path, file_path, dry_run)
     if not dry_run:
@@ -1479,6 +1587,9 @@ def _contribute_all(
 
     Also discovers and contributes local files not yet tracked in beacon.yaml,
     registering them automatically.
+
+    For skills: reads from live agent directories. If multiple agents have
+    conflicting modifications the user is prompted to choose per-skill.
     """
     summary = comparator.compare_from_config(beacon_settings)
     contributable = summary.modified + summary.added
@@ -1497,12 +1608,26 @@ def _contribute_all(
 
     # Contribute tracked modified/added files
     for result in contributable:
-        local_path = artifacts_dir / result.path
-        if not local_path.exists():
-            console.print(
-                f"  [yellow]Skipping[/yellow] {result.path} (not found locally — run 'abc sync')"
+        is_skill = result.path.startswith("skills/") and bool(comparator.skills_paths)
+
+        if is_skill:
+            local_path = _resolve_skill_contribute_source(
+                comparator, result.path, artifacts_dir
             )
-            continue
+            if local_path is None:
+                console.print(
+                    f"  [yellow]Skipping[/yellow] {result.path} "
+                    "(no modified live copy found)"
+                )
+                continue
+        else:
+            local_path = artifacts_dir / result.path
+            if not local_path.exists():
+                console.print(
+                    f"  [yellow]Skipping[/yellow] {result.path} (not found locally — run 'abc sync')"
+                )
+                continue
+
         _copy_to_warehouse(
             local_path, warehouse_path / result.path, result.path, dry_run
         )

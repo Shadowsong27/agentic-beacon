@@ -404,3 +404,235 @@ def test_contribute_single_already_tracked_does_not_duplicate(project_with_delta
     data = yaml.safe_load(beacon_yaml.read_text())
     knowledge = data["artifacts"]["knowledge"]
     assert knowledge.count("knowledge/python/type-hints.md") == 1
+
+
+# ---------------------------------------------------------------------------
+# Skills: contribute from live agent directories (bug fix)
+# abc contribute must read from the live agent path, not the artifact snapshot.
+# ---------------------------------------------------------------------------
+
+SKILL_WAREHOUSE_CONTENT = "# Skill: My Skill\n\n## Purpose\nDoes something.\n"
+SKILL_MODIFIED_CONTENT = (
+    "# Skill: My Skill\n\n## Purpose\nDoes something.\n\n## Guardrail\nNo foo.\n"
+)
+SKILL_OTHER_MODIFIED_CONTENT = (
+    "# Skill: My Skill\n\n## Purpose\nDoes something.\n\n## Guardrail\nNo bar.\n"
+)
+
+
+@pytest.fixture
+def project_with_skill_setup(tmp_path, monkeypatch):
+    """Project connected to warehouse with a skill installed in the live agent dir."""
+    monkeypatch.chdir(tmp_path)
+
+    warehouse = tmp_path / "warehouse"
+    warehouse.mkdir()
+    (warehouse / "contexts").mkdir()
+    (warehouse / "knowledge").mkdir()
+    (warehouse / "skills").mkdir()
+    (warehouse / "docs").mkdir()
+    (warehouse / "README.md").write_text("# Warehouse")
+
+    skill_wh = warehouse / "skills" / "my-skill"
+    skill_wh.mkdir(parents=True)
+    (skill_wh / "SKILL.md").write_text(SKILL_WAREHOUSE_CONTENT)
+
+    beacon_dir = tmp_path / ".agentic-beacon"
+    beacon_dir.mkdir()
+    (beacon_dir / "config.toml").write_text(
+        f'[warehouse]\nlocal_path = "{warehouse}"\n'
+    )
+    (beacon_dir / "beacon.yaml").write_text(
+        "artifacts:\n  knowledge: []\n  skills:\n    - skills/my-skill/SKILL.md\n  contexts: []\n"
+    )
+
+    # Artifact snapshot (identical to warehouse — unchanged by sync)
+    snapshot_dir = beacon_dir / "artifacts" / "skills" / "my-skill"
+    snapshot_dir.mkdir(parents=True)
+    (snapshot_dir / "SKILL.md").write_text(SKILL_WAREHOUSE_CONTENT)
+
+    # opencode agent configured
+    (tmp_path / "opencode.json").write_text("{}")
+
+    return tmp_path, warehouse
+
+
+def test_contribute_skill_single_reads_from_live_dir(project_with_skill_setup):
+    """abc contribute <skill> copies the live agent version to the warehouse."""
+    tmp_path, warehouse = project_with_skill_setup
+
+    # Live dir has a modified version
+    live_dir = tmp_path / ".opencode" / "skills" / "my-skill"
+    live_dir.mkdir(parents=True)
+    (live_dir / "SKILL.md").write_text(SKILL_MODIFIED_CONTENT)
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["contribute", "skills/my-skill/SKILL.md"])
+
+    assert result.exit_code == 0, result.output
+    dest = warehouse / "skills" / "my-skill" / "SKILL.md"
+    assert dest.read_text() == SKILL_MODIFIED_CONTENT
+
+
+def test_contribute_skill_single_ignores_stale_snapshot(project_with_skill_setup):
+    """Regression: contribute reads live dir even when the snapshot still matches warehouse.
+
+    Old behaviour: snapshot == warehouse → reported "Nothing to contribute" and
+    silently skipped the file, losing the live edit.
+    """
+    tmp_path, warehouse = project_with_skill_setup
+
+    # Snapshot is IDENTICAL to warehouse (unchanged)
+    # But live dir has a different version
+    live_dir = tmp_path / ".opencode" / "skills" / "my-skill"
+    live_dir.mkdir(parents=True)
+    (live_dir / "SKILL.md").write_text(SKILL_MODIFIED_CONTENT)
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["contribute", "skills/my-skill/SKILL.md"])
+
+    assert result.exit_code == 0, result.output
+    dest = warehouse / "skills" / "my-skill" / "SKILL.md"
+    assert dest.read_text() == SKILL_MODIFIED_CONTENT, (
+        "Warehouse should contain the live-dir version, not the stale snapshot"
+    )
+
+
+def test_contribute_skill_single_identical_live_is_noop(project_with_skill_setup):
+    """abc contribute <skill> reports nothing to contribute when live matches warehouse."""
+    tmp_path, warehouse = project_with_skill_setup
+
+    # Live dir is identical to warehouse
+    live_dir = tmp_path / ".opencode" / "skills" / "my-skill"
+    live_dir.mkdir(parents=True)
+    (live_dir / "SKILL.md").write_text(SKILL_WAREHOUSE_CONTENT)
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["contribute", "skills/my-skill/SKILL.md"])
+
+    assert result.exit_code == 0
+    assert "nothing to contribute" in result.output.lower()
+    # Warehouse unchanged
+    assert (
+        warehouse / "skills" / "my-skill" / "SKILL.md"
+    ).read_text() == SKILL_WAREHOUSE_CONTENT
+
+
+def test_contribute_skill_all_reads_from_live_dir(project_with_skill_setup):
+    """abc contribute --all picks up live-dir skill modifications."""
+    tmp_path, warehouse = project_with_skill_setup
+
+    live_dir = tmp_path / ".opencode" / "skills" / "my-skill"
+    live_dir.mkdir(parents=True)
+    (live_dir / "SKILL.md").write_text(SKILL_MODIFIED_CONTENT)
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["contribute", "--all"])
+
+    assert result.exit_code == 0, result.output
+    dest = warehouse / "skills" / "my-skill" / "SKILL.md"
+    assert dest.read_text() == SKILL_MODIFIED_CONTENT
+
+
+def test_contribute_skill_multi_agent_identical_versions_no_prompt(
+    project_with_skill_setup,
+):
+    """With two agents having identical modifications, contribute proceeds without prompting."""
+    tmp_path, warehouse = project_with_skill_setup
+
+    # Add claudecode agent
+    (tmp_path / ".claude").mkdir()
+
+    # Both agents have the same modified version
+    oc_dir = tmp_path / ".opencode" / "skills" / "my-skill"
+    oc_dir.mkdir(parents=True)
+    (oc_dir / "SKILL.md").write_text(SKILL_MODIFIED_CONTENT)
+
+    cc_dir = tmp_path / ".claude" / "skills" / "my-skill"
+    cc_dir.mkdir(parents=True)
+    (cc_dir / "SKILL.md").write_text(SKILL_MODIFIED_CONTENT)  # same content
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["contribute", "skills/my-skill/SKILL.md"])
+
+    assert result.exit_code == 0, result.output
+    # No prompt — they agreed
+    assert "conflict" not in result.output.lower()
+    dest = warehouse / "skills" / "my-skill" / "SKILL.md"
+    assert dest.read_text() == SKILL_MODIFIED_CONTENT
+
+
+def test_contribute_skill_multi_agent_conflict_prompts_user(
+    project_with_skill_setup,
+):
+    """With two agents having different modifications, contribute prompts the user to choose."""
+    tmp_path, warehouse = project_with_skill_setup
+
+    # Add claudecode agent
+    (tmp_path / ".claude").mkdir()
+
+    oc_dir = tmp_path / ".opencode" / "skills" / "my-skill"
+    oc_dir.mkdir(parents=True)
+    (oc_dir / "SKILL.md").write_text(SKILL_MODIFIED_CONTENT)
+
+    cc_dir = tmp_path / ".claude" / "skills" / "my-skill"
+    cc_dir.mkdir(parents=True)
+    (cc_dir / "SKILL.md").write_text(SKILL_OTHER_MODIFIED_CONTENT)
+
+    runner = CliRunner()
+    # User picks option 1 (opencode)
+    result = runner.invoke(
+        main, ["contribute", "skills/my-skill/SKILL.md"], input="1\n"
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "conflict" in result.output.lower()
+    dest = warehouse / "skills" / "my-skill" / "SKILL.md"
+    assert dest.read_text() == SKILL_MODIFIED_CONTENT
+
+
+def test_contribute_skill_multi_agent_conflict_user_picks_second(
+    project_with_skill_setup,
+):
+    """User picks the second agent's version when prompted about a conflict."""
+    tmp_path, warehouse = project_with_skill_setup
+
+    (tmp_path / ".claude").mkdir()
+
+    oc_dir = tmp_path / ".opencode" / "skills" / "my-skill"
+    oc_dir.mkdir(parents=True)
+    (oc_dir / "SKILL.md").write_text(SKILL_MODIFIED_CONTENT)
+
+    cc_dir = tmp_path / ".claude" / "skills" / "my-skill"
+    cc_dir.mkdir(parents=True)
+    (cc_dir / "SKILL.md").write_text(SKILL_OTHER_MODIFIED_CONTENT)
+
+    runner = CliRunner()
+    # User picks option 2 (claudecode)
+    result = runner.invoke(
+        main, ["contribute", "skills/my-skill/SKILL.md"], input="2\n"
+    )
+
+    assert result.exit_code == 0, result.output
+    dest = warehouse / "skills" / "my-skill" / "SKILL.md"
+    assert dest.read_text() == SKILL_OTHER_MODIFIED_CONTENT
+
+
+def test_contribute_skill_dry_run_does_not_copy(project_with_skill_setup):
+    """--dry-run does not copy the live skill to the warehouse."""
+    tmp_path, warehouse = project_with_skill_setup
+
+    live_dir = tmp_path / ".opencode" / "skills" / "my-skill"
+    live_dir.mkdir(parents=True)
+    (live_dir / "SKILL.md").write_text(SKILL_MODIFIED_CONTENT)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main, ["contribute", "skills/my-skill/SKILL.md", "--dry-run"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "would" in result.output.lower() or "dry" in result.output.lower()
+    # Warehouse unchanged
+    dest = warehouse / "skills" / "my-skill" / "SKILL.md"
+    assert dest.read_text() == SKILL_WAREHOUSE_CONTENT
