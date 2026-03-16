@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.2](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v2.0.1...agentic-beacon@v2.0.2) (2026-03-16)
+
+
+### Bug Fixes
+
+* abc contribute reads skills from live agent dirs not artifact snapshot ([#32](https://github.com/Shadowsong27/agentic-beacon/issues/32)) ([4480e1f](https://github.com/Shadowsong27/agentic-beacon/commit/4480e1ff16c940399ed1458a9f56ecc49ff10b53))
+
 ## [2.0.1](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v2.0.0...agentic-beacon@v2.0.1) (2026-03-16)
 
 
