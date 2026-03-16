@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.0.1](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v2.0.0...agentic-beacon@v2.0.1) (2026-03-16)
+
+
+### Bug Fixes
+
+* abc delta compares skills against live agent dirs not artifact snapshot ([eda5344](https://github.com/Shadowsong27/agentic-beacon/commit/eda53447eb13ececd6b98d939f7d605f3a53a61e))
+
 ## [2.0.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v1.6.0...agentic-beacon@v2.0.0) (2026-03-15)
 
 
