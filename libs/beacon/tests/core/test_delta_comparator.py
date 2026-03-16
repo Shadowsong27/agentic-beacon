@@ -367,7 +367,11 @@ def test_compare_from_config_detects_added_file_via_glob(valid_warehouse, temp_d
 
 
 def test_compare_from_config_detects_added_skill_via_glob(valid_warehouse, temp_dir):
-    """compare_from_config detects a locally-added skill file via glob."""
+    """compare_from_config detects a locally-added skill file via glob.
+
+    When no skills_paths are configured, falls back to artifacts_path for skills
+    (backward compatibility — no agents detected).
+    """
     from beacon.core.settings import BeaconSettings
 
     artifacts_dir = temp_dir / "artifacts"
@@ -381,11 +385,127 @@ def test_compare_from_config_detects_added_skill_via_glob(valid_warehouse, temp_
     )
     settings = BeaconSettings.from_yaml(beacon_yaml)
 
+    # No skills_paths → falls back to artifacts_path
     comparator = DeltaComparator(valid_warehouse, artifacts_dir)
     summary = comparator.compare_from_config(settings)
 
     added_paths = [r.path for r in summary.added]
     assert "skills/my-skill/SKILL.md" in added_paths
+
+
+def test_compare_from_config_skills_uses_live_agent_path(valid_warehouse, temp_dir):
+    """compare_from_config uses live agent install dir for skills when skills_paths configured."""
+    from beacon.core.settings import BeaconSettings
+
+    artifacts_dir = temp_dir / "artifacts"
+    artifacts_dir.mkdir()
+
+    # Warehouse has the skill
+    skill_wh = valid_warehouse / "skills" / "opsx-enhance"
+    skill_wh.mkdir(parents=True)
+    (skill_wh / "SKILL.md").write_text("# Warehouse version\n")
+
+    # Live agent dir has a MODIFIED version
+    opencode_skills = temp_dir / ".opencode" / "skills"
+    live_skill_dir = opencode_skills / "opsx-enhance"
+    live_skill_dir.mkdir(parents=True)
+    (live_skill_dir / "SKILL.md").write_text("# Modified locally\n")
+
+    beacon_yaml = temp_dir / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n  knowledge: []\n  skills:\n    - skills/opsx-enhance/SKILL.md\n  contexts: []\n"
+    )
+    settings = BeaconSettings.from_yaml(beacon_yaml)
+
+    comparator = DeltaComparator(
+        valid_warehouse,
+        artifacts_dir,
+        skills_paths={"opencode": opencode_skills},
+    )
+    summary = comparator.compare_from_config(settings)
+
+    assert len(summary.modified) == 1
+    result = summary.modified[0]
+    assert result.path == "skills/opsx-enhance/SKILL.md"
+    assert result.agent_statuses == {"opencode": DeltaStatus.MODIFIED}
+
+
+def test_compare_from_config_skills_identical_live_agent(valid_warehouse, temp_dir):
+    """compare_from_config reports IDENTICAL when live skill matches warehouse."""
+    from beacon.core.settings import BeaconSettings
+
+    artifacts_dir = temp_dir / "artifacts"
+    artifacts_dir.mkdir()
+
+    content = "# Same content\n"
+    skill_wh = valid_warehouse / "skills" / "my-skill"
+    skill_wh.mkdir(parents=True)
+    (skill_wh / "SKILL.md").write_text(content)
+
+    opencode_skills = temp_dir / ".opencode" / "skills"
+    live_skill_dir = opencode_skills / "my-skill"
+    live_skill_dir.mkdir(parents=True)
+    (live_skill_dir / "SKILL.md").write_text(content)
+
+    beacon_yaml = temp_dir / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n  knowledge: []\n  skills:\n    - skills/my-skill/SKILL.md\n  contexts: []\n"
+    )
+    settings = BeaconSettings.from_yaml(beacon_yaml)
+
+    comparator = DeltaComparator(
+        valid_warehouse,
+        artifacts_dir,
+        skills_paths={"opencode": opencode_skills},
+    )
+    summary = comparator.compare_from_config(settings)
+
+    assert len(summary.identical) == 1
+    assert summary.identical[0].agent_statuses == {"opencode": DeltaStatus.IDENTICAL}
+
+
+def test_compare_skill_multi_agent_worst_status_wins(valid_warehouse, temp_dir):
+    """With multiple agents, aggregate status reflects the worst across all agents."""
+    from beacon.core.settings import BeaconSettings
+
+    artifacts_dir = temp_dir / "artifacts"
+    artifacts_dir.mkdir()
+
+    warehouse_content = "# Warehouse\n"
+    skill_wh = valid_warehouse / "skills" / "my-skill"
+    skill_wh.mkdir(parents=True)
+    (skill_wh / "SKILL.md").write_text(warehouse_content)
+
+    # opencode: identical
+    opencode_skills = temp_dir / ".opencode" / "skills"
+    oc_skill = opencode_skills / "my-skill"
+    oc_skill.mkdir(parents=True)
+    (oc_skill / "SKILL.md").write_text(warehouse_content)
+
+    # claudecode: modified
+    claude_skills = temp_dir / ".claude" / "skills"
+    cc_skill = claude_skills / "my-skill"
+    cc_skill.mkdir(parents=True)
+    (cc_skill / "SKILL.md").write_text("# Different\n")
+
+    beacon_yaml = temp_dir / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n  knowledge: []\n  skills:\n    - skills/my-skill/SKILL.md\n  contexts: []\n"
+    )
+    settings = BeaconSettings.from_yaml(beacon_yaml)
+
+    comparator = DeltaComparator(
+        valid_warehouse,
+        artifacts_dir,
+        skills_paths={"opencode": opencode_skills, "claudecode": claude_skills},
+    )
+    summary = comparator.compare_from_config(settings)
+
+    assert len(summary.modified) == 1
+    result = summary.modified[0]
+    assert result.status == DeltaStatus.MODIFIED
+    assert result.agent_statuses["opencode"] == DeltaStatus.IDENTICAL
+    assert result.agent_statuses["claudecode"] == DeltaStatus.MODIFIED
 
 
 def test_compare_from_config_detects_missing_skill_via_glob(valid_warehouse, temp_dir):
@@ -434,3 +554,322 @@ def test_compare_from_config_no_duplicates_for_modified(valid_warehouse, temp_di
     assert len(summary.results) == 1
     assert summary.results[0].path == "knowledge/shared.md"
     assert len(summary.modified) == 1
+
+
+# ========== Skills: live agent path comparison (bug fix) ==========
+# Tests for the fix where abc delta now compares skills against the
+# live agent installation directories (.opencode/skills, .claude/skills)
+# instead of the intermediate artifact snapshot.
+
+
+def test_compare_skill_file_directly_modified(valid_warehouse, temp_dir):
+    """compare_file reports MODIFIED when live skill differs from warehouse."""
+    opencode_skills = temp_dir / ".opencode" / "skills"
+    live_dir = opencode_skills / "opsx-enhance"
+    live_dir.mkdir(parents=True)
+    (live_dir / "SKILL.md").write_text("# Modified live\n")
+
+    (valid_warehouse / "skills" / "opsx-enhance").mkdir(parents=True)
+    (valid_warehouse / "skills" / "opsx-enhance" / "SKILL.md").write_text(
+        "# Warehouse\n"
+    )
+
+    artifacts_dir = temp_dir / "artifacts"
+    artifacts_dir.mkdir()
+
+    comparator = DeltaComparator(
+        valid_warehouse,
+        artifacts_dir,
+        skills_paths={"opencode": opencode_skills},
+    )
+    result = comparator.compare_file("skills/opsx-enhance/SKILL.md")
+
+    assert result.status == DeltaStatus.MODIFIED
+    assert result.is_skill is True
+    assert result.agent_statuses == {"opencode": DeltaStatus.MODIFIED}
+
+
+def test_compare_skill_file_identical(valid_warehouse, temp_dir):
+    """compare_file reports IDENTICAL when live skill matches warehouse."""
+    content = "# Same\n"
+    opencode_skills = temp_dir / ".opencode" / "skills"
+    (opencode_skills / "my-skill").mkdir(parents=True)
+    (opencode_skills / "my-skill" / "SKILL.md").write_text(content)
+
+    (valid_warehouse / "skills" / "my-skill").mkdir(parents=True)
+    (valid_warehouse / "skills" / "my-skill" / "SKILL.md").write_text(content)
+
+    artifacts_dir = temp_dir / "artifacts"
+    artifacts_dir.mkdir()
+
+    comparator = DeltaComparator(
+        valid_warehouse,
+        artifacts_dir,
+        skills_paths={"opencode": opencode_skills},
+    )
+    result = comparator.compare_file("skills/my-skill/SKILL.md")
+
+    assert result.status == DeltaStatus.IDENTICAL
+    assert result.is_skill is True
+    assert result.agent_statuses == {"opencode": DeltaStatus.IDENTICAL}
+
+
+def test_compare_skill_file_missing_from_live(valid_warehouse, temp_dir):
+    """compare_file reports MISSING when skill exists in warehouse but not in live dir."""
+    (valid_warehouse / "skills" / "my-skill").mkdir(parents=True)
+    (valid_warehouse / "skills" / "my-skill" / "SKILL.md").write_text("# Warehouse\n")
+
+    opencode_skills = temp_dir / ".opencode" / "skills"
+    opencode_skills.mkdir(parents=True)  # agent dir exists but skill not installed
+
+    artifacts_dir = temp_dir / "artifacts"
+    artifacts_dir.mkdir()
+
+    comparator = DeltaComparator(
+        valid_warehouse,
+        artifacts_dir,
+        skills_paths={"opencode": opencode_skills},
+    )
+    result = comparator.compare_file("skills/my-skill/SKILL.md")
+
+    assert result.status == DeltaStatus.MISSING
+    assert result.agent_statuses == {"opencode": DeltaStatus.MISSING}
+
+
+def test_compare_skill_file_added_only_in_live(valid_warehouse, temp_dir):
+    """compare_file reports ADDED when skill exists live but not in warehouse."""
+    opencode_skills = temp_dir / ".opencode" / "skills"
+    (opencode_skills / "my-skill").mkdir(parents=True)
+    (opencode_skills / "my-skill" / "SKILL.md").write_text("# Local only\n")
+
+    artifacts_dir = temp_dir / "artifacts"
+    artifacts_dir.mkdir()
+
+    comparator = DeltaComparator(
+        valid_warehouse,
+        artifacts_dir,
+        skills_paths={"opencode": opencode_skills},
+    )
+    result = comparator.compare_file("skills/my-skill/SKILL.md")
+
+    assert result.status == DeltaStatus.ADDED
+    assert result.agent_statuses == {"opencode": DeltaStatus.ADDED}
+
+
+def test_compare_skill_multi_agent_all_identical(valid_warehouse, temp_dir):
+    """When all agents have the skill identical to warehouse, aggregate is IDENTICAL."""
+    content = "# Same\n"
+    (valid_warehouse / "skills" / "my-skill").mkdir(parents=True)
+    (valid_warehouse / "skills" / "my-skill" / "SKILL.md").write_text(content)
+
+    opencode_skills = temp_dir / ".opencode" / "skills"
+    (opencode_skills / "my-skill").mkdir(parents=True)
+    (opencode_skills / "my-skill" / "SKILL.md").write_text(content)
+
+    claude_skills = temp_dir / ".claude" / "skills"
+    (claude_skills / "my-skill").mkdir(parents=True)
+    (claude_skills / "my-skill" / "SKILL.md").write_text(content)
+
+    artifacts_dir = temp_dir / "artifacts"
+    artifacts_dir.mkdir()
+
+    comparator = DeltaComparator(
+        valid_warehouse,
+        artifacts_dir,
+        skills_paths={"opencode": opencode_skills, "claudecode": claude_skills},
+    )
+    result = comparator.compare_file("skills/my-skill/SKILL.md")
+
+    assert result.status == DeltaStatus.IDENTICAL
+    assert result.agent_statuses["opencode"] == DeltaStatus.IDENTICAL
+    assert result.agent_statuses["claudecode"] == DeltaStatus.IDENTICAL
+
+
+def test_compare_skill_multi_agent_missing_beats_identical(valid_warehouse, temp_dir):
+    """MISSING beats IDENTICAL in the aggregate rollup for multi-agent."""
+    content = "# Warehouse\n"
+    (valid_warehouse / "skills" / "my-skill").mkdir(parents=True)
+    (valid_warehouse / "skills" / "my-skill" / "SKILL.md").write_text(content)
+
+    # opencode: identical
+    opencode_skills = temp_dir / ".opencode" / "skills"
+    (opencode_skills / "my-skill").mkdir(parents=True)
+    (opencode_skills / "my-skill" / "SKILL.md").write_text(content)
+
+    # claudecode: agent dir exists but skill not installed
+    claude_skills = temp_dir / ".claude" / "skills"
+    claude_skills.mkdir(parents=True)
+
+    artifacts_dir = temp_dir / "artifacts"
+    artifacts_dir.mkdir()
+
+    comparator = DeltaComparator(
+        valid_warehouse,
+        artifacts_dir,
+        skills_paths={"opencode": opencode_skills, "claudecode": claude_skills},
+    )
+    result = comparator.compare_file("skills/my-skill/SKILL.md")
+
+    assert result.status == DeltaStatus.MISSING
+    assert result.agent_statuses["opencode"] == DeltaStatus.IDENTICAL
+    assert result.agent_statuses["claudecode"] == DeltaStatus.MISSING
+
+
+def test_compare_skill_is_skill_false_for_non_skill(valid_warehouse, temp_dir):
+    """is_skill is False for knowledge and context artifacts."""
+    artifacts_dir = temp_dir / "artifacts"
+    (artifacts_dir / "knowledge").mkdir(parents=True)
+    (valid_warehouse / "knowledge" / "doc.md").write_text("content")
+    (artifacts_dir / "knowledge" / "doc.md").write_text("content")
+
+    comparator = DeltaComparator(valid_warehouse, artifacts_dir)
+    result = comparator.compare_file("knowledge/doc.md")
+
+    assert result.is_skill is False
+    assert result.agent_statuses == {}
+
+
+def test_compare_skill_no_skills_paths_falls_back_to_artifacts(
+    valid_warehouse, temp_dir
+):
+    """When skills_paths is empty, skill comparison falls back to artifact snapshot."""
+    artifacts_dir = temp_dir / "artifacts"
+    (artifacts_dir / "skills" / "my-skill").mkdir(parents=True)
+    (artifacts_dir / "skills" / "my-skill" / "SKILL.md").write_text("# Snapshot\n")
+
+    (valid_warehouse / "skills" / "my-skill").mkdir(parents=True)
+    (valid_warehouse / "skills" / "my-skill" / "SKILL.md").write_text("# Warehouse\n")
+
+    # No skills_paths → backward compat, uses artifacts_path
+    comparator = DeltaComparator(valid_warehouse, artifacts_dir)
+    result = comparator.compare_file("skills/my-skill/SKILL.md")
+
+    assert result.status == DeltaStatus.MODIFIED
+    assert result.agent_statuses == {}
+    assert result.is_skill is False
+
+
+def test_detailed_diff_uses_live_skill_path(valid_warehouse, temp_dir):
+    """detailed_diff diffs against the live agent install, not the artifact snapshot."""
+    warehouse_content = "line one\nline two\n"
+    live_content = "line one\nline two modified\n"
+
+    (valid_warehouse / "skills" / "my-skill").mkdir(parents=True)
+    (valid_warehouse / "skills" / "my-skill" / "SKILL.md").write_text(warehouse_content)
+
+    opencode_skills = temp_dir / ".opencode" / "skills"
+    (opencode_skills / "my-skill").mkdir(parents=True)
+    (opencode_skills / "my-skill" / "SKILL.md").write_text(live_content)
+
+    # Snapshot intentionally has the original (identical to warehouse)
+    # so a snapshot-based diff would incorrectly show no diff
+    artifacts_dir = temp_dir / "artifacts"
+    (artifacts_dir / "skills" / "my-skill").mkdir(parents=True)
+    (artifacts_dir / "skills" / "my-skill" / "SKILL.md").write_text(warehouse_content)
+
+    comparator = DeltaComparator(
+        valid_warehouse,
+        artifacts_dir,
+        skills_paths={"opencode": opencode_skills},
+    )
+    diff = comparator.detailed_diff("skills/my-skill/SKILL.md", color=False)
+
+    assert "line two modified" in diff or "modified" in diff
+    assert len(diff) > 0
+
+
+def test_detailed_diff_skill_missing_from_live_falls_back_to_snapshot(
+    valid_warehouse, temp_dir
+):
+    """detailed_diff falls back to artifact snapshot when no live agent has the skill."""
+    warehouse_content = "# Warehouse\n"
+    snapshot_content = "# Snapshot version\n"
+
+    (valid_warehouse / "skills" / "my-skill").mkdir(parents=True)
+    (valid_warehouse / "skills" / "my-skill" / "SKILL.md").write_text(warehouse_content)
+
+    artifacts_dir = temp_dir / "artifacts"
+    (artifacts_dir / "skills" / "my-skill").mkdir(parents=True)
+    (artifacts_dir / "skills" / "my-skill" / "SKILL.md").write_text(snapshot_content)
+
+    # Agent dir exists but skill not installed
+    opencode_skills = temp_dir / ".opencode" / "skills"
+    opencode_skills.mkdir(parents=True)
+
+    comparator = DeltaComparator(
+        valid_warehouse,
+        artifacts_dir,
+        skills_paths={"opencode": opencode_skills},
+    )
+    diff = comparator.detailed_diff("skills/my-skill/SKILL.md", color=False)
+
+    # Falls back to snapshot — diff should show snapshot_content change
+    assert "Snapshot version" in diff or len(diff) > 0
+
+
+def test_compare_from_config_glob_detects_added_skill_in_live_dir(
+    valid_warehouse, temp_dir
+):
+    """Glob-based config detects a skill present in the live dir but not in the warehouse."""
+    from beacon.core.settings import BeaconSettings
+
+    artifacts_dir = temp_dir / "artifacts"
+    artifacts_dir.mkdir()
+
+    # Live dir has a new skill not yet contributed to warehouse
+    opencode_skills = temp_dir / ".opencode" / "skills"
+    (opencode_skills / "new-skill").mkdir(parents=True)
+    (opencode_skills / "new-skill" / "SKILL.md").write_text("# New local skill\n")
+
+    beacon_yaml = temp_dir / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n  knowledge: []\n  skills:\n    - skills/**/*\n  contexts: []\n"
+    )
+    settings = BeaconSettings.from_yaml(beacon_yaml)
+
+    comparator = DeltaComparator(
+        valid_warehouse,
+        artifacts_dir,
+        skills_paths={"opencode": opencode_skills},
+    )
+    summary = comparator.compare_from_config(settings)
+
+    added_paths = [r.path for r in summary.added]
+    assert "skills/new-skill/SKILL.md" in added_paths
+
+
+def test_compare_from_config_glob_no_duplicates_multi_agent(valid_warehouse, temp_dir):
+    """With multiple agents having the same skill, it appears only once in results."""
+    from beacon.core.settings import BeaconSettings
+
+    content = "# Warehouse\n"
+    (valid_warehouse / "skills" / "my-skill").mkdir(parents=True)
+    (valid_warehouse / "skills" / "my-skill" / "SKILL.md").write_text(content)
+
+    opencode_skills = temp_dir / ".opencode" / "skills"
+    (opencode_skills / "my-skill").mkdir(parents=True)
+    (opencode_skills / "my-skill" / "SKILL.md").write_text(content)
+
+    claude_skills = temp_dir / ".claude" / "skills"
+    (claude_skills / "my-skill").mkdir(parents=True)
+    (claude_skills / "my-skill" / "SKILL.md").write_text(content)
+
+    artifacts_dir = temp_dir / "artifacts"
+    artifacts_dir.mkdir()
+
+    beacon_yaml = temp_dir / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n  knowledge: []\n  skills:\n    - skills/**/*\n  contexts: []\n"
+    )
+    settings = BeaconSettings.from_yaml(beacon_yaml)
+
+    comparator = DeltaComparator(
+        valid_warehouse,
+        artifacts_dir,
+        skills_paths={"opencode": opencode_skills, "claudecode": claude_skills},
+    )
+    summary = comparator.compare_from_config(settings)
+
+    # Should appear exactly once despite two agents
+    skill_paths = [r.path for r in summary.results if "my-skill" in r.path]
+    assert len(skill_paths) == 1

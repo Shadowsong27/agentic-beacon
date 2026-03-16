@@ -128,3 +128,204 @@ def test_delta_no_beacon_dir(temp_dir, monkeypatch):
     result = runner.invoke(main, ["delta"])
     assert result.exit_code == 1
     assert "No .agentic-beacon" in result.output
+
+
+# ---------------------------------------------------------------------------
+# Skills: live agent path comparison (bug fix)
+# abc delta must compare skills against the live agent dirs, not the snapshot.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def project_with_skill(temp_dir, valid_warehouse):
+    """Project with a synced skill and an opencode.json agent config."""
+    project = temp_dir / "project"
+    project.mkdir()
+
+    beacon_dir = project / ".agentic-beacon"
+    beacon_dir.mkdir()
+    (beacon_dir / "config.toml").write_text(
+        f'[warehouse]\nlocal_path = "{valid_warehouse}"\n'
+    )
+    (beacon_dir / "beacon.yaml").write_text(
+        "artifacts:\n"
+        "  knowledge: []\n"
+        "  skills:\n"
+        "    - skills/my-skill/SKILL.md\n"
+        "  contexts: []\n"
+    )
+
+    # Add skill to warehouse
+    skill_wh = valid_warehouse / "skills" / "my-skill"
+    skill_wh.mkdir(parents=True)
+    (skill_wh / "SKILL.md").write_text("# Warehouse version\n")
+
+    # Artifact snapshot (identical to warehouse)
+    (beacon_dir / "artifacts" / "skills" / "my-skill").mkdir(parents=True)
+    (beacon_dir / "artifacts" / "skills" / "my-skill" / "SKILL.md").write_text(
+        "# Warehouse version\n"
+    )
+
+    # opencode.json marks this as an opencode project
+    (project / "opencode.json").write_text("{}")
+
+    return project
+
+
+def test_delta_skill_identical_live_shows_no_differences(
+    project_with_skill, valid_warehouse, monkeypatch
+):
+    """abc delta reports no differences when live skill matches warehouse."""
+    project = project_with_skill
+
+    # Install the live skill (identical to warehouse)
+    live_dir = project / ".opencode" / "skills" / "my-skill"
+    live_dir.mkdir(parents=True)
+    (live_dir / "SKILL.md").write_text("# Warehouse version\n")
+
+    runner = CliRunner()
+    monkeypatch.chdir(project)
+    result = runner.invoke(main, ["delta"])
+
+    assert result.exit_code == 0
+    assert "No differences" in result.output
+
+
+def test_delta_skill_modified_live_shows_modified(
+    project_with_skill, valid_warehouse, monkeypatch
+):
+    """abc delta reports Modified when live skill differs from warehouse."""
+    project = project_with_skill
+
+    # Install a MODIFIED version in the live dir
+    live_dir = project / ".opencode" / "skills" / "my-skill"
+    live_dir.mkdir(parents=True)
+    (live_dir / "SKILL.md").write_text("# Locally edited version\n")
+
+    runner = CliRunner()
+    monkeypatch.chdir(project)
+    result = runner.invoke(main, ["delta"])
+
+    assert result.exit_code == 0
+    assert "Modified" in result.output
+    assert "skills/my-skill/SKILL.md" in result.output
+
+
+def test_delta_skill_snapshot_identical_but_live_modified_shows_modified(
+    project_with_skill, valid_warehouse, monkeypatch
+):
+    """Regression: delta reports Modified even when artifact snapshot is identical.
+
+    This is the core bug scenario — the snapshot matches warehouse but the live
+    agent copy has been edited. Without the fix, delta would silently show
+    'No differences'.
+    """
+    project = project_with_skill
+
+    # Snapshot is identical to warehouse (no drift there)
+    # but live dir has a different version
+    live_dir = project / ".opencode" / "skills" / "my-skill"
+    live_dir.mkdir(parents=True)
+    (live_dir / "SKILL.md").write_text("# Added a new guardrail\n")
+
+    runner = CliRunner()
+    monkeypatch.chdir(project)
+    result = runner.invoke(main, ["delta"])
+
+    assert result.exit_code == 0
+    assert "Modified" in result.output
+    assert "skills/my-skill/SKILL.md" in result.output
+
+
+def test_delta_skill_shows_per_agent_breakdown_in_output(
+    temp_dir, valid_warehouse, monkeypatch
+):
+    """abc delta shows per-agent status for modified skills with multiple agents."""
+    project = temp_dir / "project"
+    project.mkdir()
+
+    beacon_dir = project / ".agentic-beacon"
+    beacon_dir.mkdir()
+    (beacon_dir / "config.toml").write_text(
+        f'[warehouse]\nlocal_path = "{valid_warehouse}"\n'
+    )
+    (beacon_dir / "beacon.yaml").write_text(
+        "artifacts:\n"
+        "  knowledge: []\n"
+        "  skills:\n"
+        "    - skills/my-skill/SKILL.md\n"
+        "  contexts: []\n"
+    )
+
+    skill_wh = valid_warehouse / "skills" / "my-skill"
+    skill_wh.mkdir(parents=True)
+    (skill_wh / "SKILL.md").write_text("# Warehouse\n")
+
+    (beacon_dir / "artifacts" / "skills" / "my-skill").mkdir(parents=True)
+    (beacon_dir / "artifacts" / "skills" / "my-skill" / "SKILL.md").write_text(
+        "# Warehouse\n"
+    )
+
+    # Both agents configured
+    (project / "opencode.json").write_text("{}")
+    (project / ".claude").mkdir()
+
+    # opencode: modified
+    oc_live = project / ".opencode" / "skills" / "my-skill"
+    oc_live.mkdir(parents=True)
+    (oc_live / "SKILL.md").write_text("# OpenCode edit\n")
+
+    # claudecode: identical
+    cc_live = project / ".claude" / "skills" / "my-skill"
+    cc_live.mkdir(parents=True)
+    (cc_live / "SKILL.md").write_text("# Warehouse\n")
+
+    runner = CliRunner()
+    monkeypatch.chdir(project)
+    result = runner.invoke(main, ["delta"])
+
+    assert result.exit_code == 0
+    assert "Modified" in result.output
+    assert "opencode" in result.output
+    assert "claudecode" in result.output
+    # opencode modified, claudecode identical
+    assert "modified" in result.output.lower()
+    assert "identical" in result.output.lower()
+
+
+def test_delta_skill_no_live_dir_reports_missing(
+    project_with_skill, valid_warehouse, monkeypatch
+):
+    """abc delta reports Missing when skill is in warehouse but not installed in live dir."""
+    project = project_with_skill
+    # opencode.json exists (agent detected) but .opencode/skills/ dir is absent
+
+    runner = CliRunner()
+    monkeypatch.chdir(project)
+    result = runner.invoke(main, ["delta"])
+
+    assert result.exit_code == 0
+    assert "Missing" in result.output
+    assert "skills/my-skill/SKILL.md" in result.output
+
+
+def test_delta_skill_detailed_diff_uses_live_path(
+    project_with_skill, valid_warehouse, monkeypatch
+):
+    """abc delta <file> diffs warehouse against the live agent copy, not the snapshot."""
+    project = project_with_skill
+
+    # Snapshot identical to warehouse
+    # Live has extra content
+    live_dir = project / ".opencode" / "skills" / "my-skill"
+    live_dir.mkdir(parents=True)
+    (live_dir / "SKILL.md").write_text(
+        "# Warehouse version\n\n## New Section\nExtra.\n"
+    )
+
+    runner = CliRunner()
+    monkeypatch.chdir(project)
+    result = runner.invoke(main, ["delta", "skills/my-skill/SKILL.md", "--no-color"])
+
+    assert result.exit_code == 0
+    assert "New Section" in result.output or "Extra" in result.output
