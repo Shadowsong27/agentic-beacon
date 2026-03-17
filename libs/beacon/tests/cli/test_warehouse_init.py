@@ -19,7 +19,7 @@ def runner():
 
 EXPECTED_DIRS = ["contexts", "knowledge", "skills", "docs"]
 EXPECTED_FILES = [
-    "contexts/AGENTS.md",
+    "contexts/README.md",
     "knowledge/README.md",
     "skills/README.md",
     "docs/architecture.md",
@@ -140,7 +140,7 @@ def test_init_in_existing_dir_skips_existing_files(runner, tmp_path):
 
     # All other warehouse files must be created
     for f in EXPECTED_FILES:
-        if f != "contexts/AGENTS.md":
+        if f != "contexts/README.md":
             assert (tmp_path / f).is_file(), f"Missing file: {f}"
 
 

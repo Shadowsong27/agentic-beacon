@@ -269,7 +269,7 @@ def test_template_has_no_duplicate_artifact_keys(
 def test_template_context_comments_use_full_path(
     valid_warehouse, temp_dir, monkeypatch
 ):
-    """Regression #1/#4: Context examples in template use full path (contexts/AGENTS.md).
+    """Regression #1/#4: Context examples in template use full path (contexts/README.md).
 
     Old stale examples showed 'AGENTS.global.md' (old naming convention, no prefix),
     which would lead users/agents to fill in beacon.yaml incorrectly.
@@ -288,8 +288,8 @@ def test_template_context_comments_use_full_path(
     assert "AGENTS.global.md" not in raw_text, (
         "Template must not reference old 'AGENTS.global.md' naming convention"
     )
-    assert "contexts/AGENTS.md" in raw_text, (
-        "Template should show 'contexts/AGENTS.md' as a context example"
+    assert "contexts/README.md" in raw_text, (
+        "Template should show 'contexts/README.md' as a context example"
     )
 
 

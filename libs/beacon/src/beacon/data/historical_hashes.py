@@ -21,9 +21,9 @@ KNOWN_TEMPLATE_HASHES: dict[str, list[str]] = {
         # v2.x (current)
         "3c1c02ce7df7161a4f6286638b9d4b12fb462c08e8bba12aa2d1b720de6d5856",
     ],
-    "contexts/AGENTS.md": [
-        # v2.x (current)
-        "750e19e14f7ede1326eac4343a6d0c6ecef319356b037e64229f4e74e1a41ef7",
+    "contexts/README.md": [
+        # v2.2+ (current)
+        "90dfeb30f5844e16596302291d9f9770e2f714a35733d525ab7fe913be49912b",
     ],
     "docs/architecture.md": [
         # v2.x (current)

@@ -89,7 +89,7 @@ def test_e2e_warehouse_init_creates_structure(e2e_warehouse):
     assert (e2e_warehouse / "skills").is_dir()
     assert (e2e_warehouse / "docs").is_dir()
     assert (e2e_warehouse / "README.md").exists()
-    assert (e2e_warehouse / "contexts" / "AGENTS.md").exists()
+    assert (e2e_warehouse / "contexts" / "README.md").exists()
 
 
 def test_e2e_warehouse_init_installs_record_knowledge(e2e_warehouse):
@@ -113,7 +113,7 @@ def test_e2e_warehouse_list_shows_contexts(e2e_project):
 
     assert result.exit_code == 0
     assert "Contexts" in result.output
-    assert "contexts/AGENTS.md" in result.output
+    assert "contexts/README.md" in result.output
     assert "Knowledge" in result.output
     assert "Skills" in result.output
 
@@ -164,7 +164,7 @@ def test_e2e_setup_manual_template(e2e_project):
     assert len(re.findall(r"^\s{2}skills:", raw, re.MULTILINE)) == 1
     # Context comments use current path format (Bug #1/#4 regression)
     assert "AGENTS.global.md" not in raw
-    assert "contexts/AGENTS.md" in raw
+    assert "contexts/README.md" in raw
 
 
 # ---------------------------------------------------------------------------
@@ -185,7 +185,7 @@ def test_e2e_sync_copies_artifacts(e2e_project):
         "  skills:\n"
         "    - skills/code-review/SKILL.md\n"
         "  contexts:\n"
-        "    - contexts/AGENTS.md\n"
+        "    - contexts/README.md\n"
     )
 
     result = runner.invoke(main, ["sync"])
@@ -197,7 +197,7 @@ def test_e2e_sync_copies_artifacts(e2e_project):
     assert (artifacts / "knowledge" / "python" / "standards.md").exists()
     assert (artifacts / "knowledge" / "decisions" / "use-uv.md").exists()
     assert (artifacts / "skills" / "code-review" / "SKILL.md").exists()
-    assert (artifacts / "contexts" / "AGENTS.md").exists()
+    assert (artifacts / "contexts" / "README.md").exists()
 
 
 def test_e2e_sync_is_idempotent(e2e_project):
@@ -259,14 +259,14 @@ def test_e2e_status_shows_check_marks_for_synced(e2e_project):
         "  skills:\n"
         "    - skills/code-review/SKILL.md\n"
         "  contexts:\n"
-        "    - contexts/AGENTS.md\n"
+        "    - contexts/README.md\n"
     )
     runner.invoke(main, ["sync"])
 
     result = runner.invoke(main, ["status"])
 
     assert result.exit_code == 0
-    assert "✗ contexts/AGENTS.md" not in result.output
+    assert "✗ contexts/README.md" not in result.output
     assert "✗ skills/code-review/SKILL.md" not in result.output
     assert "✓" in result.output
 

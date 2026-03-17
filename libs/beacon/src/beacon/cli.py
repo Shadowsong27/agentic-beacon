@@ -568,8 +568,8 @@ artifacts:
 
   contexts: []
     # Examples:
-    # - contexts/AGENTS.md
-    # - contexts/teams/backend/AGENTS.md
+    # - contexts/README.md
+    # - contexts/teams/backend/README.md
 """
     path.write_text(template)
 
@@ -672,7 +672,7 @@ def _generate_warehouse_catalog(warehouse_path: Path) -> str:
             "  skills:",
             "    - skills/code-review/SKILL.md",
             "  contexts:",
-            "    - contexts/AGENTS.md",
+            "    - contexts/README.md",
             "```",
             "",
             "Then run `abc sync` to download the artifacts.",

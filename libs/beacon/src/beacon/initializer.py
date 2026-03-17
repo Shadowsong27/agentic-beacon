@@ -16,7 +16,7 @@ _TEMPLATES_DIR = _DATA_DIR / "templates"
 TEMPLATE_FILES: list[str] = [
     ".gitignore",
     "README.md",
-    "contexts/AGENTS.md",
+    "contexts/README.md",
     "docs/architecture.md",
     "docs/contribution-guide.md",
     "knowledge/README.md",
@@ -71,7 +71,7 @@ class WarehouseInitializer:
         self._create_structure()
 
         # Create starter files
-        self._create_contexts(org_name)
+        self._create_contexts()
         self._create_knowledge()
         self._create_skills()
         self._create_docs(org_name)
@@ -114,11 +114,11 @@ class WarehouseInitializer:
         content = (_TEMPLATES_DIR / rel_path).read_text(encoding="utf-8")
         return content.replace("{org_name}", org_name)
 
-    def _create_contexts(self, org_name: str) -> None:
+    def _create_contexts(self) -> None:
         """Create starter context file."""
         self._write_if_missing(
-            self.warehouse_path / "contexts" / "AGENTS.md",
-            self._render_template("contexts/AGENTS.md", org_name),
+            self.warehouse_path / "contexts" / "README.md",
+            self._render_template("contexts/README.md", ""),
         )
 
     def _create_knowledge(self) -> None:
