@@ -263,3 +263,74 @@ def test_legacy_warehouse_unknown_hash_writes_sidecar(tmp_path):
     upgrader.run(template_overrides=new_templates)
     assert (wh / "skills" / "README.md").read_text() == "# Customised skills doc\n"
     assert (wh / "skills" / "README.md.new").exists()
+
+
+# ---------------------------------------------------------------------------
+# New template file handling (file absent from warehouse)
+# ---------------------------------------------------------------------------
+
+
+def test_new_template_file_created_when_absent_from_checksums(tmp_path):
+    """File not on disk and not in stored checksums → new template → created."""
+    wh = _make_warehouse(tmp_path)
+    # Remove a file AND its checksum entry to simulate a brand-new template
+    (wh / "skills" / "README.md").unlink()
+    cs_path = wh / ".beacon" / "template-checksums.json"
+    data = json.loads(cs_path.read_text())
+    del data["files"]["skills/README.md"]
+    cs_path.write_text(json.dumps(data))
+
+    upgrader = WarehouseUpgrader(warehouse_path=wh)
+    new_templates = {"skills/README.md": "# Newly Added Template\n"}
+    result = upgrader.run(template_overrides=new_templates)
+
+    assert (wh / "skills" / "README.md").read_text(
+        encoding="utf-8"
+    ) == "# Newly Added Template\n"
+    assert result["upgraded"] >= 1
+
+
+def test_user_deleted_file_is_skipped(tmp_path):
+    """File not on disk but present in stored checksums → user deleted it → skip."""
+    wh = _make_warehouse(tmp_path)
+    # Delete the file but leave its checksum entry intact
+    (wh / "skills" / "README.md").unlink()
+
+    upgrader = WarehouseUpgrader(warehouse_path=wh)
+    new_templates = {"skills/README.md": "# Would overwrite\n"}
+    result = upgrader.run(template_overrides=new_templates)
+
+    assert not (wh / "skills" / "README.md").exists()
+    assert result["skipped"] >= 1
+
+
+def test_new_template_file_dry_run_does_not_create(tmp_path):
+    """dry-run for new template → prints [would add] but does not create file."""
+    wh = _make_warehouse(tmp_path)
+    (wh / "skills" / "README.md").unlink()
+    cs_path = wh / ".beacon" / "template-checksums.json"
+    data = json.loads(cs_path.read_text())
+    del data["files"]["skills/README.md"]
+    cs_path.write_text(json.dumps(data))
+
+    upgrader = WarehouseUpgrader(warehouse_path=wh)
+    upgrader.run(template_overrides={"skills/README.md": "# New\n"}, dry_run=True)
+
+    assert not (wh / "skills" / "README.md").exists()
+
+
+def test_new_template_checksum_stored_after_creation(tmp_path):
+    """Newly created template file hash is stored in checksums."""
+    wh = _make_warehouse(tmp_path)
+    (wh / "skills" / "README.md").unlink()
+    cs_path = wh / ".beacon" / "template-checksums.json"
+    data = json.loads(cs_path.read_text())
+    del data["files"]["skills/README.md"]
+    cs_path.write_text(json.dumps(data))
+
+    new_content = "# Newly Added Template\n"
+    upgrader = WarehouseUpgrader(warehouse_path=wh)
+    upgrader.run(template_overrides={"skills/README.md": new_content})
+
+    hashes = json.loads(cs_path.read_text())["files"]
+    assert hashes["skills/README.md"] == compute_sha256(new_content)

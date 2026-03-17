@@ -107,11 +107,33 @@ class WarehouseUpgrader:
 
         for rel in TEMPLATE_FILES:
             path = self.warehouse_path / rel
-            if not path.exists():
-                continue
 
             new_content = self._read_new_template(rel, overrides)
             if not new_content:
+                continue
+
+            if not path.exists():
+                # Distinguish a new template (never existed here) from a user-deleted one.
+                # If rel is absent from the stored checksums, this warehouse has never had
+                # this file → it was added in a newer abc version → create it.
+                # If rel IS in the stored checksums, the user deleted it → respect that.
+                norm = normalise_path(rel)
+                was_present = (
+                    self._stored_checksums is not None
+                    and norm in self._stored_checksums
+                )
+                if was_present:
+                    click.echo(f"↷ Skipped {rel} (deleted by user)")
+                    stats["skipped"] += 1
+                    continue
+                # New template — create the parent dir if needed and write it.
+                path.parent.mkdir(parents=True, exist_ok=True)
+                label = "[would add]" if dry_run else "✓ Added"
+                click.echo(f"{label} {rel} (new template)")
+                if not dry_run:
+                    path.write_text(new_content, encoding="utf-8")
+                    stats["upgraded"] += 1
+                    upgraded_hashes[rel] = compute_sha256(new_content)
                 continue
 
             state = self.classify_file(rel)
