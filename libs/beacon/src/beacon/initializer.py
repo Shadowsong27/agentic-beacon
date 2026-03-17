@@ -6,8 +6,22 @@ from typing import Any
 
 from loguru import logger
 
+from .checksums import compute_sha256, write_checksums
+
 _DATA_DIR = Path(__file__).parent / "data"
 _TEMPLATES_DIR = _DATA_DIR / "templates"
+
+# Relative paths (from warehouse root) of all template-generated files.
+# Keep in sync with _create_* methods below.
+TEMPLATE_FILES: list[str] = [
+    ".gitignore",
+    "README.md",
+    "contexts/AGENTS.md",
+    "docs/architecture.md",
+    "docs/contribution-guide.md",
+    "knowledge/README.md",
+    "skills/README.md",
+]
 
 
 class WarehouseInitializer:
@@ -63,6 +77,9 @@ class WarehouseInitializer:
         self._create_docs(org_name)
         self._create_root_files(org_name)
         self._install_bundled_skills()
+
+        # Write checksum file atomically after all template writes succeed
+        self._write_template_checksums()
 
         # Initialize git if requested
         if init_git:
@@ -155,6 +172,17 @@ class WarehouseInitializer:
             self._write_if_missing(dest_dir / "SKILL.md", content)
 
         logger.info("Bundled skills installed")
+
+    def _write_template_checksums(self) -> None:
+        """Compute SHA256 for each template-generated file and write the checksum file."""
+        file_hashes: dict[str, str] = {}
+        for rel in TEMPLATE_FILES:
+            path = self.warehouse_path / rel
+            if path.exists():
+                content = path.read_text(encoding="utf-8")
+                file_hashes[rel] = compute_sha256(content)
+        write_checksums(self.warehouse_path, file_hashes)
+        logger.debug(f"Template checksums written for {len(file_hashes)} files")
 
     def _init_git(self) -> None:
         """Initialize git repository with initial commit.

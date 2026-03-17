@@ -1,10 +1,17 @@
-"""Regression test: all `abc ...` commands referenced in templates must exist in the CLI."""
+"""Regression tests for warehouse templates.
 
+1. All `abc ...` commands referenced in templates must exist in the CLI.
+2. All current template file hashes must be present in KNOWN_TEMPLATE_HASHES
+   (guards against drift when templates change but the registry is not updated).
+"""
+
+import hashlib
 import re
 from pathlib import Path
 
 import click
 from beacon.cli import main
+from beacon.data.historical_hashes import KNOWN_TEMPLATE_HASHES, normalise_path
 
 _TEMPLATES_DIR = Path(__file__).parent.parent / "src/beacon/data/templates"
 
@@ -51,4 +58,27 @@ def test_template_commands_exist_in_cli():
 
     assert not invalid, "Templates reference unknown abc commands:\n" + "\n".join(
         invalid
+    )
+
+
+def test_current_template_hashes_in_registry():
+    """Every current template file's SHA256 must be present in KNOWN_TEMPLATE_HASHES.
+
+    If this test fails, update libs/beacon/src/beacon/data/historical_hashes.py
+    with the missing hash shown in the failure message.
+    """
+    missing = []
+    for tmpl in sorted(_TEMPLATES_DIR.rglob("*")):
+        if not tmpl.is_file():
+            continue
+        rel = normalise_path(tmpl.relative_to(_TEMPLATES_DIR).as_posix())
+        sha = hashlib.sha256(tmpl.read_bytes()).hexdigest()
+        known = KNOWN_TEMPLATE_HASHES.get(rel, [])
+        if sha not in known:
+            missing.append(f"  {rel}: {sha}")
+
+    assert not missing, (
+        "Current template hashes missing from KNOWN_TEMPLATE_HASHES.\n"
+        "Add these entries to libs/beacon/src/beacon/data/historical_hashes.py:\n"
+        + "\n".join(missing)
     )

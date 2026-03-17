@@ -17,6 +17,7 @@ from .core.settings import ArtifactsConfig, BeaconSettings, WarehouseSettings
 from .core.sync import SyncEngine
 from .distributor import WarehouseDistributor
 from .initializer import WarehouseInitializer
+from .upgrader import WarehouseUpgrader
 from .warehouse import WarehouseValidator
 
 console = Console()
@@ -385,6 +386,53 @@ def warehouse_list(*, artifact_type: str | None) -> None:
     if not any_shown:
         label = artifact_type or "artifacts"
         console.print(f"[yellow]No {label} found in warehouse.[/yellow]")
+
+
+@warehouse.command(name="template-upgrade")
+@click.argument(
+    "warehouse_path",
+    type=click.Path(path_type=Path, exists=True, file_okay=False),
+    required=False,
+    default=None,
+)
+@click.option(
+    "--dry-run", is_flag=True, help="Show planned changes without writing anything."
+)
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Overwrite all files regardless of modification status (scripting-friendly).",
+)
+@click.option(
+    "--interactive",
+    "-i",
+    is_flag=True,
+    help="Prompt per modified file with a coloured diff before overwriting.",
+)
+def warehouse_template_upgrade(
+    *,
+    warehouse_path: Path | None,
+    dry_run: bool,
+    force: bool,
+    interactive: bool,
+) -> None:
+    """Upgrade template-generated files in an existing warehouse.
+
+    Compares each template-generated file against the stored checksum to
+    determine whether it was user-modified.  Modified files are protected by
+    default: the new template is written to a '<file>.new' sidecar so you can
+    merge manually.
+
+    \b
+    Examples:
+        abc warehouse template-upgrade /path/to/warehouse
+        abc warehouse template-upgrade /path/to/warehouse --dry-run
+        abc warehouse template-upgrade /path/to/warehouse --force
+        abc warehouse template-upgrade /path/to/warehouse --interactive
+    """
+    target = warehouse_path or Path.cwd()
+    upgrader = WarehouseUpgrader(warehouse_path=target)
+    upgrader.run(dry_run=dry_run, force=force, interactive=interactive)
 
 
 # ========== Client Commands (top-level) ==========
