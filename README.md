@@ -18,14 +18,6 @@ Agentic Beacon provides:
 1. 🗂️ **A methodology** for managing contexts, knowledge, and skills - the core agentic engineering artifacts worthy of standardization and team-wide distribution
 2. 🛠️ **CLI tooling (`abc`)** for initializing warehouses, managing connections, and distributing artifacts across projects
 
-## Quickstart
-
-```bash
-pip install agentic-beacon
-abc connect <warehouse-url>
-abc sync
-```
-
 ## The Problem
 
 Imagine your team has 15 microservices. Each one has its own `.cursorrules` or `CLAUDE.md`. When your API naming guidelines change, you copy-paste the update into 15 repos. Miss one, and that service's agent starts giving inconsistent advice. Three months later, no one knows which version is correct.
@@ -159,7 +151,7 @@ my-warehouse/              # Created by: abc warehouse init my-warehouse
 - **Warehouse contexts:** Simple filenames (e.g., `global.md`, `python.md`)
 - **Project/User level:** Single `AGENTS.md` file by convention
 
-## 🚦 Getting Started
+## Quickstart
 
 ### Installation
 
@@ -202,7 +194,7 @@ pip install agentic-beacon
 uvx --from agentic-beacon abc warehouse init my-warehouse
 ```
 
-### Quick Start
+### Get Started
 
 **Scenario A — Starting fresh (no warehouse exists yet)**
 
