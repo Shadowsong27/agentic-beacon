@@ -9,6 +9,7 @@ And integration tests through the full `abc sync` CLI command.
 """
 
 import json
+from unittest.mock import patch
 
 import pytest
 from beacon.cli import (
@@ -338,14 +339,47 @@ def test_sync_wiring_is_idempotent(full_sync_project, monkeypatch):
     assert instructions.count(".agentic-beacon/artifacts/contexts/global.md") == 1
 
 
-def test_sync_prints_manual_instructions_when_no_agent_config(
+def test_sync_prints_manual_instructions_when_no_agent_config_non_interactive(
     full_sync_project, monkeypatch
 ):
     project, runner = full_sync_project
     monkeypatch.chdir(project)
-    # No opencode.json, no CLAUDE.md
+    # No opencode.json, no CLAUDE.md; simulate non-interactive (CI) environment
 
-    result = runner.invoke(main, ["sync"])
+    with patch("beacon.cli._is_interactive", return_value=False):
+        result = runner.invoke(main, ["sync"])
 
     assert result.exit_code == 0
     assert "manual" in result.output.lower() or "wire" in result.output.lower()
+
+
+def test_sync_interactive_init_opencode_json(full_sync_project, monkeypatch):
+    project, runner = full_sync_project
+    monkeypatch.chdir(project)
+    # No opencode.json, no CLAUDE.md; user answers yes/no to prompts
+
+    with patch("beacon.cli._is_interactive", return_value=True):
+        # "y" for opencode.json prompt, "n" for CLAUDE.md prompt
+        result = runner.invoke(main, ["sync"], input="y\nn\n")
+
+    assert result.exit_code == 0
+    assert (project / "opencode.json").exists()
+    data = json.loads((project / "opencode.json").read_text())
+    assert ".agentic-beacon/artifacts/contexts/global.md" in data["instructions"]
+    assert not (project / "CLAUDE.md").exists()
+
+
+def test_sync_interactive_init_claude_md(full_sync_project, monkeypatch):
+    project, runner = full_sync_project
+    monkeypatch.chdir(project)
+    # No opencode.json, no CLAUDE.md; user answers no/yes to prompts
+
+    with patch("beacon.cli._is_interactive", return_value=True):
+        # "n" for opencode.json prompt, "y" for CLAUDE.md prompt
+        result = runner.invoke(main, ["sync"], input="n\ny\n")
+
+    assert result.exit_code == 0
+    assert not (project / "opencode.json").exists()
+    assert (project / "CLAUDE.md").exists()
+    content = (project / "CLAUDE.md").read_text()
+    assert "@.agentic-beacon/artifacts/contexts/global.md" in content
