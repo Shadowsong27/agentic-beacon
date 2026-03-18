@@ -50,6 +50,15 @@ This directory contains **practical how-to guides** for using Agentic Beacon. Fo
 
 **Who should read:** Warehouse creators and maintainers
 
+**[Keeping Warehouse Docs Up to Date](./warehouse-template-upgrade.md)**
+- How template checksums work
+- Upgrading template-generated files with `abc warehouse template-upgrade`
+- Merging `.new` sidecar files for modified docs
+- `--dry-run`, `--interactive`, and `--force` options
+- Handling legacy warehouses (no checksum file)
+
+**Who should read:** Warehouse maintainers upgrading after `abc` version bumps
+
 ---
 
 ## Reference

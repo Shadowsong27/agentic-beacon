@@ -6,7 +6,22 @@ from typing import Any
 
 from loguru import logger
 
+from .checksums import compute_sha256, write_checksums
+
 _DATA_DIR = Path(__file__).parent / "data"
+_TEMPLATES_DIR = _DATA_DIR / "templates"
+
+# Relative paths (from warehouse root) of all template-generated files.
+# Keep in sync with _create_* methods below.
+TEMPLATE_FILES: list[str] = [
+    ".gitignore",
+    "README.md",
+    "contexts/README.md",
+    "docs/architecture.md",
+    "docs/contribution-guide.md",
+    "knowledge/README.md",
+    "skills/README.md",
+]
 
 
 class WarehouseInitializer:
@@ -56,12 +71,15 @@ class WarehouseInitializer:
         self._create_structure()
 
         # Create starter files
-        self._create_contexts(org_name)
+        self._create_contexts()
         self._create_knowledge()
         self._create_skills()
         self._create_docs(org_name)
         self._create_root_files(org_name)
         self._install_bundled_skills()
+
+        # Write checksum file atomically after all template writes succeed
+        self._write_template_checksums()
 
         # Initialize git if requested
         if init_git:
@@ -91,343 +109,53 @@ class WarehouseInitializer:
         else:
             logger.debug(f"Skipping existing file: {path}")
 
-    def _create_contexts(self, org_name: str) -> None:
+    def _render_template(self, rel_path: str, org_name: str) -> str:
+        """Read a template file and substitute the org_name placeholder."""
+        content = (_TEMPLATES_DIR / rel_path).read_text(encoding="utf-8")
+        return content.replace("{org_name}", org_name)
+
+    def _create_contexts(self) -> None:
         """Create starter context file."""
-        global_context = f"""# {org_name} — Agent Context
-
-**Organization:** {org_name}
-**Last Updated:** [Date]
-
----
-
-## Purpose
-
-This file contains practices and standards that apply to all projects in {org_name}.
-Add your team's rules, conventions, and workflow here.
-
----
-
-## Instructions
-
-Replace this placeholder with your organization's actual standards.
-See the Agentic Beacon documentation for guidance on writing effective context files.
-"""
         self._write_if_missing(
-            self.warehouse_path / "contexts" / "AGENTS.md", global_context
+            self.warehouse_path / "contexts" / "README.md",
+            self._render_template("contexts/README.md", ""),
         )
 
     def _create_knowledge(self) -> None:
         """Create starter knowledge file."""
-        placeholder = """# Knowledge
-
-Add your team's knowledge artifacts here. The structure is entirely yours to define.
-
-Examples of what teams put here:
-- Architectural decisions and their rationale
-- Coding standards and conventions
-- Framework-specific patterns and best practices
-- Security policies
-- "Why we chose X" explanations
-
-There are no required subdirectories or naming conventions.
-Organize knowledge however makes sense for your team.
-"""
         self._write_if_missing(
-            self.warehouse_path / "knowledge" / "README.md", placeholder
+            self.warehouse_path / "knowledge" / "README.md",
+            self._render_template("knowledge/README.md", ""),
         )
 
     def _create_skills(self) -> None:
         """Create skills structure."""
-        skills_readme = """# Skills Directory
-
-Reusable workflows and procedures for agents.
-
-## Structure
-
-```
-skills/
-└── skill-name/
-    ├── SKILL.md           # Main skill instructions
-    ├── templates/         # Optional: Template files
-    ├── scripts/           # Optional: Helper scripts
-    └── examples/          # Optional: Example usage
-```
-
-## Creating Skills
-
-1. **Create directory:** `skills/your-skill-name/`
-2. **Add SKILL.md** with instructions for agents
-3. **Optional:** Add templates, scripts, or examples
-4. **Test locally** before adding to warehouse
-
-## Example Skill Structure
-
-```markdown
-# Skill: Deploy to Production
-
-## Purpose
-Guide agents through safe production deployment.
-
-## When to Use
-- Deploying new features to production
-- Rolling back production deployments
-
-## Procedure
-
-1. **Verify tests pass**
-   ```bash
-   pytest tests/
-   ```
-
-2. **Create release tag**
-   ```bash
-   git tag -a v1.0.0 -m "Release 1.0.0"
-   ```
-
-3. **Deploy**
-   ```bash
-   ./scripts/deploy.sh production
-   ```
-
-## Safety Checks
-- [ ] All tests passing
-- [ ] No breaking changes
-- [ ] Changelog updated
-```
-
-## Installation
-
-Teams install skills to their projects:
-
-```bash
-abc setup --skill deploy-production
-```
-"""
         self._write_if_missing(
-            self.warehouse_path / "skills" / "README.md", skills_readme
+            self.warehouse_path / "skills" / "README.md",
+            self._render_template("skills/README.md", ""),
         )
 
     def _create_docs(self, org_name: str) -> None:
         """Create documentation files."""
-        architecture_doc = f"""# {org_name} Warehouse Architecture
-
-## Overview
-
-This warehouse contains centralized knowledge, contexts, and skills for {org_name}'s agentic development practices.
-
-## Structure
-
-### Contexts (`contexts/`)
-High-level guidance files loaded by agents on session start.
-
-- **Global**: Universal practices for all projects
-- **Language**: Language-specific standards (Python, TypeScript, etc.)
-- **Domain**: Domain-specific patterns (data-platform, web-services, etc.)
-
-### Knowledge (`knowledge/`)
-Detailed information organized by scope and type.
-
-- **Decisions**: Technical choices and rationale
-- **Lessons**: Common failure modes and correct patterns
-- **Facts**: Established configurations and standards
-
-### Skills (`skills/`)
-Reusable workflows and procedures for specific tasks.
-
-## Distribution
-
-Teams use Beacon CLI to distribute warehouse content to projects:
-
-```bash
-# Install beacon
-pip install beacon --index-url https://your-pypi.local/simple/
-
-# Setup in project
-cd ~/my-project
-abc setup --warehouse ~/warehouse --all
-
-# Content is copied to .opencode/ (gitignored)
-```
-
-## Contribution
-
-1. Make changes in warehouse repository
-2. Test with Beacon CLI
-3. Submit pull request
-4. After merge, teams run `abc update` to sync
-
-## Maintenance
-
-- Review and update contexts quarterly
-- Document new patterns as lessons
-- Keep facts current with infrastructure changes
-"""
         self._write_if_missing(
-            self.warehouse_path / "docs" / "architecture.md", architecture_doc
+            self.warehouse_path / "docs" / "architecture.md",
+            self._render_template("docs/architecture.md", org_name),
         )
-
-        contribution_guide = f"""# Contributing to {org_name} Warehouse
-
-## How to Contribute
-
-### 1. Find Something to Add
-
-- New coding standard → Add to contexts
-- Technical decision → Document in knowledge/decisions
-- Common mistake → Document in knowledge/lessons
-- Reusable workflow → Create in skills
-
-### 2. Follow Structure
-
-**Contexts:** Brief summary + pointer to knowledge
-**Knowledge:** Detailed explanation with examples
-**Skills:** Step-by-step procedures
-
-### 3. Test Locally
-
-```bash
-# Test distribution
-cd ~/test-project
-abc setup --warehouse ~/warehouse --all
-beacon status
-```
-
-### 4. Submit PR
-
-- Clear title describing the change
-- Link to related discussions or issues
-- Explain why this addition is useful
-
-## Guidelines
-
-- **Be specific:** Vague guidance doesn't help agents
-- **Be concise:** Agents have token limits
-- **Include examples:** Show don't just tell
-- **Keep updated:** Remove outdated information
-
-## Questions?
-
-Contact the platform team or open an issue.
-"""
         self._write_if_missing(
-            self.warehouse_path / "docs" / "contribution-guide.md", contribution_guide
+            self.warehouse_path / "docs" / "contribution-guide.md",
+            self._render_template("docs/contribution-guide.md", org_name),
         )
 
     def _create_root_files(self, org_name: str) -> None:
         """Create root-level files."""
-        readme = f"""# {org_name} Agentic Engineering Warehouse
-
-Centralized repository for coding standards, knowledge, and skills used by AI agents across {org_name}.
-
-## Quick Start
-
-### For Developers
-
-```bash
-# 1. Install the Agentic Beacon CLI (once per machine)
-uv tool install agentic-beacon
-
-# 2. In your project, connect to this warehouse
-cd ~/my-project
-abc warehouse connect --path ~/path/to/this-warehouse
-
-# 3. Create your artifact config and sync
-abc setup --manual   # then edit .agentic-beacon/beacon.yaml
-abc sync
-
-# 4. (Optional) Register skills as agent slash commands
-abc skill install --all
-```
-
-### For Contributors
-
-```bash
-# Clone warehouse
-git clone <this-repo-url>
-
-# Make changes
-# - Add contexts, knowledge, or skills
-# - Follow the contribution guide in docs/
-
-# Submit PR
-
-# After your changes are merged, teammates can pull them in with:
-abc update
-```
-
-### Offline / Private Install
-
-Download the bundle zip for your platform from the [Releases page](<releases-url>):
-
-```bash
-unzip agentic_beacon-X.Y.Z-bundle-<platform>.zip -d abc-bundle
-uv tool install agentic-beacon --no-index --find-links ./abc-bundle/
-```
-
-## Structure
-
-- **`contexts/`** - Boot instructions loaded by agents at session start
-- **`knowledge/`** - Atomic decisions, lessons, and facts organized by scope
-- **`skills/`** - Reusable workflows and procedures (agent slash commands)
-- **`docs/`** - Warehouse documentation and contribution guides
-
-## CLI Reference
-
-| Command | Description |
-|---------|-------------|
-| `abc warehouse connect` | Connect a project to this warehouse |
-| `abc setup` | Create `beacon.yaml` for a project |
-| `abc sync` | Sync declared artifacts to the project |
-| `abc skill install` | Register synced skills as agent slash commands |
-| `abc list` | Show available content in the warehouse |
-| `abc status` | Show connection and sync status |
-| `abc delta` | Find local changes not yet contributed back |
-| `abc contribute` | Copy local improvements back to the warehouse |
-| `abc update` | Re-sync and overwrite local artifacts from warehouse |
-| `abc clean` | Remove synced artifacts from the project |
-
-## Documentation
-
-- [Contribution Guide](./docs/contribution-guide.md) - How to add content
-
-## Maintenance
-
-This warehouse is maintained by {org_name}'s Platform Team.
-
-- **Review Frequency:** Quarterly
-- **Questions:** Contact platform-team@example.com
-- **Issues:** Open an issue in this repository
-"""
-        self._write_if_missing(self.warehouse_path / "README.md", readme)
-
-        gitignore = """# Editor and IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Temporary files
-*.tmp
-*.bak
-
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.egg-info/
-.venv/
-venv/
-
-# Logs
-*.log
-logs/
-"""
-        self._write_if_missing(self.warehouse_path / ".gitignore", gitignore)
+        self._write_if_missing(
+            self.warehouse_path / "README.md",
+            self._render_template("README.md", org_name),
+        )
+        self._write_if_missing(
+            self.warehouse_path / ".gitignore",
+            (_TEMPLATES_DIR / ".gitignore").read_text(encoding="utf-8"),
+        )
 
     def _install_bundled_skills(self) -> None:
         """Add abc-provided skills to the warehouse skills directory (skips existing)."""
@@ -444,6 +172,17 @@ logs/
             self._write_if_missing(dest_dir / "SKILL.md", content)
 
         logger.info("Bundled skills installed")
+
+    def _write_template_checksums(self) -> None:
+        """Compute SHA256 for each template-generated file and write the checksum file."""
+        file_hashes: dict[str, str] = {}
+        for rel in TEMPLATE_FILES:
+            path = self.warehouse_path / rel
+            if path.exists():
+                content = path.read_text(encoding="utf-8")
+                file_hashes[rel] = compute_sha256(content)
+        write_checksums(self.warehouse_path, file_hashes)
+        logger.debug(f"Template checksums written for {len(file_hashes)} files")
 
     def _init_git(self) -> None:
         """Initialize git repository with initial commit.

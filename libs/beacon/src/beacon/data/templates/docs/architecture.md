@@ -1,8 +1,8 @@
-# Example Corp Warehouse Architecture
+# {org_name} Warehouse Architecture
 
 ## Overview
 
-This warehouse contains centralized knowledge, contexts, and skills for Example Corp's agentic development practices.
+This warehouse contains centralized knowledge, contexts, and skills for {org_name}'s agentic development practices.
 
 ## Structure
 

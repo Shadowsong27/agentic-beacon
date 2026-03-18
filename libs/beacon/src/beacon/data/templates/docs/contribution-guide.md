@@ -1,4 +1,4 @@
-# Contributing to Example Corp Warehouse
+# Contributing to {org_name} Warehouse
 
 ## How to Contribute
 
