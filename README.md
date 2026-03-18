@@ -1,4 +1,6 @@
-# 🚀 Agentic Beacon
+<p align="center">
+  <img src="agentic-beacon-banner.png" alt="Agentic Beacon" width="100%" />
+</p>
 
 **An opinionated framework for standardizing and distributing agentic engineering artifacts across teams.**
 
