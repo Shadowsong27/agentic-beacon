@@ -10,7 +10,7 @@
   <a href="https://github.com/Shadowsong27/agentic-beacon/pulls"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome" /></a>
 </p>
 
-**The package manager for AI coding agents. Centrally manage and sync `.cursorrules`, `CLAUDE.md`, and AI instructions across your entire engineering team.**
+**The package manager for AI coding agents. Centrally manage and distribute contexts, knowledge, and skills across your team — with native support for Claude Code and OpenCode.**
 
 > *Git for AI Prompts. DRY for AI Agents.*
 
