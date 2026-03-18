@@ -895,13 +895,39 @@ def sync(*, preserve: bool, prune: bool, verbose_flag: bool, dry_run: bool) -> N
             if not has_opencode and not has_claude:
                 contexts_dir = artifacts_dir / "contexts"
                 if contexts_dir.exists() and any(contexts_dir.rglob("*.md")):
-                    wiring_notes.append(
-                        "  Contexts synced — wire them into your agent config:\n"
-                        '  [bold]opencode.json[/bold] → add to "instructions" array:\n'
-                        '    ".agentic-beacon/artifacts/contexts/<name>.md"\n'
-                        "  [bold]CLAUDE.md[/bold] → add a line per context:\n"
-                        "    @.agentic-beacon/artifacts/contexts/<name>.md"
-                    )
+                    if not dry_run and _is_interactive():
+                        console.print(
+                            "\n[yellow]No agent config detected.[/yellow] "
+                            "Set one up to wire contexts automatically."
+                        )
+                        if click.confirm("  Initialize opencode.json?", default=False):
+                            _init_opencode_json(project_root)
+                            oc_init = _wire_contexts_opencode(
+                                project_root, artifacts_dir
+                            )
+                            if oc_init:
+                                console.print(
+                                    f"[green]✓[/green] Created opencode.json and "
+                                    f"wired {len(oc_init)} context(s)"
+                                )
+                        if click.confirm("  Initialize CLAUDE.md?", default=False):
+                            _init_claude_md(project_root)
+                            cc_init = _wire_contexts_claudecode(
+                                project_root, artifacts_dir
+                            )
+                            if cc_init:
+                                console.print(
+                                    f"[green]✓[/green] Created CLAUDE.md and "
+                                    f"wired {len(cc_init)} context(s)"
+                                )
+                    else:
+                        wiring_notes.append(
+                            "  Contexts synced — wire them into your agent config:\n"
+                            '  [bold]opencode.json[/bold] → add to "instructions" array:\n'
+                            '    ".agentic-beacon/artifacts/contexts/<name>.md"\n'
+                            "  [bold]CLAUDE.md[/bold] → add a line per context:\n"
+                            "    @.agentic-beacon/artifacts/contexts/<name>.md"
+                        )
 
         if beacon_settings.artifacts.skills:
             wired_skills, wire_errors = _wire_skills_post_sync(
@@ -1770,6 +1796,11 @@ def _update_beacon_yaml(beacon_dir: Path, files: list[str]) -> None:
     settings.to_yaml(beacon_yaml)
 
 
+def _is_interactive() -> bool:
+    """Return True if running in an interactive terminal."""
+    return sys.stdin.isatty()
+
+
 def _wire_contexts_opencode(project_root: Path, artifacts_dir: Path) -> list[str]:
     """Append synced context paths to opencode.json instructions.
 
@@ -1856,6 +1887,21 @@ def _wire_contexts_claudecode(project_root: Path, artifacts_dir: Path) -> list[s
         )
 
     return added
+
+
+def _init_opencode_json(project_root: Path) -> None:
+    """Create a minimal opencode.json if one does not already exist."""
+    opencode_json = project_root / "opencode.json"
+    if not opencode_json.exists():
+        data = {"$schema": "https://opencode.ai/config.json", "instructions": []}
+        opencode_json.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+
+def _init_claude_md(project_root: Path) -> None:
+    """Create an empty CLAUDE.md at the project root if none exists."""
+    claude_md = project_root / "CLAUDE.md"
+    if not claude_md.exists():
+        claude_md.write_text("", encoding="utf-8")
 
 
 def _wire_skills_post_sync(
