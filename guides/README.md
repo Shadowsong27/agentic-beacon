@@ -96,6 +96,17 @@ This directory contains **practical how-to guides** for using Agentic Beacon. Fo
 
 ---
 
+## Development
+
+**[Manual Testing Workflow](./manual-testing-workflow.md)**
+- Install `abc` globally from local source with `uv tool install --editable`
+- Test CLI changes without publishing to PyPI
+- End-to-end test checklist
+
+**Who should read:** Contributors testing local changes to `abc`
+
+---
+
 ## Troubleshooting
 
 **[Troubleshooting Guide](./troubleshooting.md)**
