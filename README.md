@@ -2,15 +2,35 @@
   <img src="agentic-beacon-banner.png" alt="Agentic Beacon" width="100%" />
 </p>
 
-**An opinionated framework for standardizing and distributing agentic engineering artifacts across teams.**
+<p align="center">
+  <a href="https://github.com/Shadowsong27/agentic-beacon/blob/main/LICENSE"><img src="https://img.shields.io/github/license/Shadowsong27/agentic-beacon" alt="License: MIT" /></a>
+  <a href="https://pypi.org/project/agentic-beacon/"><img src="https://img.shields.io/pypi/pyversions/agentic-beacon" alt="Python Version" /></a>
+  <a href="https://github.com/Shadowsong27/agentic-beacon/stargazers"><img src="https://img.shields.io/github/stars/Shadowsong27/agentic-beacon" alt="GitHub Stars" /></a>
+  <a href="https://pypi.org/project/agentic-beacon/"><img src="https://img.shields.io/pypi/dm/agentic-beacon" alt="Monthly Downloads" /></a>
+  <a href="https://github.com/Shadowsong27/agentic-beacon/pulls"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome" /></a>
+</p>
+
+**The package manager for AI coding agents. Centrally manage and sync `.cursorrules`, `CLAUDE.md`, and AI instructions across your entire engineering team.**
+
+> *Git for AI Prompts. DRY for AI Agents.*
 
 Agentic Beacon provides:
 1. 🗂️ **A methodology** for managing contexts, knowledge, and skills - the core agentic engineering artifacts worthy of standardization and team-wide distribution
 2. 🛠️ **CLI tooling (`abc`)** for initializing warehouses, managing connections, and distributing artifacts across projects
 
-> **Opinionated Framework:** Agentic Beacon takes a **specific stance** on how to organize and distribute agentic artifacts. This is not a universal standard - it's an opinionated approach based on DRY principles, file-based simplicity, and centralized collaboration. The agentic engineering landscape is rapidly evolving, and this framework provides one possible solution. Evaluate whether this approach fits your team's needs and adapt accordingly.
+## Quickstart
+
+```bash
+pip install agentic-beacon
+abc connect <warehouse-url>
+abc sync
+```
 
 ## The Problem
+
+Imagine your team has 15 microservices. Each one has its own `.cursorrules` or `CLAUDE.md`. When your API naming guidelines change, you copy-paste the update into 15 repos. Miss one, and that service's agent starts giving inconsistent advice. Three months later, no one knows which version is correct.
+
+This is **Context Drift** — and it gets worse as your team and codebase grow.
 
 When a team starts using AI coding agents, each developer independently figures out how to prompt their agent — what context to provide, what coding standards to enforce, what patterns to follow. This knowledge lives in individual `AGENTS.md` files, system prompts, and personal configs that are never shared.
 
@@ -18,7 +38,7 @@ The result:
 
 - **Reinvention at every project.** The same context files get written from scratch for each new repo, with slight variations that accumulate over time.
 - **Knowledge stays siloed.** When one developer discovers the right way to phrase a Python convention, or learns that a certain agent pattern causes issues, that lesson never leaves their laptop.
-- **Context drift.** Copy-pasted `AGENTS.md` files diverge. Projects that started identical now describe conflicting standards. No one knows which is authoritative.
+- **Context drift at scale.** Copy-pasted files diverge across 5, 10, 50 repos. Projects that started identical now describe conflicting standards. No one knows which is authoritative.
 - **Painful onboarding.** New team members (and new agents) start with nothing. The organization's accumulated agentic knowledge isn't anywhere they can find it.
 - **No feedback loop.** When an agent session produces a better approach, there's no workflow to promote that improvement back to the rest of the team.
 
@@ -260,6 +280,27 @@ agentic-beacon/
 
 > **Note on `knowledge/` and `skills/`:** These folders contain artifacts specific to developing the Agentic Beacon framework itself. They are **not** a warehouse and not meant to be distributed to other projects.
 
+## Agentic Beacon vs. Similar Tools
+
+The AI context management space is growing. Here's how Agentic Beacon compares:
+
+| Tool | What it does |
+|------|-------------|
+| **Repomix** | Bundles your codebase into a single LLM-readable file |
+| **faf-mcp** | Syncs context files locally via MCP |
+| **cursorrules.com** | Static directory of community `.cursorrules` files |
+| **Langfuse / LLM Ops tools** | Production observability and prompt management for LLM apps |
+
+**Use Agentic Beacon when:**
+- You want a version-controlled, team-wide source of truth for agent instructions
+- You're managing context files across multiple projects or repos
+- You want automation to keep every project's agent instructions in sync
+
+**Agentic Beacon is not the right fit when:**
+- You need to bundle your codebase for a one-off LLM query (use Repomix)
+- You're setting up a single project for yourself with no team sharing needs
+- You need production LLM observability or prompt management (use Langfuse)
+
 ## 📚 Documentation
 
 ### Conceptual Design (docs/)
@@ -300,4 +341,6 @@ agentic-beacon/
 
 ---
 
-**Last Updated:** 2026-03-10
+If you find Agentic Beacon useful, consider [giving it a star](https://github.com/Shadowsong27/agentic-beacon) — it helps others discover the project.
+
+**Last Updated:** 2026-03-18
