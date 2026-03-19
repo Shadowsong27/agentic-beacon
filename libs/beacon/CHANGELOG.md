@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.1.1](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v2.1.0...agentic-beacon@v2.1.1) (2026-03-19)
+
+
+### Bug Fixes
+
+* skip skill wiring when files are already up-to-date ([#59](https://github.com/Shadowsong27/agentic-beacon/issues/59)) ([7ce1a6a](https://github.com/Shadowsong27/agentic-beacon/commit/7ce1a6a8586db6a9e0cf2121b113ef6cab0aa5f2))
+
 ## [2.1.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v2.0.2...agentic-beacon@v2.1.0) (2026-03-19)
 
 
