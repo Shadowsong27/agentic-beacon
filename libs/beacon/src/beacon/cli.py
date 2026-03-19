@@ -2162,10 +2162,13 @@ def _wire_skills_post_sync(
         for agent in agents:
             try:
                 if agent == "opencode":
-                    _install_skill_opencode(project_root, name, content, description)
+                    changed = _install_skill_opencode(
+                        project_root, name, content, description
+                    )
                 else:
-                    _install_skill_claudecode(project_root, name, content)
-                installed.append(f"{name} ({agent})")
+                    changed = _install_skill_claudecode(project_root, name, content)
+                if changed:
+                    installed.append(f"{name} ({agent})")
             except Exception as e:
                 errors.append(f"{name} ({agent}): {e}")
 
@@ -2198,31 +2201,58 @@ def _extract_skill_description(content: str) -> str:
 
 def _install_skill_opencode(
     project_root: Path, skill_name: str, content: str, description: str
-) -> None:
-    """Install a skill for OpenCode: skill file + thin command stub."""
-    # Copy full skill to .opencode/skills/<name>/SKILL.md
+) -> bool:
+    """Install a skill for OpenCode: skill file + thin command stub.
+
+    Returns True if files were written, False if already up-to-date.
+    """
     skill_dest = project_root / ".opencode" / "skills" / skill_name
     skill_dest.mkdir(parents=True, exist_ok=True)
-    (skill_dest / "SKILL.md").write_text(content)
+    skill_file = skill_dest / "SKILL.md"
 
-    # Create thin command stub in .opencode/command/<name>.md
-    command_dir = project_root / ".opencode" / "command"
-    command_dir.mkdir(parents=True, exist_ok=True)
     stub = (
         f"---\ndescription: {description}\n---\n\n"
         f"Use the **skill** tool to load and execute the `{skill_name}` skill "
         f"with any provided arguments.\n"
     )
-    (command_dir / f"{skill_name}.md").write_text(stub)
+    command_dir = project_root / ".opencode" / "command"
+    command_dir.mkdir(parents=True, exist_ok=True)
+    stub_file = command_dir / f"{skill_name}.md"
+
+    skill_unchanged = (
+        skill_file.exists() and skill_file.read_text(encoding="utf-8") == content
+    )
+    stub_unchanged = (
+        stub_file.exists() and stub_file.read_text(encoding="utf-8") == stub
+    )
+
+    if skill_unchanged and stub_unchanged:
+        return False
+
+    if not skill_unchanged:
+        skill_file.write_text(content)
+    if not stub_unchanged:
+        stub_file.write_text(stub)
+
+    return True
 
 
 def _install_skill_claudecode(
     project_root: Path, skill_name: str, content: str
-) -> None:
-    """Install a skill for Claude Code: copy SKILL.md to .claude/skills/<name>/."""
+) -> bool:
+    """Install a skill for Claude Code: copy SKILL.md to .claude/skills/<name>/.
+
+    Returns True if the file was written, False if already up-to-date.
+    """
     dest = project_root / ".claude" / "skills" / skill_name
     dest.mkdir(parents=True, exist_ok=True)
-    (dest / "SKILL.md").write_text(content)
+    dest_file = dest / "SKILL.md"
+
+    if dest_file.exists() and dest_file.read_text(encoding="utf-8") == content:
+        return False
+
+    dest_file.write_text(content)
+    return True
 
 
 def _print_skill_next_steps(agents: list[str]) -> None:
