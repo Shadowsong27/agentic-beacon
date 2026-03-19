@@ -329,3 +329,145 @@ def test_delta_skill_detailed_diff_uses_live_path(
 
     assert result.exit_code == 0
     assert "New Section" in result.output or "Extra" in result.output
+
+
+# ---------------------------------------------------------------------------
+# Bug #52: per-agent breakdown for MISSING and ADDED (not just MODIFIED)
+# ---------------------------------------------------------------------------
+
+
+def test_delta_summary_shows_per_agent_breakdown_for_missing_skill(
+    temp_dir, valid_warehouse, monkeypatch
+):
+    """abc delta summary shows per-agent detail when rollup status is MISSING."""
+    project = temp_dir / "project"
+    project.mkdir()
+    beacon_dir = project / ".agentic-beacon"
+    beacon_dir.mkdir()
+    (beacon_dir / "config.toml").write_text(
+        f'[warehouse]\nlocal_path = "{valid_warehouse}"\n'
+    )
+    (beacon_dir / "beacon.yaml").write_text(
+        "artifacts:\n"
+        "  knowledge: []\n"
+        "  skills:\n"
+        "    - skills/my-skill/SKILL.md\n"
+        "  contexts: []\n"
+    )
+
+    # Skill in warehouse
+    skill_wh = valid_warehouse / "skills" / "my-skill"
+    skill_wh.mkdir(parents=True)
+    (skill_wh / "SKILL.md").write_text("# Warehouse\n")
+
+    # Both agents detected but neither has the skill installed
+    (project / "opencode.json").write_text("{}")
+    (project / ".claude").mkdir()
+    # Agent skill dirs exist but are empty (skill not synced)
+    (project / ".opencode" / "skills").mkdir(parents=True)
+    (project / ".claude" / "skills").mkdir(parents=True)
+
+    runner = CliRunner()
+    monkeypatch.chdir(project)
+    result = runner.invoke(main, ["delta"])
+
+    assert result.exit_code == 0
+    assert "Missing" in result.output
+    assert "skills/my-skill/SKILL.md" in result.output
+    # Per-agent breakdown should appear
+    assert "opencode" in result.output
+    assert "claudecode" in result.output
+
+
+def test_delta_summary_shows_per_agent_breakdown_for_added_skill(
+    temp_dir, valid_warehouse, monkeypatch
+):
+    """abc delta summary shows per-agent detail when rollup status is ADDED."""
+    project = temp_dir / "project"
+    project.mkdir()
+    beacon_dir = project / ".agentic-beacon"
+    beacon_dir.mkdir()
+    (beacon_dir / "config.toml").write_text(
+        f'[warehouse]\nlocal_path = "{valid_warehouse}"\n'
+    )
+    (beacon_dir / "beacon.yaml").write_text(
+        "artifacts:\n"
+        "  knowledge: []\n"
+        "  skills:\n"
+        "    - skills/my-skill/SKILL.md\n"
+        "  contexts: []\n"
+    )
+
+    # Skill NOT in warehouse (will be ADDED)
+    # Both agents have it installed
+    (project / "opencode.json").write_text("{}")
+    (project / ".claude").mkdir()
+    content = "# Local only\n"
+    (project / ".opencode" / "skills" / "my-skill").mkdir(parents=True)
+    (project / ".opencode" / "skills" / "my-skill" / "SKILL.md").write_text(content)
+    (project / ".claude" / "skills" / "my-skill").mkdir(parents=True)
+    (project / ".claude" / "skills" / "my-skill" / "SKILL.md").write_text(content)
+
+    runner = CliRunner()
+    monkeypatch.chdir(project)
+    result = runner.invoke(main, ["delta"])
+
+    assert result.exit_code == 0
+    assert "Added" in result.output
+    assert "skills/my-skill/SKILL.md" in result.output
+    # Per-agent breakdown should appear
+    assert "opencode" in result.output
+    assert "claudecode" in result.output
+
+
+def test_delta_detailed_diff_multi_agent_shows_both_sections(
+    temp_dir, valid_warehouse, monkeypatch
+):
+    """abc delta <file> shows a diff section for each agent with a differing version."""
+    project = temp_dir / "project"
+    project.mkdir()
+    beacon_dir = project / ".agentic-beacon"
+    beacon_dir.mkdir()
+    (beacon_dir / "config.toml").write_text(
+        f'[warehouse]\nlocal_path = "{valid_warehouse}"\n'
+    )
+    (beacon_dir / "beacon.yaml").write_text(
+        "artifacts:\n"
+        "  knowledge: []\n"
+        "  skills:\n"
+        "    - skills/my-skill/SKILL.md\n"
+        "  contexts: []\n"
+    )
+
+    skill_wh = valid_warehouse / "skills" / "my-skill"
+    skill_wh.mkdir(parents=True)
+    (skill_wh / "SKILL.md").write_text("# Warehouse\n")
+
+    (beacon_dir / "artifacts" / "skills" / "my-skill").mkdir(parents=True)
+    (beacon_dir / "artifacts" / "skills" / "my-skill" / "SKILL.md").write_text(
+        "# Warehouse\n"
+    )
+
+    # Both agents with different edits
+    (project / "opencode.json").write_text("{}")
+    (project / ".claude").mkdir()
+    (project / ".opencode" / "skills" / "my-skill").mkdir(parents=True)
+    (project / ".opencode" / "skills" / "my-skill" / "SKILL.md").write_text(
+        "# OpenCode edit\n"
+    )
+    (project / ".claude" / "skills" / "my-skill").mkdir(parents=True)
+    (project / ".claude" / "skills" / "my-skill" / "SKILL.md").write_text(
+        "# Claude edit\n"
+    )
+
+    runner = CliRunner()
+    monkeypatch.chdir(project)
+    result = runner.invoke(main, ["delta", "skills/my-skill/SKILL.md", "--no-color"])
+
+    assert result.exit_code == 0
+    # Both agent sections should appear
+    assert "opencode" in result.output
+    assert "claudecode" in result.output
+    # Content from both diffs
+    assert "OpenCode edit" in result.output
+    assert "Claude edit" in result.output

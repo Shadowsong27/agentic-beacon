@@ -399,7 +399,11 @@ class DeltaComparator:
     def detailed_diff(self, relative_path: str, color: bool = True) -> str:
         """Get detailed line-by-line diff using git diff --no-index.
 
-        For skills: diffs against the first available agent's live installation.
+        For skills with agent paths configured: produces a labelled diff section
+        for each agent that has the skill installed.  If multiple agents have
+        diverged differently from the warehouse, each is shown separately.
+        Falls back to the artifact snapshot when no agent has the skill installed.
+
         For knowledge/contexts: diffs against artifacts_path.
 
         Args:
@@ -413,16 +417,26 @@ class DeltaComparator:
 
         is_skill = relative_path.startswith("skills/") and bool(self.skills_paths)
         if is_skill:
-            # Use first agent that has the skill installed; fall back to artifacts
-            local_file = None
+            # Produce a diff section for every agent that has the skill installed
+            sections = []
             for agent in self.skills_paths:
                 candidate = self._skill_live_path(agent, relative_path)
                 if candidate.exists():
-                    local_file = candidate
-                    break
-            if local_file is None:
-                # No agent has it installed — fall back to artifact snapshot
-                local_file = self.artifacts_path / relative_path
+                    if not warehouse_file.exists():
+                        sections.append(
+                            f"--- {agent} ---\nWarehouse file not found: {relative_path}"
+                        )
+                    else:
+                        diff = self._diff_files(warehouse_file, candidate, color)
+                        sections.append(
+                            f"--- {agent} ---\n{diff}"
+                            if diff
+                            else f"--- {agent} ---\n(identical)"
+                        )
+            if sections:
+                return "\n".join(sections)
+            # No agent has it installed — fall back to artifact snapshot
+            local_file = self.artifacts_path / relative_path
         else:
             local_file = self.artifacts_path / relative_path
 
@@ -432,7 +446,10 @@ class DeltaComparator:
         if not warehouse_file.exists():
             return f"Warehouse file not found: {relative_path}"
 
-        # Use git diff --no-index for comparison
+        return self._diff_files(warehouse_file, local_file, color)
+
+    def _diff_files(self, warehouse_file: Path, local_file: Path, color: bool) -> str:
+        """Run git diff --no-index between two files and return the output."""
         cmd = ["git", "diff", "--no-index"]
         if color:
             cmd.append("--color=always")

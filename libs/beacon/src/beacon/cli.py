@@ -1266,9 +1266,21 @@ def _show_delta_summary(
             else:
                 console.print(f"  [yellow][Modified][/yellow] {result.path}")
         elif result.status == DeltaStatus.ADDED:
-            console.print(f"  [green][Added][/green]    {result.path}")
+            if result.is_skill and result.agent_statuses:
+                agent_detail = _format_skill_agent_statuses(result.agent_statuses)
+                console.print(
+                    f"  [green][Added][/green]    {result.path} [dim]({agent_detail})[/dim]"
+                )
+            else:
+                console.print(f"  [green][Added][/green]    {result.path}")
         elif result.status == DeltaStatus.MISSING:
-            console.print(f"  [red][Missing][/red]  {result.path}")
+            if result.is_skill and result.agent_statuses:
+                agent_detail = _format_skill_agent_statuses(result.agent_statuses)
+                console.print(
+                    f"  [red][Missing][/red]  {result.path} [dim]({agent_detail})[/dim]"
+                )
+            else:
+                console.print(f"  [red][Missing][/red]  {result.path}")
 
     for rel_path in untracked:
         console.print(

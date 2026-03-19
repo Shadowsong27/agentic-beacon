@@ -873,3 +873,69 @@ def test_compare_from_config_glob_no_duplicates_multi_agent(valid_warehouse, tem
     # Should appear exactly once despite two agents
     skill_paths = [r.path for r in summary.results if "my-skill" in r.path]
     assert len(skill_paths) == 1
+
+
+# ========== Bug fix: detailed_diff covers all agents (issue #52) ==========
+
+
+def test_detailed_diff_multi_agent_shows_section_per_agent(valid_warehouse, temp_dir):
+    """detailed_diff produces a labelled section for each agent that has the skill."""
+    warehouse_content = "# Warehouse\n"
+    (valid_warehouse / "skills" / "my-skill").mkdir(parents=True)
+    (valid_warehouse / "skills" / "my-skill" / "SKILL.md").write_text(warehouse_content)
+
+    opencode_skills = temp_dir / ".opencode" / "skills"
+    (opencode_skills / "my-skill").mkdir(parents=True)
+    (opencode_skills / "my-skill" / "SKILL.md").write_text("# OpenCode edit\n")
+
+    claude_skills = temp_dir / ".claude" / "skills"
+    (claude_skills / "my-skill").mkdir(parents=True)
+    (claude_skills / "my-skill" / "SKILL.md").write_text("# Claude edit\n")
+
+    artifacts_dir = temp_dir / "artifacts"
+    artifacts_dir.mkdir()
+
+    comparator = DeltaComparator(
+        valid_warehouse,
+        artifacts_dir,
+        skills_paths={"opencode": opencode_skills, "claudecode": claude_skills},
+    )
+    diff = comparator.detailed_diff("skills/my-skill/SKILL.md", color=False)
+
+    # Both agents should appear as labelled sections
+    assert "--- opencode ---" in diff
+    assert "--- claudecode ---" in diff
+    # Content from each agent's diverged version should be present
+    assert "OpenCode edit" in diff
+    assert "Claude edit" in diff
+
+
+def test_detailed_diff_multi_agent_only_shows_agents_with_skill(
+    valid_warehouse, temp_dir
+):
+    """detailed_diff only emits a section for agents that have the skill installed."""
+    warehouse_content = "# Warehouse\n"
+    (valid_warehouse / "skills" / "my-skill").mkdir(parents=True)
+    (valid_warehouse / "skills" / "my-skill" / "SKILL.md").write_text(warehouse_content)
+
+    # opencode: has the skill
+    opencode_skills = temp_dir / ".opencode" / "skills"
+    (opencode_skills / "my-skill").mkdir(parents=True)
+    (opencode_skills / "my-skill" / "SKILL.md").write_text("# OpenCode edit\n")
+
+    # claudecode: agent dir exists but skill NOT installed
+    claude_skills = temp_dir / ".claude" / "skills"
+    claude_skills.mkdir(parents=True)
+
+    artifacts_dir = temp_dir / "artifacts"
+    artifacts_dir.mkdir()
+
+    comparator = DeltaComparator(
+        valid_warehouse,
+        artifacts_dir,
+        skills_paths={"opencode": opencode_skills, "claudecode": claude_skills},
+    )
+    diff = comparator.detailed_diff("skills/my-skill/SKILL.md", color=False)
+
+    assert "--- opencode ---" in diff
+    assert "--- claudecode ---" not in diff
