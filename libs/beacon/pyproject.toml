@@ -1,6 +1,6 @@
 [project]
 name = "agentic-beacon"
-version = "2.0.2"
+version = "2.1.0"
 description = "Agentic Beacon CLI - Distribute knowledge contexts and skills for AI-assisted development teams"
 readme = "README.md"
 requires-python = ">=3.12"
