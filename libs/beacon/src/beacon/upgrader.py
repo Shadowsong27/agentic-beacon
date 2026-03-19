@@ -66,12 +66,17 @@ class WarehouseUpgrader:
         """Return new template content for *rel_path*.
 
         Falls back to the packaged template file when no override is supplied.
+        For bundled content (e.g. skills) not stored under templates/, also
+        checks the parent data directory.
         """
         if rel_path in template_overrides:
             return template_overrides[rel_path]
         tmpl_path = _TEMPLATES_DIR / rel_path
         if tmpl_path.exists():
             return tmpl_path.read_text(encoding="utf-8")
+        data_path = _TEMPLATES_DIR.parent / rel_path
+        if data_path.exists():
+            return data_path.read_text(encoding="utf-8")
         return ""
 
     def run(

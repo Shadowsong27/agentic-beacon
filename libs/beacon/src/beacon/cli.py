@@ -604,7 +604,8 @@ artifacts:
     # - knowledge/languages/python/**/*.md
     # - knowledge/infrastructure/docker-standards.md
 
-  skills: []
+  skills:
+    - skills/record-knowledge/SKILL.md
     # Examples:
     # - skills/code-review/SKILL.md
     # - skills/generate-unit-tests/SKILL.md

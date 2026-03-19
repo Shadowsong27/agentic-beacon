@@ -154,7 +154,7 @@ def test_e2e_setup_manual_template(e2e_project):
     # Must be valid YAML with exactly one of each artifact key
     parsed = yaml.safe_load(beacon_yaml.read_text())
     assert parsed["artifacts"]["knowledge"] == []
-    assert parsed["artifacts"]["skills"] == []
+    assert parsed["artifacts"]["skills"] == ["skills/record-knowledge/SKILL.md"]
     assert parsed["artifacts"]["contexts"] == []
 
     raw = beacon_yaml.read_text()
