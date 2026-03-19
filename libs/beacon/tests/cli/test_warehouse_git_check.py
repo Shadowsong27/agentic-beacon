@@ -237,14 +237,14 @@ def test_contribute_dry_run_bypasses_git_check(connected_project_with_artifact):
 
 
 def test_contribute_all_blocked_when_warehouse_dirty(connected_project_with_artifact):
-    """abc contribute --all exits with error when warehouse has uncommitted changes."""
+    """abc contribute (no file) exits with error when warehouse has uncommitted changes."""
     runner = CliRunner()
     warehouse = connected_project_with_artifact["warehouse"]
     (warehouse / ".git").mkdir()
 
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(stdout="?? new-file.md\n", returncode=0)
-        result = runner.invoke(main, ["contribute", "--all"])
+        result = runner.invoke(main, ["contribute"])
 
     assert result.exit_code != 0
     assert "uncommitted changes" in result.output

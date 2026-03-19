@@ -1,5 +1,6 @@
 """CLI interface for Beacon - Distribute knowledge contexts for AI development."""
 
+import datetime
 import json
 import os
 import shutil
@@ -1463,12 +1464,6 @@ def _find_untracked_local_files(
 @main.command()
 @click.argument("file", required=False, type=str)
 @click.option(
-    "--all",
-    "contribute_all",
-    is_flag=True,
-    help="Contribute all modified and added artifacts",
-)
-@click.option(
     "--dry-run",
     is_flag=True,
     help="Preview what would be contributed without copying",
@@ -1478,8 +1473,13 @@ def _find_untracked_local_files(
     is_flag=True,
     help="Skip warehouse uncommitted-changes check",
 )
+@click.option(
+    "--manual-git",
+    is_flag=True,
+    help="Skip auto git commit/push/PR — print manual steps instead",
+)
 def contribute(
-    *, file: str | None, contribute_all: bool, dry_run: bool, skip_git_check: bool
+    *, file: str | None, dry_run: bool, skip_git_check: bool, manual_git: bool
 ) -> None:
     """Copy local artifact changes back to the warehouse for sharing.
 
@@ -1487,27 +1487,18 @@ def contribute(
     use this command to copy them back to the warehouse so the whole team
     benefits from the improvements.
 
+    Without a FILE argument, all modified and added artifacts are contributed.
+
     Examples:
+
+        abc contribute                                  # All modified/added
 
         abc contribute knowledge/python/type-hints.md   # Single file
 
-        abc contribute --all                            # All modified/added
+        abc contribute --dry-run                        # Preview only
 
-        abc contribute --all --dry-run                  # Preview only
+        abc contribute --manual-git                     # Skip auto PR creation
     """
-    if not file and not contribute_all:
-        console.print(
-            "[red]Error:[/red] Specify a file or use --all to contribute all changes."
-        )
-        console.print("\nExamples:")
-        console.print("  abc contribute knowledge/python/type-hints.md")
-        console.print("  abc contribute --all")
-        sys.exit(1)
-
-    if file and contribute_all:
-        console.print("[red]Error:[/red] Cannot use both a file argument and --all.")
-        sys.exit(1)
-
     beacon_dir = Path.cwd() / ".agentic-beacon"
     if not beacon_dir.exists():
         console.print("[red]Error:[/red] No .agentic-beacon directory found.")
@@ -1559,7 +1550,7 @@ def contribute(
             console.print("[dim]Dry run — no files will be copied.[/dim]\n")
 
         if file:
-            _contribute_single(
+            contributed = _contribute_single(
                 comparator,
                 beacon_settings,
                 beacon_yaml,
@@ -1569,7 +1560,7 @@ def contribute(
                 dry_run,
             )
         else:
-            _contribute_all(
+            contributed = _contribute_all(
                 comparator,
                 beacon_settings,
                 beacon_yaml,
@@ -1577,6 +1568,14 @@ def contribute(
                 artifacts_dir,
                 dry_run,
             )
+
+        if not dry_run and contributed:
+            if manual_git:
+                _print_contribute_next_steps(
+                    warehouse_path, [p for p, _ in contributed]
+                )
+            else:
+                _auto_git_contribute(warehouse_path, contributed)
 
     except Exception as e:
         console.print(f"\n[red]Error:[/red] Contribute failed: {e}")
@@ -1680,7 +1679,7 @@ def _contribute_single(
     artifacts_dir: Path,
     file_path: str,
     dry_run: bool,
-) -> None:
+) -> list[tuple[str, str]]:
     """Contribute a single artifact back to the warehouse.
 
     If the file is not yet tracked in beacon.yaml, it will be auto-registered
@@ -1688,6 +1687,8 @@ def _contribute_single(
 
     For skills: reads from the live agent directory rather than the artifact
     snapshot, matching the same source that abc delta inspects.
+
+    Returns a list of (path, status_label) tuples for contributed files.
     """
     is_skill = file_path.startswith("skills/") and bool(comparator.skills_paths)
 
@@ -1701,7 +1702,7 @@ def _contribute_single(
                 f"[yellow]Nothing to contribute.[/yellow] "
                 f"'{file_path}' is identical to the warehouse version across all agents."
             )
-            return
+            return []
     else:
         local_path = artifacts_dir / file_path
         if not local_path.exists():
@@ -1734,15 +1735,18 @@ def _contribute_single(
                 f"[yellow]Nothing to contribute.[/yellow] "
                 f"'{file_path}' is identical to the warehouse version."
             )
-            return
+            return []
 
+    dest_existed = (warehouse_path / file_path).exists()
     _copy_to_warehouse(local_path, warehouse_path / file_path, file_path, dry_run)
     if not dry_run:
         if is_untracked and _register_in_beacon_yaml(
             beacon_settings, beacon_yaml, file_path
         ):
             console.print(f"  [dim]Registered in beacon.yaml:[/dim] {file_path}")
-        _print_contribute_next_steps(warehouse_path, [file_path])
+        status_label = "modified" if dest_existed else "added"
+        return [(file_path, status_label)]
+    return []
 
 
 def _contribute_all(
@@ -1752,7 +1756,7 @@ def _contribute_all(
     warehouse_path: Path,
     artifacts_dir: Path,
     dry_run: bool,
-) -> None:
+) -> list[tuple[str, str]]:
     """Contribute all modified and added artifacts back to the warehouse.
 
     Also discovers and contributes local files not yet tracked in beacon.yaml,
@@ -1760,6 +1764,8 @@ def _contribute_all(
 
     For skills: reads from live agent directories. If multiple agents have
     conflicting modifications the user is prompted to choose per-skill.
+
+    Returns a list of (path, status_label) tuples for contributed files.
     """
     summary = comparator.compare_from_config(beacon_settings)
     contributable = summary.modified + summary.added
@@ -1772,9 +1778,9 @@ def _contribute_all(
             "[green]Nothing to contribute.[/green] "
             "All local artifacts match the warehouse."
         )
-        return
+        return []
 
-    contributed = []
+    contributed: list[tuple[str, str]] = []
 
     # Contribute tracked modified/added files
     for result in contributable:
@@ -1802,7 +1808,10 @@ def _contribute_all(
             local_path, warehouse_path / result.path, result.path, dry_run
         )
         if not dry_run:
-            contributed.append(result.path)
+            status_label = (
+                "modified" if result.status == DeltaStatus.MODIFIED else "added"
+            )
+            contributed.append((result.path, status_label))
 
     # Contribute untracked local files and register them in beacon.yaml
     for rel_path in untracked:
@@ -1816,12 +1825,11 @@ def _contribute_all(
         local_path = artifacts_dir / rel_path
         _copy_to_warehouse(local_path, warehouse_path / rel_path, rel_path, dry_run)
         if not dry_run:
-            contributed.append(rel_path)
+            contributed.append((rel_path, "added"))
             if _register_in_beacon_yaml(beacon_settings, beacon_yaml, rel_path):
                 console.print(f"  [dim]Registered in beacon.yaml:[/dim] {rel_path}")
 
-    if not dry_run and contributed:
-        _print_contribute_next_steps(warehouse_path, contributed)
+    return contributed
 
 
 def _copy_to_warehouse(
@@ -1837,7 +1845,7 @@ def _copy_to_warehouse(
 
 
 def _print_contribute_next_steps(warehouse_path: Path, contributed: list[str]) -> None:
-    """Print post-contribute git workflow."""
+    """Print post-contribute git workflow (used when --manual-git is set)."""
     count = len(contributed)
     console.print(
         f"\n[bold green]✓ Contributed {count} file{'s' if count != 1 else ''} to warehouse[/bold green]"
@@ -1852,6 +1860,133 @@ def _print_contribute_next_steps(warehouse_path: Path, contributed: list[str]) -
     console.print("[dim]Teammates get the changes on their next:[/dim]")
     console.print("  cd ~/team-warehouse && git pull")
     console.print("  cd my-project && abc sync")
+
+
+def _build_pr_body(contributed: list[tuple[str, str]]) -> str:
+    """Build the PR body listing contributed artifacts with their status."""
+    lines = ["## Contributed artifacts", ""]
+    for path, status in contributed:
+        lines.append(f"- `{path}` ({status})")
+    return "\n".join(lines)
+
+
+def _auto_git_contribute(
+    warehouse_path: Path,
+    contributed: list[tuple[str, str]],
+) -> None:
+    """Create a branch, commit, push, and open a PR for contributed artifacts.
+
+    Falls back to manual-git output if .git is absent, any git step fails,
+    gh is not installed, or the remote is not GitHub.
+    """
+    paths = [p for p, _ in contributed]
+    count = len(paths)
+
+    if not (warehouse_path / ".git").exists():
+        console.print(
+            "[yellow]Warning:[/yellow] Warehouse has no .git — skipping auto git workflow."
+        )
+        _print_contribute_next_steps(warehouse_path, paths)
+        return
+
+    timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    branch = f"contrib/{timestamp}"
+
+    def _git(args: list[str]) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            ["git", "-C", str(warehouse_path), *args],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+    def _fallback(reason: str, detail: str = "") -> None:
+        console.print(
+            f"[yellow]Warning:[/yellow] {reason} — falling back to manual git."
+        )
+        if detail:
+            console.print(f"  [dim]{detail}[/dim]")
+        _print_contribute_next_steps(warehouse_path, paths)
+
+    try:
+        r = _git(["checkout", "-b", branch])
+        if r.returncode != 0:
+            _fallback("Could not create branch", r.stderr.strip())
+            return
+    except FileNotFoundError:
+        _fallback("git not found")
+        return
+    except subprocess.TimeoutExpired:
+        _fallback("git timed out")
+        return
+
+    r = _git(["add", "."])
+    if r.returncode != 0:
+        _fallback("git add failed", r.stderr.strip())
+        return
+
+    r = _git(["commit", "-m", "feat: contribute warehouse artifacts"])
+    if r.returncode != 0:
+        _fallback("git commit failed", r.stderr.strip())
+        return
+
+    r = _git(["push", "-u", "origin", branch])
+    if r.returncode != 0:
+        _fallback("git push failed", r.stderr.strip())
+        return
+
+    pr_body = _build_pr_body(contributed)
+    try:
+        r = subprocess.run(
+            [
+                "gh",
+                "pr",
+                "create",
+                "--title",
+                "feat: contribute warehouse artifacts",
+                "--body",
+                pr_body,
+            ],
+            cwd=str(warehouse_path),
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if r.returncode != 0:
+            console.print(
+                "[yellow]Warning:[/yellow] Could not create PR — branch pushed, create PR manually."
+            )
+            if r.stderr.strip():
+                console.print(f"  [dim]{r.stderr.strip()}[/dim]")
+            console.print(
+                f"\n[bold green]✓ Contributed {count} file{'s' if count != 1 else ''} to warehouse[/bold green]"
+            )
+            console.print(f"  Branch: [dim]{branch}[/dim]")
+            return
+
+        pr_url = r.stdout.strip()
+        console.print(
+            f"\n[bold green]✓ Contributed {count} file{'s' if count != 1 else ''} to warehouse[/bold green]"
+        )
+        console.print(f"  PR: [blue]{pr_url}[/blue]")
+
+    except FileNotFoundError:
+        console.print(
+            "[yellow]Warning:[/yellow] gh not installed — branch pushed, create PR manually."
+        )
+        console.print(
+            f"\n[bold green]✓ Contributed {count} file{'s' if count != 1 else ''} to warehouse[/bold green]"
+        )
+        console.print(f"  Branch: [dim]{branch}[/dim]")
+        console.print(f"  cd {warehouse_path} && gh pr create")
+    except subprocess.TimeoutExpired:
+        console.print(
+            "[yellow]Warning:[/yellow] gh timed out — branch pushed, create PR manually."
+        )
+        console.print(
+            f"\n[bold green]✓ Contributed {count} file{'s' if count != 1 else ''} to warehouse[/bold green]"
+        )
+        console.print(f"  Branch: [dim]{branch}[/dim]")
 
 
 # ========== Skill Commands ==========

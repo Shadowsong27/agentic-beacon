@@ -1,7 +1,15 @@
 """Tests for abc contribute command."""
 
+import subprocess
+from unittest.mock import MagicMock, patch
+
 import pytest
-from beacon.cli import _build_skills_paths, _resolve_skill_contribute_source, main
+from beacon.cli import (
+    _build_pr_body,
+    _build_skills_paths,
+    _resolve_skill_contribute_source,
+    main,
+)
 from beacon.core.delta import DeltaComparator, DeltaStatus
 from click.testing import CliRunner
 
@@ -113,7 +121,7 @@ def test_contribute_identical_file_is_noop(project_with_delta):
 
 
 # ---------------------------------------------------------------------------
-# --all flag
+# Default behaviour: contribute all (no file argument)
 # ---------------------------------------------------------------------------
 
 
@@ -121,7 +129,7 @@ def test_contribute_all_copies_modified_and_added(project_with_delta):
     tmp_path, warehouse = project_with_delta
     runner = CliRunner()
 
-    result = runner.invoke(main, ["contribute", "--all"])
+    result = runner.invoke(main, ["contribute", "--manual-git"])
 
     assert result.exit_code == 0, result.output
     assert (
@@ -133,7 +141,7 @@ def test_contribute_all_copies_modified_and_added(project_with_delta):
 
 
 def test_contribute_all_nothing_to_contribute(project_with_delta):
-    """When all artifacts are identical, --all reports nothing to contribute."""
+    """When all artifacts are identical, contribute with no file reports nothing to contribute."""
     tmp_path, warehouse = project_with_delta
     runner = CliRunner()
 
@@ -160,7 +168,7 @@ def test_contribute_all_nothing_to_contribute(project_with_delta):
     # Add new-lesson to warehouse so it's also "identical" (both absent from local)
     # Actually MISSING means it's in beacon.yaml but not local — we just remove it
 
-    result = runner.invoke(main, ["contribute", "--all"])
+    result = runner.invoke(main, ["contribute"])
 
     assert result.exit_code == 0
     assert "nothing to contribute" in result.output.lower()
@@ -191,7 +199,7 @@ def test_contribute_all_dry_run_does_not_copy(project_with_delta):
     tmp_path, warehouse = project_with_delta
     runner = CliRunner()
 
-    result = runner.invoke(main, ["contribute", "--all", "--dry-run"])
+    result = runner.invoke(main, ["contribute", "--dry-run"])
 
     assert result.exit_code == 0, result.output
     # Warehouse files unchanged
@@ -204,20 +212,6 @@ def test_contribute_all_dry_run_does_not_copy(project_with_delta):
 # ---------------------------------------------------------------------------
 # Error cases
 # ---------------------------------------------------------------------------
-
-
-def test_contribute_errors_without_file_or_all(project_with_delta):
-    runner = CliRunner()
-    result = runner.invoke(main, ["contribute"])
-    assert result.exit_code != 0
-
-
-def test_contribute_errors_with_file_and_all(project_with_delta):
-    runner = CliRunner()
-    result = runner.invoke(
-        main, ["contribute", "knowledge/python/type-hints.md", "--all"]
-    )
-    assert result.exit_code != 0
 
 
 def test_contribute_errors_when_file_not_in_beacon_yaml(project_with_delta):
@@ -354,11 +348,11 @@ def test_contribute_single_untracked_file_copies_and_registers(project_with_untr
 
 
 def test_contribute_all_untracked_file_copies_and_registers(project_with_untracked):
-    """--all also contributes untracked local files and registers them in beacon.yaml."""
+    """contribute with no file also contributes untracked local files and registers them in beacon.yaml."""
     tmp_path, warehouse = project_with_untracked
     runner = CliRunner()
 
-    result = runner.invoke(main, ["contribute", "--all"])
+    result = runner.invoke(main, ["contribute", "--manual-git"])
 
     assert result.exit_code == 0, result.output
     # Untracked file copied
@@ -374,14 +368,14 @@ def test_contribute_all_untracked_file_copies_and_registers(project_with_untrack
 
 
 def test_contribute_all_dry_run_does_not_register(project_with_untracked):
-    """--all --dry-run does not modify beacon.yaml."""
+    """--dry-run does not modify beacon.yaml."""
     tmp_path, warehouse = project_with_untracked
     runner = CliRunner()
 
     beacon_yaml = tmp_path / ".agentic-beacon" / "beacon.yaml"
     original_content = beacon_yaml.read_text()
 
-    result = runner.invoke(main, ["contribute", "--all", "--dry-run"])
+    result = runner.invoke(main, ["contribute", "--dry-run"])
 
     assert result.exit_code == 0, result.output
     # beacon.yaml unchanged
@@ -712,7 +706,7 @@ def test_contribute_skill_single_identical_live_is_noop(project_with_skill_setup
 
 
 def test_contribute_skill_all_reads_from_live_dir(project_with_skill_setup):
-    """abc contribute --all picks up live-dir skill modifications."""
+    """abc contribute (no file) picks up live-dir skill modifications."""
     tmp_path, warehouse = project_with_skill_setup
 
     live_dir = tmp_path / ".opencode" / "skills" / "my-skill"
@@ -720,7 +714,7 @@ def test_contribute_skill_all_reads_from_live_dir(project_with_skill_setup):
     (live_dir / "SKILL.md").write_text(SKILL_MODIFIED_CONTENT)
 
     runner = CliRunner()
-    result = runner.invoke(main, ["contribute", "--all"])
+    result = runner.invoke(main, ["contribute", "--manual-git"])
 
     assert result.exit_code == 0, result.output
     dest = warehouse / "skills" / "my-skill" / "SKILL.md"
@@ -829,3 +823,161 @@ def test_contribute_skill_dry_run_does_not_copy(project_with_skill_setup):
     # Warehouse unchanged
     dest = warehouse / "skills" / "my-skill" / "SKILL.md"
     assert dest.read_text() == SKILL_WAREHOUSE_CONTENT
+
+
+# ---------------------------------------------------------------------------
+# --manual-git flag
+# ---------------------------------------------------------------------------
+
+
+def test_contribute_manual_git_prints_next_steps(project_with_delta):
+    """--manual-git skips auto git and prints manual instructions."""
+    tmp_path, warehouse = project_with_delta
+    runner = CliRunner()
+
+    result = runner.invoke(main, ["contribute", "--manual-git"])
+
+    assert result.exit_code == 0, result.output
+    # Files still copied
+    assert (
+        warehouse / "knowledge" / "python" / "type-hints.md"
+    ).read_text() == KNOWLEDGE_CONTENT_MODIFIED
+    # Manual instructions printed
+    assert "git add" in result.output
+    assert "git commit" in result.output
+
+
+def test_contribute_single_manual_git_prints_next_steps(project_with_delta):
+    """--manual-git on a single file skips auto git and prints manual instructions."""
+    tmp_path, warehouse = project_with_delta
+    runner = CliRunner()
+
+    result = runner.invoke(
+        main, ["contribute", "knowledge/python/type-hints.md", "--manual-git"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert (
+        warehouse / "knowledge" / "python" / "type-hints.md"
+    ).read_text() == KNOWLEDGE_CONTENT_MODIFIED
+    assert "git add" in result.output
+
+
+# ---------------------------------------------------------------------------
+# Auto-git workflow (mocked subprocess)
+# ---------------------------------------------------------------------------
+
+
+def _make_completed(
+    returncode: int = 0, stdout: str = "", stderr: str = ""
+) -> MagicMock:
+    m = MagicMock(spec=subprocess.CompletedProcess)
+    m.returncode = returncode
+    m.stdout = stdout
+    m.stderr = stderr
+    return m
+
+
+def test_contribute_auto_git_creates_pr(project_with_delta, tmp_path):
+    """Default mode runs git workflow and creates a PR when everything succeeds."""
+    tmp_path2, warehouse = project_with_delta
+
+    # Give the warehouse a .git directory so the auto-git path is taken
+    (warehouse / ".git").mkdir()
+
+    runner = CliRunner()
+    with patch("beacon.cli.subprocess.run") as mock_run:
+        mock_run.side_effect = [
+            _make_completed(0),  # git status --porcelain (clean-check)
+            _make_completed(0),  # git checkout -b
+            _make_completed(0),  # git add .
+            _make_completed(0),  # git commit
+            _make_completed(0),  # git push
+            _make_completed(
+                0, stdout="https://github.com/org/repo/pull/42\n"
+            ),  # gh pr create
+        ]
+        result = runner.invoke(main, ["contribute"])
+
+    assert result.exit_code == 0, result.output
+    assert "https://github.com/org/repo/pull/42" in result.output
+    assert mock_run.call_count == 6
+
+
+def test_contribute_auto_git_fallback_when_no_git_dir(project_with_delta):
+    """Falls back to manual instructions when warehouse has no .git directory."""
+    tmp_path2, warehouse = project_with_delta
+    # No .git dir in warehouse (default fixture state) — git clean check is skipped,
+    # and auto-git also falls back to manual.
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["contribute"])
+
+    assert result.exit_code == 0, result.output
+    # Manual next-steps printed as fallback
+    assert "git add" in result.output
+
+
+def test_contribute_auto_git_fallback_when_push_fails(project_with_delta):
+    """Falls back to manual instructions when git push fails."""
+    tmp_path2, warehouse = project_with_delta
+    (warehouse / ".git").mkdir()
+
+    runner = CliRunner()
+    with patch("beacon.cli.subprocess.run") as mock_run:
+        mock_run.side_effect = [
+            _make_completed(0),  # git status --porcelain (clean-check)
+            _make_completed(0),  # git checkout -b
+            _make_completed(0),  # git add .
+            _make_completed(0),  # git commit
+            _make_completed(1, stderr="error: failed to push"),  # git push fails
+        ]
+        result = runner.invoke(main, ["contribute"])
+
+    assert result.exit_code == 0, result.output
+    assert "warning" in result.output.lower() or "falling back" in result.output.lower()
+    assert "git push" in result.output  # manual steps shown
+
+
+def test_contribute_auto_git_fallback_when_gh_not_installed(project_with_delta):
+    """Falls back gracefully when gh is not installed."""
+    tmp_path2, warehouse = project_with_delta
+    (warehouse / ".git").mkdir()
+
+    runner = CliRunner()
+    with patch("beacon.cli.subprocess.run") as mock_run:
+        mock_run.side_effect = [
+            _make_completed(0),  # git status --porcelain (clean-check)
+            _make_completed(0),  # git checkout -b
+            _make_completed(0),  # git add .
+            _make_completed(0),  # git commit
+            _make_completed(0),  # git push
+            FileNotFoundError("gh not found"),  # gh pr create
+        ]
+        result = runner.invoke(main, ["contribute"])
+
+    assert result.exit_code == 0, result.output
+    assert "gh not installed" in result.output.lower() or "pr" in result.output.lower()
+    # Success message still shown
+    assert "contributed" in result.output.lower()
+
+
+# ---------------------------------------------------------------------------
+# Unit tests: _build_pr_body()
+# ---------------------------------------------------------------------------
+
+
+def test_build_pr_body_lists_files():
+    contributed = [
+        ("knowledge/python/type-hints.md", "modified"),
+        ("contexts/global.md", "added"),
+    ]
+    body = _build_pr_body(contributed)
+    assert "## Contributed artifacts" in body
+    assert "`knowledge/python/type-hints.md` (modified)" in body
+    assert "`contexts/global.md` (added)" in body
+
+
+def test_build_pr_body_single_file():
+    body = _build_pr_body([("knowledge/lesson.md", "modified")])
+    assert "`knowledge/lesson.md` (modified)" in body
