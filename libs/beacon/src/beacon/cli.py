@@ -3,6 +3,7 @@
 import json
 import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -39,6 +40,48 @@ def find_project_root() -> Path:
 
     # Fallback to current directory
     return current
+
+
+def _check_warehouse_git_clean(warehouse_path: Path) -> str | None:
+    """Check if the warehouse git working tree is clean.
+
+    Returns an error message string if there are uncommitted changes,
+    or None if the tree is clean / not a git repo / git not installed.
+    """
+    if not (warehouse_path / ".git").exists():
+        return None  # Not a git repo — skip silently
+
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(warehouse_path), "status", "--porcelain"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except FileNotFoundError:
+        console.print(
+            "[yellow]Warning:[/yellow] git not found — skipping warehouse clean check."
+        )
+        return None
+    except subprocess.TimeoutExpired:
+        console.print(
+            "[yellow]Warning:[/yellow] git status timed out — skipping warehouse clean check."
+        )
+        return None
+
+    if result.stdout.strip():
+        short_path = str(warehouse_path).replace(str(Path.home()), "~")
+        return (
+            f"Warehouse has uncommitted changes.\n"
+            f"  Warehouse: {short_path}\n\n"
+            f"  Commit or stash your warehouse changes before running this command:\n"
+            f"    cd {short_path}\n"
+            f"    git diff          # review changes\n"
+            f'    git add . && git commit -m "..."\n'
+            f"    # or: git stash\n\n"
+            f"  Use --skip-git-check to bypass this check."
+        )
+    return None
 
 
 @click.group()
@@ -714,7 +757,19 @@ def _extract_description(file_path: Path) -> str:
 @click.option(
     "--dry-run", is_flag=True, help="Preview what would be synced without copying"
 )
-def sync(*, preserve: bool, prune: bool, verbose_flag: bool, dry_run: bool) -> None:
+@click.option(
+    "--skip-git-check",
+    is_flag=True,
+    help="Skip warehouse uncommitted-changes check",
+)
+def sync(
+    *,
+    preserve: bool,
+    prune: bool,
+    verbose_flag: bool,
+    dry_run: bool,
+    skip_git_check: bool,
+) -> None:
     """
     Sync artifacts from warehouse to project.
 
@@ -764,6 +819,13 @@ def sync(*, preserve: bool, prune: bool, verbose_flag: bool, dry_run: bool) -> N
                 "Run 'abc warehouse connect --path <warehouse>' to reconnect."
             )
             sys.exit(1)
+
+        # Check warehouse git cleanliness (skip if --dry-run or --skip-git-check)
+        if not dry_run and not skip_git_check:
+            git_error = _check_warehouse_git_clean(warehouse_path)
+            if git_error:
+                console.print(f"[red]Error:[/red] {git_error}")
+                sys.exit(1)
 
         # Load beacon.yaml
         beacon_settings = BeaconSettings.from_yaml(beacon_yaml)
@@ -1398,7 +1460,14 @@ def _find_untracked_local_files(
     is_flag=True,
     help="Preview what would be contributed without copying",
 )
-def contribute(*, file: str | None, contribute_all: bool, dry_run: bool) -> None:
+@click.option(
+    "--skip-git-check",
+    is_flag=True,
+    help="Skip warehouse uncommitted-changes check",
+)
+def contribute(
+    *, file: str | None, contribute_all: bool, dry_run: bool, skip_git_check: bool
+) -> None:
     """Copy local artifact changes back to the warehouse for sharing.
 
     After editing synced artifacts and verifying they work with your agent,
@@ -1456,6 +1525,13 @@ def contribute(*, file: str | None, contribute_all: bool, dry_run: bool) -> None
                 "Run 'abc warehouse connect --path <warehouse>' to reconnect."
             )
             sys.exit(1)
+
+        # Check warehouse git cleanliness (skip if --dry-run or --skip-git-check)
+        if not dry_run and not skip_git_check:
+            git_error = _check_warehouse_git_clean(warehouse_path)
+            if git_error:
+                console.print(f"[red]Error:[/red] {git_error}")
+                sys.exit(1)
 
         artifacts_dir = beacon_dir / "artifacts"
         beacon_settings = BeaconSettings.from_yaml(beacon_yaml)
