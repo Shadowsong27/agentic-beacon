@@ -13,6 +13,8 @@ from unittest.mock import patch
 
 import pytest
 from beacon.cli import (
+    _install_skill_claudecode,
+    _install_skill_opencode,
     _wire_contexts_claudecode,
     _wire_contexts_opencode,
     _wire_skills_post_sync,
@@ -247,6 +249,126 @@ def test_wire_skills_post_sync_skips_if_no_skills(tmp_path):
     assert errors == []
 
 
+def test_wire_skills_post_sync_idempotent_opencode(project_with_skill):
+    """Second call returns empty installed list when skill files are unchanged."""
+    project = project_with_skill
+    (project / "opencode.json").write_text(json.dumps({}))
+    artifacts_dir = project / ".agentic-beacon" / "artifacts"
+
+    installed_first, _ = _wire_skills_post_sync(project, artifacts_dir)
+    installed_second, errors = _wire_skills_post_sync(project, artifacts_dir)
+
+    assert any("test-skill" in e for e in installed_first)
+    assert installed_second == []
+    assert errors == []
+
+
+def test_wire_skills_post_sync_idempotent_claudecode(project_with_skill):
+    """Second call returns empty installed list for claudecode when skill is unchanged."""
+    project = project_with_skill
+    (project / ".claude").mkdir()
+    artifacts_dir = project / ".agentic-beacon" / "artifacts"
+
+    installed_first, _ = _wire_skills_post_sync(project, artifacts_dir)
+    installed_second, errors = _wire_skills_post_sync(project, artifacts_dir)
+
+    assert any("test-skill" in e for e in installed_first)
+    assert installed_second == []
+    assert errors == []
+
+
+def test_wire_skills_post_sync_reinstalls_when_content_changes(project_with_skill):
+    """Skill is re-installed when the SKILL.md content changes."""
+    project = project_with_skill
+    (project / "opencode.json").write_text(json.dumps({}))
+    artifacts_dir = project / ".agentic-beacon" / "artifacts"
+
+    _wire_skills_post_sync(project, artifacts_dir)
+
+    # Update the artifact SKILL.md
+    skill_md = artifacts_dir / "skills" / "test-skill" / "SKILL.md"
+    skill_md.write_text(SAMPLE_SKILL_MD + "\n## New Section\nExtra content.\n")
+
+    installed_second, errors = _wire_skills_post_sync(project, artifacts_dir)
+
+    assert any("test-skill" in e for e in installed_second)
+    assert errors == []
+
+
+# ---------------------------------------------------------------------------
+# Unit tests: _install_skill_opencode / _install_skill_claudecode
+# ---------------------------------------------------------------------------
+
+
+def test_install_skill_opencode_returns_true_on_first_install(tmp_path):
+    changed = _install_skill_opencode(
+        tmp_path, "my-skill", SAMPLE_SKILL_MD, "A test skill"
+    )
+
+    assert changed is True
+    assert (tmp_path / ".opencode" / "skills" / "my-skill" / "SKILL.md").exists()
+    assert (tmp_path / ".opencode" / "command" / "my-skill.md").exists()
+
+
+def test_install_skill_opencode_returns_false_when_unchanged(tmp_path):
+    _install_skill_opencode(tmp_path, "my-skill", SAMPLE_SKILL_MD, "A test skill")
+    changed = _install_skill_opencode(
+        tmp_path, "my-skill", SAMPLE_SKILL_MD, "A test skill"
+    )
+
+    assert changed is False
+
+
+def test_install_skill_opencode_returns_true_when_content_changes(tmp_path):
+    _install_skill_opencode(tmp_path, "my-skill", SAMPLE_SKILL_MD, "A test skill")
+    changed = _install_skill_opencode(
+        tmp_path, "my-skill", SAMPLE_SKILL_MD + "\n## Extra\n", "A test skill"
+    )
+
+    assert changed is True
+
+
+def test_install_skill_opencode_updates_file_content_when_changed(tmp_path):
+    _install_skill_opencode(tmp_path, "my-skill", SAMPLE_SKILL_MD, "A test skill")
+    new_content = SAMPLE_SKILL_MD + "\n## Extra\n"
+    _install_skill_opencode(tmp_path, "my-skill", new_content, "A test skill")
+
+    skill_file = tmp_path / ".opencode" / "skills" / "my-skill" / "SKILL.md"
+    assert skill_file.read_text() == new_content
+
+
+def test_install_skill_claudecode_returns_true_on_first_install(tmp_path):
+    changed = _install_skill_claudecode(tmp_path, "my-skill", SAMPLE_SKILL_MD)
+
+    assert changed is True
+    assert (tmp_path / ".claude" / "skills" / "my-skill" / "SKILL.md").exists()
+
+
+def test_install_skill_claudecode_returns_false_when_unchanged(tmp_path):
+    _install_skill_claudecode(tmp_path, "my-skill", SAMPLE_SKILL_MD)
+    changed = _install_skill_claudecode(tmp_path, "my-skill", SAMPLE_SKILL_MD)
+
+    assert changed is False
+
+
+def test_install_skill_claudecode_returns_true_when_content_changes(tmp_path):
+    _install_skill_claudecode(tmp_path, "my-skill", SAMPLE_SKILL_MD)
+    changed = _install_skill_claudecode(
+        tmp_path, "my-skill", SAMPLE_SKILL_MD + "\n## Extra\n"
+    )
+
+    assert changed is True
+
+
+def test_install_skill_claudecode_updates_file_content_when_changed(tmp_path):
+    _install_skill_claudecode(tmp_path, "my-skill", SAMPLE_SKILL_MD)
+    new_content = SAMPLE_SKILL_MD + "\n## Extra\n"
+    _install_skill_claudecode(tmp_path, "my-skill", new_content)
+
+    skill_file = tmp_path / ".claude" / "skills" / "my-skill" / "SKILL.md"
+    assert skill_file.read_text() == new_content
+
+
 # ---------------------------------------------------------------------------
 # Integration tests: abc sync end-to-end wiring
 # ---------------------------------------------------------------------------
@@ -383,3 +505,44 @@ def test_sync_interactive_init_claude_md(full_sync_project, monkeypatch):
     assert (project / "CLAUDE.md").exists()
     content = (project / "CLAUDE.md").read_text()
     assert "@.agentic-beacon/artifacts/contexts/global.md" in content
+
+
+def test_sync_does_not_report_installed_skills_on_second_run(
+    full_sync_project, monkeypatch
+):
+    """Regression: abc sync should not print 'Installed N skill(s)' when skills
+    are already up-to-date (idempotent skill wiring)."""
+    project, runner = full_sync_project
+    monkeypatch.chdir(project)
+    (project / "opencode.json").write_text(json.dumps({}))
+
+    result_first = runner.invoke(main, ["sync"])
+    result_second = runner.invoke(main, ["sync"])
+
+    assert result_first.exit_code == 0
+    assert result_second.exit_code == 0
+    assert "installed" in result_first.output.lower()
+    assert "installed" not in result_second.output.lower()
+
+
+def test_sync_reports_installed_skills_again_after_warehouse_update(
+    full_sync_project, monkeypatch, valid_warehouse
+):
+    """Skills should be re-installed (and reported) when warehouse content changes."""
+    project, runner = full_sync_project
+    monkeypatch.chdir(project)
+    (project / "opencode.json").write_text(json.dumps({}))
+
+    runner.invoke(main, ["sync"])
+
+    # Update the skill in the warehouse
+    updated_content = SAMPLE_SKILL_MD + "\n## New Section\nExtra content.\n"
+    (valid_warehouse / "skills" / "my-skill" / "SKILL.md").write_text(updated_content)
+
+    result_second = runner.invoke(main, ["sync"])
+
+    assert result_second.exit_code == 0
+    assert "installed" in result_second.output.lower()
+    # Verify the updated content was actually propagated
+    installed_skill = project / ".opencode" / "skills" / "my-skill" / "SKILL.md"
+    assert "New Section" in installed_skill.read_text()
