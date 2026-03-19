@@ -714,7 +714,7 @@ def test_e2e_contribute_skill_regression_stale_snapshot(e2e_project):
 
 
 def test_e2e_contribute_all_skill_live_modification(e2e_project):
-    """abc contribute --all picks up live-dir skill changes."""
+    """abc contribute (no file) picks up live-dir skill changes."""
     project_dir, warehouse, runner = e2e_project
     runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
 
@@ -735,7 +735,7 @@ def test_e2e_contribute_all_skill_live_modification(e2e_project):
     live_skill = project_dir / ".opencode" / "skills" / "code-review" / "SKILL.md"
     live_skill.write_text(live_skill.read_text() + "\n## Extra\n")
 
-    result = runner.invoke(main, ["contribute", "--all"])
+    result = runner.invoke(main, ["contribute", "--manual-git"])
 
     assert result.exit_code == 0, result.output
     assert "code-review" in result.output or "✓" in result.output

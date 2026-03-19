@@ -151,17 +151,17 @@ def test_contribute_blocked_on_untracked_warehouse_file(connected_project):
 
 
 # ---------------------------------------------------------------------------
-# --all flag — blocked on dirty warehouse
+# Default (no file) — blocked on dirty warehouse
 # ---------------------------------------------------------------------------
 
 
 def test_contribute_all_blocked_on_dirty_warehouse(connected_project):
-    """abc contribute --all is also blocked when the warehouse is dirty."""
+    """abc contribute (no file) is also blocked when the warehouse is dirty."""
     project, warehouse, runner = connected_project
 
     (warehouse / "knowledge" / "draft.md").write_text("# Draft\n")
 
-    result = runner.invoke(main, ["contribute", "--all"])
+    result = runner.invoke(main, ["contribute"])
 
     assert result.exit_code != 0
     assert "uncommitted changes" in result.output
