@@ -1248,7 +1248,7 @@ def _show_delta_summary(
 
     if not summary.has_differences and not untracked:
         console.print(
-            "[green]No differences found. Local artifacts match warehouse.[/green]"
+            "[green]No differences found. Local artifacts match local warehouse.[/green]"
         )
         return
 
