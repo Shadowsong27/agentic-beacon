@@ -1,5 +1,23 @@
 # Changelog
 
+## [2.1.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v2.0.2...agentic-beacon@v2.1.0) (2026-03-19)
+
+
+### Features
+
+* auto git commit, push, and PR creation after abc contribute ([#44](https://github.com/Shadowsong27/agentic-beacon/issues/44)) ([#58](https://github.com/Shadowsong27/agentic-beacon/issues/58)) ([5b6b2fc](https://github.com/Shadowsong27/agentic-beacon/commit/5b6b2fc57bcc6fb4ac289ef08989fd13ab4228a0))
+* block abc sync and abc contribute if warehouse has uncommitted changes ([#48](https://github.com/Shadowsong27/agentic-beacon/issues/48)) ([de97a10](https://github.com/Shadowsong27/agentic-beacon/commit/de97a10ad57d3016ad1f6e2a8c68f48b7317bdfd))
+* extract warehouse init templates to files and add regression test ([#37](https://github.com/Shadowsong27/agentic-beacon/issues/37)) ([1b2edf9](https://github.com/Shadowsong27/agentic-beacon/commit/1b2edf99e7f515f42979a7e5388b0e5812a8e21c))
+* integrate bundled skills into warehouse template lifecycle ([#57](https://github.com/Shadowsong27/agentic-beacon/issues/57)) ([1175c06](https://github.com/Shadowsong27/agentic-beacon/commit/1175c06d90f0f9ee1a1ff0b7672aabcb2bf157bd)), closes [#45](https://github.com/Shadowsong27/agentic-beacon/issues/45)
+* marketing improvements to README and add starter warehouse staleness test ([#40](https://github.com/Shadowsong27/agentic-beacon/issues/40)) ([aeba1f3](https://github.com/Shadowsong27/agentic-beacon/commit/aeba1f30e361716a8c03eb3938fa8fd14f636918))
+* prompt to initialise agent config during abc sync when none detected ([#43](https://github.com/Shadowsong27/agentic-beacon/issues/43)) ([736a610](https://github.com/Shadowsong27/agentic-beacon/commit/736a610e5bbb6f2fa30eb35d49ffc3242cd3cbcf))
+
+
+### Bug Fixes
+
+* fixed record-knowledge skill file write location ([#35](https://github.com/Shadowsong27/agentic-beacon/issues/35)) ([d57d8a5](https://github.com/Shadowsong27/agentic-beacon/commit/d57d8a53d4b825a755b013b215822e02db2ea96b))
+* show full multi-agent skill diffs in abc delta ([#53](https://github.com/Shadowsong27/agentic-beacon/issues/53)) ([e23cbcc](https://github.com/Shadowsong27/agentic-beacon/commit/e23cbcc87d6941557f2a7df93900c02e5fd354c9))
+
 ## [2.0.2](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v2.0.1...agentic-beacon@v2.0.2) (2026-03-16)
 
 
