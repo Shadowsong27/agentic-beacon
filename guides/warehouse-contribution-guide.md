@@ -41,37 +41,39 @@ abc delta knowledge/python/type-hints.md
 
 ### 3. Contribute changes back
 
-Copy a single file back to the warehouse:
+Contribute everything that changed at once (default):
+
+```bash
+abc contribute
+```
+
+Or contribute a single file:
 
 ```bash
 abc contribute knowledge/python/type-hints.md
 ```
 
-Or contribute everything that changed at once:
+Preview before contributing:
 
 ```bash
-abc contribute --all
+abc contribute --dry-run
 ```
 
-Preview before committing:
+By default `abc contribute` automatically:
+1. Creates a `contrib/<timestamp>` branch in the warehouse
+2. Commits the changes
+3. Pushes and opens a PR via `gh`
+4. Prints the PR URL
+
+If `gh` is not installed or the warehouse has no remote, it falls back to printing the manual git steps. You can also opt out of the auto workflow explicitly:
 
 ```bash
-abc contribute --all --dry-run
+abc contribute --manual-git
 ```
 
-`abc contribute` copies the files and prints the exact git commands to run next.
+### 4. Teammates pick it up
 
-### 4. Commit in the warehouse
-
-```bash
-cd ~/team-warehouse
-git diff                    # Review what changed
-git add .
-git commit -m "feat(python): improve type hints guide with 3.10+ syntax"
-git push
-```
-
-### 5. Teammates pick it up
+Once the PR is merged:
 
 ```bash
 cd ~/team-warehouse && git pull
@@ -88,9 +90,7 @@ The most common case — your agent refines a context, knowledge file, or skill 
 
 ```bash
 abc delta                                      # See what changed
-abc contribute knowledge/python/type-hints.md  # Contribute the change
-cd ~/team-warehouse
-git commit -m "docs(python): clarify type hint guidance"
+abc contribute knowledge/python/type-hints.md  # Contribute the change (auto PR)
 ```
 
 ### Adding a new artifact
@@ -101,7 +101,7 @@ If your agent created a new file that should live in the warehouse:
 2. Run `abc sync` (to register it)
 3. Run `abc contribute knowledge/python/new-lesson.md`
 
-Or just use `--all` which picks up both `MODIFIED` and `ADDED` files.
+Or just run `abc contribute` (no file argument) which picks up both `MODIFIED` and `ADDED` files.
 
 ### Adding a new skill
 
@@ -133,31 +133,21 @@ Before committing to the warehouse:
 
 ---
 
-## Pull Request Workflow (for team warehouses)
+## Pull Request Workflow
 
-If your warehouse uses PRs rather than direct push:
-
-```bash
-cd ~/team-warehouse
-git checkout -b improve-python-type-hints
-git add .
-git commit -m "feat(python): add str | None guidance for Python 3.10+"
-git push -u origin improve-python-type-hints
-# Open PR on GitHub/GitLab
-```
-
-**PR description template:**
+`abc contribute` creates a PR automatically when the warehouse has a GitHub remote and `gh` is installed. The generated PR body lists each contributed file and its status:
 
 ```markdown
-## Summary
-<What changed and why it helps agents>
+## Contributed artifacts
 
-## Testing
-- Tested in [project name] for [duration]
-- Agents now correctly [specific behavior]
+- `knowledge/python/type-hints.md` (modified)
+- `knowledge/python/new-lesson.md` (added)
+```
 
-## Impacted Files
-- knowledge/python/type-hints.md
+**Opting out:** pass `--manual-git` to skip the auto workflow and get the manual git steps printed instead — useful for GitLab, Bitbucket, or any non-GitHub remote:
+
+```bash
+abc contribute --manual-git
 ```
 
 ---

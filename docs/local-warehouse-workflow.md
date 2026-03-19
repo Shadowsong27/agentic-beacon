@@ -114,9 +114,7 @@ abc delta
 **Developer workflow:**
 1. Review the delta output
 2. Decide: keep local, contribute to warehouse, or discard
-3. If contributing: manually copy changes to `~/org-warehouse/knowledge/languages/python/lessons.md`4. Commit in warehouse: `cd ~/org-warehouse && git commit -am "Add Python library guardrail"`
-5. Push to remote: `git push origin main`
-6. Open PR for team review
+3. If contributing: run `abc contribute` — automatically creates a branch, commits, pushes, and opens a PR
 
 ### Phase 6: Syncing Updates (Refreshing Snapshot)
 
