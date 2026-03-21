@@ -191,3 +191,5 @@ def test_sync_all_counts(valid_warehouse, temp_dir):
     assert summary.copied == 1
     assert summary.skipped == 1
     assert summary.errors == 1
+    assert len(summary.failed_files) == 1
+    assert summary.failed_files[0][0] == "knowledge/missing.md"

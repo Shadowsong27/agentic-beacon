@@ -926,6 +926,8 @@ def sync(
             )
         if summary.errors > 0:
             console.print(f"  [red]Errors:[/red] {summary.errors} files")
+            for path, msg in summary.failed_files:
+                console.print(f"    [red]✗[/red] {path}: {msg}")
 
         if dry_run:
             console.print(
