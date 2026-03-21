@@ -589,7 +589,37 @@ def setup(*, manual: bool, agent_assisted: bool) -> None:
             "\n[on dark_green] Read `.agentic-beacon/warehouse-catalog.md` to see "
             "what artifacts are available in the connected warehouse. Analyse this "
             "project, then update `.agentic-beacon/beacon.yaml` with the artifacts "
-            "that are relevant. Run `abc sync` when done. [/on dark_green]\n"
+            "that are relevant. Always preserve any default bundled skills already "
+            "listed in beacon.yaml (e.g. `skills/record-knowledge/SKILL.md`). "
+            "Run `abc sync` when done. [/on dark_green]\n"
+        )
+
+
+def _get_bundled_skill_paths() -> list[str]:
+    """Return beacon.yaml-relative paths for all bundled skills shipped with abc."""
+    bundled_skills_dir = Path(__file__).parent / "data" / "skills"
+    paths = []
+    if bundled_skills_dir.exists():
+        for skill_dir in sorted(bundled_skills_dir.iterdir()):
+            if skill_dir.is_dir() and (skill_dir / "SKILL.md").exists():
+                paths.append(f"skills/{skill_dir.name}/SKILL.md")
+    return paths
+
+
+def _warn_missing_bundled_skills(beacon_settings: "BeaconSettings") -> None:
+    """Print a warning for any bundled skills absent from beacon.yaml."""
+    configured = set(beacon_settings.artifacts.skills)
+    missing = [p for p in _get_bundled_skill_paths() if p not in configured]
+    if missing:
+        console.print(
+            "\n[yellow]Warning:[/yellow] The following default bundled skill(s) are "
+            "not in beacon.yaml:"
+        )
+        for p in missing:
+            console.print(f"  [yellow]-[/yellow] {p}")
+        console.print(
+            "  Add them to [bold].agentic-beacon/beacon.yaml[/bold] under "
+            "[bold]artifacts.skills[/bold] and re-run [bold]abc sync[/bold]."
         )
 
 
@@ -847,6 +877,8 @@ def sync(
                 "[yellow]No artifacts configured in beacon.yaml. Nothing to sync.[/yellow]"
             )
             sys.exit(0)
+
+        _warn_missing_bundled_skills(beacon_settings)
 
         # Create artifacts directory
         artifacts_dir = beacon_dir / "artifacts"
@@ -2555,6 +2587,8 @@ def status(*, project: Path | None) -> None:
                 table.add_row(f"{status_str} {skill}")
             console.print(table)
             console.print()
+
+        _warn_missing_bundled_skills(beacon_settings)
 
     # Count synced files
     import os
