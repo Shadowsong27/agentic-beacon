@@ -95,6 +95,9 @@ def test_install_skill_wires_opencode(connected_project):
         connected_project / ".opencode" / "skills" / "code-reviewer" / "SKILL.md"
     ).exists()
     assert (connected_project / ".opencode" / "command" / "code-reviewer.md").exists()
+    opencode_gitignore = (connected_project / ".opencode" / ".gitignore").read_text()
+    assert "skills/" in opencode_gitignore
+    assert "command/" in opencode_gitignore
 
 
 def test_install_skill_wires_claudecode(connected_project):
@@ -108,6 +111,8 @@ def test_install_skill_wires_claudecode(connected_project):
     assert (
         connected_project / ".claude" / "skills" / "code-reviewer" / "SKILL.md"
     ).exists()
+    claude_gitignore = (connected_project / ".claude" / ".gitignore").read_text()
+    assert "skills/" in claude_gitignore
 
 
 def test_install_skill_no_agent_detected_skips_wiring(connected_project):
