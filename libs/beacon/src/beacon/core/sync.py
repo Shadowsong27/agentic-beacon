@@ -36,6 +36,7 @@ class SyncSummary:
     preserved: int = 0
     pruned: int = 0
     errors: int = 0
+    failed_files: list[tuple[str, str]] = field(default_factory=list)
     results: list[SyncResult] = field(default_factory=list)
     log_messages: list[str] = field(default_factory=list)
 
@@ -230,6 +231,9 @@ class SyncEngine:
                     )
             elif result.action == "error":
                 summary.errors += 1
+                summary.failed_files.append(
+                    (path, result.error_message or "unknown error")
+                )
                 log(f"  Error: {path} - {result.error_message}")
 
         # Prune artifacts not in the list
@@ -253,6 +257,7 @@ class SyncEngine:
                                     log(f"  Pruned: {rel_path}")
                             except OSError as e:
                                 summary.errors += 1
+                                summary.failed_files.append((rel_path, str(e)))
                                 log(f"  Error pruning {rel_path}: {e}")
 
             if not dry_run:

@@ -584,11 +584,13 @@ def setup(*, manual: bool, agent_assisted: bool) -> None:
         console.print("\n[bold green]✓ Agent-assisted setup ready[/bold green]")
         console.print(f"  [blue]beacon.yaml:[/blue] {beacon_yaml}")
         console.print(f"  [blue]Catalog:[/blue] {beacon_dir / 'warehouse-catalog.md'}")
-        console.print("\n[bold]Next Steps:[/bold]")
-        console.print("  1. Open your AI agent (Cursor, Copilot, etc.)")
-        console.print("  2. Ask it to read .agentic-beacon/warehouse-catalog.md")
-        console.print("  3. Have it analyze your project and populate beacon.yaml")
-        console.print("  4. Run 'abc sync' to download artifacts")
+        console.print("\n[bold]Paste this into your agent:[/bold]")
+        console.print(
+            "\n[on dark_green] Read `.agentic-beacon/warehouse-catalog.md` to see "
+            "what artifacts are available in the connected warehouse. Analyse this "
+            "project, then update `.agentic-beacon/beacon.yaml` with the artifacts "
+            "that are relevant. Run `abc sync` when done. [/on dark_green]\n"
+        )
 
 
 def _create_beacon_template(path: Path) -> None:
@@ -924,6 +926,8 @@ def sync(
             )
         if summary.errors > 0:
             console.print(f"  [red]Errors:[/red] {summary.errors} files")
+            for path, msg in summary.failed_files:
+                console.print(f"    [red]✗[/red] {path}: {msg}")
 
         if dry_run:
             console.print(
