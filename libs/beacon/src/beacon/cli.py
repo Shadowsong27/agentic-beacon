@@ -343,6 +343,7 @@ def connect(*, path: Path | None) -> None:
         gitignore_mgr = GitignoreManager(Path.cwd())
         if gitignore_mgr.ensure_entries():
             console.print("[green]✓[/green] Updated .gitignore")
+        _update_agent_gitignores(Path.cwd())
 
         # Success message
         console.print("\n[bold green]✓ Connected to warehouse[/bold green]")
@@ -1005,6 +1006,7 @@ def sync(
             if wire_errors:
                 for err in wire_errors:
                     console.print(f"  [yellow]⚠[/yellow] Skill wiring: {err}")
+            _update_agent_gitignores(project_root)
 
         if wiring_notes:
             console.print("\n[bold]Manual wiring required:[/bold]")
@@ -1116,6 +1118,7 @@ def install_artifact(*, artifact: str, agent: str | None) -> None:
                 else:
                     _install_skill_claudecode(project_root, skill_name, content)
             console.print(f"[green]✓[/green] Installed skill: {skill_name}")
+            _update_agent_gitignores(project_root)
             _print_skill_next_steps(agents)
         elif skill_md.exists():
             console.print(
@@ -2126,6 +2129,21 @@ def _init_claude_md(project_root: Path) -> None:
     claude_md = project_root / "CLAUDE.md"
     if not claude_md.exists():
         claude_md.write_text("", encoding="utf-8")
+
+
+def _update_agent_gitignores(project_root: Path) -> None:
+    """Add gitignore entries to agent subdirectory .gitignore files.
+
+    Updates .claude/.gitignore and .opencode/.gitignore if those directories
+    exist, creating the gitignore files if needed.
+    """
+    claude_dir = project_root / ".claude"
+    if claude_dir.is_dir():
+        GitignoreManager(claude_dir).ensure_entries(["skills/"])
+
+    opencode_dir = project_root / ".opencode"
+    if opencode_dir.is_dir():
+        GitignoreManager(opencode_dir).ensure_entries(["skills/", "command/"])
 
 
 def _wire_skills_post_sync(

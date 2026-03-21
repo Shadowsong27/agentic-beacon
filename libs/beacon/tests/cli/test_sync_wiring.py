@@ -15,6 +15,7 @@ import pytest
 from beacon.cli import (
     _install_skill_claudecode,
     _install_skill_opencode,
+    _update_agent_gitignores,
     _wire_contexts_claudecode,
     _wire_contexts_opencode,
     _wire_skills_post_sync,
@@ -296,6 +297,54 @@ def test_wire_skills_post_sync_reinstalls_when_content_changes(project_with_skil
 
 
 # ---------------------------------------------------------------------------
+# Unit tests: _update_agent_gitignores
+# ---------------------------------------------------------------------------
+
+
+def test_update_agent_gitignores_creates_claude_gitignore(tmp_path):
+    (tmp_path / ".claude").mkdir()
+    _update_agent_gitignores(tmp_path)
+    content = (tmp_path / ".claude" / ".gitignore").read_text()
+    assert "skills/" in content
+
+
+def test_update_agent_gitignores_creates_opencode_gitignore(tmp_path):
+    (tmp_path / ".opencode").mkdir()
+    _update_agent_gitignores(tmp_path)
+    content = (tmp_path / ".opencode" / ".gitignore").read_text()
+    assert "skills/" in content
+    assert "command/" in content
+
+
+def test_update_agent_gitignores_skips_when_no_agent_dirs(tmp_path):
+    _update_agent_gitignores(tmp_path)
+    assert not (tmp_path / ".claude" / ".gitignore").exists()
+    assert not (tmp_path / ".opencode" / ".gitignore").exists()
+
+
+def test_update_agent_gitignores_idempotent(tmp_path):
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / ".opencode").mkdir()
+    _update_agent_gitignores(tmp_path)
+    _update_agent_gitignores(tmp_path)
+    claude_content = (tmp_path / ".claude" / ".gitignore").read_text()
+    opencode_content = (tmp_path / ".opencode" / ".gitignore").read_text()
+    assert claude_content.count("skills/") == 1
+    assert opencode_content.count("skills/") == 1
+    assert opencode_content.count("command/") == 1
+
+
+def test_update_agent_gitignores_appends_to_existing_gitignore(tmp_path):
+    claude_dir = tmp_path / ".claude"
+    claude_dir.mkdir()
+    (claude_dir / ".gitignore").write_text("settings.local.json\n")
+    _update_agent_gitignores(tmp_path)
+    content = (claude_dir / ".gitignore").read_text()
+    assert "settings.local.json" in content
+    assert "skills/" in content
+
+
+# ---------------------------------------------------------------------------
 # Unit tests: _install_skill_opencode / _install_skill_claudecode
 # ---------------------------------------------------------------------------
 
@@ -444,6 +493,9 @@ def test_sync_installs_skills(full_sync_project, monkeypatch):
     assert (project / ".opencode" / "skills" / "my-skill" / "SKILL.md").exists()
     assert (project / ".opencode" / "command" / "my-skill.md").exists()
     assert "installed" in result.output.lower()
+    opencode_gitignore = (project / ".opencode" / ".gitignore").read_text()
+    assert "skills/" in opencode_gitignore
+    assert "command/" in opencode_gitignore
 
 
 def test_sync_wiring_is_idempotent(full_sync_project, monkeypatch):
