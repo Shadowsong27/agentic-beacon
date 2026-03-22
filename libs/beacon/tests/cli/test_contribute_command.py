@@ -223,23 +223,20 @@ def test_contribute_errors_when_file_not_in_beacon_yaml(project_with_delta):
     assert "error" in result.output.lower()
 
 
-def test_contribute_errors_when_unrecognisable_path(project_with_delta):
-    """A local file whose path doesn't start with knowledge/skills/contexts is rejected."""
+def test_contribute_single_unrecognised_path_still_copies(project_with_delta):
+    """A local file with non-standard path prefix is still contributed (no type gating)."""
     tmp_path, warehouse = project_with_delta
     runner = CliRunner()
 
-    # Create a local file with an unrecognisable path prefix
+    # Create a local file with an unusual path prefix
     weird = tmp_path / ".agentic-beacon" / "artifacts" / "misc" / "random.md"
     weird.parent.mkdir(parents=True)
     weird.write_text("random")
 
     result = runner.invoke(main, ["contribute", "misc/random.md"])
-    assert result.exit_code != 0
-    assert (
-        "type" in result.output.lower()
-        or "infer" in result.output.lower()
-        or "not tracked" in result.output.lower()
-    )
+
+    assert result.exit_code == 0, result.output
+    assert (warehouse / "misc" / "random.md").read_text() == "random"
 
 
 def test_contribute_errors_when_file_not_synced_locally(project_with_delta):
@@ -327,10 +324,15 @@ def project_with_untracked(tmp_path, monkeypatch):
     return tmp_path, warehouse
 
 
-def test_contribute_single_untracked_file_copies_and_registers(project_with_untracked):
-    """Contributing a file not in beacon.yaml copies it and adds it to beacon.yaml."""
+def test_contribute_single_untracked_file_copies_without_registering(
+    project_with_untracked,
+):
+    """Contributing an untracked file copies it but does NOT modify beacon.yaml."""
     tmp_path, warehouse = project_with_untracked
     runner = CliRunner()
+
+    beacon_yaml = tmp_path / ".agentic-beacon" / "beacon.yaml"
+    original_content = beacon_yaml.read_text()
 
     result = runner.invoke(main, ["contribute", "knowledge/python/new-lesson.md"])
 
@@ -339,49 +341,25 @@ def test_contribute_single_untracked_file_copies_and_registers(project_with_untr
     assert (
         warehouse / "knowledge" / "python" / "new-lesson.md"
     ).read_text() == ADDED_CONTENT
-    # beacon.yaml updated
-    import yaml
-
-    beacon_yaml = tmp_path / ".agentic-beacon" / "beacon.yaml"
-    data = yaml.safe_load(beacon_yaml.read_text())
-    assert "knowledge/python/new-lesson.md" in data["artifacts"]["knowledge"]
+    # beacon.yaml NOT modified — abc adopt is the opt-in mechanism
+    assert beacon_yaml.read_text() == original_content
 
 
-def test_contribute_all_untracked_file_copies_and_registers(project_with_untracked):
-    """contribute with no file also contributes untracked local files and registers them in beacon.yaml."""
-    tmp_path, warehouse = project_with_untracked
-    runner = CliRunner()
-
-    result = runner.invoke(main, ["contribute", "--manual-git"])
-
-    assert result.exit_code == 0, result.output
-    # Untracked file copied
-    assert (
-        warehouse / "knowledge" / "python" / "new-lesson.md"
-    ).read_text() == ADDED_CONTENT
-    # Registered in beacon.yaml
-    import yaml
-
-    beacon_yaml = tmp_path / ".agentic-beacon" / "beacon.yaml"
-    data = yaml.safe_load(beacon_yaml.read_text())
-    assert "knowledge/python/new-lesson.md" in data["artifacts"]["knowledge"]
-
-
-def test_contribute_all_dry_run_does_not_register(project_with_untracked):
-    """--dry-run does not modify beacon.yaml."""
+def test_contribute_all_ignores_untracked_files(project_with_untracked):
+    """contribute --all only contributes tracked artifacts; untracked files are ignored."""
     tmp_path, warehouse = project_with_untracked
     runner = CliRunner()
 
     beacon_yaml = tmp_path / ".agentic-beacon" / "beacon.yaml"
     original_content = beacon_yaml.read_text()
 
-    result = runner.invoke(main, ["contribute", "--dry-run"])
+    result = runner.invoke(main, ["contribute", "--manual-git"])
 
     assert result.exit_code == 0, result.output
+    # Untracked file NOT copied to warehouse
+    assert not (warehouse / "knowledge" / "python" / "new-lesson.md").exists()
     # beacon.yaml unchanged
     assert beacon_yaml.read_text() == original_content
-    # File not copied to warehouse
-    assert not (warehouse / "knowledge" / "python" / "new-lesson.md").exists()
 
 
 def test_contribute_single_already_tracked_does_not_duplicate(project_with_delta):

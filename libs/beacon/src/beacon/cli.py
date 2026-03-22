@@ -1592,7 +1592,6 @@ def contribute(
             contributed = _contribute_single(
                 comparator,
                 beacon_settings,
-                beacon_yaml,
                 warehouse_path,
                 artifacts_dir,
                 file,
@@ -1602,7 +1601,6 @@ def contribute(
             contributed = _contribute_all(
                 comparator,
                 beacon_settings,
-                beacon_yaml,
                 warehouse_path,
                 artifacts_dir,
                 dry_run,
@@ -1713,7 +1711,6 @@ def _resolve_skill_contribute_source(
 def _contribute_single(
     comparator: DeltaComparator,
     beacon_settings: BeaconSettings,
-    beacon_yaml: Path,
     warehouse_path: Path,
     artifacts_dir: Path,
     file_path: str,
@@ -1721,11 +1718,11 @@ def _contribute_single(
 ) -> list[tuple[str, str]]:
     """Contribute a single artifact back to the warehouse.
 
-    If the file is not yet tracked in beacon.yaml, it will be auto-registered
-    (inferred from path prefix: knowledge/, skills/, or contexts/).
-
     For skills: reads from the live agent directory rather than the artifact
     snapshot, matching the same source that abc delta inspects.
+
+    Does NOT auto-register untracked files in beacon.yaml — use ``abc adopt``
+    for discovery and opt-in.
 
     Returns a list of (path, status_label) tuples for contributed files.
     """
@@ -1751,22 +1748,6 @@ def _contribute_single(
             )
             sys.exit(1)
 
-    all_paths = _collect_artifact_paths(comparator, beacon_settings)
-    is_untracked = file_path not in all_paths
-
-    if is_untracked:
-        artifact_type = _infer_artifact_type(file_path)
-        if artifact_type is None:
-            console.print(
-                f"[red]Error:[/red] '{file_path}' is not tracked in beacon.yaml "
-                f"and its type cannot be inferred."
-            )
-            console.print(
-                "Path must start with knowledge/, skills/, or contexts/ "
-                "to be auto-registered."
-            )
-            sys.exit(1)
-
     if not is_skill:
         result = comparator.compare_file(file_path)
         if result.status == DeltaStatus.IDENTICAL:
@@ -1779,10 +1760,6 @@ def _contribute_single(
     dest_existed = (warehouse_path / file_path).exists()
     _copy_to_warehouse(local_path, warehouse_path / file_path, file_path, dry_run)
     if not dry_run:
-        if is_untracked and _register_in_beacon_yaml(
-            beacon_settings, beacon_yaml, file_path
-        ):
-            console.print(f"  [dim]Registered in beacon.yaml:[/dim] {file_path}")
         status_label = "modified" if dest_existed else "added"
         return [(file_path, status_label)]
     return []
@@ -1791,15 +1768,14 @@ def _contribute_single(
 def _contribute_all(
     comparator: DeltaComparator,
     beacon_settings: BeaconSettings,
-    beacon_yaml: Path,
     warehouse_path: Path,
     artifacts_dir: Path,
     dry_run: bool,
 ) -> list[tuple[str, str]]:
-    """Contribute all modified and added artifacts back to the warehouse.
+    """Contribute all tracked modified and added artifacts back to the warehouse.
 
-    Also discovers and contributes local files not yet tracked in beacon.yaml,
-    registering them automatically.
+    Only contributes artifacts already tracked in beacon.yaml. Untracked local
+    files are ignored — use ``abc adopt`` for discovery and opt-in.
 
     For skills: reads from live agent directories. If multiple agents have
     conflicting modifications the user is prompted to choose per-skill.
@@ -1809,10 +1785,7 @@ def _contribute_all(
     summary = comparator.compare_from_config(beacon_settings)
     contributable = summary.modified + summary.added
 
-    # Also find local files not covered by any beacon.yaml pattern
-    untracked = _find_untracked_local_files(comparator, beacon_settings, artifacts_dir)
-
-    if not contributable and not untracked:
+    if not contributable:
         console.print(
             "[green]Nothing to contribute.[/green] "
             "All local artifacts match the warehouse."
@@ -1821,7 +1794,6 @@ def _contribute_all(
 
     contributed: list[tuple[str, str]] = []
 
-    # Contribute tracked modified/added files
     for result in contributable:
         is_skill = result.path.startswith("skills/") and bool(comparator.skills_paths)
 
@@ -1851,22 +1823,6 @@ def _contribute_all(
                 "modified" if result.status == DeltaStatus.MODIFIED else "added"
             )
             contributed.append((result.path, status_label))
-
-    # Contribute untracked local files and register them in beacon.yaml
-    for rel_path in untracked:
-        artifact_type = _infer_artifact_type(rel_path)
-        if artifact_type is None:
-            console.print(
-                f"  [yellow]Skipping[/yellow] {rel_path} "
-                "(cannot infer artifact type — path must start with knowledge/, skills/, or contexts/)"
-            )
-            continue
-        local_path = artifacts_dir / rel_path
-        _copy_to_warehouse(local_path, warehouse_path / rel_path, rel_path, dry_run)
-        if not dry_run:
-            contributed.append((rel_path, "added"))
-            if _register_in_beacon_yaml(beacon_settings, beacon_yaml, rel_path):
-                console.print(f"  [dim]Registered in beacon.yaml:[/dim] {rel_path}")
 
     return contributed
 
