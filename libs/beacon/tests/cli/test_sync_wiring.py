@@ -549,8 +549,10 @@ def test_sync_interactive_init_claude_md(full_sync_project, monkeypatch):
     # No opencode.json, no CLAUDE.md; user answers no/yes to prompts
 
     with patch("beacon.cli._is_interactive", return_value=True):
-        # "n" for opencode.json prompt, "y" for CLAUDE.md prompt
-        result = runner.invoke(main, ["sync"], input="n\ny\n")
+        # "n" for opencode.json (contexts), "y" for CLAUDE.md (contexts),
+        # "n" for opencode.json (skills), "n" for CLAUDE.md (skills)
+        # (CLAUDE.md alone doesn't create .claude/ so skill prompt also fires)
+        result = runner.invoke(main, ["sync"], input="n\ny\nn\nn\n")
 
     assert result.exit_code == 0
     assert not (project / "opencode.json").exists()
@@ -598,3 +600,194 @@ def test_sync_reports_installed_skills_again_after_warehouse_update(
     # Verify the updated content was actually propagated
     installed_skill = project / ".opencode" / "skills" / "my-skill" / "SKILL.md"
     assert "New Section" in installed_skill.read_text()
+
+
+# ---------------------------------------------------------------------------
+# Skill wiring: no agent config prompt
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def skills_only_project(tmp_path, valid_warehouse):
+    """Connected project with skills but NO contexts in beacon.yaml."""
+    skill_dir = valid_warehouse / "skills" / "my-skill"
+    skill_dir.mkdir(parents=True, exist_ok=True)
+    (skill_dir / "SKILL.md").write_text(SAMPLE_SKILL_MD)
+
+    project = tmp_path / "project"
+    project.mkdir()
+
+    beacon_dir = project / ".agentic-beacon"
+    beacon_dir.mkdir()
+    (beacon_dir / "config.toml").write_text(
+        f'[warehouse]\nlocal_path = "{valid_warehouse}"\n'
+    )
+    (beacon_dir / "beacon.yaml").write_text(
+        "artifacts:\n"
+        "  contexts: []\n"
+        "  skills:\n"
+        "    - skills/my-skill/**/*\n"
+        "  knowledge: []\n"
+    )
+
+    runner = CliRunner()
+    return project, runner
+
+
+def test_sync_skill_no_agent_config_non_interactive(skills_only_project, monkeypatch):
+    """Non-interactive: manual wiring instructions printed for skills when no agent config."""
+    project, runner = skills_only_project
+    monkeypatch.chdir(project)
+
+    with patch("beacon.cli._is_interactive", return_value=False):
+        result = runner.invoke(main, ["sync"])
+
+    assert result.exit_code == 0
+    assert "manual wiring required" in result.output.lower()
+    assert "skills synced" in result.output.lower()
+    assert "opencode.json" in result.output
+    assert ".claude/" in result.output
+
+
+def test_sync_skill_no_agent_config_interactive_init_opencode(
+    skills_only_project, monkeypatch
+):
+    """Interactive: user inits opencode.json; skills are retried and installed."""
+    project, runner = skills_only_project
+    monkeypatch.chdir(project)
+
+    with patch("beacon.cli._is_interactive", return_value=True):
+        # "y" for opencode.json, "n" for CLAUDE.md
+        result = runner.invoke(main, ["sync"], input="y\nn\n")
+
+    assert result.exit_code == 0
+    assert (project / "opencode.json").exists()
+    assert "installed" in result.output.lower()
+    assert "my-skill" in result.output.lower()
+    # Skill actually installed to agent directory
+    assert (project / ".opencode" / "skills" / "my-skill" / "SKILL.md").exists()
+
+
+def test_sync_skill_no_agent_config_interactive_init_both_agents(
+    skills_only_project, monkeypatch
+):
+    """Interactive: user inits both agents; skills installed for opencode.
+
+    Note: _init_claude_md creates CLAUDE.md at project root, which doesn't
+    create .claude/ directory. _detect_agents checks for .claude/ dir, so
+    only opencode is detected for skill wiring. This is a known limitation.
+    """
+    project, runner = skills_only_project
+    monkeypatch.chdir(project)
+
+    with patch("beacon.cli._is_interactive", return_value=True):
+        # "y" for opencode.json, "y" for CLAUDE.md
+        result = runner.invoke(main, ["sync"], input="y\ny\n")
+
+    assert result.exit_code == 0
+    assert (project / "opencode.json").exists()
+    assert (project / "CLAUDE.md").exists()
+    assert "installed" in result.output.lower()
+    # opencode skills installed
+    assert (project / ".opencode" / "skills" / "my-skill" / "SKILL.md").exists()
+
+
+def test_sync_skill_no_agent_config_interactive_decline_both(
+    skills_only_project, monkeypatch
+):
+    """Interactive: user declines both agent prompts; no skills wired."""
+    project, runner = skills_only_project
+    monkeypatch.chdir(project)
+
+    with patch("beacon.cli._is_interactive", return_value=True):
+        # "n" for opencode.json, "n" for CLAUDE.md
+        result = runner.invoke(main, ["sync"], input="n\nn\n")
+
+    assert result.exit_code == 0
+    assert not (project / "opencode.json").exists()
+    assert not (project / "CLAUDE.md").exists()
+    assert "installed" not in result.output.lower()
+
+
+def test_sync_skill_no_agent_config_interactive_init_claude(
+    skills_only_project, monkeypatch
+):
+    """Interactive: user inits CLAUDE.md only; .claude/ dir created for skill wiring."""
+    project, runner = skills_only_project
+    monkeypatch.chdir(project)
+
+    with patch("beacon.cli._is_interactive", return_value=True):
+        # "n" for opencode.json, "y" for CLAUDE.md
+        result = runner.invoke(main, ["sync"], input="n\ny\n")
+
+    assert result.exit_code == 0
+    assert (project / "CLAUDE.md").exists()
+
+
+def test_sync_skill_dry_run_does_not_prompt(skills_only_project, monkeypatch):
+    """Dry run never triggers the no-agent-config prompt for skills."""
+    project, runner = skills_only_project
+    monkeypatch.chdir(project)
+
+    with patch("beacon.cli._is_interactive", return_value=True):
+        result = runner.invoke(main, ["sync", "--dry-run"])
+
+    assert result.exit_code == 0
+    assert "no agent config" not in result.output.lower()
+    assert "initialize" not in result.output.lower()
+    # No wiring notes either
+    assert "manual wiring required" not in result.output.lower()
+
+
+def test_sync_skill_empty_skills_dir_no_prompt(tmp_path, valid_warehouse, monkeypatch):
+    """No skills in beacon.yaml means no skill-wiring prompt fires."""
+    project = tmp_path / "project"
+    project.mkdir()
+
+    beacon_dir = project / ".agentic-beacon"
+    beacon_dir.mkdir()
+    (beacon_dir / "config.toml").write_text(
+        f'[warehouse]\nlocal_path = "{valid_warehouse}"\n'
+    )
+    (beacon_dir / "beacon.yaml").write_text(
+        "artifacts:\n  contexts: []\n  skills: []\n  knowledge: []\n"
+    )
+
+    monkeypatch.chdir(project)
+    runner = CliRunner()
+
+    with patch("beacon.cli._is_interactive", return_value=False):
+        result = runner.invoke(main, ["sync"])
+
+    assert result.exit_code == 0
+    assert "skills synced" not in result.output.lower()
+    assert "manual wiring" not in result.output.lower()
+
+
+def test_sync_skill_dir_without_skill_md_no_prompt(
+    skills_only_project, monkeypatch, valid_warehouse
+):
+    """Skill directories without SKILL.md do not trigger the no-agent-config prompt."""
+    project, runner = skills_only_project
+    monkeypatch.chdir(project)
+
+    # Remove the SKILL.md from the warehouse skill so sync copies a dir without it
+    (valid_warehouse / "skills" / "my-skill" / "SKILL.md").unlink()
+    (valid_warehouse / "skills" / "my-skill" / "README.md").write_text("# Not a skill")
+
+    # Update beacon.yaml to match
+    beacon_yaml = project / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n"
+        "  contexts: []\n"
+        "  skills:\n"
+        "    - skills/my-skill/**/*\n"
+        "  knowledge: []\n"
+    )
+
+    with patch("beacon.cli._is_interactive", return_value=False):
+        result = runner.invoke(main, ["sync"])
+
+    assert result.exit_code == 0
+    # No prompt because no valid SKILL.md files
+    assert "skills synced" not in result.output.lower()
