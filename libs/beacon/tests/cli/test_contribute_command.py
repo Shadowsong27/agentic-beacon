@@ -959,3 +959,76 @@ def test_build_pr_body_lists_files():
 def test_build_pr_body_single_file():
     body = _build_pr_body([("knowledge/lesson.md", "modified")])
     assert "`knowledge/lesson.md` (modified)" in body
+
+
+# ---------------------------------------------------------------------------
+# Regression: contribute must not create infinite delta cycle (PER-38)
+# ---------------------------------------------------------------------------
+
+
+def test_contribute_single_skill_propagates_to_other_agents(
+    project_with_skill_setup,
+):
+    """After contributing one agent's skill, all other agents' live copies converge.
+
+    Reproduces the PER-38 infinite cycle:
+      1. Two agents configured; only claudecode has the modified skill.
+      2. abc contribute copies claudecode's version to the warehouse.
+      3. opencode's live copy must be updated to the same content so that
+         a subsequent abc delta shows IDENTICAL for both agents.
+    """
+    tmp_path, warehouse = project_with_skill_setup
+
+    # Set up claudecode agent with the modified skill
+    (tmp_path / ".claude").mkdir()
+    cc_skill_dir = tmp_path / ".claude" / "skills" / "my-skill"
+    cc_skill_dir.mkdir(parents=True)
+    (cc_skill_dir / "SKILL.md").write_text(SKILL_MODIFIED_CONTENT)
+
+    # opencode live copy still has the old warehouse content
+    oc_skill_dir = tmp_path / ".opencode" / "skills" / "my-skill"
+    oc_skill_dir.mkdir(parents=True)
+    (oc_skill_dir / "SKILL.md").write_text(SKILL_WAREHOUSE_CONTENT)
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["contribute", "skills/my-skill/SKILL.md"])
+
+    assert result.exit_code == 0, result.output
+    # Warehouse updated to contributed version
+    assert (
+        warehouse / "skills" / "my-skill" / "SKILL.md"
+    ).read_text() == SKILL_MODIFIED_CONTENT
+    # opencode live copy must also be updated — no more infinite cycle
+    assert (oc_skill_dir / "SKILL.md").read_text() == SKILL_MODIFIED_CONTENT, (
+        "opencode live copy was not propagated; abc delta would flag it MODIFIED "
+        "causing an infinite contribute/delta cycle"
+    )
+
+
+def test_contribute_all_skills_propagates_to_other_agents(
+    project_with_skill_setup,
+):
+    """abc contribute (no file arg) also propagates contributed skill to all agents."""
+    tmp_path, warehouse = project_with_skill_setup
+
+    # Set up claudecode agent with the modified skill
+    (tmp_path / ".claude").mkdir()
+    cc_skill_dir = tmp_path / ".claude" / "skills" / "my-skill"
+    cc_skill_dir.mkdir(parents=True)
+    (cc_skill_dir / "SKILL.md").write_text(SKILL_MODIFIED_CONTENT)
+
+    # opencode live copy still has the old warehouse content
+    oc_skill_dir = tmp_path / ".opencode" / "skills" / "my-skill"
+    oc_skill_dir.mkdir(parents=True)
+    (oc_skill_dir / "SKILL.md").write_text(SKILL_WAREHOUSE_CONTENT)
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["contribute"])
+
+    assert result.exit_code == 0, result.output
+    assert (
+        warehouse / "skills" / "my-skill" / "SKILL.md"
+    ).read_text() == SKILL_MODIFIED_CONTENT
+    assert (oc_skill_dir / "SKILL.md").read_text() == SKILL_MODIFIED_CONTENT, (
+        "opencode live copy was not propagated after contribute --all"
+    )

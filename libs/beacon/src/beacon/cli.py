@@ -1639,6 +1639,7 @@ def contribute(
                 artifacts_dir,
                 file,
                 dry_run,
+                project_root=project_root,
             )
         else:
             contributed = _contribute_all(
@@ -1647,6 +1648,7 @@ def contribute(
                 warehouse_path,
                 artifacts_dir,
                 dry_run,
+                project_root=project_root,
             )
 
         if not dry_run and contributed:
@@ -1751,6 +1753,41 @@ def _resolve_skill_contribute_source(
     return candidates[chosen_agent]
 
 
+def _propagate_skill_to_agents(
+    project_root: Path, relative_path: str, source_path: Path
+) -> None:
+    """After contributing a skill to the warehouse, propagate the contributed
+    content to all configured agents' live copies.
+
+    This prevents the infinite delta cycle where contributing one agent's
+    modified version leaves other agents' stale copies flagged as MODIFIED.
+    After this call all live copies converge to the contributed content.
+
+    ``relative_path`` is the skill-relative warehouse path, e.g.
+    ``skills/foo/SKILL.md``.  ``source_path`` is the absolute path of the
+    file that was just written to the warehouse.
+    """
+    content = source_path.read_text(encoding="utf-8")
+    # Extract skill name from "skills/<name>/SKILL.md"
+    parts = Path(relative_path).parts
+    if len(parts) < 2:
+        return
+    skill_name = parts[1]
+
+    description = _extract_skill_description(content)
+    agents = _detect_agents(project_root)
+    for agent in agents:
+        try:
+            if agent == "opencode":
+                _install_skill_opencode(project_root, skill_name, content, description)
+            else:
+                _install_skill_claudecode(project_root, skill_name, content)
+        except Exception as e:
+            console.print(
+                f"  [yellow]Warning:[/yellow] could not propagate '{skill_name}' to {agent}: {e}"
+            )
+
+
 def _contribute_single(
     comparator: DeltaComparator,
     beacon_settings: BeaconSettings,
@@ -1758,6 +1795,7 @@ def _contribute_single(
     artifacts_dir: Path,
     file_path: str,
     dry_run: bool,
+    project_root: Path,
 ) -> list[tuple[str, str]]:
     """Contribute a single artifact back to the warehouse.
 
@@ -1803,6 +1841,8 @@ def _contribute_single(
     dest_existed = (warehouse_path / file_path).exists()
     _copy_to_warehouse(local_path, warehouse_path / file_path, file_path, dry_run)
     if not dry_run:
+        if is_skill:
+            _propagate_skill_to_agents(project_root, file_path, local_path)
         status_label = "modified" if dest_existed else "added"
         return [(file_path, status_label)]
     return []
@@ -1814,6 +1854,7 @@ def _contribute_all(
     warehouse_path: Path,
     artifacts_dir: Path,
     dry_run: bool,
+    project_root: Path,
 ) -> list[tuple[str, str]]:
     """Contribute all tracked modified and added artifacts back to the warehouse.
 
@@ -1862,6 +1903,8 @@ def _contribute_all(
             local_path, warehouse_path / result.path, result.path, dry_run
         )
         if not dry_run:
+            if is_skill:
+                _propagate_skill_to_agents(project_root, result.path, local_path)
             status_label = (
                 "modified" if result.status == DeltaStatus.MODIFIED else "added"
             )
