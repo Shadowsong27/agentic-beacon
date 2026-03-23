@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.1.2](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v2.1.1...agentic-beacon@v2.1.2) (2026-03-22)
+
+
+### Bug Fixes
+
+* gitignore synced skill dirs in agent subdirectories ([#61](https://github.com/Shadowsong27/agentic-beacon/issues/61)) ([75999da](https://github.com/Shadowsong27/agentic-beacon/commit/75999daceb555fde583490b9e3c6d5d39fe583be))
+* preserve bundled skills in agent-assisted setup and warn when missing ([#66](https://github.com/Shadowsong27/agentic-beacon/issues/66)) ([2239621](https://github.com/Shadowsong27/agentic-beacon/commit/2239621688288a67a37144d34be91d6bd6011bd3))
+* remove auto-registration of artifacts in beacon.yaml from abc contribute ([#67](https://github.com/Shadowsong27/agentic-beacon/issues/67)) ([020f44a](https://github.com/Shadowsong27/agentic-beacon/commit/020f44a5864905aace81dc7d0e29652c5205371d)), closes [#56](https://github.com/Shadowsong27/agentic-beacon/issues/56)
+* show failed file details in sync error summary ([#65](https://github.com/Shadowsong27/agentic-beacon/issues/65)) ([76daa39](https://github.com/Shadowsong27/agentic-beacon/commit/76daa394a202fa0afa12899c82aa6cc4c41d613f))
+* surface no-agent-config prompt for skill wiring during abc sync ([#68](https://github.com/Shadowsong27/agentic-beacon/issues/68)) ([4f5c6b5](https://github.com/Shadowsong27/agentic-beacon/commit/4f5c6b56b4401b8b42e2afb228686dddc61cd518)), closes [#54](https://github.com/Shadowsong27/agentic-beacon/issues/54)
+
 ## [2.1.1](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v2.1.0...agentic-beacon@v2.1.1) (2026-03-19)
 
 
