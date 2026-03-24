@@ -44,34 +44,39 @@ def find_project_root() -> Path:
 
 
 def _check_warehouse_git_clean(warehouse_path: Path) -> str | None:
-    """Check if the warehouse git working tree is clean.
+    """Check if the warehouse git working tree is clean and up to date with remote.
 
-    Returns an error message string if there are uncommitted changes,
-    or None if the tree is clean / not a git repo / git not installed.
+    Returns an error message string if there are uncommitted changes or if the
+    local branch is behind its remote tracking branch, or None if everything is
+    clean / not a git repo / git not installed.
     """
     if not (warehouse_path / ".git").exists():
         return None  # Not a git repo — skip silently
 
-    try:
-        result = subprocess.run(
-            ["git", "-C", str(warehouse_path), "status", "--porcelain"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-    except FileNotFoundError:
+    short_path = str(warehouse_path).replace(str(Path.home()), "~")
+
+    def _git(args: list[str], timeout: int = 10) -> subprocess.CompletedProcess | None:
+        try:
+            return subprocess.run(
+                ["git", "-C", str(warehouse_path), *args],
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+        except FileNotFoundError:
+            return None
+        except subprocess.TimeoutExpired:
+            return None
+
+    # Check working tree cleanliness
+    result = _git(["status", "--porcelain"])
+    if result is None:
         console.print(
-            "[yellow]Warning:[/yellow] git not found — skipping warehouse clean check."
-        )
-        return None
-    except subprocess.TimeoutExpired:
-        console.print(
-            "[yellow]Warning:[/yellow] git status timed out — skipping warehouse clean check."
+            "[yellow]Warning:[/yellow] git not available — skipping warehouse clean check."
         )
         return None
 
     if result.stdout.strip():
-        short_path = str(warehouse_path).replace(str(Path.home()), "~")
         return (
             f"Warehouse has uncommitted changes.\n"
             f"  Warehouse: {short_path}\n\n"
@@ -82,6 +87,171 @@ def _check_warehouse_git_clean(warehouse_path: Path) -> str | None:
             f"    # or: git stash\n\n"
             f"  Use --skip-git-check to bypass this check."
         )
+
+    # Fetch remote silently to get up-to-date tracking info
+    fetch_result = _git(["fetch", "--quiet"], timeout=15)
+    if fetch_result is None:
+        console.print(
+            "[yellow]Warning:[/yellow] git fetch timed out or git not found — skipping remote check."
+        )
+        return None
+
+    # Check if local branch is behind the remote tracking branch
+    behind_result = _git(["rev-list", "--count", "HEAD..@{u}"])
+    if behind_result is None or behind_result.returncode != 0:
+        # No upstream configured or other error — skip silently
+        return None
+
+    behind_count_str = behind_result.stdout.strip()
+    try:
+        behind_count = int(behind_count_str)
+    except ValueError:
+        return None
+
+    if behind_count > 0:
+        return (
+            f"Warehouse is behind its remote by {behind_count} commit(s).\n"
+            f"  Warehouse: {short_path}\n\n"
+            f"  Pull the latest changes before contributing to avoid creating a\n"
+            f"  stale PR or overwriting newer warehouse content:\n"
+            f"    cd {short_path}\n"
+            f"    git pull\n\n"
+            f"  Use --skip-git-check to bypass this check."
+        )
+
+    return None
+
+
+def _check_warehouse_on_main_branch(warehouse_path: Path) -> str | None:
+    """Check that the warehouse git repo is on the main (or master) branch.
+
+    Returns an error message string if the warehouse is on a non-main branch,
+    or None if everything looks good / not a git repo / git not installed.
+    """
+    if not (warehouse_path / ".git").exists():
+        return None  # Not a git repo — skip silently
+
+    short_path = str(warehouse_path).replace(str(Path.home()), "~")
+
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(warehouse_path), "symbolic-ref", "--short", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except FileNotFoundError:
+        return None  # git not available — skip silently
+    except subprocess.TimeoutExpired:
+        console.print(
+            "[yellow]Warning:[/yellow] git timed out — skipping branch check."
+        )
+        return None
+
+    if result.returncode != 0:
+        # Detached HEAD or other error — treat as non-main
+        return (
+            f"Warehouse is in a detached HEAD state (not on any branch).\n"
+            f"  Warehouse: {short_path}\n\n"
+            f"  Switch to the main branch before syncing:\n"
+            f"    cd {short_path}\n"
+            f"    git checkout main\n\n"
+            f"  Use --skip-git-check to bypass this check."
+        )
+
+    current_branch = result.stdout.strip()
+    main_branches = {"main", "master"}
+    if current_branch not in main_branches:
+        return (
+            f"Warehouse is on branch '{current_branch}', not 'main'.\n"
+            f"  Warehouse: {short_path}\n\n"
+            f"  Switch to the main branch before syncing to avoid distributing\n"
+            f"  unreleased or experimental warehouse content:\n"
+            f"    cd {short_path}\n"
+            f"    git checkout main\n\n"
+            f"  Use --skip-git-check to bypass this check."
+        )
+
+    return None
+
+
+_SYNC_STATE_FILENAME = ".sync-state"
+
+
+def _get_warehouse_head_sha(warehouse_path: Path) -> str | None:
+    """Return the current HEAD commit SHA of the warehouse git repo, or None."""
+    if not (warehouse_path / ".git").exists():
+        return None
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(warehouse_path), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip() or None
+
+
+def _write_sync_state(artifacts_dir: Path, warehouse_path: Path) -> None:
+    """Record the warehouse HEAD SHA into the artifacts sync-state file.
+
+    Called at the end of a successful (non-dry-run) sync so contribute can
+    verify the snapshot was taken against the current warehouse HEAD.
+    """
+    sha = _get_warehouse_head_sha(warehouse_path)
+    if sha is None:
+        return  # Warehouse has no git — nothing to record
+    state_file = artifacts_dir / _SYNC_STATE_FILENAME
+    state_file.write_text(sha + "\n")
+
+
+def _check_sync_state(artifacts_dir: Path, warehouse_path: Path) -> str | None:
+    """Check that the local artifact snapshot is current with the warehouse HEAD.
+
+    Returns a warning message string if:
+    - artifacts_dir does not exist or is empty (sync never run), OR
+    - the recorded sync SHA does not match the current warehouse HEAD (stale snapshot)
+
+    Returns None if everything looks current, or if the warehouse has no git.
+    """
+    if not (warehouse_path / ".git").exists():
+        return None  # No git in warehouse — skip
+
+    # artifacts_dir missing or empty → sync was never run
+    if not artifacts_dir.exists() or not any(
+        f for f in artifacts_dir.iterdir() if f.name != _SYNC_STATE_FILENAME
+    ):
+        return "No artifacts found — run 'abc sync' before contributing.\n\n  abc sync"
+
+    state_file = artifacts_dir / _SYNC_STATE_FILENAME
+    if not state_file.exists():
+        # Sync was run before sync-state tracking was introduced — warn softly
+        return (
+            "Sync state is unknown. Run 'abc sync' to ensure your snapshot is\n"
+            "  current before contributing to avoid overwriting newer warehouse content.\n\n"
+            "  abc sync"
+        )
+
+    recorded_sha = state_file.read_text().strip()
+    current_sha = _get_warehouse_head_sha(warehouse_path)
+
+    if current_sha is None:
+        return None  # Can't determine current SHA — skip silently
+
+    if recorded_sha != current_sha:
+        return (
+            "Local artifact snapshot is based on an older warehouse commit.\n"
+            "  The warehouse has been updated since your last sync — contributing\n"
+            "  now risks overwriting newer warehouse content with stale local changes.\n\n"
+            "  Run 'abc sync' to refresh your snapshot first:\n"
+            "    abc sync\n\n"
+            "  Use --skip-git-check to bypass this check."
+        )
+
     return None
 
 
@@ -862,6 +1032,13 @@ def sync(
                 console.print(f"[red]Error:[/red] {git_error}")
                 sys.exit(1)
 
+        # Check warehouse is on main branch (skip if --dry-run or --skip-git-check)
+        if not dry_run and not skip_git_check:
+            branch_error = _check_warehouse_on_main_branch(warehouse_path)
+            if branch_error:
+                console.print(f"[red]Error:[/red] {branch_error}")
+                sys.exit(1)
+
         # Load beacon.yaml
         beacon_settings = BeaconSettings.from_yaml(beacon_yaml)
 
@@ -1091,6 +1268,9 @@ def sync(
             console.print("\n[bold]Manual wiring required:[/bold]")
             for note in wiring_notes:
                 console.print(note)
+
+        # Record sync state so contribute can detect stale snapshots
+        _write_sync_state(artifacts_dir, warehouse_path)
 
     except Exception as e:
         console.print(f"\n[red]Error:[/red] Sync failed: {e}")
@@ -1620,6 +1800,15 @@ def contribute(
                 sys.exit(1)
 
         artifacts_dir = beacon_dir / "artifacts"
+
+        # Check that abc sync has been run and the snapshot is current with
+        # the warehouse HEAD (skip if --dry-run or --skip-git-check)
+        if not dry_run and not skip_git_check:
+            sync_error = _check_sync_state(artifacts_dir, warehouse_path)
+            if sync_error:
+                console.print(f"[yellow]Warning:[/yellow] {sync_error}")
+                sys.exit(1)
+
         beacon_settings = BeaconSettings.from_yaml(beacon_yaml)
         project_root = Path.cwd()
         comparator = DeltaComparator(
@@ -1935,7 +2124,8 @@ def _print_contribute_next_steps(warehouse_path: Path, contributed: list[str]) -
     console.print("[bold]Next Steps — commit the changes in your warehouse:[/bold]")
     console.print(f"\n  cd {warehouse_path}")
     console.print("  git diff                    # Review what changed")
-    console.print("  git add .")
+    git_add_args = " ".join(contributed)
+    console.print(f"  git add {git_add_args}")
     console.print('  git commit -m "feat: <describe your improvements>"')
     console.print("  git push\n")
     console.print("[dim]Teammates get the changes on their next:[/dim]")
@@ -2001,7 +2191,7 @@ def _auto_git_contribute(
         _fallback("git timed out")
         return
 
-    r = _git(["add", "."])
+    r = _git(["add", "--", *paths])
     if r.returncode != 0:
         _fallback("git add failed", r.stderr.strip())
         return

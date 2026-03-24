@@ -214,7 +214,7 @@ def test_contribute_dry_run_bypasses_git_check(connected_project):
 
 
 def test_contribute_proceeds_after_committing_warehouse_changes(connected_project):
-    """abc contribute succeeds once dirty warehouse changes are committed."""
+    """abc contribute succeeds once dirty warehouse changes are committed and re-synced."""
     project, warehouse, runner = connected_project
 
     # Dirty the warehouse
@@ -227,6 +227,12 @@ def test_contribute_proceeds_after_committing_warehouse_changes(connected_projec
     # Commit the warehouse changes
     _git(["add", "."], warehouse)
     _git(["commit", "-m", "add unrelated"], warehouse)
+
+    # Re-sync so the snapshot is current with the new warehouse HEAD, then
+    # re-apply the local modification (sync would have overwritten it)
+    runner.invoke(main, ["sync"])
+    synced = project / ".agentic-beacon" / "artifacts" / "knowledge" / "lesson.md"
+    synced.write_text("# Lesson\nImproved locally.\n")
 
     # Now contribute should succeed
     result = runner.invoke(main, ["contribute", "knowledge/lesson.md"])
