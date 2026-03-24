@@ -2277,7 +2277,7 @@ def _detect_agents(project_root: Path) -> list[str]:
     agents = []
     if (project_root / "opencode.json").exists():
         agents.append("opencode")
-    if (project_root / ".claude").exists():
+    if (project_root / ".claude").exists() or (project_root / "CLAUDE.md").exists():
         agents.append("claudecode")
     return agents
 
