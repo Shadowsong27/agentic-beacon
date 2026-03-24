@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.1.3](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v2.1.2...agentic-beacon@v2.1.3) (2026-03-24)
+
+
+### Bug Fixes
+
+* add agent skill dirs to .gitignore template and detect claudecode via CLAUDE.md ([#71](https://github.com/Shadowsong27/agentic-beacon/issues/71)) ([ade1d54](https://github.com/Shadowsong27/agentic-beacon/commit/ade1d543607254dc7b926404fb935180ae2e48ac))
+* prevent infinite delta cycle after abc contribute for multi-agent skills ([#69](https://github.com/Shadowsong27/agentic-beacon/issues/69)) ([d5dd086](https://github.com/Shadowsong27/agentic-beacon/commit/d5dd086079c6675720f01ef8d959a45c085b9a6a))
+
 ## [2.1.2](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v2.1.1...agentic-beacon@v2.1.2) (2026-03-22)
 
 
