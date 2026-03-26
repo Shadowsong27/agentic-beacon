@@ -154,14 +154,16 @@ def test_sync_dry_run_bypasses_branch_guard(connected_project):
 
 
 def test_sync_proceeds_after_switching_back_to_main(connected_project):
-    """abc sync succeeds once the warehouse is switched back to main."""
+    """abc sync succeeds once the warehouse is switched back to the default branch."""
     project, warehouse, runner = connected_project
 
     _git(["checkout", "-b", "feat/experimental"], warehouse)
     blocked = runner.invoke(main, ["sync"])
     assert blocked.exit_code != 0
 
-    _git(["checkout", "main"], warehouse)
+    # Use 'git checkout -' to return to the previous (default) branch regardless
+    # of whether it's named 'main' or 'master'
+    _git(["checkout", "-"], warehouse)
     result = runner.invoke(main, ["sync"])
 
     assert result.exit_code == 0
