@@ -90,6 +90,125 @@ def test_sync_proceeds_when_warehouse_is_clean(connected_project):
 
 
 # ---------------------------------------------------------------------------
+# Branch guard — warehouse must be on main/master branch
+# ---------------------------------------------------------------------------
+
+
+def test_sync_blocked_when_warehouse_on_feature_branch(connected_project):
+    """abc sync exits with an error when the warehouse is on a non-main branch."""
+    project, warehouse, runner = connected_project
+
+    _git(["checkout", "-b", "feat/experimental"], warehouse)
+
+    result = runner.invoke(main, ["sync"])
+
+    assert result.exit_code != 0
+    assert "feat/experimental" in result.output
+    assert "--skip-git-check" in result.output
+
+
+def test_sync_blocked_when_warehouse_in_detached_head(connected_project):
+    """abc sync exits with an error when the warehouse is in detached HEAD state."""
+    project, warehouse, runner = connected_project
+
+    sha_result = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=str(warehouse),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    sha = sha_result.stdout.strip()
+    _git(["checkout", sha], warehouse)
+
+    result = runner.invoke(main, ["sync"])
+
+    assert result.exit_code != 0
+    assert "detached" in result.output
+    assert "--skip-git-check" in result.output
+
+
+def test_sync_skip_git_check_bypasses_branch_guard(connected_project):
+    """abc sync --skip-git-check proceeds even when warehouse is on a feature branch."""
+    project, warehouse, runner = connected_project
+
+    _git(["checkout", "-b", "feat/experimental"], warehouse)
+
+    result = runner.invoke(main, ["sync", "--skip-git-check"])
+
+    assert result.exit_code == 0
+    synced = project / ".agentic-beacon" / "artifacts" / "knowledge" / "lesson.md"
+    assert synced.exists()
+
+
+def test_sync_dry_run_bypasses_branch_guard(connected_project):
+    """abc sync --dry-run does not check the branch and exits 0."""
+    project, warehouse, runner = connected_project
+
+    _git(["checkout", "-b", "feat/experimental"], warehouse)
+
+    result = runner.invoke(main, ["sync", "--dry-run"])
+
+    assert result.exit_code == 0
+    assert "feat/experimental" not in result.output
+
+
+def test_sync_proceeds_after_switching_back_to_main(connected_project):
+    """abc sync succeeds once the warehouse is switched back to the default branch."""
+    project, warehouse, runner = connected_project
+
+    _git(["checkout", "-b", "feat/experimental"], warehouse)
+    blocked = runner.invoke(main, ["sync"])
+    assert blocked.exit_code != 0
+
+    # Use 'git checkout -' to return to the previous (default) branch regardless
+    # of whether it's named 'main' or 'master'
+    _git(["checkout", "-"], warehouse)
+    result = runner.invoke(main, ["sync"])
+
+    assert result.exit_code == 0
+    synced = project / ".agentic-beacon" / "artifacts" / "knowledge" / "lesson.md"
+    assert synced.exists()
+
+
+def test_sync_proceeds_on_master_branch(tmp_path, monkeypatch):
+    """abc sync proceeds when the warehouse is on 'master' (accepted alias for main)."""
+    wh = tmp_path / "warehouse"
+    wh.mkdir()
+    for d in ("contexts", "knowledge", "skills", "docs"):
+        (wh / d).mkdir()
+    (wh / "README.md").write_text("# Warehouse\n")
+    (wh / "knowledge" / "lesson.md").write_text("# Lesson\n")
+
+    subprocess.run(
+        ["git", "init", "-b", "master"],
+        cwd=str(wh),
+        check=True,
+        capture_output=True,
+    )
+    _git(["config", "user.email", "test@test.com"], wh)
+    _git(["config", "user.name", "Test"], wh)
+    _git(["add", "."], wh)
+    _git(["commit", "-m", "initial"], wh)
+
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.chdir(project)
+    beacon_dir = project / ".agentic-beacon"
+    beacon_dir.mkdir()
+    (beacon_dir / "config.toml").write_text(f'[warehouse]\nlocal_path = "{wh}"\n')
+    (beacon_dir / "beacon.yaml").write_text(
+        "artifacts:\n  knowledge:\n    - knowledge/lesson.md\n  skills: []\n  contexts: []\n"
+    )
+
+    result = CliRunner().invoke(main, ["sync"])
+
+    assert result.exit_code == 0
+    assert (
+        project / ".agentic-beacon" / "artifacts" / "knowledge" / "lesson.md"
+    ).exists()
+
+
 # Unstaged modification — sync blocked
 # ---------------------------------------------------------------------------
 

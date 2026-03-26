@@ -864,11 +864,14 @@ def test_contribute_auto_git_creates_pr(project_with_delta, tmp_path):
     (warehouse / ".git").mkdir()
 
     runner = CliRunner()
-    with patch("beacon.cli.subprocess.run") as mock_run:
+    with (
+        patch("beacon.cli._check_warehouse_git_clean", return_value=None),
+        patch("beacon.cli._check_sync_state", return_value=None),
+        patch("beacon.cli.subprocess.run") as mock_run,
+    ):
         mock_run.side_effect = [
-            _make_completed(0),  # git status --porcelain (clean-check)
             _make_completed(0),  # git checkout -b
-            _make_completed(0),  # git add .
+            _make_completed(0),  # git add -- <paths>
             _make_completed(0),  # git commit
             _make_completed(0),  # git push
             _make_completed(
@@ -879,7 +882,7 @@ def test_contribute_auto_git_creates_pr(project_with_delta, tmp_path):
 
     assert result.exit_code == 0, result.output
     assert "https://github.com/org/repo/pull/42" in result.output
-    assert mock_run.call_count == 6
+    assert mock_run.call_count == 5
 
 
 def test_contribute_auto_git_fallback_when_no_git_dir(project_with_delta):
@@ -902,11 +905,14 @@ def test_contribute_auto_git_fallback_when_push_fails(project_with_delta):
     (warehouse / ".git").mkdir()
 
     runner = CliRunner()
-    with patch("beacon.cli.subprocess.run") as mock_run:
+    with (
+        patch("beacon.cli._check_warehouse_git_clean", return_value=None),
+        patch("beacon.cli._check_sync_state", return_value=None),
+        patch("beacon.cli.subprocess.run") as mock_run,
+    ):
         mock_run.side_effect = [
-            _make_completed(0),  # git status --porcelain (clean-check)
             _make_completed(0),  # git checkout -b
-            _make_completed(0),  # git add .
+            _make_completed(0),  # git add -- <paths>
             _make_completed(0),  # git commit
             _make_completed(1, stderr="error: failed to push"),  # git push fails
         ]
@@ -923,11 +929,14 @@ def test_contribute_auto_git_fallback_when_gh_not_installed(project_with_delta):
     (warehouse / ".git").mkdir()
 
     runner = CliRunner()
-    with patch("beacon.cli.subprocess.run") as mock_run:
+    with (
+        patch("beacon.cli._check_warehouse_git_clean", return_value=None),
+        patch("beacon.cli._check_sync_state", return_value=None),
+        patch("beacon.cli.subprocess.run") as mock_run,
+    ):
         mock_run.side_effect = [
-            _make_completed(0),  # git status --porcelain (clean-check)
             _make_completed(0),  # git checkout -b
-            _make_completed(0),  # git add .
+            _make_completed(0),  # git add -- <paths>
             _make_completed(0),  # git commit
             _make_completed(0),  # git push
             FileNotFoundError("gh not found"),  # gh pr create
