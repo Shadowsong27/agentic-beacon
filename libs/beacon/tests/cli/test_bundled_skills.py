@@ -55,9 +55,7 @@ def _fake_global_dirs(tmp_path: Path) -> dict[str, Path]:
     }
 
 
-def _capture_bundled_skills_status(
-    project_root: Path, global_dirs: dict[str, Path]
-) -> str:
+def _capture_bundled_skills_status(global_dirs: dict[str, Path]) -> str:
     """Run _show_bundled_skills_status with patched global dirs and return rendered output."""
     buf = io.StringIO()
     real_console = Console(file=buf, highlight=False, markup=False)
@@ -65,7 +63,7 @@ def _capture_bundled_skills_status(
         patch("beacon.cli.console", real_console),
         patch("beacon.cli._bundled_global_skill_dirs", return_value=global_dirs),
     ):
-        _show_bundled_skills_status(project_root)
+        _show_bundled_skills_status()
     return buf.getvalue()
 
 
@@ -180,7 +178,7 @@ def test_show_bundled_skills_status_installed(tmp_path):
         dest.mkdir(parents=True)
         (dest / "SKILL.md").write_text("# Skill")
 
-    output = _capture_bundled_skills_status(tmp_path, fake_dirs)
+    output = _capture_bundled_skills_status(fake_dirs)
 
     assert BUNDLED_SKILL_NAME in output
     assert "✓" in output
@@ -190,7 +188,7 @@ def test_show_bundled_skills_status_not_installed(tmp_path):
     """Shows ✗ for a bundled skill that has not been installed."""
     fake_dirs = _fake_global_dirs(tmp_path)
 
-    output = _capture_bundled_skills_status(tmp_path, fake_dirs)
+    output = _capture_bundled_skills_status(fake_dirs)
 
     assert BUNDLED_SKILL_NAME in output
     assert "✗" in output
@@ -203,7 +201,7 @@ def test_show_bundled_skills_status_partial(tmp_path):
     dest.mkdir(parents=True)
     (dest / "SKILL.md").write_text("# Skill")
 
-    output = _capture_bundled_skills_status(tmp_path, fake_dirs)
+    output = _capture_bundled_skills_status(fake_dirs)
 
     assert BUNDLED_SKILL_NAME in output
     assert "✗" in output
@@ -213,7 +211,7 @@ def test_show_bundled_skills_status_shows_global_label(tmp_path):
     """Status table title indicates global scope."""
     fake_dirs = _fake_global_dirs(tmp_path)
 
-    output = _capture_bundled_skills_status(tmp_path, fake_dirs)
+    output = _capture_bundled_skills_status(fake_dirs)
 
     assert "global" in output.lower()
 

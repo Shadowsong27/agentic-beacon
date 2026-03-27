@@ -815,7 +815,19 @@ def _install_bundled_skills_globally() -> tuple[list[str], list[str]]:
     return installed, errors
 
 
-def _show_bundled_skills_status(project_root: Path) -> None:  # noqa: ARG001
+def _print_bundled_install_result(installed: list[str], errors: list[str]) -> None:
+    """Print the result of a bundled skill install to the console."""
+    if installed:
+        names = ", ".join(s.split(" (")[0] for s in dict.fromkeys(installed))
+        console.print(
+            f"[green]✓[/green] Installed bundled skill(s) ({names}) "
+            "[dim]— managed by abc, no beacon.yaml entry needed[/dim]"
+        )
+    for err in errors:
+        console.print(f"  [yellow]⚠[/yellow] Bundled skill wiring: {err}")
+
+
+def _show_bundled_skills_status() -> None:
     """Print bundled skill installation status for the status command.
 
     Checks global agent skill dirs — bundled skills are user-level,
@@ -1110,18 +1122,7 @@ def sync(
                 "[yellow]No artifacts configured in beacon.yaml. Nothing to sync.[/yellow]"
             )
             # Still install bundled skills even when no warehouse artifacts are configured
-            project_root = Path.cwd()
-            bundled_installed, bundled_errors = _install_bundled_skills_globally()
-            if bundled_installed:
-                names = ", ".join(
-                    s.split(" (")[0] for s in dict.fromkeys(bundled_installed)
-                )
-                console.print(
-                    f"[green]✓[/green] Installed bundled skill(s) ({names}) "
-                    "[dim]— managed by abc, no beacon.yaml entry needed[/dim]"
-                )
-            for err in bundled_errors:
-                console.print(f"  [yellow]⚠[/yellow] Bundled skill wiring: {err}")
+            _print_bundled_install_result(*_install_bundled_skills_globally())
             sys.exit(0)
 
         # Create artifacts directory
@@ -1337,17 +1338,7 @@ def sync(
                 console.print(note)
 
         # Install abc-bundled skills directly from data/skills/ (no beacon.yaml entry needed)
-        bundled_installed, bundled_errors = _install_bundled_skills_globally()
-        if bundled_installed:
-            names = ", ".join(
-                s.split(" (")[0] for s in dict.fromkeys(bundled_installed)
-            )
-            console.print(
-                f"[green]✓[/green] Installed bundled skill(s) ({names}) "
-                "[dim]— managed by abc, no beacon.yaml entry needed[/dim]"
-            )
-        for err in bundled_errors:
-            console.print(f"  [yellow]⚠[/yellow] Bundled skill wiring: {err}")
+        _print_bundled_install_result(*_install_bundled_skills_globally())
 
         # Record sync state so contribute can detect stale snapshots
         _write_sync_state(artifacts_dir, warehouse_path)
@@ -2865,7 +2856,7 @@ def status(*, project: Path | None) -> None:
     if not artifacts_dir.exists():
         console.print("\n[yellow]No artifacts synced yet.[/yellow]")
         console.print("Run 'abc sync' to download artifacts from warehouse.")
-        _show_bundled_skills_status(project_root)
+        _show_bundled_skills_status()
         sys.exit(0)
 
     # Show beacon.yaml configuration
@@ -2902,7 +2893,7 @@ def status(*, project: Path | None) -> None:
             console.print(table)
             console.print()
 
-    _show_bundled_skills_status(project_root)
+    _show_bundled_skills_status()
 
     # Count synced files
     import os
