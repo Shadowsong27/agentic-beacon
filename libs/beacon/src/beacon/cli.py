@@ -759,38 +759,93 @@ def setup(*, manual: bool, agent_assisted: bool) -> None:
             "\n[on dark_green] Read `.agentic-beacon/warehouse-catalog.md` to see "
             "what artifacts are available in the connected warehouse. Analyse this "
             "project, then update `.agentic-beacon/beacon.yaml` with the artifacts "
-            "that are relevant. Always preserve any default bundled skills already "
-            "listed in beacon.yaml (e.g. `skills/record-knowledge/SKILL.md`). "
-            "Run `abc sync` when done. [/on dark_green]\n"
+            "that are relevant. Run `abc sync` when done. [/on dark_green]\n"
         )
 
 
-def _get_bundled_skill_paths() -> list[str]:
-    """Return beacon.yaml-relative paths for all bundled skills shipped with abc."""
+def _bundled_global_skill_dirs() -> dict[str, Path]:
+    """Return global agent skill directories for bundled skill installation.
+
+    These are the user-level skill dirs read by opencode and Claude Code
+    regardless of which project is active.
+    """
+    return {
+        "opencode": Path.home() / ".config" / "opencode" / "skills",
+        "claudecode": Path.home() / ".claude" / "skills",
+    }
+
+
+def _install_bundled_skills_globally() -> tuple[list[str], list[str]]:
+    """Install abc-bundled skills into global agent skill directories.
+
+    Writes directly to ~/.config/opencode/skills/ and ~/.claude/skills/,
+    bypassing the warehouse and any per-project agent detection.  Skills
+    are available in every project as soon as they are installed.
+
+    Returns (installed, errors) where each entry is '<skill> (<agent>)'.
+    """
     bundled_skills_dir = Path(__file__).parent / "data" / "skills"
-    paths = []
-    if bundled_skills_dir.exists():
-        for skill_dir in sorted(bundled_skills_dir.iterdir()):
-            if skill_dir.is_dir() and (skill_dir / "SKILL.md").exists():
-                paths.append(f"skills/{skill_dir.name}/SKILL.md")
-    return paths
+    if not bundled_skills_dir.exists():
+        return [], []
+
+    global_dirs = _bundled_global_skill_dirs()
+    installed: list[str] = []
+    errors: list[str] = []
+
+    for skill_dir in sorted(bundled_skills_dir.iterdir()):
+        if not skill_dir.is_dir():
+            continue
+        skill_md = skill_dir / "SKILL.md"
+        if not skill_md.exists():
+            continue
+        content = skill_md.read_text(encoding="utf-8")
+        name = skill_dir.name
+
+        for agent, skills_root in global_dirs.items():
+            try:
+                dest = skills_root / name / "SKILL.md"
+                if dest.exists() and dest.read_text(encoding="utf-8") == content:
+                    continue
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_text(content, encoding="utf-8")
+                installed.append(f"{name} ({agent})")
+            except Exception as e:
+                errors.append(f"{name} ({agent}): {e}")
+
+    return installed, errors
 
 
-def _warn_missing_bundled_skills(beacon_settings: "BeaconSettings") -> None:
-    """Print a warning for any bundled skills absent from beacon.yaml."""
-    configured = set(beacon_settings.artifacts.skills)
-    missing = [p for p in _get_bundled_skill_paths() if p not in configured]
-    if missing:
-        console.print(
-            "\n[yellow]Warning:[/yellow] The following default bundled skill(s) are "
-            "not in beacon.yaml:"
+def _show_bundled_skills_status(project_root: Path) -> None:  # noqa: ARG001
+    """Print bundled skill installation status for the status command.
+
+    Checks global agent skill dirs — bundled skills are user-level,
+    not per-project.
+    """
+    bundled_skills_dir = Path(__file__).parent / "data" / "skills"
+    if not bundled_skills_dir.exists():
+        return
+
+    skill_names = sorted(
+        d.name
+        for d in bundled_skills_dir.iterdir()
+        if d.is_dir() and (d / "SKILL.md").exists()
+    )
+    if not skill_names:
+        return
+
+    global_dirs = _bundled_global_skill_dirs()
+
+    table = Table(title="Bundled Skills (abc-managed, global)")
+    table.add_column("Skill", style="yellow")
+    for name in skill_names:
+        installed_in_all = all(
+            (skills_root / name / "SKILL.md").exists()
+            for skills_root in global_dirs.values()
         )
-        for p in missing:
-            console.print(f"  [yellow]-[/yellow] {p}")
-        console.print(
-            "  Add them to [bold].agentic-beacon/beacon.yaml[/bold] under "
-            "[bold]artifacts.skills[/bold] and re-run [bold]abc sync[/bold]."
-        )
+        status_str = "[green]✓[/green]" if installed_in_all else "[red]✗[/red]"
+        table.add_row(f"{status_str} {name}")
+    console.print(table)
+    console.print()
 
 
 def _create_beacon_template(path: Path) -> None:
@@ -808,11 +863,12 @@ artifacts:
     # - knowledge/languages/python/**/*.md
     # - knowledge/infrastructure/docker-standards.md
 
-  skills:
-    - skills/record-knowledge/SKILL.md
+  skills: []
     # Examples:
     # - skills/code-review/SKILL.md
     # - skills/generate-unit-tests/SKILL.md
+    # Note: abc bundled skills (e.g. record-knowledge) are installed automatically
+    #       by 'abc sync' — no entry needed here.
 
   contexts: []
     # Examples:
@@ -1053,9 +1109,20 @@ def sync(
             console.print(
                 "[yellow]No artifacts configured in beacon.yaml. Nothing to sync.[/yellow]"
             )
+            # Still install bundled skills even when no warehouse artifacts are configured
+            project_root = Path.cwd()
+            bundled_installed, bundled_errors = _install_bundled_skills_globally()
+            if bundled_installed:
+                names = ", ".join(
+                    s.split(" (")[0] for s in dict.fromkeys(bundled_installed)
+                )
+                console.print(
+                    f"[green]✓[/green] Installed bundled skill(s) ({names}) "
+                    "[dim]— managed by abc, no beacon.yaml entry needed[/dim]"
+                )
+            for err in bundled_errors:
+                console.print(f"  [yellow]⚠[/yellow] Bundled skill wiring: {err}")
             sys.exit(0)
-
-        _warn_missing_bundled_skills(beacon_settings)
 
         # Create artifacts directory
         artifacts_dir = beacon_dir / "artifacts"
@@ -1268,6 +1335,19 @@ def sync(
             console.print("\n[bold]Manual wiring required:[/bold]")
             for note in wiring_notes:
                 console.print(note)
+
+        # Install abc-bundled skills directly from data/skills/ (no beacon.yaml entry needed)
+        bundled_installed, bundled_errors = _install_bundled_skills_globally()
+        if bundled_installed:
+            names = ", ".join(
+                s.split(" (")[0] for s in dict.fromkeys(bundled_installed)
+            )
+            console.print(
+                f"[green]✓[/green] Installed bundled skill(s) ({names}) "
+                "[dim]— managed by abc, no beacon.yaml entry needed[/dim]"
+            )
+        for err in bundled_errors:
+            console.print(f"  [yellow]⚠[/yellow] Bundled skill wiring: {err}")
 
         # Record sync state so contribute can detect stale snapshots
         _write_sync_state(artifacts_dir, warehouse_path)
@@ -2785,6 +2865,7 @@ def status(*, project: Path | None) -> None:
     if not artifacts_dir.exists():
         console.print("\n[yellow]No artifacts synced yet.[/yellow]")
         console.print("Run 'abc sync' to download artifacts from warehouse.")
+        _show_bundled_skills_status(project_root)
         sys.exit(0)
 
     # Show beacon.yaml configuration
@@ -2821,7 +2902,7 @@ def status(*, project: Path | None) -> None:
             console.print(table)
             console.print()
 
-        _warn_missing_bundled_skills(beacon_settings)
+    _show_bundled_skills_status(project_root)
 
     # Count synced files
     import os

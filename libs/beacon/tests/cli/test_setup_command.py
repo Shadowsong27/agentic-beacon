@@ -191,7 +191,7 @@ def test_template_has_empty_lists(valid_warehouse, temp_dir, monkeypatch):
     content = yaml.safe_load(beacon_yaml.read_text())
 
     assert content["artifacts"]["knowledge"] == []
-    assert content["artifacts"]["skills"] == ["skills/record-knowledge/SKILL.md"]
+    assert content["artifacts"]["skills"] == []
     assert content["artifacts"]["contexts"] == []
 
 
