@@ -1,5 +1,22 @@
 # Changelog
 
+## [2.2.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v2.1.3...agentic-beacon@v2.2.0) (2026-03-28)
+
+
+### Features
+
+* add agents/ as first-class warehouse artifact type with global install ([#76](https://github.com/Shadowsong27/agentic-beacon/issues/76)) ([967be37](https://github.com/Shadowsong27/agentic-beacon/commit/967be37c4d875388eeba02e0a7710e76938475a6))
+
+
+### Bug Fixes
+
+* decouple bundled skill installation from warehouse sync (PER-43) ([#75](https://github.com/Shadowsong27/agentic-beacon/issues/75)) ([ef54410](https://github.com/Shadowsong27/agentic-beacon/commit/ef54410a9bf04d9230fe6ca0f189efc49048fbf2))
+
+
+### Tests
+
+* fix branch-switch integration test for CI git default branch ([#72](https://github.com/Shadowsong27/agentic-beacon/issues/72)) ([3813d1a](https://github.com/Shadowsong27/agentic-beacon/commit/3813d1aa2e8c06ac1753a56b48295ce93c89cf70))
+
 ## [2.1.3](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v2.1.2...agentic-beacon@v2.1.3) (2026-03-24)
 
 
