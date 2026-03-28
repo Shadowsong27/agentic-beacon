@@ -85,6 +85,7 @@ def valid_warehouse(temp_dir):
     warehouse_path.mkdir()
 
     # Create required directories
+    (warehouse_path / "agents").mkdir()
     (warehouse_path / "contexts").mkdir()
     (warehouse_path / "knowledge").mkdir()
     (warehouse_path / "skills").mkdir()

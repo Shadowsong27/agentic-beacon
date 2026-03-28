@@ -25,6 +25,9 @@ class DeltaStatus(Enum):
     MODIFIED = "modified"
     ADDED = "added"  # Exists locally but not in warehouse
     MISSING = "missing"  # In beacon.yaml but not synced locally
+    STALE = "stale"  # Installed content matches last snapshot but warehouse HEAD has advanced
+    # Note: STALE is NOT in the _compare_skill_file priority map — it is enriched
+    # post-comparison at the CLI layer after reading sync-state.
 
 
 class ComparisonResult(BaseModel):
@@ -95,6 +98,9 @@ class DeltaComparator:
     warehouse_path: Path
     artifacts_path: Path
     skills_paths: dict[str, Path] = field(default_factory=dict)
+    # agents_paths: mapping of agent name → global agents root dir
+    # e.g. {"opencode": Path("~/.config/opencode/agents"), "claudecode": Path("~/.claude/agents")}
+    agents_paths: dict[str, Path] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         """Resolve paths and validate warehouse directory.
@@ -171,6 +177,76 @@ class DeltaComparator:
             skill_relative = Path(relative_path)
         return agent_root / skill_relative
 
+    def _agent_live_path(self, agent: str, relative_path: str) -> Path:
+        """Resolve the global installed path for an agent definition file.
+
+        Agent files are stored in the warehouse as agents/<name>.md and are
+        installed into the agent-specific global agents directory.
+
+        Args:
+            agent: Agent name key into self.agents_paths ("opencode" or "claudecode").
+            relative_path: Warehouse-relative path, e.g. "agents/code-reviewer.md".
+
+        Returns:
+            Absolute path to the agent file's global location for that tool.
+        """
+        parts = Path(relative_path).parts
+        if parts[0] == "agents":
+            agent_relative = Path(*parts[1:])
+        else:
+            agent_relative = Path(relative_path)
+        return (
+            Path.home()
+            / (".config/opencode/agents" if agent == "opencode" else ".claude/agents")
+            / agent_relative
+        )
+
+    def _compare_agent_file(self, relative_path: str) -> ComparisonResult:
+        """Compare an agent definition file against all global agent directories.
+
+        Returns ComparisonResult with per-agent statuses (MISSING/IDENTICAL/MODIFIED).
+        STALE is not returned here — it is enriched at the CLI layer after reading sync-state.
+
+        Args:
+            relative_path: Warehouse-relative path, e.g. "agents/code-reviewer.md".
+        """
+        warehouse_file = self.warehouse_path / relative_path
+        warehouse_exists = warehouse_file.is_file()
+        warehouse_hash = self.compute_hash(warehouse_file) if warehouse_exists else None
+
+        agent_statuses: dict[str, DeltaStatus] = {}
+
+        for agent in self.agents_paths:
+            live_file = self._agent_live_path(agent, relative_path)
+            live_exists = live_file.is_file()
+
+            if not live_exists:
+                agent_statuses[agent] = DeltaStatus.MISSING
+            else:
+                live_hash = self.compute_hash(live_file)
+                if live_hash == warehouse_hash:
+                    agent_statuses[agent] = DeltaStatus.IDENTICAL
+                else:
+                    agent_statuses[agent] = DeltaStatus.MODIFIED
+
+        # Aggregate: MODIFIED > MISSING > IDENTICAL
+        if agent_statuses:
+            priority = {
+                DeltaStatus.MODIFIED: 2,
+                DeltaStatus.MISSING: 1,
+                DeltaStatus.IDENTICAL: 0,
+            }
+            aggregate = max(agent_statuses.values(), key=lambda s: priority.get(s, 0))
+        else:
+            aggregate = DeltaStatus.MISSING
+
+        return ComparisonResult(
+            path=relative_path,
+            status=aggregate,
+            warehouse_hash=warehouse_hash,
+            agent_statuses=agent_statuses,
+        )
+
     def compare_file(self, relative_path: str) -> ComparisonResult:
         """Compare a single artifact between local and warehouse.
 
@@ -185,9 +261,13 @@ class DeltaComparator:
             ComparisonResult with status and hashes
         """
         is_skill = relative_path.startswith("skills/") and bool(self.skills_paths)
+        is_agent = relative_path.startswith("agents/")
 
         if is_skill:
             return self._compare_skill_file(relative_path)
+
+        if is_agent:
+            return self._compare_agent_file(relative_path)
 
         local_file = self.artifacts_path / relative_path
         warehouse_file = self.warehouse_path / relative_path
@@ -299,7 +379,7 @@ class DeltaComparator:
 
         Args:
             artifact_paths: List of relative paths to compare.
-                If None, compares all files in artifacts directory.
+                If None, compares all files in artifacts directory plus agents/ if configured.
 
         Returns:
             DeltaSummary with all comparison results
@@ -319,6 +399,16 @@ class DeltaComparator:
                         rel_path = str(file_path.relative_to(self.artifacts_path))
                         result = self.compare_file(rel_path)
                         summary.results.append(result)
+
+            # Also iterate agents/ from warehouse when agents_paths is configured
+            if self.agents_paths:
+                agents_dir = self.warehouse_path / "agents"
+                if agents_dir.is_dir():
+                    for agent_file in sorted(agents_dir.rglob("*")):
+                        if agent_file.is_file():
+                            rel_path = str(agent_file.relative_to(self.warehouse_path))
+                            result = self.compare_file(rel_path)
+                            summary.results.append(result)
 
         return summary
 

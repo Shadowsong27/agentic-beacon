@@ -16,6 +16,7 @@ _TEMPLATES_DIR = _DATA_DIR / "templates"
 TEMPLATE_FILES: list[str] = [
     ".gitignore",
     "README.md",
+    "agents/README.md",
     "contexts/README.md",
     "docs/architecture.md",
     "docs/contribution-guide.md",
@@ -98,10 +99,12 @@ class WarehouseInitializer:
     def _create_structure(self) -> None:
         """Create required directory structure (skips dirs that already exist)."""
         self.warehouse_path.mkdir(parents=True, exist_ok=True)
+        (self.warehouse_path / "agents").mkdir(exist_ok=True)
         (self.warehouse_path / "contexts").mkdir(exist_ok=True)
         (self.warehouse_path / "knowledge").mkdir(exist_ok=True)
         (self.warehouse_path / "skills").mkdir(exist_ok=True)
         (self.warehouse_path / "docs").mkdir(exist_ok=True)
+        self._create_agents()
 
     def _write_if_missing(self, path: Path, content: str) -> None:
         """Write *content* to *path* only when the file does not already exist."""
@@ -114,6 +117,13 @@ class WarehouseInitializer:
         """Read a template file and substitute the org_name placeholder."""
         content = (_TEMPLATES_DIR / rel_path).read_text(encoding="utf-8")
         return content.replace("{org_name}", org_name)
+
+    def _create_agents(self) -> None:
+        """Create agents directory with README template."""
+        self._write_if_missing(
+            self.warehouse_path / "agents" / "README.md",
+            (_TEMPLATES_DIR / "agents" / "README.md").read_text(encoding="utf-8"),
+        )
 
     def _create_contexts(self) -> None:
         """Create starter context file."""
