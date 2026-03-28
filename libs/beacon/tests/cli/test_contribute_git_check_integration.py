@@ -35,7 +35,7 @@ def warehouse_git(tmp_path):
     wh = tmp_path / "warehouse"
     wh.mkdir()
 
-    for d in ("contexts", "knowledge", "skills", "docs"):
+    for d in ("agents", "contexts", "knowledge", "skills", "docs"):
         (wh / d).mkdir()
     (wh / "README.md").write_text("# Test Warehouse\n")
     (wh / "knowledge" / "lesson.md").write_text("# Lesson\nOriginal content.\n")
@@ -229,8 +229,8 @@ def test_contribute_proceeds_after_committing_warehouse_changes(connected_projec
     _git(["commit", "-m", "add unrelated"], warehouse)
 
     # Re-sync so the snapshot is current with the new warehouse HEAD, then
-    # re-apply the local modification (sync would have overwritten it)
-    runner.invoke(main, ["sync"])
+    # re-apply the local modification (sync --force overwrites local changes)
+    runner.invoke(main, ["sync", "--force"])
     synced = project / ".agentic-beacon" / "artifacts" / "knowledge" / "lesson.md"
     synced.write_text("# Lesson\nImproved locally.\n")
 

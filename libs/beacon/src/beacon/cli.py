@@ -6,6 +6,7 @@ import os
 import shutil
 import subprocess
 import sys
+from datetime import UTC
 from pathlib import Path
 
 import click
@@ -13,7 +14,7 @@ from loguru import logger
 from rich.console import Console
 from rich.table import Table
 
-from .core.delta import DeltaComparator, DeltaStatus
+from .core.delta import ComparisonResult, DeltaComparator, DeltaStatus
 from .core.gitignore import GitignoreManager
 from .core.settings import ArtifactsConfig, BeaconSettings, WarehouseSettings
 from .core.sync import SyncEngine
@@ -253,6 +254,141 @@ def _check_sync_state(artifacts_dir: Path, warehouse_path: Path) -> str | None:
         )
 
     return None
+
+
+_GLOBAL_SYNC_STATE_VERSION = 1
+
+
+def _global_sync_state_file() -> Path:
+    """Return path to the global agent sync-state file (lazy, respects Path.home() mocking)."""
+    return Path.home() / ".config" / "agentic-beacon" / "sync-state.json"
+
+
+def _read_global_sync_state() -> dict:
+    """Read global agent sync-state from ~/.config/agentic-beacon/sync-state.json.
+
+    Returns empty dict if file does not exist, is unparseable, or has unknown version.
+    """
+    import json
+
+    state_file = _global_sync_state_file()
+    if not state_file.exists():
+        return {}
+    try:
+        raw = state_file.read_text(encoding="utf-8")
+        data = json.loads(raw)
+    except (json.JSONDecodeError, OSError) as e:
+        logger.warning(f"Could not read global sync state: {e}")
+        return {}
+    version = data.get("version")
+    if version != _GLOBAL_SYNC_STATE_VERSION:
+        logger.warning(f"Global sync state has unknown version {version!r}, skipping.")
+        return {}
+    return data
+
+
+def _write_global_sync_state(state: dict) -> None:
+    """Write global agent sync-state to ~/.config/agentic-beacon/sync-state.json.
+
+    Always writes version field at the top level.
+    """
+    import json
+
+    state_file = _global_sync_state_file()
+    state_file.parent.mkdir(parents=True, exist_ok=True)
+    state["version"] = _GLOBAL_SYNC_STATE_VERSION
+    state_file.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
+
+
+def _write_agent_sync_state(
+    warehouse_path: Path, relative_path: str, content_hash: str
+) -> None:
+    """Upsert an agent install entry into the global sync-state file.
+
+    Entry schema:
+        {"content_hash": "...", "warehouse_head": "...", "installed_at": "..."}
+    """
+    from datetime import datetime
+
+    state = _read_global_sync_state()
+    warehouses = state.get("warehouses", {})
+    wh_key = str(warehouse_path)
+    wh_entries = warehouses.setdefault(wh_key, {})
+    wh_entries[relative_path] = {
+        "content_hash": content_hash,
+        "warehouse_head": _get_warehouse_head_sha(warehouse_path) or "",
+        "installed_at": datetime.now(UTC).isoformat(),
+    }
+    state["warehouses"] = warehouses
+    _write_global_sync_state(state)
+
+
+def _relink_global_sync_state(current_warehouse_path: Path) -> bool:
+    """Prompt user to relink sync-state when warehouse has been moved/renamed.
+
+    Returns True if the state was relinked (key renamed), False otherwise.
+    """
+    state = _read_global_sync_state()
+    warehouses = state.get("warehouses", {})
+    current_key = str(current_warehouse_path)
+
+    if current_key in warehouses:
+        return False  # Already have state for this path
+
+    if not warehouses:
+        return False
+
+    # Find candidate old paths whose directory name matches the current warehouse name
+    current_name = current_warehouse_path.name
+    candidates = [
+        old_path
+        for old_path in warehouses
+        if Path(old_path).name == current_name and old_path != current_key
+    ]
+
+    if not candidates:
+        return False
+
+    if len(candidates) == 1:
+        old_key = candidates[0]
+        console.print(
+            f"\n[yellow]No tracking state found for[/yellow] {current_key}\n"
+            f"[yellow]Found existing state for[/yellow] {old_key}\n"
+            f"Is this the same warehouse? [y/N] (Relinks tracking state) ",
+            end="",
+        )
+        try:
+            answer = click.prompt("", default="N", prompt_suffix="")
+        except click.Abort:
+            return False
+        if answer.strip().lower() != "y":
+            return False
+        warehouses[current_key] = warehouses.pop(old_key)
+        state["warehouses"] = warehouses
+        _write_global_sync_state(state)
+        return True
+    else:
+        # Multiple candidates — ask user to pick
+        console.print(f"\n[yellow]No tracking state found for[/yellow] {current_key}")
+        console.print("[yellow]Found existing state for multiple paths:[/yellow]")
+        for i, cand in enumerate(candidates, 1):
+            console.print(f"  {i}. {cand}")
+        console.print("  0. None — skip relink\n")
+        try:
+            choice_str = click.prompt(
+                "Which path is the same warehouse?",
+                default="0",
+            )
+            choice = int(choice_str)
+        except (click.Abort, ValueError):
+            return False
+        if choice == 0 or choice > len(candidates):
+            return False
+        old_key = candidates[choice - 1]
+        warehouses[current_key] = warehouses.pop(old_key)
+        state["warehouses"] = warehouses
+        _write_global_sync_state(state)
+        return True
 
 
 @click.group()
@@ -534,7 +670,9 @@ def connect(*, path: Path | None) -> None:
 @click.argument(
     "artifact_type",
     required=False,
-    type=click.Choice(["knowledge", "skills", "contexts"], case_sensitive=False),
+    type=click.Choice(
+        ["agents", "knowledge", "skills", "contexts"], case_sensitive=False
+    ),
     default=None,
 )
 def warehouse_list(*, artifact_type: str | None) -> None:
@@ -576,10 +714,13 @@ def warehouse_list(*, artifact_type: str | None) -> None:
     available = distributor.list_available()
 
     types_to_show = (
-        [artifact_type] if artifact_type else ["contexts", "knowledge", "skills"]
+        [artifact_type]
+        if artifact_type
+        else ["agents", "contexts", "knowledge", "skills"]
     )
 
     section_config = {
+        "agents": ("Available Agents", "magenta", "Agent"),
         "contexts": ("Available Contexts", "cyan", "Context"),
         "knowledge": ("Available Knowledge", "green", "Scope"),
         "skills": ("Available Skills", "yellow", "Skill"),
@@ -588,6 +729,11 @@ def warehouse_list(*, artifact_type: str | None) -> None:
     any_shown = False
     for section in types_to_show:
         items = available.get(section, [])
+        if section == "agents" and not items:
+            if artifact_type == "agents":
+                console.print("[yellow]No agents found in warehouse.[/yellow]")
+                any_shown = True
+            continue
         if items:
             title, color, col_name = section_config[section]
             table = Table(title=title)
@@ -747,6 +893,16 @@ def setup(*, manual: bool, agent_assisted: bool) -> None:
         console.print("\n[bold]Next Steps:[/bold]")
         console.print("  1. Edit .agentic-beacon/beacon.yaml to specify artifacts")
         console.print("  2. Run 'abc sync' to download artifacts from warehouse")
+        console.print("\n[bold]Artifact Types:[/bold]")
+        console.print(
+            "  • [cyan]knowledge[/cyan], [cyan]contexts[/cyan], [cyan]skills[/cyan] — project-scoped, tracked in beacon.yaml"
+        )
+        console.print(
+            "  • [magenta]agents[/magenta] — globally installed on your machine (not in beacon.yaml)"
+        )
+        console.print(
+            "    Agent definitions are installed globally — use [bold]abc install agents/<name>[/bold] to install them"
+        )
 
     elif workflow == "agent-assisted":
         _create_beacon_template(beacon_yaml)
@@ -775,12 +931,86 @@ def _bundled_global_skill_dirs() -> dict[str, Path]:
     }
 
 
+def _global_agent_dirs() -> dict[str, Path]:
+    """Return global agent definition directories per tool."""
+    return {
+        "opencode": Path.home() / ".config" / "opencode" / "agents",
+        "claudecode": Path.home() / ".claude" / "agents",
+    }
+
+
+def _detect_agents_global() -> list[str]:
+    """Detect which agent tools are available on this machine via home-dir paths.
+
+    Checks only home-directory paths (not project-relative paths).
+    Returns list of tool names: 'opencode' and/or 'claudecode'.
+    """
+    tools = []
+    opencode_dir = Path.home() / ".config" / "opencode"
+    if opencode_dir.is_dir():
+        tools.append("opencode")
+    claudecode_dir = Path.home() / ".claude"
+    if claudecode_dir.is_dir():
+        tools.append("claudecode")
+    return tools
+
+
+def _install_agent_global(agent: str, agent_name: str, content: str) -> bool:
+    """Write an agent definition file to the global agent directory for a tool.
+
+    Creates parent dirs if needed.
+    Returns True if the file was written, False if content was identical (skipped).
+    Conflict handling is the caller's responsibility (soft block pre-check).
+
+    Args:
+        agent: Tool name — "opencode" or "claudecode".
+        agent_name: Filename (e.g. "code-reviewer.md").
+        content: File content to write.
+    """
+    agent_dirs = _global_agent_dirs()
+    dest = agent_dirs[agent] / agent_name
+    if dest.exists() and dest.read_text(encoding="utf-8") == content:
+        return False
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(content, encoding="utf-8")
+    return True
+
+
+def _list_global_agents() -> None:
+    """Display globally installed agent files from all detected tool directories."""
+    agent_dirs = _global_agent_dirs()
+
+    # Union of all agent filenames across detected tools, deduplicated
+    seen: dict[str, list[str]] = {}  # filename -> list of tools that have it
+    for tool, agent_dir in agent_dirs.items():
+        if not agent_dir.exists():
+            continue
+        for f in sorted(agent_dir.rglob("*.md")):
+            if f.is_file() and not f.name.startswith("."):
+                name = f.name
+                seen.setdefault(name, []).append(tool)
+
+    if not seen:
+        console.print("[yellow]No agents found.[/yellow]")
+        console.print("Install agents with: abc install agents/<name>.md")
+        return
+
+    table = Table(title="Installed Agents (Global)")
+    table.add_column("Agent", style="magenta")
+    table.add_column("Tools", style="dim")
+    for name in sorted(seen):
+        table.add_row(name, ", ".join(seen[name]))
+    console.print(table)
+
+
 def _install_bundled_skills_globally() -> tuple[list[str], list[str]]:
     """Install abc-bundled skills into global agent skill directories.
 
     Writes directly to ~/.config/opencode/skills/ and ~/.claude/skills/,
     bypassing the warehouse and any per-project agent detection.  Skills
     are available in every project as soon as they are installed.
+
+    # Bundled skills are abc-package-managed — not user content; exempt from soft block
 
     Returns (installed, errors) where each entry is '<skill> (<agent>)'.
     """
@@ -1021,8 +1251,60 @@ def _extract_description(file_path: Path) -> str:
     return ""
 
 
+def _handle_soft_block(
+    conflicts: list[str],
+    force: bool,
+    preserve: bool,
+) -> bool:
+    """Handle soft-block pre-check for conflicting files.
+
+    Returns True if we should proceed with overwriting, False to skip conflicts.
+    May call sys.exit(1) in non-interactive mode when conflicts exist without flags.
+
+    Args:
+        conflicts: List of relative paths that have conflicting local content
+        force: --force flag (overwrite without prompt)
+        preserve: --preserve flag (skip without prompt)
+
+    Returns:
+        True to proceed (overwrite), False to skip (preserve)
+    """
+    if not conflicts:
+        return True  # No conflicts — proceed normally
+
+    if preserve:
+        return False  # --preserve: skip all conflicts silently
+
+    if force:
+        return True  # --force: overwrite all conflicts silently
+
+    # Interactive vs non-interactive
+    is_interactive = sys.stdin.isatty()
+
+    conflict_list = "\n".join(f"  • {p}" for p in conflicts)
+    console.print(
+        f"\n[yellow]Warning:[/yellow] {len(conflicts)} file(s) have local changes "
+        f"that differ from the warehouse:\n{conflict_list}\n"
+    )
+
+    if not is_interactive:
+        console.print(
+            "[red]Error:[/red] Non-interactive mode — cannot prompt for overwrite.\n"
+            "Use --force to overwrite or --preserve to skip conflicting files."
+        )
+        sys.exit(1)
+
+    answer = click.confirm(
+        "Overwrite these files with warehouse content?", default=False
+    )
+    return answer
+
+
 @main.command()
 @click.option("--preserve", is_flag=True, help="Skip files with local modifications")
+@click.option(
+    "--force", is_flag=True, help="Overwrite conflicting files without prompting"
+)
 @click.option("--prune", is_flag=True, help="Remove artifacts no longer in beacon.yaml")
 @click.option(
     "--verbose", "verbose_flag", is_flag=True, help="Show detailed sync output"
@@ -1038,6 +1320,7 @@ def _extract_description(file_path: Path) -> str:
 def sync(
     *,
     preserve: bool,
+    force: bool,
     prune: bool,
     verbose_flag: bool,
     dry_run: bool,
@@ -1052,10 +1335,17 @@ def sync(
     Example:
         abc sync              # Sync all artifacts
         abc sync --preserve   # Skip locally modified files
+        abc sync --force      # Overwrite all conflicts without prompting
         abc sync --prune      # Remove artifacts not in beacon.yaml
         abc sync --verbose    # Show detailed output
         abc sync --dry-run    # Preview without copying
     """
+    if force and preserve:
+        console.print(
+            "[red]Error:[/red] --force and --preserve are mutually exclusive."
+        )
+        sys.exit(1)
+
     # Check for .agentic-beacon directory
     beacon_dir = Path.cwd() / ".agentic-beacon"
     if not beacon_dir.exists():
@@ -1164,6 +1454,14 @@ def sync(
                         sys.exit(1)
                 else:
                     artifact_paths.append(pattern)
+
+        # Soft-block pre-check: detect conflicts before writing
+        if not dry_run:
+            conflicts = sync_engine.classify_conflicts(artifact_paths)
+            overwrite = _handle_soft_block(conflicts, force=force, preserve=preserve)
+            if not overwrite and conflicts:
+                # User said N or --preserve: switch to preserve mode for the conflicting files
+                preserve = True
 
         # Perform sync
         def log_fn(msg: str) -> None:
@@ -1277,7 +1575,7 @@ def sync(
 
         if beacon_settings.artifacts.skills:
             wired_skills, wire_errors = _wire_skills_post_sync(
-                project_root, artifacts_dir
+                project_root, artifacts_dir, force=force, preserve=preserve
             )
             if wired_skills:
                 console.print(
@@ -1349,6 +1647,91 @@ def sync(
         sys.exit(1)
 
 
+def _handle_install_agent(
+    artifact: str, *, force: bool = False, preserve: bool = False
+) -> None:
+    """Handle 'abc install agents/<name>.md' — global install for all detected tools.
+
+    Loads warehouse settings, reads the agent file, performs soft-block conflict
+    detection against global agent dirs, writes to each detected tool dir, and
+    records sync-state for each successful write. Does NOT update beacon.yaml.
+    """
+    beacon_dir = Path.cwd() / ".agentic-beacon"
+    if not beacon_dir.exists():
+        console.print("[red]Error:[/red] No .agentic-beacon directory found.")
+        console.print("Run 'abc warehouse connect' to connect to a warehouse first.")
+        sys.exit(1)
+
+    try:
+        warehouse_settings = WarehouseSettings()
+        warehouse_path = Path(warehouse_settings.warehouse.local_path)
+    except Exception as e:
+        console.print(f"[red]Error:[/red] Could not load warehouse settings: {e}")
+        sys.exit(1)
+
+    agent_file = warehouse_path / artifact
+    if not agent_file.exists():
+        console.print(f"[red]Error:[/red] Agent not found in warehouse: {artifact}")
+        sys.exit(1)
+
+    content = agent_file.read_text(encoding="utf-8")
+    agent_name = Path(artifact).name
+
+    # Relink sync state if warehouse path has changed
+    _relink_global_sync_state(warehouse_path)
+
+    # Detect tools
+    tools = _detect_agents_global()
+    if not tools:
+        console.print(
+            "[yellow]Warning:[/yellow] No agent tools detected "
+            "(neither ~/.config/opencode/ nor ~/.claude/ found)."
+        )
+        console.print("Install OpenCode or Claude Code and re-run to install agent.")
+        return
+
+    # Soft-block pre-check: check for conflicting global agent files
+    agent_dirs = _global_agent_dirs()
+    conflicts: list[str] = []
+    for tool in tools:
+        dest = agent_dirs[tool] / agent_name
+        if dest.exists() and dest.read_text(encoding="utf-8") != content:
+            conflicts.append(str(dest))
+
+    overwrite = _handle_soft_block(conflicts, force=force, preserve=preserve)
+    if not overwrite and conflicts:
+        preserve = True  # skip conflicting files
+
+    written_any = False
+    for tool in tools:
+        dest = agent_dirs[tool] / agent_name
+        is_conflict = str(dest) in conflicts
+
+        if preserve and is_conflict:
+            console.print(f"[yellow]Skipped[/yellow] {dest} (preserved local version)")
+            continue
+
+        written = _install_agent_global(tool, agent_name, content)
+        if written:
+            console.print(f"[green]Installed[/green] {artifact} → {dest}")
+            _write_agent_sync_state(warehouse_path, artifact, _hash_content(content))
+            written_any = True
+        else:
+            console.print(f"[dim]Up to date[/dim] {dest}")
+
+    if not written_any and not conflicts:
+        console.print(
+            f"[dim]{artifact} is already up to date in all tool directories.[/dim]"
+        )
+
+
+def _hash_content(content: str) -> str:
+    """Return SHA-256 hex digest of UTF-8 encoded content string."""
+    import hashlib
+
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+
 @main.command(name="install")
 @click.argument("artifact", metavar="ARTIFACT")
 @click.option(
@@ -1356,7 +1739,13 @@ def sync(
     type=click.Choice(["opencode", "claudecode"], case_sensitive=False),
     help="Target agent tool (auto-detected if not specified)",
 )
-def install_artifact(*, artifact: str, agent: str | None) -> None:
+@click.option("--preserve", is_flag=True, help="Skip files with local modifications")
+@click.option(
+    "--force", is_flag=True, help="Overwrite conflicting files without prompting"
+)
+def install_artifact(
+    *, artifact: str, agent: str | None, preserve: bool, force: bool
+) -> None:
     """Pull and wire a single artifact from the warehouse.
 
     ARTIFACT is a path relative to the warehouse root. Type is inferred
@@ -1366,7 +1755,20 @@ def install_artifact(*, artifact: str, agent: str | None) -> None:
         abc install skills/code-reviewer
         abc install contexts/python
         abc install knowledge/decisions/coding-standards.md
+        abc install agents/code-reviewer.md
     """
+    if force and preserve:
+        console.print(
+            "[red]Error:[/red] --force and --preserve are mutually exclusive."
+        )
+        sys.exit(1)
+
+    # Special case: agents are globally installed
+    artifact_path = Path(artifact.rstrip("/"))
+    if artifact_path.parts and artifact_path.parts[0] == "agents":
+        _handle_install_agent(artifact.rstrip("/"), force=force, preserve=preserve)
+        return
+
     beacon_dir = Path.cwd() / ".agentic-beacon"
     if not beacon_dir.exists():
         console.print("[red]Error:[/red] No .agentic-beacon directory found.")
@@ -1405,11 +1807,17 @@ def install_artifact(*, artifact: str, agent: str | None) -> None:
         console.print(f"[red]Error:[/red] No files found for: {artifact}")
         sys.exit(1)
 
+    # Soft-block pre-check: detect conflicts before writing
+    conflicts = engine.classify_conflicts(files_to_copy)
+    overwrite = _handle_soft_block(conflicts, force=force, preserve=preserve)
+    if not overwrite and conflicts:
+        preserve = True  # Switch to preserve mode for conflicting files
+
     # Copy files from warehouse to artifacts
     copy_errors: list[str] = []
     copied = 0
     for path in files_to_copy:
-        result = engine.copy_file(path)
+        result = engine.copy_file(path, preserve=preserve)
         if result.success:
             if result.action == "copied":
                 copied += 1
@@ -1421,8 +1829,9 @@ def install_artifact(*, artifact: str, agent: str | None) -> None:
             console.print(f"[red]✗[/red] {err}")
         sys.exit(1)
 
-    # Update beacon.yaml so future abc sync stays idempotent
-    _update_beacon_yaml(beacon_dir, files_to_copy)
+    # Update beacon.yaml only when at least one file was successfully written
+    if copied > 0:
+        _update_beacon_yaml(beacon_dir, files_to_copy)
 
     # Infer type and wire
     artifact_type = Path(artifact).parts[0] if Path(artifact).parts else ""
@@ -1481,6 +1890,48 @@ def install_artifact(*, artifact: str, agent: str | None) -> None:
 
     if copied:
         console.print(f"  [dim]{copied} file(s) newly copied[/dim]")
+
+
+def _enrich_agent_stale(
+    result: ComparisonResult,
+    *,
+    warehouse_path: Path,
+    current_head: str,
+) -> ComparisonResult:
+    """Enrich an IDENTICAL agent ComparisonResult to STALE if the sync-state HEAD differs.
+
+    Only applies to IDENTICAL results — MODIFIED/MISSING are returned unchanged.
+    If no sync-state entry exists, the result is returned unchanged (no enrichment).
+
+    Args:
+        result: ComparisonResult to potentially enrich.
+        warehouse_path: Path to the warehouse (used as sync-state key).
+        current_head: Current warehouse HEAD SHA.
+    """
+    if result.status != DeltaStatus.IDENTICAL:
+        return result
+
+    state = _read_global_sync_state()
+    warehouses = state.get("warehouses", {})
+    wh_entries = warehouses.get(str(warehouse_path), {})
+    entry = wh_entries.get(result.path)
+
+    if entry is None:
+        return result  # No sync-state entry — can't determine STALE
+
+    recorded_head = entry.get("warehouse_head", "")
+    if recorded_head and recorded_head != current_head:
+        # Warehouse has advanced since last install — mark as STALE
+        stale_statuses = {agent: DeltaStatus.STALE for agent in result.agent_statuses}
+        return ComparisonResult(
+            path=result.path,
+            status=DeltaStatus.STALE,
+            local_hash=result.local_hash,
+            warehouse_hash=result.warehouse_hash,
+            agent_statuses=stale_statuses,
+        )
+
+    return result
 
 
 def _build_skills_paths(project_root: Path) -> dict[str, Path]:
@@ -1551,12 +2002,27 @@ def delta(*, file: str | None, no_color: bool) -> None:
         artifacts_dir = beacon_dir / "artifacts"
         beacon_settings = BeaconSettings.from_yaml(beacon_yaml)
 
+        # Relink sync-state if warehouse path has changed
+        _relink_global_sync_state(warehouse_path)
+
         # Build skills_paths via shared helper — same logic used by contribute.
         project_root = Path.cwd()
+
+        # Build agents_paths for global agent detection
+        agents_paths: dict[str, Path] = {}
+        for tool in _detect_agents_global():
+            if tool == "opencode":
+                agents_paths["opencode"] = (
+                    Path.home() / ".config" / "opencode" / "agents"
+                )
+            elif tool == "claudecode":
+                agents_paths["claudecode"] = Path.home() / ".claude" / "agents"
+
         comparator = DeltaComparator(
             warehouse_path=warehouse_path,
             artifacts_path=artifacts_dir,
             skills_paths=_build_skills_paths(project_root),
+            agents_paths=agents_paths,
         )
 
         if file:
@@ -1564,7 +2030,7 @@ def delta(*, file: str | None, no_color: bool) -> None:
             _show_detailed_diff(comparator, beacon_settings, file, no_color)
         else:
             # Summary view
-            _show_delta_summary(comparator, beacon_settings)
+            _show_delta_summary(comparator, beacon_settings, warehouse_path)
 
     except Exception as e:
         console.print(f"\n[red]Error:[/red] Delta comparison failed: {e}")
@@ -1573,21 +2039,43 @@ def delta(*, file: str | None, no_color: bool) -> None:
 
 
 def _show_delta_summary(
-    comparator: DeltaComparator, beacon_settings: BeaconSettings
+    comparator: DeltaComparator,
+    beacon_settings: BeaconSettings,
+    warehouse_path: Path | None = None,
 ) -> None:
     """Show summary of all artifact differences."""
     summary = comparator.compare_from_config(beacon_settings)
+
+    # Also gather agent comparison results from agents/ warehouse dir
+    agent_results = []
+    if comparator.agents_paths and warehouse_path is not None:
+        agents_dir = warehouse_path / "agents"
+        if agents_dir.is_dir():
+            current_head = _get_warehouse_head_sha(warehouse_path) or ""
+            for agent_file in sorted(agents_dir.rglob("*")):
+                # Skip README.md — it's a warehouse scaffold file, not an installable agent
+                if agent_file.is_file() and agent_file.name != "README.md":
+                    rel_path = str(agent_file.relative_to(warehouse_path))
+                    result = comparator._compare_agent_file(rel_path)
+                    # Enrich IDENTICAL → STALE if warehouse HEAD has advanced
+                    result = _enrich_agent_stale(
+                        result, warehouse_path=warehouse_path, current_head=current_head
+                    )
+                    agent_results.append(result)
+
     untracked = _find_untracked_local_files(
         comparator, beacon_settings, comparator.artifacts_path
     )
 
-    if not summary.has_differences and not untracked:
+    has_agent_diffs = any(r.status != DeltaStatus.IDENTICAL for r in agent_results)
+
+    if not summary.has_differences and not untracked and not has_agent_diffs:
         console.print(
             "[green]No differences found. Local artifacts match local warehouse.[/green]"
         )
         return
 
-    # Show differences
+    # Show artifact differences
     console.print("\n[bold]Artifact Differences:[/bold]\n")
 
     for result in summary.results:
@@ -1622,6 +2110,23 @@ def _show_delta_summary(
             f"  [green][Added][/green]    {rel_path} [dim](not in beacon.yaml)[/dim]"
         )
 
+    # Show agent differences
+    stale_agents = []
+    for result in agent_results:
+        agent_detail = (
+            _format_skill_agent_statuses(result.agent_statuses)
+            if result.agent_statuses
+            else ""
+        )
+        suffix = f" [dim]({agent_detail})[/dim]" if agent_detail else ""
+        if result.status == DeltaStatus.STALE:
+            console.print(f"  [dim cyan][Stale][/dim cyan]    {result.path}{suffix}")
+            stale_agents.append(result.path)
+        elif result.status == DeltaStatus.MODIFIED:
+            console.print(f"  [yellow][Modified][/yellow] {result.path}{suffix}")
+        elif result.status == DeltaStatus.MISSING:
+            console.print(f"  [red][Missing][/red]  {result.path}{suffix}")
+
     # Summary counts
     console.print("\n[bold]Summary:[/bold]")
     if summary.modified:
@@ -1633,6 +2138,8 @@ def _show_delta_summary(
         console.print(f"  [red]Missing:[/red] {len(summary.missing)} files")
     if summary.identical:
         console.print(f"  [dim]Identical:[/dim] {len(summary.identical)} files")
+    if stale_agents:
+        console.print(f"  [dim cyan]Stale:[/dim cyan] {len(stale_agents)} agent(s)")
 
     # Tips
     if summary.missing:
@@ -1646,6 +2153,10 @@ def _show_delta_summary(
     if untracked:
         console.print(
             "[dim]Tip: Run 'abc contribute --all' to push untracked local artifacts to the warehouse.[/dim]"
+        )
+    if stale_agents:
+        console.print(
+            "[dim]Tip: Run 'abc install agents/<name>' to update stale agent definitions.[/dim]"
         )
 
 
@@ -2486,9 +2997,15 @@ def _update_agent_gitignores(project_root: Path) -> None:
 
 
 def _wire_skills_post_sync(
-    project_root: Path, artifacts_dir: Path
+    project_root: Path,
+    artifacts_dir: Path,
+    force: bool = False,
+    preserve: bool = False,
 ) -> tuple[list[str], list[str]]:
     """Install all synced skills for detected agents.
+
+    Respects soft-block flags: --force overwrites without prompt, --preserve skips
+    conflicting live skill files.
 
     Returns (installed, errors) where each entry is '<skill> (<agent>)'.
     Returns empty lists if no agents are detected — callers should check
@@ -2506,6 +3023,28 @@ def _wire_skills_post_sync(
     if not skill_dirs:
         return [], []
 
+    # Compute wiring conflicts (live skill files that differ from what we'd write)
+    wiring_conflicts: list[tuple[str, str, str]] = []  # (agent, skill_name, dest_path)
+    for skill_dir in skill_dirs:
+        skill_md = skill_dir / "SKILL.md"
+        if not skill_md.exists():
+            continue
+        content = skill_md.read_text(encoding="utf-8")
+        name = skill_dir.name
+        for agent in agents:
+            if agent == "opencode":
+                dest = project_root / ".opencode" / "skills" / name / "SKILL.md"
+            else:
+                dest = project_root / ".claude" / "skills" / name / "SKILL.md"
+            if dest.exists() and dest.read_text(encoding="utf-8") != content:
+                wiring_conflicts.append((agent, name, str(dest)))
+
+    if wiring_conflicts:
+        conflict_paths = [str(dest) for _, _, dest in wiring_conflicts]
+        overwrite = _handle_soft_block(conflict_paths, force=force, preserve=preserve)
+        if not overwrite:
+            preserve = True  # skip conflicting live skill files
+
     installed: list[str] = []
     errors: list[str] = []
 
@@ -2518,6 +3057,11 @@ def _wire_skills_post_sync(
         name = skill_dir.name
 
         for agent in agents:
+            # Check if this specific wiring target is a conflict we should skip
+            conflicting_agents_skills = {(a, n) for a, n, _ in wiring_conflicts}
+            if preserve and (agent, name) in conflicting_agents_skills:
+                continue  # Skip this wiring target
+
             try:
                 if agent == "opencode":
                     changed = _install_skill_opencode(
@@ -2592,7 +3136,8 @@ def _install_skill_opencode(
     if not stub_unchanged:
         stub_file.write_text(stub)
 
-    return True
+    # Return True only if SKILL.md was written (command stub updates are transparent)
+    return not skill_unchanged
 
 
 def _install_skill_claudecode(
@@ -2644,15 +3189,8 @@ def deprecated_init(name: str | None = None) -> None:
     sys.exit(1)
 
 
-@main.command()
-@click.option(
-    "--project",
-    type=click.Path(exists=True, file_okay=False, path_type=Path),
-    help="Path to project root (auto-detected if not provided)",
-)
-def update(*, project: Path | None) -> None:
-    """Update existing synced artifacts from warehouse (re-runs sync, overwrites changes)."""
-    project_root = project or find_project_root()
+def _do_reset(project_root: Path) -> None:
+    """Force-overwrite all synced artifacts from warehouse. Used by both reset and update."""
     beacon_dir = project_root / ".agentic-beacon"
 
     if not beacon_dir.exists():
@@ -2665,7 +3203,7 @@ def update(*, project: Path | None) -> None:
         console.print("Run 'abc setup' to create artifact configuration.")
         sys.exit(1)
 
-    console.print("[blue]Updating artifacts from warehouse...[/blue]")
+    console.print("[blue]Resetting artifacts from warehouse...[/blue]")
 
     try:
         from .core.settings import BeaconSettings, WarehouseSettings
@@ -2707,7 +3245,7 @@ def update(*, project: Path | None) -> None:
         error_count = 0
 
         for artifact_path in artifact_paths:
-            # Force update: remove destination first so idempotent check doesn't skip
+            # Force overwrite: remove destination first so idempotent check doesn't skip
             dest = artifacts_dir / artifact_path
             if dest.exists():
                 dest.unlink()
@@ -2719,25 +3257,64 @@ def update(*, project: Path | None) -> None:
                 error_count += 1
                 console.print(f"  [red]✗[/red] {artifact_path}: {result.error_message}")
 
-        console.print("\n[bold green]✓ Update complete![/bold green]")
-        console.print(f"  [blue]Updated:[/blue] {overwritten_count} files")
-        console.print(
-            f"  [blue]New:[/blue] {copied_count - overwritten_count if copied_count > overwritten_count else 0} files"
+        console.print("\n[bold green]✓ Reset complete![/bold green]")
+        console.print(f"  [blue]Overwritten:[/blue] {overwritten_count} files")
+        new_count = (
+            copied_count - overwritten_count if copied_count > overwritten_count else 0
         )
+        if new_count:
+            console.print(f"  [blue]New:[/blue] {new_count} files")
         if error_count > 0:
             console.print(f"  [red]Errors:[/red] {error_count} files")
 
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
-        logger.exception("Update failed")
+        logger.exception("Reset failed")
         sys.exit(1)
+
+
+@main.command(name="reset")
+@click.option(
+    "--project",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    help="Path to project root (auto-detected if not provided)",
+)
+def reset_cmd(*, project: Path | None) -> None:
+    """Force-overwrite all synced artifacts from the warehouse.
+
+    Overwrites any local modifications without prompting.
+    Use this when you want to discard local changes and resync from the warehouse.
+    """
+    project_root = project or find_project_root()
+    _do_reset(project_root)
+
+
+@main.command(name="update", hidden=True)
+@click.option(
+    "--project",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    help="Path to project root (auto-detected if not provided)",
+)
+def update(*, project: Path | None) -> None:
+    """[Deprecated] Use 'abc reset' instead.
+
+    Update existing synced artifacts from warehouse (re-runs sync, overwrites changes).
+    """
+    console.print(
+        "[yellow]Deprecation warning:[/yellow] 'abc update' is deprecated. "
+        "Use 'abc reset' instead."
+    )
+    project_root = project or find_project_root()
+    _do_reset(project_root)
 
 
 @main.command(name="list")
 @click.argument(
     "artifact_type",
     required=False,
-    type=click.Choice(["knowledge", "skills", "contexts"], case_sensitive=False),
+    type=click.Choice(
+        ["agents", "knowledge", "skills", "contexts"], case_sensitive=False
+    ),
     default=None,
 )
 def list_cmd(*, artifact_type: str | None) -> None:
@@ -2746,13 +3323,21 @@ def list_cmd(*, artifact_type: str | None) -> None:
     ARTIFACT_TYPE filters output to a single type. Omit to show all.
 
     Reads from .agentic-beacon/artifacts/. Run 'abc sync' first to populate.
+    For agents, shows globally installed files from ~/.config/opencode/agents/
+    and ~/.claude/agents/.
 
     Example:
         abc list
         abc list knowledge
         abc list skills
         abc list contexts
+        abc list agents
     """
+    # Special case: agents are globally installed, not project-scoped
+    if artifact_type == "agents":
+        _list_global_agents()
+        return
+
     beacon_dir = Path.cwd() / ".agentic-beacon"
     artifacts_dir = beacon_dir / "artifacts"
 

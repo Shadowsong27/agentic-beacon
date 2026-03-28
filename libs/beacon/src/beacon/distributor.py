@@ -103,13 +103,15 @@ class WarehouseDistributor:
         List all available content in warehouse.
 
         Returns:
-            Dictionary with contexts, knowledge, and skills lists
+            Dictionary with agents, contexts, knowledge, and skills lists
         """
+        agents_dir = self.warehouse_root / "agents"
         contexts_dir = self.warehouse_root / "contexts"
         knowledge_dir = self.warehouse_root / "knowledge"
         skills_dir = self.warehouse_root / "skills"
 
         return {
+            "agents": self._list_agents(agents_dir),
             "contexts": self._list_contexts(contexts_dir),
             "knowledge": self._list_knowledge(knowledge_dir),
             "skills": self._list_skills(skills_dir),
@@ -316,6 +318,19 @@ class WarehouseDistributor:
                 logger.warning(f"Skill not found: {skill_name}")
 
         return count
+
+    def _list_agents(self, agents_dir: Path) -> list[str]:
+        """List available agent definition files as paths relative to warehouse root."""
+        if not agents_dir.exists():
+            return []
+
+        agents = []
+        for file in sorted(agents_dir.rglob("*.md")):
+            if not file.name.startswith("."):
+                rel = file.relative_to(agents_dir.parent)
+                agents.append(str(rel))
+
+        return sorted(agents)
 
     def _list_contexts(self, contexts_dir: Path) -> list[str]:
         """List available context files as paths relative to warehouse root."""

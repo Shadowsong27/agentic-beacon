@@ -18,6 +18,7 @@ class WarehouseValidator:
     """
 
     REQUIRED_DIRECTORIES = [
+        "agents",
         "contexts",
         "knowledge",
         "skills",
@@ -75,7 +76,13 @@ class WarehouseValidator:
         for required_dir in self.REQUIRED_DIRECTORIES:
             dir_path = warehouse_path / required_dir
             if not dir_path.exists():
-                errors.append(f"Missing required directory: {required_dir}/")
+                if required_dir == "agents":
+                    errors.append(
+                        "Missing required directory: agents/ "
+                        "(run 'mkdir agents/' in your warehouse to upgrade)"
+                    )
+                else:
+                    errors.append(f"Missing required directory: {required_dir}/")
             elif not dir_path.is_dir():
                 errors.append(f"Expected directory, found file: {required_dir}")
 

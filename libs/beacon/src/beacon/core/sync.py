@@ -287,7 +287,7 @@ class SyncEngine:
 
         return relative_paths
 
-    def _files_identical(self, file1: Path, file2: Path) -> bool:
+    def files_identical(self, file1: Path, file2: Path) -> bool:
         """Check if two files have identical content using hash comparison.
 
         Args:
@@ -303,6 +303,35 @@ class SyncEngine:
             return hash1 == hash2
         except OSError:
             return False
+
+    def _files_identical(self, file1: Path, file2: Path) -> bool:
+        """Private alias for files_identical (backward-compat internal callers)."""
+        return self.files_identical(file1, file2)
+
+    def classify_conflicts(self, artifact_paths: list[str]) -> list[str]:
+        """Return list of relative paths where local content differs from warehouse.
+
+        A conflict is any path where both the warehouse source and the local
+        destination exist but their content differs. Fresh files (dest absent) are
+        not conflicts.
+
+        Args:
+            artifact_paths: Relative paths to check (e.g. "knowledge/doc.md")
+
+        Returns:
+            List of conflicting relative paths
+        """
+        conflicts = []
+        for rel_path in artifact_paths:
+            source = self.warehouse_path / rel_path
+            dest = self.artifacts_path / rel_path
+            if (
+                source.exists()
+                and dest.exists()
+                and not self.files_identical(source, dest)
+            ):
+                conflicts.append(rel_path)
+        return conflicts
 
     def _compute_file_hash(self, file_path: Path) -> str:
         """Compute SHA256 hash of file content.

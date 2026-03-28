@@ -26,6 +26,7 @@ class TestWarehouseValidator:
     def test_tc1_valid_warehouse_structure(self, temp_dir):
         """TC1: Valid warehouse structure → ValidationResult(valid=True, errors=[])"""
         warehouse = temp_dir / "warehouse"
+        (warehouse / "agents").mkdir(parents=True)
         (warehouse / "contexts").mkdir(parents=True)
         (warehouse / "knowledge").mkdir(parents=True)
         (warehouse / "skills").mkdir(parents=True)
@@ -186,3 +187,54 @@ class TestWarehouseValidator:
             # Should follow symlink and validate the target
         except OSError:
             pytest.skip("Cannot create symlinks in this environment")
+
+
+class TestAgentsDirectoryValidation:
+    """Tests for agents/ directory requirement (task 2.1)."""
+
+    def test_tc1_warehouse_with_agents_dir_valid(self, temp_dir):
+        """TC1: Warehouse has agents/ dir → validates successfully."""
+        warehouse = temp_dir / "warehouse"
+        (warehouse / "agents").mkdir(parents=True)
+        (warehouse / "contexts").mkdir(parents=True)
+        (warehouse / "knowledge").mkdir(parents=True)
+        (warehouse / "skills").mkdir(parents=True)
+        (warehouse / "docs").mkdir(parents=True)
+        (warehouse / "README.md").write_text("# Warehouse")
+
+        validator = WarehouseValidator()
+        result = validator.validate(str(warehouse))
+
+        assert result.valid is True
+
+    def test_tc2_warehouse_missing_agents_dir_invalid(self, temp_dir):
+        """TC2: Warehouse missing agents/ dir → validation error listing agents/."""
+        warehouse = temp_dir / "warehouse"
+        (warehouse / "contexts").mkdir(parents=True)
+        (warehouse / "knowledge").mkdir(parents=True)
+        (warehouse / "skills").mkdir(parents=True)
+        (warehouse / "docs").mkdir(parents=True)
+        (warehouse / "README.md").write_text("# Warehouse")
+
+        validator = WarehouseValidator()
+        result = validator.validate(str(warehouse))
+
+        assert result.valid is False
+        assert any("agents" in err.lower() for err in result.errors)
+
+    def test_tc3_agents_missing_includes_upgrade_hint(self, temp_dir):
+        """TC3: Missing agents/ → error message includes mkdir upgrade instruction."""
+        warehouse = temp_dir / "warehouse"
+        (warehouse / "contexts").mkdir(parents=True)
+        (warehouse / "knowledge").mkdir(parents=True)
+        (warehouse / "skills").mkdir(parents=True)
+        (warehouse / "docs").mkdir(parents=True)
+        (warehouse / "README.md").write_text("# Warehouse")
+
+        validator = WarehouseValidator()
+        result = validator.validate(str(warehouse))
+
+        assert result.valid is False
+        agents_errors = [e for e in result.errors if "agents" in e.lower()]
+        assert agents_errors
+        assert any("mkdir" in e for e in agents_errors)

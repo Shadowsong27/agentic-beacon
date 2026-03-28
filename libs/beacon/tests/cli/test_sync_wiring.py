@@ -279,7 +279,7 @@ def test_wire_skills_post_sync_idempotent_claudecode(project_with_skill):
 
 
 def test_wire_skills_post_sync_reinstalls_when_content_changes(project_with_skill):
-    """Skill is re-installed when the SKILL.md content changes."""
+    """Skill is re-installed when the SKILL.md content changes (force mode)."""
     project = project_with_skill
     (project / "opencode.json").write_text(json.dumps({}))
     artifacts_dir = project / ".agentic-beacon" / "artifacts"
@@ -290,7 +290,10 @@ def test_wire_skills_post_sync_reinstalls_when_content_changes(project_with_skil
     skill_md = artifacts_dir / "skills" / "test-skill" / "SKILL.md"
     skill_md.write_text(SAMPLE_SKILL_MD + "\n## New Section\nExtra content.\n")
 
-    installed_second, errors = _wire_skills_post_sync(project, artifacts_dir)
+    # force=True bypasses the soft-block (non-interactive mode would otherwise block)
+    installed_second, errors = _wire_skills_post_sync(
+        project, artifacts_dir, force=True
+    )
 
     assert any("test-skill" in e for e in installed_second)
     assert errors == []
@@ -593,7 +596,7 @@ def test_sync_reports_installed_skills_again_after_warehouse_update(
     updated_content = SAMPLE_SKILL_MD + "\n## New Section\nExtra content.\n"
     (valid_warehouse / "skills" / "my-skill" / "SKILL.md").write_text(updated_content)
 
-    result_second = runner.invoke(main, ["sync"])
+    result_second = runner.invoke(main, ["sync", "--force"])
 
     assert result_second.exit_code == 0
     assert "installed" in result_second.output.lower()

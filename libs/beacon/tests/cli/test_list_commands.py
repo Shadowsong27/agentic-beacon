@@ -20,6 +20,7 @@ def warehouse_with_artifacts(tmp_path):
     wh = tmp_path / "warehouse"
     wh.mkdir()
     (wh / "README.md").write_text("# Warehouse")
+    (wh / "agents").mkdir()
     (wh / "docs").mkdir()
 
     (wh / "contexts").mkdir()
@@ -161,6 +162,7 @@ def test_warehouse_list_empty_warehouse(runner, tmp_path, monkeypatch):
     wh = tmp_path / "empty-warehouse"
     wh.mkdir()
     (wh / "README.md").write_text("# Empty Warehouse")
+    (wh / "agents").mkdir()
     (wh / "docs").mkdir()
     (wh / "contexts").mkdir()
     (wh / "knowledge").mkdir()
@@ -303,3 +305,155 @@ def test_integration_list_after_sync(synced_project):
     assert "knowledge/python/standards.md" in result.output
     assert "skills/code-review/SKILL.md" in result.output
     assert "contexts/AGENTS.md" in result.output
+
+
+# ---------------------------------------------------------------------------
+# agents surfacing — Phase 2 tasks 2.2 and 2.3
+# ---------------------------------------------------------------------------
+
+
+def test_warehouse_list_agents_section(tmp_path, monkeypatch):
+    """TC1: abc warehouse list → agents section shown alongside other types."""
+    from click.testing import CliRunner
+
+    runner = CliRunner()
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.chdir(project)
+
+    wh = tmp_path / "warehouse"
+    wh.mkdir()
+    (wh / "README.md").write_text("# Warehouse")
+    (wh / "agents").mkdir()
+    (wh / "agents" / "code-reviewer.md").write_text(
+        "---\nname: code-reviewer\n---\n# Agent"
+    )
+    (wh / "docs").mkdir()
+    (wh / "contexts").mkdir()
+    (wh / "knowledge").mkdir()
+    (wh / "skills").mkdir()
+
+    connect = runner.invoke(main, ["warehouse", "connect", "--path", str(wh)])
+    assert connect.exit_code == 0
+
+    result = runner.invoke(main, ["warehouse", "list"])
+    assert result.exit_code == 0
+    assert "Agent" in result.output or "agent" in result.output.lower()
+
+
+def test_warehouse_list_filter_agents(tmp_path, monkeypatch):
+    """TC2: abc warehouse list agents → only agents section shown."""
+    from click.testing import CliRunner
+
+    runner = CliRunner()
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.chdir(project)
+
+    wh = tmp_path / "warehouse"
+    wh.mkdir()
+    (wh / "README.md").write_text("# Warehouse")
+    (wh / "agents").mkdir()
+    (wh / "agents" / "code-reviewer.md").write_text(
+        "---\nname: code-reviewer\n---\n# Agent"
+    )
+    (wh / "docs").mkdir()
+    (wh / "contexts").mkdir()
+    (wh / "knowledge").mkdir()
+    (wh / "skills").mkdir()
+
+    connect = runner.invoke(main, ["warehouse", "connect", "--path", str(wh)])
+    assert connect.exit_code == 0
+
+    result = runner.invoke(main, ["warehouse", "list", "agents"])
+    assert result.exit_code == 0
+    assert "Contexts" not in result.output
+    assert "Skills" not in result.output
+
+
+def test_warehouse_list_agents_empty(tmp_path, monkeypatch):
+    """TC3: Warehouse agents/ dir is empty → 'No agents found' message."""
+    from click.testing import CliRunner
+
+    runner = CliRunner()
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.chdir(project)
+
+    wh = tmp_path / "warehouse"
+    wh.mkdir()
+    (wh / "README.md").write_text("# Warehouse")
+    (wh / "agents").mkdir()
+    (wh / "docs").mkdir()
+    (wh / "contexts").mkdir()
+    (wh / "knowledge").mkdir()
+    (wh / "skills").mkdir()
+
+    connect = runner.invoke(main, ["warehouse", "connect", "--path", str(wh)])
+    assert connect.exit_code == 0
+
+    result = runner.invoke(main, ["warehouse", "list", "agents"])
+    assert result.exit_code == 0
+    assert "No agents found" in result.output
+
+
+def test_list_agents_shows_global_installs(tmp_path, monkeypatch):
+    """TC1: abc list agents → shows globally installed agent files from both tool dirs."""
+    from click.testing import CliRunner
+
+    runner = CliRunner()
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.chdir(project)
+
+    # Fake global agent dirs
+    fake_home = tmp_path / "home"
+    opencode_agents = fake_home / ".config" / "opencode" / "agents"
+    claude_agents = fake_home / ".claude" / "agents"
+    opencode_agents.mkdir(parents=True)
+    claude_agents.mkdir(parents=True)
+    (opencode_agents / "code-reviewer.md").write_text("# Agent")
+    (claude_agents / "code-reviewer.md").write_text("# Agent")
+
+    monkeypatch.setattr("pathlib.Path.home", lambda: fake_home)
+
+    result = runner.invoke(main, ["list", "agents"])
+    assert result.exit_code == 0
+    assert "code-reviewer" in result.output
+
+
+def test_list_agents_no_artifacts_dir_needed(tmp_path, monkeypatch):
+    """TC2: abc list agents doesn't require .agentic-beacon/artifacts/ to exist."""
+    from click.testing import CliRunner
+
+    runner = CliRunner()
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.chdir(project)
+
+    fake_home = tmp_path / "home"
+    (fake_home / ".config" / "opencode" / "agents").mkdir(parents=True)
+    (fake_home / ".claude" / "agents").mkdir(parents=True)
+    monkeypatch.setattr("pathlib.Path.home", lambda: fake_home)
+
+    result = runner.invoke(main, ["list", "agents"])
+    assert result.exit_code == 0
+    assert "No agents found" in result.output
+
+
+def test_list_agents_not_shown_in_default_list(synced_project, monkeypatch):
+    """TC2: abc list (no filter) → agents section not shown (backward compatible)."""
+    project, warehouse, runner = synced_project
+
+    fake_home = project.parent / "home"
+    (fake_home / ".config" / "opencode" / "agents").mkdir(parents=True)
+    (fake_home / ".config" / "opencode" / "agents" / "test-agent.md").write_text(
+        "# Agent"
+    )
+    (fake_home / ".claude" / "agents").mkdir(parents=True)
+    monkeypatch.setattr("pathlib.Path.home", lambda: fake_home)
+
+    result = runner.invoke(main, ["list"])
+    assert result.exit_code == 0
+    # Agents should not appear in the default project list
+    assert "Installed Agents" not in result.output

@@ -19,6 +19,10 @@ KNOWN_TEMPLATE_HASHES: dict[str, list[str]] = {
         # v2.2+ (agent skill dirs added)
         "84eeaf600db2a2b5aaa963c05e4ea13af92dc973a6b63740554212fec1701cb7",
     ],
+    "agents/README.md": [
+        # v2.3+ (agents artifact type introduced)
+        "5ffded083242776b0016aabbfe66baa01798892ea17c0a7da1bf551707df4b1c",
+    ],
     "README.md": [
         # v2.x (current)
         "3c1c02ce7df7161a4f6286638b9d4b12fb462c08e8bba12aa2d1b720de6d5856",
