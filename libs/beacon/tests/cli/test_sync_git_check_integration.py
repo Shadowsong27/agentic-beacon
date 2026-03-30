@@ -360,3 +360,70 @@ def test_sync_proceeds_when_warehouse_has_no_git(tmp_path, monkeypatch):
     assert (
         project / ".agentic-beacon" / "artifacts" / "knowledge" / "lesson.md"
     ).exists()
+
+
+# ---------------------------------------------------------------------------
+# Stale snapshot: sync with 0 artifact changes must still clear the warning
+# ---------------------------------------------------------------------------
+
+
+def test_contribute_stale_warning_clears_after_sync_with_zero_artifact_changes(
+    connected_project,
+):
+    """Regression: abc sync showing 0 copied must update .sync-state so the stale
+    snapshot warning does NOT reappear on the next abc contribute.
+
+    Mirrors the real user scenario: the user creates NEW knowledge files locally
+    (no beacon.yaml entry, no conflict with warehouse), the warehouse gets a
+    non-artifact commit (README only), and then abc sync shows 0 changes.
+    After that sync, abc contribute must NOT re-warn about a stale snapshot.
+
+      1. Initial sync against warehouse SHA-1.
+      2. User creates a new local knowledge file (untracked, no conflict).
+      3. Warehouse gets a non-artifact commit (README) → HEAD is now SHA-2.
+      4. abc contribute (tracked file) → stale snapshot warning (SHA-1 != SHA-2). [expected]
+      5. abc sync → 0 files copied (no artifact changes), MUST write SHA-2 to .sync-state.
+      6. abc contribute → must NOT warn again (SHA-2 == SHA-2).
+    """
+    project, warehouse, runner = connected_project
+
+    # Step 1 — initial sync
+    result = runner.invoke(main, ["sync"])
+    assert result.exit_code == 0
+
+    # Step 2 — user creates a NEW untracked file locally (no beacon.yaml entry)
+    # This mirrors the "new knowledge files" scenario from the user report.
+    new_file = project / ".agentic-beacon" / "artifacts" / "knowledge" / "new-idea.md"
+    new_file.write_text("# New Idea\nSomething discovered locally.\n")
+
+    # Also locally modify the tracked file so there is something to contribute
+    synced = project / ".agentic-beacon" / "artifacts" / "knowledge" / "lesson.md"
+    synced.write_text("# Lesson\nImproved locally.\n")
+
+    # Step 3 — warehouse gets a non-artifact commit (README only, no tracked file change)
+    (warehouse / "README.md").write_text("# Warehouse — updated README\n")
+    _git(["add", "README.md"], warehouse)
+    _git(["commit", "-m", "chore: update README"], warehouse)
+
+    # Step 4 — contribute is blocked by stale snapshot
+    blocked = runner.invoke(main, ["contribute", "knowledge/lesson.md"])
+    assert blocked.exit_code != 0
+    assert (
+        "older warehouse commit" in blocked.output or "stale" in blocked.output.lower()
+    )
+
+    # Step 5 — sync: no conflicts (tracked lesson.md differs locally but warehouse
+    # didn't change it), so sync exits 0 and MUST update .sync-state to SHA-2.
+    sync_result = runner.invoke(main, ["sync", "--preserve"])
+    assert sync_result.exit_code == 0
+    assert "Copied: 0" in sync_result.output
+
+    # Re-apply the local modification (--preserve kept it, but be explicit)
+    synced.write_text("# Lesson\nImproved locally.\n")
+
+    # Step 6 — contribute must no longer warn about a stale snapshot
+    result = runner.invoke(main, ["contribute", "knowledge/lesson.md", "--manual-git"])
+    assert result.exit_code == 0, (
+        f"Expected contribute to succeed after sync, but got:\n{result.output}"
+    )
+    assert "older warehouse commit" not in result.output
