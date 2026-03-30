@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.3.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v2.2.0...agentic-beacon@v2.3.0) (2026-03-30)
+
+
+### Features
+
+* contribute/delta/sync UX improvements ([c6a7893](https://github.com/Shadowsong27/agentic-beacon/commit/c6a7893f9b32690ff560cf611f5b284b727ea658))
+
+
+### Bug Fixes
+
+* force release for agentic-beacon ([48dc721](https://github.com/Shadowsong27/agentic-beacon/commit/48dc72175729c5dc78ea7ca4a2fb2a1d5893e35f))
+
 ## [2.2.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v2.1.3...agentic-beacon@v2.2.0) (2026-03-28)
 
 
