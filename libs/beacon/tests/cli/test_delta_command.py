@@ -471,3 +471,23 @@ def test_delta_detailed_diff_multi_agent_shows_both_sections(
     # Content from both diffs
     assert "OpenCode edit" in result.output
     assert "Claude edit" in result.output
+
+
+# ---------------------------------------------------------------------------
+# Regression: .sync-state must not appear as an untracked artifact
+# ---------------------------------------------------------------------------
+
+
+def test_delta_sync_state_not_shown_as_untracked(project_with_artifacts, monkeypatch):
+    """Regression: .sync-state is a framework metadata file and must never appear
+    in the delta untracked section, even though it lives inside artifacts_dir."""
+    artifacts_dir = project_with_artifacts / ".agentic-beacon" / "artifacts"
+    # Simulate what abc sync writes after a successful sync
+    (artifacts_dir / ".sync-state").write_text("abc123\n")
+
+    runner = CliRunner()
+    monkeypatch.chdir(project_with_artifacts)
+    result = runner.invoke(main, ["delta"])
+
+    assert result.exit_code == 0
+    assert ".sync-state" not in result.output

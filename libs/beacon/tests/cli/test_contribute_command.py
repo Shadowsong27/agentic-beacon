@@ -1041,3 +1041,146 @@ def test_contribute_all_skills_propagates_to_other_agents(
     assert (oc_skill_dir / "SKILL.md").read_text() == SKILL_MODIFIED_CONTENT, (
         "opencode live copy was not propagated after contribute --all"
     )
+
+
+# ---------------------------------------------------------------------------
+# --include-unregistered flag
+# ---------------------------------------------------------------------------
+
+
+def test_include_unregistered_copies_untracked_file(project_with_untracked):
+    """--include-unregistered copies files not listed in beacon.yaml to the warehouse."""
+    tmp_path, warehouse = project_with_untracked
+    runner = CliRunner()
+
+    result = runner.invoke(
+        main, ["contribute", "--include-unregistered", "--manual-git"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert (
+        warehouse / "knowledge" / "python" / "new-lesson.md"
+    ).read_text() == ADDED_CONTENT
+
+
+def test_include_unregistered_does_not_modify_beacon_yaml(project_with_untracked):
+    """--include-unregistered never writes to beacon.yaml; registration stays user's job."""
+    tmp_path, warehouse = project_with_untracked
+    runner = CliRunner()
+
+    beacon_yaml = tmp_path / ".agentic-beacon" / "beacon.yaml"
+    original_content = beacon_yaml.read_text()
+
+    runner.invoke(main, ["contribute", "--include-unregistered", "--manual-git"])
+
+    assert beacon_yaml.read_text() == original_content
+
+
+def test_include_unregistered_contributes_both_tracked_and_untracked(
+    project_with_untracked,
+):
+    """--include-unregistered contributes tracked modified files AND untracked new files."""
+    tmp_path, warehouse = project_with_untracked
+    runner = CliRunner()
+
+    # Make the tracked file differ from the warehouse
+    local_hints = (
+        tmp_path
+        / ".agentic-beacon"
+        / "artifacts"
+        / "knowledge"
+        / "python"
+        / "type-hints.md"
+    )
+    local_hints.write_text(KNOWLEDGE_CONTENT_MODIFIED)
+
+    result = runner.invoke(
+        main, ["contribute", "--include-unregistered", "--manual-git"]
+    )
+
+    assert result.exit_code == 0, result.output
+    # Tracked modified file contributed
+    assert (
+        warehouse / "knowledge" / "python" / "type-hints.md"
+    ).read_text() == KNOWLEDGE_CONTENT_MODIFIED
+    # Untracked new file also contributed
+    assert (
+        warehouse / "knowledge" / "python" / "new-lesson.md"
+    ).read_text() == ADDED_CONTENT
+
+
+def test_include_unregistered_dry_run_does_not_copy(project_with_untracked):
+    """--include-unregistered combined with --dry-run does not copy any files."""
+    tmp_path, warehouse = project_with_untracked
+    runner = CliRunner()
+
+    result = runner.invoke(main, ["contribute", "--include-unregistered", "--dry-run"])
+
+    assert result.exit_code == 0, result.output
+    assert "dry" in result.output.lower() or "would" in result.output.lower()
+    assert not (warehouse / "knowledge" / "python" / "new-lesson.md").exists()
+
+
+def test_without_include_unregistered_still_ignores_untracked(project_with_untracked):
+    """Regression: default behaviour still ignores untracked files without the flag."""
+    tmp_path, warehouse = project_with_untracked
+    runner = CliRunner()
+
+    result = runner.invoke(main, ["contribute", "--manual-git"])
+
+    assert result.exit_code == 0, result.output
+    assert not (warehouse / "knowledge" / "python" / "new-lesson.md").exists()
+
+
+def test_include_unregistered_nothing_to_contribute_when_all_match(
+    project_with_untracked,
+):
+    """When tracked files are identical and there are no untracked files, reports nothing."""
+    tmp_path, warehouse = project_with_untracked
+    runner = CliRunner()
+
+    # Remove the untracked file so there's truly nothing new
+    untracked = (
+        tmp_path
+        / ".agentic-beacon"
+        / "artifacts"
+        / "knowledge"
+        / "python"
+        / "new-lesson.md"
+    )
+    untracked.unlink()
+
+    result = runner.invoke(main, ["contribute", "--include-unregistered"])
+
+    assert result.exit_code == 0
+    assert "nothing to contribute" in result.output.lower()
+
+
+def test_include_unregistered_auto_git_includes_untracked_in_pr(project_with_untracked):
+    """--include-unregistered includes untracked files in the auto-git PR."""
+    tmp_path, warehouse = project_with_untracked
+    (warehouse / ".git").mkdir()
+
+    runner = CliRunner()
+    with (
+        patch("beacon.cli._check_warehouse_git_clean", return_value=None),
+        patch("beacon.cli._check_sync_state", return_value=None),
+        patch("beacon.cli.subprocess.run") as mock_run,
+    ):
+        mock_run.side_effect = [
+            _make_completed(0),  # git checkout -b
+            _make_completed(0),  # git add -- <paths>
+            _make_completed(0),  # git commit
+            _make_completed(0),  # git push
+            _make_completed(
+                0, stdout="https://github.com/org/repo/pull/99\n"
+            ),  # gh pr create
+        ]
+        result = runner.invoke(main, ["contribute", "--include-unregistered"])
+
+    assert result.exit_code == 0, result.output
+    assert "https://github.com/org/repo/pull/99" in result.output
+    # The untracked file should appear in the git add call
+    add_call = mock_run.call_args_list[1]
+    added_paths = add_call.args[0] if add_call.args else add_call[0][0]
+    assert any("new-lesson.md" in str(p) for p in added_paths)

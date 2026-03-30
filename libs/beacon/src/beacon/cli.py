@@ -166,8 +166,11 @@ def _check_warehouse_on_main_branch(warehouse_path: Path) -> str | None:
         return (
             f"Warehouse is on branch '{current_branch}', not 'main'.\n"
             f"  Warehouse: {short_path}\n\n"
-            f"  Switch to the main branch before syncing to avoid distributing\n"
-            f"  unreleased or experimental warehouse content:\n"
+            f"  This usually means you have a contribution in progress.\n"
+            f"  Before switching branches, make sure your work is published:\n"
+            f"    - Open a PR or push your branch so the work isn't lost\n"
+            f"    - Or run 'abc contribute' to package it up first\n\n"
+            f"  Then switch to main:\n"
             f"    cd {short_path}\n"
             f"    git checkout main\n\n"
             f"  Use --skip-git-check to bypass this check."
@@ -1455,6 +1458,13 @@ def sync(
                 else:
                     artifact_paths.append(pattern)
 
+        # Record sync state now — before the conflict check which may sys.exit(1).
+        # Semantics: "I've verified the warehouse at this HEAD."  Even when sync exits
+        # early (non-interactive conflict), the stale-snapshot warning in `abc contribute`
+        # should clear because the user has checked the current warehouse commit.
+        if not dry_run:
+            _write_sync_state(artifacts_dir, warehouse_path)
+
         # Soft-block pre-check: detect conflicts before writing
         if not dry_run:
             conflicts = sync_engine.classify_conflicts(artifact_paths)
@@ -1637,9 +1647,6 @@ def sync(
 
         # Install abc-bundled skills directly from data/skills/ (no beacon.yaml entry needed)
         _print_bundled_install_result(*_install_bundled_skills_globally())
-
-        # Record sync state so contribute can detect stale snapshots
-        _write_sync_state(artifacts_dir, warehouse_path)
 
     except Exception as e:
         console.print(f"\n[red]Error:[/red] Sync failed: {e}")
@@ -2075,65 +2082,75 @@ def _show_delta_summary(
         )
         return
 
-    # Show artifact differences
-    console.print("\n[bold]Artifact Differences:[/bold]\n")
+    tracked_diffs = [r for r in summary.results if r.status != DeltaStatus.IDENTICAL]
 
-    for result in summary.results:
-        if result.status == DeltaStatus.MODIFIED:
-            if result.is_skill and result.agent_statuses:
-                # Show per-agent breakdown for skills
-                agent_detail = _format_skill_agent_statuses(result.agent_statuses)
-                console.print(
-                    f"  [yellow][Modified][/yellow] {result.path} [dim]({agent_detail})[/dim]"
-                )
-            else:
-                console.print(f"  [yellow][Modified][/yellow] {result.path}")
-        elif result.status == DeltaStatus.ADDED:
-            if result.is_skill and result.agent_statuses:
-                agent_detail = _format_skill_agent_statuses(result.agent_statuses)
-                console.print(
-                    f"  [green][Added][/green]    {result.path} [dim]({agent_detail})[/dim]"
-                )
-            else:
-                console.print(f"  [green][Added][/green]    {result.path}")
-        elif result.status == DeltaStatus.MISSING:
-            if result.is_skill and result.agent_statuses:
-                agent_detail = _format_skill_agent_statuses(result.agent_statuses)
-                console.print(
-                    f"  [red][Missing][/red]  {result.path} [dim]({agent_detail})[/dim]"
-                )
-            else:
-                console.print(f"  [red][Missing][/red]  {result.path}")
+    # --- Tracked Artifacts section ---
+    if tracked_diffs or has_agent_diffs:
+        console.print("\n[bold]Tracked Artifacts:[/bold]\n")
+        for result in tracked_diffs:
+            if result.status == DeltaStatus.MODIFIED:
+                if result.is_skill and result.agent_statuses:
+                    agent_detail = _format_skill_agent_statuses(result.agent_statuses)
+                    console.print(
+                        f"  [yellow][Modified][/yellow] {result.path} [dim]({agent_detail})[/dim]"
+                    )
+                else:
+                    console.print(f"  [yellow][Modified][/yellow] {result.path}")
+            elif result.status == DeltaStatus.ADDED:
+                if result.is_skill and result.agent_statuses:
+                    agent_detail = _format_skill_agent_statuses(result.agent_statuses)
+                    console.print(
+                        f"  [green][Added][/green]    {result.path} [dim]({agent_detail})[/dim]"
+                    )
+                else:
+                    console.print(f"  [green][Added][/green]    {result.path}")
+            elif result.status == DeltaStatus.MISSING:
+                if result.is_skill and result.agent_statuses:
+                    agent_detail = _format_skill_agent_statuses(result.agent_statuses)
+                    console.print(
+                        f"  [red][Missing][/red]  {result.path} [dim]({agent_detail})[/dim]"
+                    )
+                else:
+                    console.print(f"  [red][Missing][/red]  {result.path}")
 
-    for rel_path in untracked:
+        stale_agents = []
+        for result in agent_results:
+            agent_detail = (
+                _format_skill_agent_statuses(result.agent_statuses)
+                if result.agent_statuses
+                else ""
+            )
+            suffix = f" [dim]({agent_detail})[/dim]" if agent_detail else ""
+            if result.status == DeltaStatus.STALE:
+                console.print(
+                    f"  [dim cyan][Stale][/dim cyan]    {result.path}{suffix}"
+                )
+                stale_agents.append(result.path)
+            elif result.status == DeltaStatus.MODIFIED:
+                console.print(f"  [yellow][Modified][/yellow] {result.path}{suffix}")
+            elif result.status == DeltaStatus.MISSING:
+                console.print(f"  [red][Missing][/red]  {result.path}{suffix}")
+    else:
+        stale_agents = []
+
+    # --- Untracked Artifacts section ---
+    if untracked:
+        if tracked_diffs or has_agent_diffs:
+            console.rule(style="dim")
         console.print(
-            f"  [green][Added][/green]    {rel_path} [dim](not in beacon.yaml)[/dim]"
+            "\n[bold]Untracked Artifacts:[/bold] [dim](not in beacon.yaml)[/dim]\n"
         )
-
-    # Show agent differences
-    stale_agents = []
-    for result in agent_results:
-        agent_detail = (
-            _format_skill_agent_statuses(result.agent_statuses)
-            if result.agent_statuses
-            else ""
-        )
-        suffix = f" [dim]({agent_detail})[/dim]" if agent_detail else ""
-        if result.status == DeltaStatus.STALE:
-            console.print(f"  [dim cyan][Stale][/dim cyan]    {result.path}{suffix}")
-            stale_agents.append(result.path)
-        elif result.status == DeltaStatus.MODIFIED:
-            console.print(f"  [yellow][Modified][/yellow] {result.path}{suffix}")
-        elif result.status == DeltaStatus.MISSING:
-            console.print(f"  [red][Missing][/red]  {result.path}{suffix}")
+        for rel_path in untracked:
+            console.print(f"  [green][Added][/green]    {rel_path}")
 
     # Summary counts
     console.print("\n[bold]Summary:[/bold]")
     if summary.modified:
         console.print(f"  [yellow]Modified:[/yellow] {len(summary.modified)} files")
-    total_added = len(summary.added) + len(untracked)
-    if total_added:
-        console.print(f"  [green]Added:[/green] {total_added} files")
+    if summary.added:
+        console.print(f"  [green]Added:[/green] {len(summary.added)} files")
+    if untracked:
+        console.print(f"  [green]Untracked:[/green] {len(untracked)} files")
     if summary.missing:
         console.print(f"  [red]Missing:[/red] {len(summary.missing)} files")
     if summary.identical:
@@ -2152,7 +2169,7 @@ def _show_delta_summary(
         )
     if untracked:
         console.print(
-            "[dim]Tip: Run 'abc contribute --all' to push untracked local artifacts to the warehouse.[/dim]"
+            "[dim]Tip: Run 'abc contribute --include-unregistered' to push untracked local artifacts to the warehouse.[/dim]"
         )
     if stale_agents:
         console.print(
@@ -2295,7 +2312,7 @@ def _find_untracked_local_files(
     untracked: list[str] = []
     if artifacts_dir.exists():
         for file_path in sorted(artifacts_dir.rglob("*")):
-            if file_path.is_file():
+            if file_path.is_file() and file_path.name != _SYNC_STATE_FILENAME:
                 rel = str(file_path.relative_to(artifacts_dir))
                 if rel not in tracked:
                     untracked.append(rel)
@@ -2322,8 +2339,18 @@ def _find_untracked_local_files(
     is_flag=True,
     help="Skip auto git commit/push/PR — print manual steps instead",
 )
+@click.option(
+    "--include-unregistered",
+    is_flag=True,
+    help="Also contribute local artifacts not tracked in beacon.yaml (without registering them)",
+)
 def contribute(
-    *, file: str | None, dry_run: bool, skip_git_check: bool, manual_git: bool
+    *,
+    file: str | None,
+    dry_run: bool,
+    skip_git_check: bool,
+    manual_git: bool,
+    include_unregistered: bool,
 ) -> None:
     """Copy local artifact changes back to the warehouse for sharing.
 
@@ -2342,6 +2369,8 @@ def contribute(
         abc contribute --dry-run                        # Preview only
 
         abc contribute --manual-git                     # Skip auto PR creation
+
+        abc contribute --include-unregistered           # Also include untracked local artifacts
     """
     beacon_dir = Path.cwd() / ".agentic-beacon"
     if not beacon_dir.exists():
@@ -2420,6 +2449,7 @@ def contribute(
                 artifacts_dir,
                 dry_run,
                 project_root=project_root,
+                include_unregistered=include_unregistered,
             )
 
         if not dry_run and contributed:
@@ -2626,11 +2656,14 @@ def _contribute_all(
     artifacts_dir: Path,
     dry_run: bool,
     project_root: Path,
+    include_unregistered: bool = False,
 ) -> list[tuple[str, str]]:
     """Contribute all tracked modified and added artifacts back to the warehouse.
 
-    Only contributes artifacts already tracked in beacon.yaml. Untracked local
-    files are ignored — use ``abc adopt`` for discovery and opt-in.
+    Only contributes artifacts already tracked in beacon.yaml unless
+    ``include_unregistered`` is True, in which case locally-added files that are
+    not tracked in beacon.yaml are also copied to the warehouse (without
+    registering them).
 
     For skills: reads from live agent directories. If multiple agents have
     conflicting modifications the user is prompted to choose per-skill.
@@ -2640,7 +2673,13 @@ def _contribute_all(
     summary = comparator.compare_from_config(beacon_settings)
     contributable = summary.modified + summary.added
 
-    if not contributable:
+    unregistered_paths: list[str] = []
+    if include_unregistered:
+        unregistered_paths = _find_untracked_local_files(
+            comparator, beacon_settings, artifacts_dir
+        )
+
+    if not contributable and not unregistered_paths:
         console.print(
             "[green]Nothing to contribute.[/green] "
             "All local artifacts match the warehouse."
@@ -2680,6 +2719,12 @@ def _contribute_all(
                 "modified" if result.status == DeltaStatus.MODIFIED else "added"
             )
             contributed.append((result.path, status_label))
+
+    for rel_path in unregistered_paths:
+        local_path = artifacts_dir / rel_path
+        _copy_to_warehouse(local_path, warehouse_path / rel_path, rel_path, dry_run)
+        if not dry_run:
+            contributed.append((rel_path, "added"))
 
     return contributed
 
