@@ -89,7 +89,7 @@ def test_contribute_proceeds_when_warehouse_is_clean(connected_project):
     """abc contribute succeeds when the warehouse working tree is clean."""
     project, warehouse, runner = connected_project
 
-    result = runner.invoke(main, ["contribute", "knowledge/lesson.md"])
+    result = runner.invoke(main, ["contribute", "knowledge/lesson.md"], input="y\n")
 
     assert result.exit_code == 0
     assert "Improved locally." in (warehouse / "knowledge" / "lesson.md").read_text()
@@ -180,7 +180,9 @@ def test_contribute_skip_git_check_proceeds_despite_dirty_warehouse(connected_pr
     (warehouse / "knowledge" / "draft.md").write_text("# Draft\n")
 
     result = runner.invoke(
-        main, ["contribute", "knowledge/lesson.md", "--skip-git-check"]
+        main,
+        ["contribute", "knowledge/lesson.md", "--skip-git-check"],
+        input="y\n",
     )
 
     assert result.exit_code == 0
@@ -235,7 +237,7 @@ def test_contribute_proceeds_after_committing_warehouse_changes(connected_projec
     synced.write_text("# Lesson\nImproved locally.\n")
 
     # Now contribute should succeed
-    result = runner.invoke(main, ["contribute", "knowledge/lesson.md"])
+    result = runner.invoke(main, ["contribute", "knowledge/lesson.md"], input="y\n")
     assert result.exit_code == 0
     assert "Improved locally." in (warehouse / "knowledge" / "lesson.md").read_text()
 
@@ -275,7 +277,7 @@ def test_contribute_proceeds_when_warehouse_has_no_git(tmp_path, monkeypatch):
     synced = beacon_dir / "artifacts" / "knowledge" / "lesson.md"
     synced.write_text("# Lesson\nImproved.\n")
 
-    result = runner.invoke(main, ["contribute", "knowledge/lesson.md"])
+    result = runner.invoke(main, ["contribute", "knowledge/lesson.md"], input="y\n")
 
     assert result.exit_code == 0
     assert "Improved." in (wh / "knowledge" / "lesson.md").read_text()

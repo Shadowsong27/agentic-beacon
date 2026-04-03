@@ -74,7 +74,9 @@ def test_contribute_single_modified_file(project_with_delta):
     tmp_path, warehouse = project_with_delta
     runner = CliRunner()
 
-    result = runner.invoke(main, ["contribute", "knowledge/python/type-hints.md"])
+    result = runner.invoke(
+        main, ["contribute", "knowledge/python/type-hints.md"], input="y\n"
+    )
 
     assert result.exit_code == 0, result.output
     dest = warehouse / "knowledge" / "python" / "type-hints.md"
@@ -86,7 +88,9 @@ def test_contribute_single_added_file(project_with_delta):
     tmp_path, warehouse = project_with_delta
     runner = CliRunner()
 
-    result = runner.invoke(main, ["contribute", "knowledge/python/new-lesson.md"])
+    result = runner.invoke(
+        main, ["contribute", "knowledge/python/new-lesson.md"], input="y\n"
+    )
 
     assert result.exit_code == 0, result.output
     dest = warehouse / "knowledge" / "python" / "new-lesson.md"
@@ -110,7 +114,9 @@ def test_contribute_identical_file_is_noop(project_with_delta):
     )
     local.write_text(KNOWLEDGE_CONTENT_ORIGINAL)
 
-    result = runner.invoke(main, ["contribute", "knowledge/python/type-hints.md"])
+    result = runner.invoke(
+        main, ["contribute", "knowledge/python/type-hints.md"], input="y\n"
+    )
 
     assert result.exit_code == 0
     assert "nothing to contribute" in result.output.lower()
@@ -129,7 +135,7 @@ def test_contribute_all_copies_modified_and_added(project_with_delta):
     tmp_path, warehouse = project_with_delta
     runner = CliRunner()
 
-    result = runner.invoke(main, ["contribute", "--manual-git"])
+    result = runner.invoke(main, ["contribute", "--manual-git"], input="y\n")
 
     assert result.exit_code == 0, result.output
     assert (
@@ -140,7 +146,7 @@ def test_contribute_all_copies_modified_and_added(project_with_delta):
     ).read_text() == ADDED_CONTENT
 
 
-def test_contribute_all_nothing_to_contribute(project_with_delta):
+def test_contribute_all_nothing_to_contribute(project_with_delta, isolated_home):
     """When all artifacts are identical, contribute with no file reports nothing to contribute."""
     tmp_path, warehouse = project_with_delta
     runner = CliRunner()
@@ -233,7 +239,7 @@ def test_contribute_single_unrecognised_path_still_copies(project_with_delta):
     weird.parent.mkdir(parents=True)
     weird.write_text("random")
 
-    result = runner.invoke(main, ["contribute", "misc/random.md"])
+    result = runner.invoke(main, ["contribute", "misc/random.md"], input="y\n")
 
     assert result.exit_code == 0, result.output
     assert (warehouse / "misc" / "random.md").read_text() == "random"
@@ -254,7 +260,9 @@ def test_contribute_errors_when_file_not_synced_locally(project_with_delta):
     local.unlink()
 
     runner = CliRunner()
-    result = runner.invoke(main, ["contribute", "knowledge/python/type-hints.md"])
+    result = runner.invoke(
+        main, ["contribute", "knowledge/python/type-hints.md"], input="y\n"
+    )
     assert result.exit_code != 0
     assert "sync" in result.output.lower() or "not" in result.output.lower()
 
@@ -262,7 +270,9 @@ def test_contribute_errors_when_file_not_synced_locally(project_with_delta):
 def test_contribute_errors_without_beacon_dir(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     runner = CliRunner()
-    result = runner.invoke(main, ["contribute", "knowledge/python/type-hints.md"])
+    result = runner.invoke(
+        main, ["contribute", "knowledge/python/type-hints.md"], input="y\n"
+    )
     assert result.exit_code != 0
     assert ".agentic-beacon" in result.output
 
@@ -272,7 +282,9 @@ def test_contribute_errors_without_warehouse_connection(tmp_path, monkeypatch):
     (tmp_path / ".agentic-beacon").mkdir()
     # No config.toml
     runner = CliRunner()
-    result = runner.invoke(main, ["contribute", "knowledge/python/type-hints.md"])
+    result = runner.invoke(
+        main, ["contribute", "knowledge/python/type-hints.md"], input="y\n"
+    )
     assert result.exit_code != 0
     assert "warehouse" in result.output.lower()
 
@@ -334,7 +346,9 @@ def test_contribute_single_untracked_file_copies_without_registering(
     beacon_yaml = tmp_path / ".agentic-beacon" / "beacon.yaml"
     original_content = beacon_yaml.read_text()
 
-    result = runner.invoke(main, ["contribute", "knowledge/python/new-lesson.md"])
+    result = runner.invoke(
+        main, ["contribute", "knowledge/python/new-lesson.md"], input="y\n"
+    )
 
     assert result.exit_code == 0, result.output
     # File copied to warehouse
@@ -346,14 +360,16 @@ def test_contribute_single_untracked_file_copies_without_registering(
 
 
 def test_contribute_all_ignores_untracked_files(project_with_untracked):
-    """contribute --all only contributes tracked artifacts; untracked files are ignored."""
+    """--exclude-unregistered only contributes tracked artifacts; untracked files are ignored."""
     tmp_path, warehouse = project_with_untracked
     runner = CliRunner()
 
     beacon_yaml = tmp_path / ".agentic-beacon" / "beacon.yaml"
     original_content = beacon_yaml.read_text()
 
-    result = runner.invoke(main, ["contribute", "--manual-git"])
+    result = runner.invoke(
+        main, ["contribute", "--exclude-unregistered", "--manual-git"], input="y\n"
+    )
 
     assert result.exit_code == 0, result.output
     # Untracked file NOT copied to warehouse
@@ -369,7 +385,9 @@ def test_contribute_single_already_tracked_does_not_duplicate(project_with_delta
 
     beacon_yaml = tmp_path / ".agentic-beacon" / "beacon.yaml"
 
-    result = runner.invoke(main, ["contribute", "knowledge/python/type-hints.md"])
+    result = runner.invoke(
+        main, ["contribute", "knowledge/python/type-hints.md"], input="y\n"
+    )
 
     assert result.exit_code == 0, result.output
     import yaml
@@ -632,7 +650,9 @@ def test_contribute_skill_single_reads_from_live_dir(project_with_skill_setup):
     (live_dir / "SKILL.md").write_text(SKILL_MODIFIED_CONTENT)
 
     runner = CliRunner()
-    result = runner.invoke(main, ["contribute", "skills/my-skill/SKILL.md"])
+    result = runner.invoke(
+        main, ["contribute", "skills/my-skill/SKILL.md"], input="y\n"
+    )
 
     assert result.exit_code == 0, result.output
     dest = warehouse / "skills" / "my-skill" / "SKILL.md"
@@ -654,7 +674,9 @@ def test_contribute_skill_single_ignores_stale_snapshot(project_with_skill_setup
     (live_dir / "SKILL.md").write_text(SKILL_MODIFIED_CONTENT)
 
     runner = CliRunner()
-    result = runner.invoke(main, ["contribute", "skills/my-skill/SKILL.md"])
+    result = runner.invoke(
+        main, ["contribute", "skills/my-skill/SKILL.md"], input="y\n"
+    )
 
     assert result.exit_code == 0, result.output
     dest = warehouse / "skills" / "my-skill" / "SKILL.md"
@@ -673,7 +695,9 @@ def test_contribute_skill_single_identical_live_is_noop(project_with_skill_setup
     (live_dir / "SKILL.md").write_text(SKILL_WAREHOUSE_CONTENT)
 
     runner = CliRunner()
-    result = runner.invoke(main, ["contribute", "skills/my-skill/SKILL.md"])
+    result = runner.invoke(
+        main, ["contribute", "skills/my-skill/SKILL.md"], input="y\n"
+    )
 
     assert result.exit_code == 0
     assert "nothing to contribute" in result.output.lower()
@@ -692,7 +716,7 @@ def test_contribute_skill_all_reads_from_live_dir(project_with_skill_setup):
     (live_dir / "SKILL.md").write_text(SKILL_MODIFIED_CONTENT)
 
     runner = CliRunner()
-    result = runner.invoke(main, ["contribute", "--manual-git"])
+    result = runner.invoke(main, ["contribute", "--manual-git"], input="y\n")
 
     assert result.exit_code == 0, result.output
     dest = warehouse / "skills" / "my-skill" / "SKILL.md"
@@ -718,7 +742,9 @@ def test_contribute_skill_multi_agent_identical_versions_no_prompt(
     (cc_dir / "SKILL.md").write_text(SKILL_MODIFIED_CONTENT)  # same content
 
     runner = CliRunner()
-    result = runner.invoke(main, ["contribute", "skills/my-skill/SKILL.md"])
+    result = runner.invoke(
+        main, ["contribute", "skills/my-skill/SKILL.md"], input="y\n"
+    )
 
     assert result.exit_code == 0, result.output
     # No prompt — they agreed
@@ -745,9 +771,9 @@ def test_contribute_skill_multi_agent_conflict_prompts_user(
     (cc_dir / "SKILL.md").write_text(SKILL_OTHER_MODIFIED_CONTENT)
 
     runner = CliRunner()
-    # User picks option 1 (opencode)
+    # User picks option 1 (opencode); y\n answers the preceding "Proceed?" prompt
     result = runner.invoke(
-        main, ["contribute", "skills/my-skill/SKILL.md"], input="1\n"
+        main, ["contribute", "skills/my-skill/SKILL.md"], input="y\n1\n"
     )
 
     assert result.exit_code == 0, result.output
@@ -773,9 +799,9 @@ def test_contribute_skill_multi_agent_conflict_user_picks_second(
     (cc_dir / "SKILL.md").write_text(SKILL_OTHER_MODIFIED_CONTENT)
 
     runner = CliRunner()
-    # User picks option 2 (claudecode)
+    # User picks option 2 (claudecode); y\n answers the preceding "Proceed?" prompt
     result = runner.invoke(
-        main, ["contribute", "skills/my-skill/SKILL.md"], input="2\n"
+        main, ["contribute", "skills/my-skill/SKILL.md"], input="y\n2\n"
     )
 
     assert result.exit_code == 0, result.output
@@ -813,7 +839,7 @@ def test_contribute_manual_git_prints_next_steps(project_with_delta):
     tmp_path, warehouse = project_with_delta
     runner = CliRunner()
 
-    result = runner.invoke(main, ["contribute", "--manual-git"])
+    result = runner.invoke(main, ["contribute", "--manual-git"], input="y\n")
 
     assert result.exit_code == 0, result.output
     # Files still copied
@@ -831,7 +857,9 @@ def test_contribute_single_manual_git_prints_next_steps(project_with_delta):
     runner = CliRunner()
 
     result = runner.invoke(
-        main, ["contribute", "knowledge/python/type-hints.md", "--manual-git"]
+        main,
+        ["contribute", "knowledge/python/type-hints.md", "--manual-git"],
+        input="y\n",
     )
 
     assert result.exit_code == 0, result.output
@@ -878,7 +906,7 @@ def test_contribute_auto_git_creates_pr(project_with_delta, tmp_path):
                 0, stdout="https://github.com/org/repo/pull/42\n"
             ),  # gh pr create
         ]
-        result = runner.invoke(main, ["contribute"])
+        result = runner.invoke(main, ["contribute"], input="y\n")
 
     assert result.exit_code == 0, result.output
     assert "https://github.com/org/repo/pull/42" in result.output
@@ -892,7 +920,7 @@ def test_contribute_auto_git_fallback_when_no_git_dir(project_with_delta):
     # and auto-git also falls back to manual.
 
     runner = CliRunner()
-    result = runner.invoke(main, ["contribute"])
+    result = runner.invoke(main, ["contribute"], input="y\n")
 
     assert result.exit_code == 0, result.output
     # Manual next-steps printed as fallback
@@ -916,7 +944,7 @@ def test_contribute_auto_git_fallback_when_push_fails(project_with_delta):
             _make_completed(0),  # git commit
             _make_completed(1, stderr="error: failed to push"),  # git push fails
         ]
-        result = runner.invoke(main, ["contribute"])
+        result = runner.invoke(main, ["contribute"], input="y\n")
 
     assert result.exit_code == 0, result.output
     assert "warning" in result.output.lower() or "falling back" in result.output.lower()
@@ -941,7 +969,7 @@ def test_contribute_auto_git_fallback_when_gh_not_installed(project_with_delta):
             _make_completed(0),  # git push
             FileNotFoundError("gh not found"),  # gh pr create
         ]
-        result = runner.invoke(main, ["contribute"])
+        result = runner.invoke(main, ["contribute"], input="y\n")
 
     assert result.exit_code == 0, result.output
     assert "gh not installed" in result.output.lower() or "pr" in result.output.lower()
@@ -1000,7 +1028,9 @@ def test_contribute_single_skill_propagates_to_other_agents(
     (oc_skill_dir / "SKILL.md").write_text(SKILL_WAREHOUSE_CONTENT)
 
     runner = CliRunner()
-    result = runner.invoke(main, ["contribute", "skills/my-skill/SKILL.md"])
+    result = runner.invoke(
+        main, ["contribute", "skills/my-skill/SKILL.md"], input="y\n"
+    )
 
     assert result.exit_code == 0, result.output
     # Warehouse updated to contributed version
@@ -1032,7 +1062,7 @@ def test_contribute_all_skills_propagates_to_other_agents(
     (oc_skill_dir / "SKILL.md").write_text(SKILL_WAREHOUSE_CONTENT)
 
     runner = CliRunner()
-    result = runner.invoke(main, ["contribute"])
+    result = runner.invoke(main, ["contribute"], input="y\n")
 
     assert result.exit_code == 0, result.output
     assert (
@@ -1044,18 +1074,16 @@ def test_contribute_all_skills_propagates_to_other_agents(
 
 
 # ---------------------------------------------------------------------------
-# --include-unregistered flag
+# --exclude-unregistered flag
 # ---------------------------------------------------------------------------
 
 
-def test_include_unregistered_copies_untracked_file(project_with_untracked):
-    """--include-unregistered copies files not listed in beacon.yaml to the warehouse."""
+def test_default_includes_untracked_file(project_with_untracked):
+    """Default behaviour contributes files not listed in beacon.yaml to the warehouse."""
     tmp_path, warehouse = project_with_untracked
     runner = CliRunner()
 
-    result = runner.invoke(
-        main, ["contribute", "--include-unregistered", "--manual-git"]
-    )
+    result = runner.invoke(main, ["contribute", "--manual-git"], input="y\n")
 
     assert result.exit_code == 0, result.output
     assert (
@@ -1063,23 +1091,23 @@ def test_include_unregistered_copies_untracked_file(project_with_untracked):
     ).read_text() == ADDED_CONTENT
 
 
-def test_include_unregistered_does_not_modify_beacon_yaml(project_with_untracked):
-    """--include-unregistered never writes to beacon.yaml; registration stays user's job."""
+def test_default_does_not_modify_beacon_yaml(project_with_untracked):
+    """Default contribute never writes to beacon.yaml; registration stays user's job."""
     tmp_path, warehouse = project_with_untracked
     runner = CliRunner()
 
     beacon_yaml = tmp_path / ".agentic-beacon" / "beacon.yaml"
     original_content = beacon_yaml.read_text()
 
-    runner.invoke(main, ["contribute", "--include-unregistered", "--manual-git"])
+    runner.invoke(main, ["contribute", "--manual-git"], input="y\n")
 
     assert beacon_yaml.read_text() == original_content
 
 
-def test_include_unregistered_contributes_both_tracked_and_untracked(
+def test_default_contributes_both_tracked_and_untracked(
     project_with_untracked,
 ):
-    """--include-unregistered contributes tracked modified files AND untracked new files."""
+    """Default contribute includes tracked modified files AND untracked new files."""
     tmp_path, warehouse = project_with_untracked
     runner = CliRunner()
 
@@ -1094,9 +1122,7 @@ def test_include_unregistered_contributes_both_tracked_and_untracked(
     )
     local_hints.write_text(KNOWLEDGE_CONTENT_MODIFIED)
 
-    result = runner.invoke(
-        main, ["contribute", "--include-unregistered", "--manual-git"]
-    )
+    result = runner.invoke(main, ["contribute", "--manual-git"], input="y\n")
 
     assert result.exit_code == 0, result.output
     # Tracked modified file contributed
@@ -1109,31 +1135,46 @@ def test_include_unregistered_contributes_both_tracked_and_untracked(
     ).read_text() == ADDED_CONTENT
 
 
-def test_include_unregistered_dry_run_does_not_copy(project_with_untracked):
-    """--include-unregistered combined with --dry-run does not copy any files."""
+def test_default_dry_run_does_not_copy(project_with_untracked):
+    """Default --dry-run does not copy any files."""
     tmp_path, warehouse = project_with_untracked
     runner = CliRunner()
 
-    result = runner.invoke(main, ["contribute", "--include-unregistered", "--dry-run"])
+    result = runner.invoke(main, ["contribute", "--dry-run"])
 
     assert result.exit_code == 0, result.output
     assert "dry" in result.output.lower() or "would" in result.output.lower()
     assert not (warehouse / "knowledge" / "python" / "new-lesson.md").exists()
 
 
-def test_without_include_unregistered_still_ignores_untracked(project_with_untracked):
-    """Regression: default behaviour still ignores untracked files without the flag."""
+def test_exclude_unregistered_ignores_untracked(project_with_untracked):
+    """--exclude-unregistered skips files not listed in beacon.yaml."""
     tmp_path, warehouse = project_with_untracked
     runner = CliRunner()
 
-    result = runner.invoke(main, ["contribute", "--manual-git"])
+    # Make the tracked file differ so there IS something to contribute (triggers prompt)
+    local_hints = (
+        tmp_path
+        / ".agentic-beacon"
+        / "artifacts"
+        / "knowledge"
+        / "python"
+        / "type-hints.md"
+    )
+    local_hints.write_text(KNOWLEDGE_CONTENT_MODIFIED)
+
+    result = runner.invoke(
+        main, ["contribute", "--exclude-unregistered", "--manual-git"], input="y\n"
+    )
 
     assert result.exit_code == 0, result.output
+    # Untracked file NOT copied — excluded by flag
     assert not (warehouse / "knowledge" / "python" / "new-lesson.md").exists()
 
 
-def test_include_unregistered_nothing_to_contribute_when_all_match(
+def test_nothing_to_contribute_when_all_match(
     project_with_untracked,
+    isolated_home,
 ):
     """When tracked files are identical and there are no untracked files, reports nothing."""
     tmp_path, warehouse = project_with_untracked
@@ -1150,14 +1191,14 @@ def test_include_unregistered_nothing_to_contribute_when_all_match(
     )
     untracked.unlink()
 
-    result = runner.invoke(main, ["contribute", "--include-unregistered"])
+    result = runner.invoke(main, ["contribute", "--exclude-unregistered"])
 
     assert result.exit_code == 0
     assert "nothing to contribute" in result.output.lower()
 
 
-def test_include_unregistered_auto_git_includes_untracked_in_pr(project_with_untracked):
-    """--include-unregistered includes untracked files in the auto-git PR."""
+def test_default_auto_git_includes_untracked_in_pr(project_with_untracked):
+    """Default contribute includes untracked files in the auto-git PR."""
     tmp_path, warehouse = project_with_untracked
     (warehouse / ".git").mkdir()
 
@@ -1176,7 +1217,7 @@ def test_include_unregistered_auto_git_includes_untracked_in_pr(project_with_unt
                 0, stdout="https://github.com/org/repo/pull/99\n"
             ),  # gh pr create
         ]
-        result = runner.invoke(main, ["contribute", "--include-unregistered"])
+        result = runner.invoke(main, ["contribute"], input="y\n")
 
     assert result.exit_code == 0, result.output
     assert "https://github.com/org/repo/pull/99" in result.output
@@ -1184,3 +1225,109 @@ def test_include_unregistered_auto_git_includes_untracked_in_pr(project_with_unt
     add_call = mock_run.call_args_list[1]
     added_paths = add_call.args[0] if add_call.args else add_call[0][0]
     assert any("new-lesson.md" in str(p) for p in added_paths)
+
+
+# ---------------------------------------------------------------------------
+# y/N confirmation prompt
+# ---------------------------------------------------------------------------
+
+
+def test_contribute_prompts_before_copying(project_with_delta):
+    """abc contribute shows a preview and prompts y/N before copying any files."""
+    tmp_path, warehouse = project_with_delta
+    runner = CliRunner()
+
+    result = runner.invoke(
+        main,
+        ["contribute", "knowledge/python/type-hints.md", "--manual-git"],
+        input="y\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "preview" in result.output.lower()
+    assert "would contribute" in result.output.lower()
+    assert "proceed" in result.output.lower()
+    # File was actually copied
+    assert (
+        warehouse / "knowledge" / "python" / "type-hints.md"
+    ).read_text() == KNOWLEDGE_CONTENT_MODIFIED
+
+
+def test_contribute_aborts_when_user_declines(project_with_delta):
+    """Answering 'n' at the confirmation prompt aborts without copying any files."""
+    tmp_path, warehouse = project_with_delta
+    runner = CliRunner()
+
+    result = runner.invoke(
+        main,
+        ["contribute", "knowledge/python/type-hints.md", "--manual-git"],
+        input="n\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "aborted" in result.output.lower()
+    # Warehouse must be unchanged
+    assert (
+        warehouse / "knowledge" / "python" / "type-hints.md"
+    ).read_text() == KNOWLEDGE_CONTENT_ORIGINAL
+
+
+def test_contribute_all_prompts_before_copying(project_with_delta):
+    """abc contribute (no file) also shows preview and prompts before copying."""
+    tmp_path, warehouse = project_with_delta
+    runner = CliRunner()
+
+    result = runner.invoke(main, ["contribute", "--manual-git"], input="y\n")
+
+    assert result.exit_code == 0, result.output
+    assert "preview" in result.output.lower()
+    assert "proceed" in result.output.lower()
+    assert (
+        warehouse / "knowledge" / "python" / "type-hints.md"
+    ).read_text() == KNOWLEDGE_CONTENT_MODIFIED
+
+
+def test_contribute_all_aborts_when_user_declines(project_with_delta):
+    """Answering 'n' to the all-files confirmation aborts without copying anything."""
+    tmp_path, warehouse = project_with_delta
+    runner = CliRunner()
+
+    result = runner.invoke(main, ["contribute", "--manual-git"], input="n\n")
+
+    assert result.exit_code == 0, result.output
+    assert "aborted" in result.output.lower()
+    assert (
+        warehouse / "knowledge" / "python" / "type-hints.md"
+    ).read_text() == KNOWLEDGE_CONTENT_ORIGINAL
+    assert not (warehouse / "knowledge" / "python" / "new-lesson.md").exists()
+
+
+def test_contribute_noop_skips_prompt(project_with_delta, isolated_home):
+    """When there is nothing to contribute, the confirmation prompt is not shown."""
+    tmp_path, warehouse = project_with_delta
+    runner = CliRunner()
+
+    # Make local identical to warehouse
+    local_hints = (
+        tmp_path
+        / ".agentic-beacon"
+        / "artifacts"
+        / "knowledge"
+        / "python"
+        / "type-hints.md"
+    )
+    local_hints.write_text(KNOWLEDGE_CONTENT_ORIGINAL)
+    (
+        tmp_path
+        / ".agentic-beacon"
+        / "artifacts"
+        / "knowledge"
+        / "python"
+        / "new-lesson.md"
+    ).unlink()
+
+    result = runner.invoke(main, ["contribute"])
+
+    assert result.exit_code == 0, result.output
+    assert "nothing to contribute" in result.output.lower()
+    assert "proceed" not in result.output.lower()

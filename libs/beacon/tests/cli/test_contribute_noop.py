@@ -51,7 +51,9 @@ def connected_project(tmp_path, warehouse_with_agent, monkeypatch):
     return project, warehouse_with_agent, runner
 
 
-def test_tc1_identical_artifacts_nothing_to_contribute(connected_project):
+def test_tc1_identical_artifacts_nothing_to_contribute(
+    connected_project, isolated_home
+):
     """TC1: All project artifacts identical → Nothing to contribute, exit 0."""
     project, warehouse, runner = connected_project
 
@@ -72,15 +74,17 @@ def test_tc2_modified_artifact_proceeds(connected_project):
     local.write_text("# Lesson\nImproved.\n")
 
     result = runner.invoke(
-        main, ["contribute", "knowledge/lesson.md", "--skip-git-check"]
+        main,
+        ["contribute", "knowledge/lesson.md", "--skip-git-check"],
+        input="y\n",
     )
 
     assert result.exit_code == 0
     assert "Improved." in (warehouse / "knowledge" / "lesson.md").read_text()
 
 
-def test_tc4_agents_not_in_contribute_scope(connected_project, fake_home):
-    """TC4: Warehouse agents/ files differ from global installs → abc contribute ignores them."""
+def test_tc4_agents_in_contribute_scope(connected_project, fake_home):
+    """TC4: Warehouse agents/ files differ from global installs → abc contribute includes them."""
     project, warehouse, runner = connected_project
 
     # Install agent globally with different content
@@ -90,14 +94,12 @@ def test_tc4_agents_not_in_contribute_scope(connected_project, fake_home):
         "# Reviewer\nLocally modified version.\n"
     )
 
-    # Project artifacts are all identical (no local changes)
-    result = runner.invoke(main, ["contribute"])
+    # Project artifacts are all identical, but the global agent has changed
+    result = runner.invoke(main, ["contribute"], input="y\n")
 
     assert result.exit_code == 0
+    # Warehouse agent SHOULD have been updated with the modified version
     assert (
-        "Nothing to contribute" in result.output or "nothing" in result.output.lower()
-    )
-    # Warehouse agent should NOT have been modified
-    assert (
-        "Warehouse version" in (warehouse / "agents" / "code-reviewer.md").read_text()
+        "Locally modified version."
+        in (warehouse / "agents" / "code-reviewer.md").read_text()
     )

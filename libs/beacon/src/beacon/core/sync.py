@@ -27,6 +27,18 @@ class SyncResult(BaseModel):
     model_config = {"arbitrary_types_allowed": True}
 
 
+class OrphanInfo(BaseModel):
+    """Information about a single orphaned artifact file."""
+
+    rel_path: str
+    """Relative path under artifacts_path."""
+
+    is_modified: bool
+    """True if local content differs from the warehouse copy."""
+
+    model_config = {"arbitrary_types_allowed": True}
+
+
 @dataclass
 class SyncSummary:
     """Summary of a full sync operation."""
@@ -39,6 +51,7 @@ class SyncSummary:
     failed_files: list[tuple[str, str]] = field(default_factory=list)
     results: list[SyncResult] = field(default_factory=list)
     log_messages: list[str] = field(default_factory=list)
+    pruned_paths: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -171,11 +184,61 @@ class SyncEngine:
 
         return "copied"
 
+    def classify_orphans(self, artifact_paths: list[str]) -> list[OrphanInfo]:
+        """Classify files in artifacts_path that are not in artifact_paths.
+
+        A file is an *orphan* if it exists under artifacts_path but is not
+        listed in artifact_paths.  Orphans are split into two categories:
+
+        - Prune candidates: the file also exists in the warehouse (was synced
+          at some point, then removed from beacon.yaml).  These should be
+          deleted after user confirmation.
+        - New contributions: the file does NOT exist in the warehouse (was
+          created locally and has never been pushed).  These must never be
+          auto-deleted.
+
+        Only prune candidates are returned; new contributions are silently
+        ignored.
+
+        Args:
+            artifact_paths: List of relative paths currently in beacon.yaml.
+
+        Returns:
+            List of OrphanInfo for prune candidates, each carrying whether the
+            local copy has been modified relative to the warehouse version.
+        """
+        if not self.artifacts_path.exists():
+            return []
+
+        synced_set = set(artifact_paths)
+        orphans: list[OrphanInfo] = []
+
+        for file_path in sorted(self.artifacts_path.rglob("*")):
+            if not file_path.is_file():
+                continue
+            rel_path = str(file_path.relative_to(self.artifacts_path))
+            if rel_path in synced_set:
+                continue
+
+            warehouse_copy = self.warehouse_path / rel_path
+            if not warehouse_copy.exists():
+                # New contribution — never prune
+                logger.debug(
+                    "Skipping new contribution (not in warehouse): {}", rel_path
+                )
+                continue
+
+            is_modified = not self.files_identical(file_path, warehouse_copy)
+            orphans.append(OrphanInfo(rel_path=rel_path, is_modified=is_modified))
+
+        return orphans
+
     def sync_all(
         self,
         artifact_paths: list[str],
         preserve: bool = False,
         prune: bool = False,
+        paths_to_prune: list[str] | None = None,
         verbose: bool = False,
         dry_run: bool = False,
         log_fn: Callable[[str], None] | None = None,
@@ -185,7 +248,11 @@ class SyncEngine:
         Args:
             artifact_paths: List of relative paths to sync
             preserve: If True, skip locally modified files
-            prune: If True, remove artifacts not in the list
+            prune: If True, remove artifacts not in the list (legacy flag —
+                   prefer passing paths_to_prune explicitly for confirmed lists)
+            paths_to_prune: Explicit list of relative paths to delete.  When
+                provided this takes precedence over the automatic prune scan
+                driven by ``prune=True``.
             verbose: If True, log detailed operations
             dry_run: If True, preview actions without copying or pruning
             log_fn: Optional callback for log messages
@@ -236,33 +303,43 @@ class SyncEngine:
                 )
                 log(f"  Error: {path} - {result.error_message}")
 
-        # Prune artifacts not in the list
-        if prune and self.artifacts_path.exists():
+        # Determine which paths to prune
+        if paths_to_prune is not None:
+            prune_list = paths_to_prune
+        elif prune and self.artifacts_path.exists():
             synced_set = set(artifact_paths)
-            for file_path in sorted(self.artifacts_path.rglob("*")):
-                if file_path.is_file():
-                    rel_path = str(file_path.relative_to(self.artifacts_path))
-                    if rel_path not in synced_set:
-                        if dry_run:
-                            summary.pruned += 1
-                            logger.debug("Would prune: {}", rel_path)
-                            if verbose or dry_run:
-                                log(f"  Would prune: {rel_path}")
-                        else:
-                            try:
-                                file_path.unlink()
-                                summary.pruned += 1
-                                logger.debug("Pruned: {}", rel_path)
-                                if verbose:
-                                    log(f"  Pruned: {rel_path}")
-                            except OSError as e:
-                                summary.errors += 1
-                                summary.failed_files.append((rel_path, str(e)))
-                                log(f"  Error pruning {rel_path}: {e}")
+            prune_list = [
+                str(f.relative_to(self.artifacts_path))
+                for f in sorted(self.artifacts_path.rglob("*"))
+                if f.is_file()
+                and str(f.relative_to(self.artifacts_path)) not in synced_set
+            ]
+        else:
+            prune_list = []
 
-            if not dry_run:
-                # Clean up empty directories after pruning
-                self._cleanup_empty_dirs(self.artifacts_path)
+        for rel_path in prune_list:
+            file_path = self.artifacts_path / rel_path
+            if dry_run:
+                summary.pruned += 1
+                summary.pruned_paths.append(rel_path)
+                logger.debug("Would prune: {}", rel_path)
+                if verbose or dry_run:
+                    log(f"  Would prune: {rel_path}")
+            else:
+                try:
+                    file_path.unlink(missing_ok=True)
+                    summary.pruned += 1
+                    summary.pruned_paths.append(rel_path)
+                    logger.debug("Pruned: {}", rel_path)
+                    if verbose:
+                        log(f"  Pruned: {rel_path}")
+                except OSError as e:
+                    summary.errors += 1
+                    summary.failed_files.append((rel_path, str(e)))
+                    log(f"  Error pruning {rel_path}: {e}")
+
+        if prune_list and not dry_run:
+            self._cleanup_empty_dirs(self.artifacts_path)
 
         return summary
 
