@@ -1611,48 +1611,6 @@ def sync(
                 for err in wire_errors:
                     console.print(f"  [yellow]⚠[/yellow] Skill wiring: {err}")
 
-            # If no agent config exists, surface prompt (mirrors context wiring)
-            if not wired_skills and not wire_errors:
-                skills_dir = artifacts_dir / "skills"
-                has_skills = skills_dir.exists() and any(
-                    (d / "SKILL.md").exists()
-                    for d in skills_dir.iterdir()
-                    if d.is_dir()
-                )
-                if has_skills and not _detect_agents(project_root):
-                    if not dry_run and _is_interactive():
-                        console.print(
-                            "\n[yellow]No agent config detected.[/yellow] "
-                            "Set one up to install skills automatically."
-                        )
-                        if click.confirm("  Initialize opencode.json?", default=False):
-                            _init_opencode_json(project_root)
-                        if click.confirm("  Initialize CLAUDE.md?", default=False):
-                            _init_claude_md(project_root)
-                        # Re-run skill wiring after agent init
-                        if _detect_agents(project_root):
-                            retry_skills, retry_errors = _wire_skills_post_sync(
-                                project_root, artifacts_dir
-                            )
-                            if retry_skills:
-                                console.print(
-                                    f"[green]✓[/green] Installed "
-                                    f"{len(retry_skills)} skill(s) "
-                                    f"({', '.join(retry_skills)})"
-                                )
-                            if retry_errors:
-                                for err in retry_errors:
-                                    console.print(
-                                        f"  [yellow]⚠[/yellow] Skill wiring: {err}"
-                                    )
-                    else:
-                        wiring_notes.append(
-                            "  Skills synced — set up an agent config to install them:\n"
-                            "  [bold]opencode.json[/bold] → create with:\n"
-                            '    {"$schema": "https://opencode.ai/config.json", "instructions": []}\n'
-                            "  [bold].claude/[/bold] → create directory, then re-run 'abc sync'"
-                        )
-
             _update_agent_gitignores(project_root)
 
         if wiring_notes:
@@ -1858,7 +1816,11 @@ def install_artifact(
     # Infer type and wire
     artifact_type = Path(artifact).parts[0] if Path(artifact).parts else ""
     project_root = Path.cwd()
-    agents = _detect_agents(project_root) if not agent else [agent.lower()]
+    agents = (
+        _detect_agents(project_root, fallback_to_all=True)
+        if not agent
+        else [agent.lower()]
+    )
 
     if artifact_type == "skills":
         # Skill name is the directory directly under skills/
@@ -3575,12 +3537,10 @@ def _wire_skills_post_sync(
     conflicting live skill files.
 
     Returns (installed, errors) where each entry is '<skill> (<agent>)'.
-    Returns empty lists if no agents are detected — callers should check
-    for missing agent config and prompt the user.
+    Uses fallback_to_all so skills are always wired regardless of whether agent
+    config files exist yet.
     """
-    agents = _detect_agents(project_root)
-    if not agents:
-        return [], []
+    agents = _detect_agents(project_root, fallback_to_all=True)
 
     skills_dir = artifacts_dir / "skills"
     if not skills_dir.exists():
@@ -3644,13 +3604,22 @@ def _wire_skills_post_sync(
     return installed, errors
 
 
-def _detect_agents(project_root: Path) -> list[str]:
-    """Detect which agent tools are configured in the project."""
+_ALL_KNOWN_AGENTS = ["opencode", "claudecode"]
+
+
+def _detect_agents(project_root: Path, *, fallback_to_all: bool = False) -> list[str]:
+    """Detect which agent tools are configured in the project.
+
+    When fallback_to_all=True and no config files are found, returns all known
+    agents so callers can wire unconditionally (e.g. skill installation).
+    """
     agents = []
     if (project_root / "opencode.json").exists():
         agents.append("opencode")
     if (project_root / ".claude").exists() or (project_root / "CLAUDE.md").exists():
         agents.append("claudecode")
+    if not agents and fallback_to_all:
+        return list(_ALL_KNOWN_AGENTS)
     return agents
 
 

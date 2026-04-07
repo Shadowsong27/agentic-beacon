@@ -115,12 +115,13 @@ def test_install_skill_wires_claudecode(connected_project):
     assert "skills/" in claude_gitignore
 
 
-def test_install_skill_no_agent_detected_skips_wiring(connected_project):
+def test_install_skill_no_agent_detected_wires_for_both(connected_project):
+    """When no agent config exists, abc install wires the skill for both agents."""
     runner = CliRunner()
     result = runner.invoke(main, ["install", "skills/code-reviewer"])
 
     assert result.exit_code == 0, result.output
-    # Artifact should still be copied
+    # Artifact copied
     assert (
         connected_project
         / ".agentic-beacon"
@@ -129,8 +130,69 @@ def test_install_skill_no_agent_detected_skips_wiring(connected_project):
         / "code-reviewer"
         / "SKILL.md"
     ).exists()
-    # No wiring
-    assert not (connected_project / ".opencode").exists()
+    # Wired to both agent directories
+    assert (
+        connected_project / ".opencode" / "skills" / "code-reviewer" / "SKILL.md"
+    ).exists()
+    assert (
+        connected_project / ".claude" / "skills" / "code-reviewer" / "SKILL.md"
+    ).exists()
+
+
+def test_install_skill_no_agent_config_content_matches(connected_project):
+    """Wired skill files match the artifact content."""
+    runner = CliRunner()
+    runner.invoke(main, ["install", "skills/code-reviewer"])
+
+    opencode_content = (
+        connected_project / ".opencode" / "skills" / "code-reviewer" / "SKILL.md"
+    ).read_text()
+    claude_content = (
+        connected_project / ".claude" / "skills" / "code-reviewer" / "SKILL.md"
+    ).read_text()
+
+    assert opencode_content == SAMPLE_SKILL_MD
+    assert claude_content == SAMPLE_SKILL_MD
+
+
+def test_install_skill_no_agent_config_gitignores_created(connected_project):
+    """Agent gitignores are created for both directories on install."""
+    runner = CliRunner()
+    runner.invoke(main, ["install", "skills/code-reviewer"])
+
+    assert "skills/" in (connected_project / ".opencode" / ".gitignore").read_text()
+    assert "skills/" in (connected_project / ".claude" / ".gitignore").read_text()
+
+
+def test_install_skill_no_agent_config_idempotent(connected_project):
+    """Running abc install twice produces no duplicate entries or errors."""
+    runner = CliRunner()
+    result1 = runner.invoke(main, ["install", "skills/code-reviewer"])
+    result2 = runner.invoke(main, ["install", "skills/code-reviewer"])
+
+    assert result1.exit_code == 0, result1.output
+    assert result2.exit_code == 0, result2.output
+    # Content unchanged on second run
+    assert (
+        connected_project / ".opencode" / "skills" / "code-reviewer" / "SKILL.md"
+    ).read_text() == SAMPLE_SKILL_MD
+
+
+def test_install_skill_explicit_agent_flag_skips_fallback(connected_project):
+    """--agent flag targets only the specified agent; fallback is not triggered."""
+    runner = CliRunner()
+    result = runner.invoke(
+        main, ["install", "skills/code-reviewer", "--agent", "opencode"]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert (
+        connected_project / ".opencode" / "skills" / "code-reviewer" / "SKILL.md"
+    ).exists()
+    # claudecode NOT wired — explicit agent flag bypasses fallback
+    assert not (
+        connected_project / ".claude" / "skills" / "code-reviewer" / "SKILL.md"
+    ).exists()
 
 
 # ---------------------------------------------------------------------------

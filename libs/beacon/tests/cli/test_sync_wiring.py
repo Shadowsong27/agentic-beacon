@@ -229,14 +229,20 @@ def test_wire_skills_post_sync_installs_for_claudecode(project_with_skill):
     assert (project / ".claude" / "skills" / "test-skill" / "SKILL.md").exists()
 
 
-def test_wire_skills_post_sync_skips_if_no_agents(project_with_skill):
+def test_wire_skills_post_sync_wires_for_all_agents_when_none_detected(
+    project_with_skill,
+):
+    """When no agent config files exist, skills are wired for both agents by default."""
     project = project_with_skill
     artifacts_dir = project / ".agentic-beacon" / "artifacts"
 
     installed, errors = _wire_skills_post_sync(project, artifacts_dir)
 
-    assert installed == []
     assert errors == []
+    assert any("test-skill" in e and "opencode" in e for e in installed)
+    assert any("test-skill" in e and "claudecode" in e for e in installed)
+    assert (project / ".opencode" / "skills" / "test-skill" / "SKILL.md").exists()
+    assert (project / ".claude" / "skills" / "test-skill" / "SKILL.md").exists()
 
 
 def test_wire_skills_post_sync_skips_if_no_skills(tmp_path):
@@ -637,94 +643,34 @@ def skills_only_project(tmp_path, valid_warehouse):
     return project, runner
 
 
-def test_sync_skill_no_agent_config_non_interactive(skills_only_project, monkeypatch):
-    """Non-interactive: manual wiring instructions printed for skills when no agent config."""
+def test_sync_skill_no_agent_config_wires_for_both_agents(
+    skills_only_project, monkeypatch
+):
+    """Skills are wired to both agent directories even when no agent config exists."""
     project, runner = skills_only_project
     monkeypatch.chdir(project)
 
-    with patch("beacon.cli._is_interactive", return_value=False):
+    result = runner.invoke(main, ["sync"])
+
+    assert result.exit_code == 0
+    assert "installed" in result.output.lower()
+    assert "my-skill" in result.output.lower()
+    assert (project / ".opencode" / "skills" / "my-skill" / "SKILL.md").exists()
+    assert (project / ".claude" / "skills" / "my-skill" / "SKILL.md").exists()
+
+
+def test_sync_skill_no_agent_config_no_prompt(skills_only_project, monkeypatch):
+    """No agent-init prompts are shown when no agent config exists — skills wire unconditionally."""
+    project, runner = skills_only_project
+    monkeypatch.chdir(project)
+
+    with patch("beacon.cli._is_interactive", return_value=True):
         result = runner.invoke(main, ["sync"])
 
     assert result.exit_code == 0
-    assert "manual wiring required" in result.output.lower()
-    assert "skills synced" in result.output.lower()
-    assert "opencode.json" in result.output
-    assert ".claude/" in result.output
-
-
-def test_sync_skill_no_agent_config_interactive_init_opencode(
-    skills_only_project, monkeypatch
-):
-    """Interactive: user inits opencode.json; skills are retried and installed."""
-    project, runner = skills_only_project
-    monkeypatch.chdir(project)
-
-    with patch("beacon.cli._is_interactive", return_value=True):
-        # "y" for opencode.json, "n" for CLAUDE.md
-        result = runner.invoke(main, ["sync"], input="y\nn\n")
-
-    assert result.exit_code == 0
-    assert (project / "opencode.json").exists()
+    assert "initialize" not in result.output.lower()
+    assert "no agent config" not in result.output.lower()
     assert "installed" in result.output.lower()
-    assert "my-skill" in result.output.lower()
-    # Skill actually installed to agent directory
-    assert (project / ".opencode" / "skills" / "my-skill" / "SKILL.md").exists()
-
-
-def test_sync_skill_no_agent_config_interactive_init_both_agents(
-    skills_only_project, monkeypatch
-):
-    """Interactive: user inits both agents; skills installed for opencode.
-
-    Note: _init_claude_md creates CLAUDE.md at project root, which doesn't
-    create .claude/ directory. _detect_agents checks for .claude/ dir, so
-    only opencode is detected for skill wiring. This is a known limitation.
-    """
-    project, runner = skills_only_project
-    monkeypatch.chdir(project)
-
-    with patch("beacon.cli._is_interactive", return_value=True):
-        # "y" for opencode.json, "y" for CLAUDE.md
-        result = runner.invoke(main, ["sync"], input="y\ny\n")
-
-    assert result.exit_code == 0
-    assert (project / "opencode.json").exists()
-    assert (project / "CLAUDE.md").exists()
-    assert "installed" in result.output.lower()
-    # opencode skills installed
-    assert (project / ".opencode" / "skills" / "my-skill" / "SKILL.md").exists()
-
-
-def test_sync_skill_no_agent_config_interactive_decline_both(
-    skills_only_project, monkeypatch
-):
-    """Interactive: user declines both agent prompts; no skills wired."""
-    project, runner = skills_only_project
-    monkeypatch.chdir(project)
-
-    with patch("beacon.cli._is_interactive", return_value=True):
-        # "n" for opencode.json, "n" for CLAUDE.md
-        result = runner.invoke(main, ["sync"], input="n\nn\n")
-
-    assert result.exit_code == 0
-    assert not (project / "opencode.json").exists()
-    assert not (project / "CLAUDE.md").exists()
-    assert "installed" not in result.output.lower()
-
-
-def test_sync_skill_no_agent_config_interactive_init_claude(
-    skills_only_project, monkeypatch
-):
-    """Interactive: user inits CLAUDE.md only; .claude/ dir created for skill wiring."""
-    project, runner = skills_only_project
-    monkeypatch.chdir(project)
-
-    with patch("beacon.cli._is_interactive", return_value=True):
-        # "n" for opencode.json, "y" for CLAUDE.md
-        result = runner.invoke(main, ["sync"], input="n\ny\n")
-
-    assert result.exit_code == 0
-    assert (project / "CLAUDE.md").exists()
 
 
 def test_sync_skill_dry_run_does_not_prompt(skills_only_project, monkeypatch):
@@ -794,3 +740,172 @@ def test_sync_skill_dir_without_skill_md_no_prompt(
     assert result.exit_code == 0
     # No prompt because no valid SKILL.md files
     assert "skills synced" not in result.output.lower()
+
+
+# ---------------------------------------------------------------------------
+# No-agent-config fallback: comprehensive edge cases
+# ---------------------------------------------------------------------------
+
+
+def test_wire_skills_fallback_idempotent(project_with_skill):
+    """Second call with no agent config returns empty installed (skill unchanged)."""
+    project = project_with_skill
+    artifacts_dir = project / ".agentic-beacon" / "artifacts"
+
+    installed_first, _ = _wire_skills_post_sync(project, artifacts_dir)
+    installed_second, errors = _wire_skills_post_sync(project, artifacts_dir)
+
+    assert any("test-skill" in e for e in installed_first)
+    assert installed_second == []
+    assert errors == []
+    # Files still exist
+    assert (project / ".opencode" / "skills" / "test-skill" / "SKILL.md").exists()
+    assert (project / ".claude" / "skills" / "test-skill" / "SKILL.md").exists()
+
+
+def test_wire_skills_fallback_force_overwrites_conflict(project_with_skill):
+    """Force flag overwrites a modified live skill file when no agent config."""
+    project = project_with_skill
+    artifacts_dir = project / ".agentic-beacon" / "artifacts"
+
+    # Pre-install a modified version of the skill
+    opencode_skill = project / ".opencode" / "skills" / "test-skill" / "SKILL.md"
+    opencode_skill.parent.mkdir(parents=True)
+    opencode_skill.write_text("# local modification")
+
+    installed, errors = _wire_skills_post_sync(project, artifacts_dir, force=True)
+
+    assert errors == []
+    assert any("test-skill" in e and "opencode" in e for e in installed)
+    assert opencode_skill.read_text() == SAMPLE_SKILL_MD
+
+
+def test_wire_skills_fallback_preserve_skips_conflict(project_with_skill):
+    """Preserve flag skips a modified live skill file when no agent config."""
+    project = project_with_skill
+    artifacts_dir = project / ".agentic-beacon" / "artifacts"
+
+    opencode_skill = project / ".opencode" / "skills" / "test-skill" / "SKILL.md"
+    opencode_skill.parent.mkdir(parents=True)
+    opencode_skill.write_text("# local modification")
+
+    installed, errors = _wire_skills_post_sync(project, artifacts_dir, preserve=True)
+
+    assert errors == []
+    # opencode skipped due to conflict; claudecode installed
+    assert not any("test-skill" in e and "opencode" in e for e in installed)
+    assert any("test-skill" in e and "claudecode" in e for e in installed)
+    assert opencode_skill.read_text() == "# local modification"
+
+
+def test_wire_skills_fallback_multiple_skills(tmp_path):
+    """All skills in the artifacts dir are wired for both agents when none detected."""
+    for name in ("skill-a", "skill-b", "skill-c"):
+        skill_dir = tmp_path / ".agentic-beacon" / "artifacts" / "skills" / name
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text(SAMPLE_SKILL_MD.replace("test-skill", name))
+
+    artifacts_dir = tmp_path / ".agentic-beacon" / "artifacts"
+    installed, errors = _wire_skills_post_sync(tmp_path, artifacts_dir)
+
+    assert errors == []
+    assert len(installed) == 6  # 3 skills × 2 agents
+    for name in ("skill-a", "skill-b", "skill-c"):
+        assert (tmp_path / ".opencode" / "skills" / name / "SKILL.md").exists()
+        assert (tmp_path / ".claude" / "skills" / name / "SKILL.md").exists()
+
+
+def test_wire_skills_fallback_content_matches_artifact(project_with_skill):
+    """Wired skill files contain exactly the artifact content."""
+    project = project_with_skill
+    artifacts_dir = project / ".agentic-beacon" / "artifacts"
+
+    _wire_skills_post_sync(project, artifacts_dir)
+
+    opencode_content = (
+        project / ".opencode" / "skills" / "test-skill" / "SKILL.md"
+    ).read_text()
+    claude_content = (
+        project / ".claude" / "skills" / "test-skill" / "SKILL.md"
+    ).read_text()
+
+    assert opencode_content == SAMPLE_SKILL_MD
+    assert claude_content == SAMPLE_SKILL_MD
+
+
+def test_sync_no_agent_config_gitignores_created(skills_only_project, monkeypatch):
+    """abc sync creates agent gitignores for both directories when no config exists."""
+    project, runner = skills_only_project
+    monkeypatch.chdir(project)
+
+    runner.invoke(main, ["sync"])
+
+    assert (project / ".opencode" / ".gitignore").exists()
+    assert (project / ".claude" / ".gitignore").exists()
+    opencode_gi = (project / ".opencode" / ".gitignore").read_text()
+    assert "skills/" in opencode_gi
+    claude_gi = (project / ".claude" / ".gitignore").read_text()
+    assert "skills/" in claude_gi
+
+
+def test_sync_no_agent_config_dry_run_does_not_wire(skills_only_project, monkeypatch):
+    """Dry-run does not create any skill files even with the fallback active."""
+    project, runner = skills_only_project
+    monkeypatch.chdir(project)
+
+    result = runner.invoke(main, ["sync", "--dry-run"])
+
+    assert result.exit_code == 0
+    assert not (project / ".opencode" / "skills").exists()
+    assert not (project / ".claude" / "skills").exists()
+
+
+def test_sync_full_project_skills_wired_even_when_contexts_need_agent_config(
+    full_sync_project, monkeypatch
+):
+    """When no agent config exists, skills wire unconditionally while contexts still prompt."""
+    project, runner = full_sync_project
+    monkeypatch.chdir(project)
+
+    with patch("beacon.cli._is_interactive", return_value=False):
+        result = runner.invoke(main, ["sync"])
+
+    assert result.exit_code == 0
+    # Skills wired to both agents
+    assert (project / ".opencode" / "skills" / "my-skill" / "SKILL.md").exists()
+    assert (project / ".claude" / "skills" / "my-skill" / "SKILL.md").exists()
+    assert "installed" in result.output.lower()
+    # Contexts still need manual wiring (no opencode.json / CLAUDE.md)
+    assert "manual wiring required" in result.output.lower()
+
+
+def test_sync_no_agent_config_second_run_idempotent(skills_only_project, monkeypatch):
+    """Second abc sync with no agent config wires nothing new and prints no install line."""
+    project, runner = skills_only_project
+    monkeypatch.chdir(project)
+
+    runner.invoke(main, ["sync"])
+    result_second = runner.invoke(main, ["sync"])
+
+    assert result_second.exit_code == 0
+    assert "installed" not in result_second.output.lower()
+    # Files still present
+    assert (project / ".opencode" / "skills" / "my-skill" / "SKILL.md").exists()
+    assert (project / ".claude" / "skills" / "my-skill" / "SKILL.md").exists()
+
+
+def test_sync_fallback_wires_for_both_even_when_one_config_exists(
+    skills_only_project, monkeypatch
+):
+    """When only one agent config exists, the detected agent is used (not the fallback)."""
+    project, runner = skills_only_project
+    monkeypatch.chdir(project)
+
+    # Only opencode configured
+    (project / "opencode.json").write_text("{}")
+    result = runner.invoke(main, ["sync"])
+
+    assert result.exit_code == 0
+    assert (project / ".opencode" / "skills" / "my-skill" / "SKILL.md").exists()
+    # claudecode NOT wired — detection found opencode, fallback not triggered
+    assert not (project / ".claude" / "skills" / "my-skill" / "SKILL.md").exists()
