@@ -53,16 +53,20 @@ There are two moving parts:
 The flow is:
 
 ```
-Warehouse (shared git repo)                 Your project
+Warehouse (shared git repo)                 Your project / global
 ────────────────────────────                ────────────────────────────────
 knowledge/    ── abc sync ──►  .agentic-beacon/artifacts/knowledge/
 contexts/     ── abc sync ──►  .agentic-beacon/artifacts/contexts/
                                 opencode.json / AGENTS.md (wired)
 skills/       ── abc sync ──►  .opencode/skills/<name>/   (agent-readable)
                                 .opencode/command/<name>/  (slash command)
+agents/       ── abc sync ──►  ~/.claude/agents/<name>.md
+                                ~/.config/opencode/agents/<name>.md
 ```
 
-`abc sync` reads `beacon.yaml` and does the full job: copies knowledge and contexts into `.agentic-beacon/artifacts/` and wires them into your agent config, then installs skills into your agent's skill and command folders so they are immediately usable. No live connection to the warehouse is required during coding sessions.
+`abc sync` reads `beacon.yaml` and does the full job: copies knowledge and contexts into `.agentic-beacon/artifacts/` and wires them into your agent config, installs skills into your agent's skill and command folders, and installs agent definitions globally for immediate use. No live connection to the warehouse is required during coding sessions.
+
+If an artifact was previously synced but has since been removed from `beacon.yaml`, `abc sync` detects it and prompts before deleting — preventing accidental data loss. If an artifact has local modifications, you are prompted before it is overwritten (use `--force` to bypass or `--preserve` to skip).
 
 **Example — after `abc sync` with OpenCode:**
 
@@ -91,11 +95,12 @@ When a session produces something worth sharing — a better pattern, a new less
 
 ### The Framework Components
 
-Three artifact types form the core of a warehouse:
+Four artifact types form the core of a warehouse:
 
 - 📄 **Contexts** - Boot instructions and coding standards loaded at agent session start
 - 🧠 **Knowledge** - Atomic decisions, lessons, and facts
 - ⚡ **Skills** - Reusable workflows and procedures available as slash commands
+- 🤖 **Agents** - Sub-agent definitions installed globally to all detected AI tools
 
 The `abc` CLI handles the rest: initializing warehouses, connecting projects, syncing artifacts, and contributing improvements back. Everything is plain markdown files in Git — no infrastructure required.
 
@@ -120,12 +125,20 @@ The `abc` CLI handles the rest: initializing warehouses, connecting projects, sy
 - Specialized instructions for specific tasks
 - Templates and automation with usage guides
 
+🤖 **Agents** - Sub-agent definitions (installed globally)
+- Specialized agents for recurring tasks (e.g. code reviewer, test writer)
+- Installed to `~/.claude/agents/` and `~/.config/opencode/agents/` on sync
+- Available across all projects without per-project configuration
+
 ### Warehouse Structure
 
 The framework defines three top-level directories (`contexts/`, `knowledge/`, `skills/`) and creates a starter structure with `abc warehouse init`. **The internal layout within each directory is entirely yours to decide** — the example below is one suggested starting point, not a prescription.
 
 ```
 my-warehouse/              # Created by: abc warehouse init my-warehouse
+├── agents/                # Sub-agent definitions (installed globally)
+│   └── README.md          # Agents catalog
+│
 ├── contexts/              # Boot context files (loaded via opencode.json)
 │   ├── global.md          # e.g. universal standards for all projects
 │   ├── python.md          # e.g. language-specific standards
@@ -322,17 +335,17 @@ The AI context management space is growing. Here's how Agentic Beacon compares:
 | `abc warehouse init` | Initialize a new warehouse repository |
 | `abc warehouse connect` | Connect a project to a warehouse |
 | `abc setup` | Create `beacon.yaml` (manual or agent-assisted) |
-| `abc sync` | Sync and wire all artifacts declared in `beacon.yaml` (knowledge, contexts, skills) |
-| `abc install <artifact>` | Sync and wire a single artifact (e.g. `abc install skills/code-reviewer`) |
-| `abc contribute` | Copy local artifact changes back to the warehouse |
+| `abc sync` | Sync and wire all artifacts declared in `beacon.yaml` (knowledge, contexts, skills, agents); auto-prunes removed artifacts |
+| `abc install <artifact>` | Sync and wire a single artifact (e.g. `abc install skills/code-reviewer`, `abc install agents/reviewer.md`) |
+| `abc contribute` | Copy local artifact changes back to the warehouse (supports agents, `--exclude-unregistered`) |
 | `abc status` | Show current connection and sync status |
-| `abc delta` | Compare synced artifacts with warehouse (find local changes) |
-| `abc update` | Re-sync and overwrite local artifacts from warehouse |
-| `abc list` | List available content in the connected warehouse |
+| `abc delta` | Compare synced artifacts with warehouse; dedicated agents section shows MISSING/IDENTICAL/MODIFIED/STALE per tool |
+| `abc reset` | Force-overwrite all synced artifacts from the warehouse (replaces `abc update`) |
+| `abc list` | List synced artifacts; `abc list agents` shows globally installed agents |
 | `abc clean` | Remove synced artifacts from the project |
 
 ---
 
 If you find Agentic Beacon useful, consider [giving it a star](https://github.com/Shadowsong27/agentic-beacon) — it helps others discover the project.
 
-**Last Updated:** 2026-03-18
+**Last Updated:** 2026-04-07
