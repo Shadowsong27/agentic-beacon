@@ -212,7 +212,7 @@ def test_contribute_proceeds_when_warehouse_clean(connected_project_with_artifac
         patch("beacon.cli._check_sync_state", return_value=None),
     ):
         mock_run.return_value = MagicMock(stdout="", returncode=0)
-        result = runner.invoke(main, ["contribute", "knowledge/lesson.md"])
+        result = runner.invoke(main, ["contribute", "knowledge/lesson.md"], input="y\n")
 
     assert result.exit_code == 0
 
@@ -228,7 +228,9 @@ def test_contribute_skip_git_check_bypasses_block(connected_project_with_artifac
             stdout=" M knowledge/lesson.md\n", returncode=0
         )
         result = runner.invoke(
-            main, ["contribute", "knowledge/lesson.md", "--skip-git-check"]
+            main,
+            ["contribute", "knowledge/lesson.md", "--skip-git-check"],
+            input="y\n",
         )
 
     assert result.exit_code == 0
@@ -265,7 +267,7 @@ def test_contribute_no_git_dir_proceeds(connected_project_with_artifact):
     """abc contribute proceeds silently when warehouse has no .git directory."""
     runner = CliRunner()
     # No .git dir — check skipped
-    result = runner.invoke(main, ["contribute", "knowledge/lesson.md"])
+    result = runner.invoke(main, ["contribute", "knowledge/lesson.md"], input="y\n")
     assert result.exit_code == 0
 
 
@@ -505,7 +507,9 @@ def test_contribute_skip_git_check_bypasses_sync_state(connected_project_with_ar
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(stdout="", returncode=0)
         result = runner.invoke(
-            main, ["contribute", "knowledge/lesson.md", "--skip-git-check"]
+            main,
+            ["contribute", "knowledge/lesson.md", "--skip-git-check"],
+            input="y\n",
         )
 
     assert result.exit_code == 0

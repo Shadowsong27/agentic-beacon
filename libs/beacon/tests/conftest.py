@@ -8,6 +8,20 @@ import pytest
 
 
 @pytest.fixture
+def isolated_home(tmp_path, monkeypatch):
+    """Redirect Path.home() to a clean temp directory.
+
+    Use this fixture in tests that invoke CLI commands which call
+    _detect_agents_global() or _build_agents_paths(), to prevent real global
+    agent installs from leaking into the test.
+    """
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+    return home
+
+
+@pytest.fixture
 def temp_dir():
     """Create a temporary directory for tests."""
     temp_path = tempfile.mkdtemp()

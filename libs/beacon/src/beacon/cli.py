@@ -17,7 +17,7 @@ from rich.table import Table
 from .core.delta import ComparisonResult, DeltaComparator, DeltaStatus
 from .core.gitignore import GitignoreManager
 from .core.settings import ArtifactsConfig, BeaconSettings, WarehouseSettings
-from .core.sync import SyncEngine
+from .core.sync import OrphanInfo, SyncEngine
 from .distributor import WarehouseDistributor
 from .initializer import WarehouseInitializer
 from .upgrader import WarehouseUpgrader
@@ -1112,8 +1112,9 @@ artifacts:
     # Examples:
     # - skills/code-review/SKILL.md
     # - skills/generate-unit-tests/SKILL.md
-    # Note: abc bundled skills (e.g. record-knowledge) are installed automatically
-    #       by 'abc sync' — no entry needed here.
+    # Note: abc bundled skills (e.g. record-knowledge) are installed globally
+    #       into ~/.config/opencode/skills/ and ~/.claude/skills/ by 'abc sync'
+    #       — they are not project-scoped and need no entry here.
 
   contexts: []
     # Examples:
@@ -1308,7 +1309,6 @@ def _handle_soft_block(
 @click.option(
     "--force", is_flag=True, help="Overwrite conflicting files without prompting"
 )
-@click.option("--prune", is_flag=True, help="Remove artifacts no longer in beacon.yaml")
 @click.option(
     "--verbose", "verbose_flag", is_flag=True, help="Show detailed sync output"
 )
@@ -1324,7 +1324,6 @@ def sync(
     *,
     preserve: bool,
     force: bool,
-    prune: bool,
     verbose_flag: bool,
     dry_run: bool,
     skip_git_check: bool,
@@ -1334,12 +1333,13 @@ def sync(
 
     Reads .agentic-beacon/beacon.yaml and copies specified artifacts
     from the connected warehouse to .agentic-beacon/artifacts/ directory.
+    Artifacts that were previously synced but removed from beacon.yaml will
+    be detected and you will be prompted before they are deleted.
 
     Example:
         abc sync              # Sync all artifacts
         abc sync --preserve   # Skip locally modified files
         abc sync --force      # Overwrite all conflicts without prompting
-        abc sync --prune      # Remove artifacts not in beacon.yaml
         abc sync --verbose    # Show detailed output
         abc sync --dry-run    # Preview without copying
     """
@@ -1473,6 +1473,12 @@ def sync(
                 # User said N or --preserve: switch to preserve mode for the conflicting files
                 preserve = True
 
+        # Auto-prune: classify orphans and ask for confirmation
+        orphans = sync_engine.classify_orphans(artifact_paths)
+        confirmed_prune: list[str] = []
+        if orphans:
+            confirmed_prune = _confirm_prune(orphans, dry_run=dry_run)
+
         # Perform sync
         def log_fn(msg: str) -> None:
             console.print(f"  {msg}")
@@ -1480,7 +1486,7 @@ def sync(
         summary = sync_engine.sync_all(
             artifact_paths=artifact_paths,
             preserve=preserve,
-            prune=prune,
+            paths_to_prune=confirmed_prune if not dry_run else None,
             verbose=verbose_flag,
             dry_run=dry_run,
             log_fn=log_fn if (verbose_flag or dry_run) else None,
@@ -1504,10 +1510,15 @@ def sync(
             )
             if not dry_run:
                 console.print("  [dim]Use 'abc delta' to review local changes.[/dim]")
-        if summary.pruned > 0:
+        if dry_run and orphans:
             console.print(
-                f"  [yellow]{'Would prune' if dry_run else 'Pruned'}:[/yellow] "
-                f"{summary.pruned} artifacts no longer in beacon.yaml"
+                f"  [yellow]Would remove:[/yellow] {len(orphans)} artifact(s) "
+                f"no longer in beacon.yaml (confirmation required)"
+            )
+        elif summary.pruned > 0:
+            console.print(
+                f"  [yellow]Removed:[/yellow] "
+                f"{summary.pruned} artifact(s) no longer in beacon.yaml"
             )
         if summary.errors > 0:
             console.print(f"  [red]Errors:[/red] {summary.errors} files")
@@ -1520,9 +1531,13 @@ def sync(
             )
             return
 
-        # Post-sync wiring
+        # Post-sync wiring: wire newly synced artifacts
         project_root = Path.cwd()
         wiring_notes: list[str] = []
+
+        # Unwire pruned artifacts first
+        if summary.pruned_paths:
+            _unwire_pruned_artifacts(project_root, summary.pruned_paths, artifacts_dir)
 
         if beacon_settings.artifacts.contexts:
             oc_added = _wire_contexts_opencode(project_root, artifacts_dir)
@@ -1957,6 +1972,22 @@ def _build_skills_paths(project_root: Path) -> dict[str, Path]:
     return skills_paths
 
 
+def _build_agents_paths() -> dict[str, Path]:
+    """Return a mapping of tool name → global agents directory for detected tools.
+
+    This is the shared detection logic used by both `abc delta` and
+    `abc contribute` so both commands always compare/read from the same
+    global agent locations.
+    """
+    agents_paths: dict[str, Path] = {}
+    for tool in _detect_agents_global():
+        if tool == "opencode":
+            agents_paths["opencode"] = Path.home() / ".config" / "opencode" / "agents"
+        elif tool == "claudecode":
+            agents_paths["claudecode"] = Path.home() / ".claude" / "agents"
+    return agents_paths
+
+
 @main.command()
 @click.argument("file", required=False, type=str)
 @click.option("--no-color", is_flag=True, help="Disable color output in diffs")
@@ -2015,21 +2046,11 @@ def delta(*, file: str | None, no_color: bool) -> None:
         # Build skills_paths via shared helper — same logic used by contribute.
         project_root = Path.cwd()
 
-        # Build agents_paths for global agent detection
-        agents_paths: dict[str, Path] = {}
-        for tool in _detect_agents_global():
-            if tool == "opencode":
-                agents_paths["opencode"] = (
-                    Path.home() / ".config" / "opencode" / "agents"
-                )
-            elif tool == "claudecode":
-                agents_paths["claudecode"] = Path.home() / ".claude" / "agents"
-
         comparator = DeltaComparator(
             warehouse_path=warehouse_path,
             artifacts_path=artifacts_dir,
             skills_paths=_build_skills_paths(project_root),
-            agents_paths=agents_paths,
+            agents_paths=_build_agents_paths(),
         )
 
         if file:
@@ -2053,22 +2074,38 @@ def _show_delta_summary(
     """Show summary of all artifact differences."""
     summary = comparator.compare_from_config(beacon_settings)
 
-    # Also gather agent comparison results from agents/ warehouse dir
+    # Gather agent comparison results — discover from global agent dirs + warehouse
+    # so agents that exist globally but not yet in the warehouse show as ADDED.
     agent_results = []
     if comparator.agents_paths and warehouse_path is not None:
-        agents_dir = warehouse_path / "agents"
-        if agents_dir.is_dir():
-            current_head = _get_warehouse_head_sha(warehouse_path) or ""
-            for agent_file in sorted(agents_dir.rglob("*")):
-                # Skip README.md — it's a warehouse scaffold file, not an installable agent
+        current_head = _get_warehouse_head_sha(warehouse_path) or ""
+
+        # Collect all unique agent file names across all global tool dirs and warehouse
+        seen_rel_paths: set[str] = set()
+
+        # First: files in global dirs (source of truth for new agents)
+        for _tool, agents_dir in comparator.agents_paths.items():
+            if agents_dir.is_dir():
+                for agent_file in sorted(agents_dir.rglob("*")):
+                    if agent_file.is_file() and agent_file.name != "README.md":
+                        # Reconstruct warehouse-relative path: agents/<filename>
+                        rel_path = "agents/" + agent_file.name
+                        seen_rel_paths.add(rel_path)
+
+        # Second: files in warehouse/agents/ that may not be in any global dir (MISSING)
+        warehouse_agents_dir = warehouse_path / "agents"
+        if warehouse_agents_dir.is_dir():
+            for agent_file in sorted(warehouse_agents_dir.rglob("*")):
                 if agent_file.is_file() and agent_file.name != "README.md":
                     rel_path = str(agent_file.relative_to(warehouse_path))
-                    result = comparator._compare_agent_file(rel_path)
-                    # Enrich IDENTICAL → STALE if warehouse HEAD has advanced
-                    result = _enrich_agent_stale(
-                        result, warehouse_path=warehouse_path, current_head=current_head
-                    )
-                    agent_results.append(result)
+                    seen_rel_paths.add(rel_path)
+
+        for rel_path in sorted(seen_rel_paths):
+            result = comparator._compare_agent_file(rel_path)
+            result = _enrich_agent_stale(
+                result, warehouse_path=warehouse_path, current_head=current_head
+            )
+            agent_results.append(result)
 
     untracked = _find_untracked_local_files(
         comparator, beacon_settings, comparator.artifacts_path
@@ -2084,64 +2121,112 @@ def _show_delta_summary(
 
     tracked_diffs = [r for r in summary.results if r.status != DeltaStatus.IDENTICAL]
 
-    # --- Tracked Artifacts section ---
-    if tracked_diffs or has_agent_diffs:
-        console.print("\n[bold]Tracked Artifacts:[/bold]\n")
-        for result in tracked_diffs:
-            if result.status == DeltaStatus.MODIFIED:
-                if result.is_skill and result.agent_statuses:
-                    agent_detail = _format_skill_agent_statuses(result.agent_statuses)
-                    console.print(
-                        f"  [yellow][Modified][/yellow] {result.path} [dim]({agent_detail})[/dim]"
-                    )
-                else:
-                    console.print(f"  [yellow][Modified][/yellow] {result.path}")
-            elif result.status == DeltaStatus.ADDED:
-                if result.is_skill and result.agent_statuses:
-                    agent_detail = _format_skill_agent_statuses(result.agent_statuses)
-                    console.print(
-                        f"  [green][Added][/green]    {result.path} [dim]({agent_detail})[/dim]"
-                    )
-                else:
-                    console.print(f"  [green][Added][/green]    {result.path}")
-            elif result.status == DeltaStatus.MISSING:
-                if result.is_skill and result.agent_statuses:
-                    agent_detail = _format_skill_agent_statuses(result.agent_statuses)
-                    console.print(
-                        f"  [red][Missing][/red]  {result.path} [dim]({agent_detail})[/dim]"
-                    )
-                else:
-                    console.print(f"  [red][Missing][/red]  {result.path}")
+    _STATUS_MARKUP: dict[DeltaStatus, str] = {
+        DeltaStatus.MODIFIED: "[yellow]modified[/yellow]",
+        DeltaStatus.ADDED: "[green]added[/green]",
+        DeltaStatus.MISSING: "[red]missing[/red]",
+        DeltaStatus.STALE: "[dim cyan]stale[/dim cyan]",
+    }
+    _AGENT_STATUS_MARKUP: dict[DeltaStatus, str] = {
+        DeltaStatus.MODIFIED: "[yellow]modified[/yellow]",
+        DeltaStatus.ADDED: "[green]added[/green]",
+        DeltaStatus.MISSING: "[red]missing[/red]",
+        DeltaStatus.IDENTICAL: "[dim]identical[/dim]",
+        DeltaStatus.STALE: "[dim cyan]stale[/dim cyan]",
+    }
 
-        stale_agents = []
-        for result in agent_results:
-            agent_detail = (
-                _format_skill_agent_statuses(result.agent_statuses)
-                if result.agent_statuses
-                else ""
-            )
-            suffix = f" [dim]({agent_detail})[/dim]" if agent_detail else ""
-            if result.status == DeltaStatus.STALE:
-                console.print(
-                    f"  [dim cyan][Stale][/dim cyan]    {result.path}{suffix}"
-                )
-                stale_agents.append(result.path)
-            elif result.status == DeltaStatus.MODIFIED:
-                console.print(f"  [yellow][Modified][/yellow] {result.path}{suffix}")
-            elif result.status == DeltaStatus.MISSING:
-                console.print(f"  [red][Missing][/red]  {result.path}{suffix}")
-    else:
-        stale_agents = []
+    # --- Tracked Artifacts section ---
+    if tracked_diffs:
+        # Collect all agent names present across skill rows to build columns
+        tracked_agents: list[str] = []
+        for result in tracked_diffs:
+            if result.is_skill and result.agent_statuses:
+                for a in result.agent_statuses:
+                    if a not in tracked_agents:
+                        tracked_agents.append(a)
+
+        rows: list[tuple[str, str, dict[str, str]]] = []
+        for result in tracked_diffs:
+            status_markup = _STATUS_MARKUP.get(result.status, result.status.value)
+            agent_cells: dict[str, str] = {}
+            if result.is_skill and result.agent_statuses:
+                for a, s in result.agent_statuses.items():
+                    agent_cells[a] = _AGENT_STATUS_MARKUP.get(s, s.value)
+            rows.append((status_markup, result.path, agent_cells))
+
+        console.print()
+        console.print(_render_delta_table(rows, "Tracked Artifacts", tracked_agents))
+
+    # Classify agents for summary counts (always, even if no section rendered)
+    stale_agents: list[str] = []
+    added_agents: list[str] = []
+    modified_agents: list[str] = []
+    for result in agent_results:
+        if result.status == DeltaStatus.STALE:
+            stale_agents.append(result.path)
+        elif result.status == DeltaStatus.ADDED:
+            added_agents.append(result.path)
+        elif result.status == DeltaStatus.MODIFIED:
+            modified_agents.append(result.path)
 
     # --- Untracked Artifacts section ---
     if untracked:
-        if tracked_diffs or has_agent_diffs:
+        if tracked_diffs:
             console.rule(style="dim")
+
+        # Collect all agent names present across untracked skill rows
+        untracked_agents: list[str] = []
+        for _rel_path, agents in untracked:
+            for a in agents:
+                if a not in untracked_agents:
+                    untracked_agents.append(a)
+
+        rows = []
+        for rel_path, agents in untracked:
+            agent_cells = {a: "[green]added[/green]" for a in agents}
+            rows.append(("[green]added[/green]", rel_path, agent_cells))
+
+        console.print()
         console.print(
-            "\n[bold]Untracked Artifacts:[/bold] [dim](not in beacon.yaml)[/dim]\n"
+            _render_delta_table(
+                rows,
+                "Untracked Artifacts [dim](not in beacon.yaml)[/dim]",
+                untracked_agents,
+            )
         )
-        for rel_path in untracked:
-            console.print(f"  [green][Added][/green]    {rel_path}")
+
+    # --- Agents section ---
+    if agent_results:
+        if tracked_diffs or untracked:
+            console.rule(style="dim")
+
+        # Collect all tool names present across agent rows
+        agent_tools: list[str] = []
+        for result in agent_results:
+            if result.agent_statuses:
+                for t in result.agent_statuses:
+                    if t not in agent_tools:
+                        agent_tools.append(t)
+
+        rows = []
+        for result in agent_results:
+            status_markup: str = (
+                _STATUS_MARKUP.get(result.status) or result.status.value
+            )
+            agent_cells: dict[str, str] = {}
+            if result.agent_statuses:
+                for t, s in result.agent_statuses.items():
+                    agent_cells[t] = _AGENT_STATUS_MARKUP.get(s) or s.value
+            rows.append((status_markup, result.path, agent_cells))
+
+        console.print()
+        console.print(
+            _render_delta_table(
+                rows,
+                "Agents [dim](global, not tracked in beacon.yaml)[/dim]",
+                agent_tools,
+            )
+        )
 
     # Summary counts
     console.print("\n[bold]Summary:[/bold]")
@@ -2155,6 +2240,12 @@ def _show_delta_summary(
         console.print(f"  [red]Missing:[/red] {len(summary.missing)} files")
     if summary.identical:
         console.print(f"  [dim]Identical:[/dim] {len(summary.identical)} files")
+    if added_agents:
+        console.print(
+            f"  [green]New agent(s):[/green] {len(added_agents)} (not yet in warehouse)"
+        )
+    if modified_agents:
+        console.print(f"  [yellow]Modified agent(s):[/yellow] {len(modified_agents)}")
     if stale_agents:
         console.print(f"  [dim cyan]Stale:[/dim cyan] {len(stale_agents)} agent(s)")
 
@@ -2169,7 +2260,11 @@ def _show_delta_summary(
         )
     if untracked:
         console.print(
-            "[dim]Tip: Run 'abc contribute --include-unregistered' to push untracked local artifacts to the warehouse.[/dim]"
+            "[dim]Tip: Run 'abc contribute' to push untracked local artifacts to the warehouse.[/dim]"
+        )
+    if added_agents or modified_agents:
+        console.print(
+            "[dim]Tip: Run 'abc contribute' to push agent changes to the warehouse.[/dim]"
         )
     if stale_agents:
         console.print(
@@ -2244,6 +2339,38 @@ def _format_skill_agent_statuses(agent_statuses: dict) -> str:
     return ", ".join(parts)
 
 
+def _render_delta_table(
+    rows: list[tuple[str, str, dict[str, str]]],
+    title: str,
+    agents: list[str],
+) -> Table:
+    """Render a delta section as a Rich table.
+
+    Each row is a (status_markup, artifact_path, agent_cells) tuple where
+    agent_cells maps agent name → markup string (empty string if not applicable).
+    Agent columns are only added when at least one skill row is present (agents != []).
+    """
+    table = Table(
+        title=title,
+        title_style="bold",
+        title_justify="left",
+        show_header=True,
+        header_style="dim",
+        box=None,
+        padding=(0, 2, 0, 0),
+    )
+    table.add_column("Status", no_wrap=True)
+    table.add_column("Artifact")
+    for agent in agents:
+        table.add_column(agent, no_wrap=True)
+
+    for status_markup, path, agent_cells in rows:
+        agent_values = [agent_cells.get(a, "") for a in agents]
+        table.add_row(status_markup, path, *agent_values)
+
+    return table
+
+
 def _collect_artifact_paths(
     comparator: DeltaComparator, beacon_settings: BeaconSettings
 ) -> set:
@@ -2306,17 +2433,53 @@ def _find_untracked_local_files(
     comparator: DeltaComparator,
     beacon_settings: BeaconSettings,
     artifacts_dir: Path,
-) -> list[str]:
-    """Return local artifact files that are not covered by any beacon.yaml pattern."""
+) -> list[tuple[str, list[str]]]:
+    """Return local artifact files that are not covered by any beacon.yaml pattern.
+
+    Returns a list of (relative_path, agents) tuples. For skills found in live
+    agent directories, agents lists which agents have the skill (e.g. ["opencode",
+    "claudecode"]). For knowledge/context files from artifacts_dir, agents is [].
+
+    NOTE: .agentic-beacon/artifacts/skills/ is intentionally excluded from the
+    artifacts_dir scan. That directory is a one-way intermediary used only during
+    'abc sync' to stage skill files before wiring them to live agent directories
+    (.opencode/skills/, .claude/skills/). It is never a source of truth for delta —
+    skills are always compared against their live agent installation, not the snapshot.
+    """
     tracked = _collect_artifact_paths(comparator, beacon_settings)
-    untracked: list[str] = []
+
+    # Scan artifacts_dir for untracked knowledge and context files.
+    # Explicitly skip the skills/ subdirectory — it is a one-way sync staging area
+    # and must not be treated as a canonical source for delta comparisons.
+    artifacts_untracked: list[str] = []
     if artifacts_dir.exists():
         for file_path in sorted(artifacts_dir.rglob("*")):
             if file_path.is_file() and file_path.name != _SYNC_STATE_FILENAME:
                 rel = str(file_path.relative_to(artifacts_dir))
+                if rel.startswith("skills/"):
+                    continue  # skills live in agent dirs, not here
                 if rel not in tracked:
-                    untracked.append(rel)
-    return untracked
+                    artifacts_untracked.append(rel)
+
+    # Scan live agent skill directories — the canonical location for installed skills.
+    # Group by rel_path so a skill present in multiple agent dirs is reported once
+    # with all agents listed.
+    skill_agents: dict[str, list[str]] = {}
+    for agent, skills_root in comparator.skills_paths.items():
+        if skills_root.exists():
+            for file_path in sorted(skills_root.rglob("*")):
+                if file_path.is_file():
+                    rel = str(Path("skills") / file_path.relative_to(skills_root))
+                    if rel not in tracked:
+                        skill_agents.setdefault(rel, []).append(agent)
+
+    result: list[tuple[str, list[str]]] = []
+    for rel in artifacts_untracked:
+        result.append((rel, []))
+    for rel in sorted(skill_agents):
+        result.append((rel, skill_agents[rel]))
+
+    return result
 
 
 # ========== Contribute Command ==========
@@ -2340,9 +2503,9 @@ def _find_untracked_local_files(
     help="Skip auto git commit/push/PR — print manual steps instead",
 )
 @click.option(
-    "--include-unregistered",
+    "--exclude-unregistered",
     is_flag=True,
-    help="Also contribute local artifacts not tracked in beacon.yaml (without registering them)",
+    help="Only contribute artifacts already tracked in beacon.yaml; skip untracked local artifacts",
 )
 def contribute(
     *,
@@ -2350,7 +2513,7 @@ def contribute(
     dry_run: bool,
     skip_git_check: bool,
     manual_git: bool,
-    include_unregistered: bool,
+    exclude_unregistered: bool,
 ) -> None:
     """Copy local artifact changes back to the warehouse for sharing.
 
@@ -2358,11 +2521,14 @@ def contribute(
     use this command to copy them back to the warehouse so the whole team
     benefits from the improvements.
 
+    Untracked local artifacts (not in beacon.yaml) are included by default.
+    Use --exclude-unregistered to contribute only tracked artifacts.
+
     Without a FILE argument, all modified and added artifacts are contributed.
 
     Examples:
 
-        abc contribute                                  # All modified/added
+        abc contribute                                  # All modified/added (incl. untracked)
 
         abc contribute knowledge/python/type-hints.md   # Single file
 
@@ -2370,7 +2536,7 @@ def contribute(
 
         abc contribute --manual-git                     # Skip auto PR creation
 
-        abc contribute --include-unregistered           # Also include untracked local artifacts
+        abc contribute --exclude-unregistered           # Only tracked artifacts
     """
     beacon_dir = Path.cwd() / ".agentic-beacon"
     if not beacon_dir.exists():
@@ -2426,12 +2592,30 @@ def contribute(
             warehouse_path=warehouse_path,
             artifacts_path=artifacts_dir,
             skills_paths=_build_skills_paths(project_root),
+            agents_paths=_build_agents_paths(),
         )
 
         if dry_run:
             console.print("[dim]Dry run — no files will be copied.[/dim]\n")
 
         if file:
+            if not dry_run:
+                # Preview what will be contributed, then confirm
+                console.print("[dim]Preview:[/dim]\n")
+                preview = _contribute_single(
+                    comparator,
+                    beacon_settings,
+                    warehouse_path,
+                    artifacts_dir,
+                    file,
+                    dry_run=True,
+                    project_root=project_root,
+                )
+                if preview and not click.confirm(
+                    "\nProceed with contribute?", default=True
+                ):
+                    console.print("[dim]Aborted.[/dim]")
+                    return
             contributed = _contribute_single(
                 comparator,
                 beacon_settings,
@@ -2442,6 +2626,23 @@ def contribute(
                 project_root=project_root,
             )
         else:
+            if not dry_run:
+                # Preview what will be contributed, then confirm
+                console.print("[dim]Preview:[/dim]\n")
+                preview = _contribute_all(
+                    comparator,
+                    beacon_settings,
+                    warehouse_path,
+                    artifacts_dir,
+                    dry_run=True,
+                    project_root=project_root,
+                    include_unregistered=not exclude_unregistered,
+                )
+                if preview and not click.confirm(
+                    "\nProceed with contribute?", default=True
+                ):
+                    console.print("[dim]Aborted.[/dim]")
+                    return
             contributed = _contribute_all(
                 comparator,
                 beacon_settings,
@@ -2449,7 +2650,7 @@ def contribute(
                 artifacts_dir,
                 dry_run,
                 project_root=project_root,
-                include_unregistered=include_unregistered,
+                include_unregistered=not exclude_unregistered,
             )
 
         if not dry_run and contributed:
@@ -2470,6 +2671,7 @@ def _resolve_skill_contribute_source(
     comparator: DeltaComparator,
     relative_path: str,
     artifacts_dir: Path,
+    dry_run: bool = False,
 ) -> Path | None:
     """Resolve which file to read when contributing a skill back to the warehouse.
 
@@ -2527,7 +2729,16 @@ def _resolve_skill_contribute_source(
         # All modified copies are identical — pick the first one
         return next(iter(candidates.values()))
 
-    # Genuinely different versions across agents — prompt the user
+    # Genuinely different versions across agents.
+    # During a dry-run preview, skip the interactive prompt and just report the conflict.
+    if dry_run:
+        console.print(
+            f"\n[yellow]Conflict:[/yellow] '{relative_path}' has been modified differently "
+            "across agents — you will be prompted to choose when you confirm.\n"
+        )
+        return next(iter(candidates.values()))  # placeholder; not used in dry-run
+
+    # Prompt the user to choose
     console.print(
         f"\n[yellow]Conflict:[/yellow] '{relative_path}' has been modified differently across agents:\n"
     )
@@ -2589,6 +2800,87 @@ def _propagate_skill_to_agents(
             )
 
 
+def _resolve_agent_contribute_source(
+    comparator: DeltaComparator,
+    relative_path: str,
+    dry_run: bool = False,
+) -> Path | None:
+    """Resolve which global agent file to read when contributing back to the warehouse.
+
+    Agent files live in global directories (~/.config/opencode/agents/ or
+    ~/.claude/agents/). The logic mirrors _resolve_skill_contribute_source:
+
+    - No agents configured → return None (nothing to contribute).
+    - One tool has a modified copy → use it.
+    - Multiple tools modified with identical content → use any.
+    - Multiple tools modified with different content → prompt user to choose.
+    - No tool has a modified copy → return None (identical to warehouse).
+
+    Returns the absolute Path of the file to copy, or None if nothing to contribute.
+    """
+    if not comparator.agents_paths:
+        return None
+
+    result = comparator._compare_agent_file(relative_path)
+
+    modified_tools = [
+        tool
+        for tool, status in result.agent_statuses.items()
+        if status == DeltaStatus.MODIFIED
+    ]
+
+    if not modified_tools:
+        return None
+
+    candidates: dict[str, Path] = {}
+    for tool in modified_tools:
+        live_path = comparator._agent_live_path(tool, relative_path)
+        if live_path.exists():
+            candidates[tool] = live_path
+
+    if not candidates:
+        return None
+
+    if len(candidates) == 1:
+        return next(iter(candidates.values()))
+
+    # Multiple tools have modified copies — check if they are identical
+    hashes = {tool: comparator.compute_hash(path) for tool, path in candidates.items()}
+    if len(set(hashes.values())) == 1:
+        return next(iter(candidates.values()))
+
+    # Genuinely different — prompt or report
+    if dry_run:
+        console.print(
+            f"\n[yellow]Conflict:[/yellow] '{relative_path}' has been modified differently "
+            "across tools — you will be prompted to choose when you confirm.\n"
+        )
+        return next(iter(candidates.values()))  # placeholder; not used in dry-run
+
+    console.print(
+        f"\n[yellow]Conflict:[/yellow] '{relative_path}' has been modified differently across tools:\n"
+    )
+    tool_list = list(candidates.keys())
+    for i, tool in enumerate(tool_list, 1):
+        console.print(f"  [{i}] {tool}")
+        console.print(f"      [dim]{candidates[tool]}[/dim]")
+    console.print()
+    valid = [str(i) for i in range(1, len(tool_list) + 1)]
+    while True:
+        raw = click.prompt(
+            f"Which version to contribute to the warehouse? ({'/'.join(valid)})",
+            default="",
+            show_default=False,
+        ).strip()
+        if raw in valid:
+            break
+        console.print(f"  [red]Invalid choice.[/red] Enter {' or '.join(valid)}.")
+
+    chosen = tool_list[int(raw) - 1]
+    console.print(f"  Using [bold]{chosen}[/bold] version.\n")
+    return candidates[chosen]
+
+
 def _contribute_single(
     comparator: DeltaComparator,
     beacon_settings: BeaconSettings,
@@ -2602,6 +2894,8 @@ def _contribute_single(
 
     For skills: reads from the live agent directory rather than the artifact
     snapshot, matching the same source that abc delta inspects.
+    For agents: reads from the global agent directory (~/.config/opencode/agents/
+    or ~/.claude/agents/).
 
     Does NOT auto-register untracked files in beacon.yaml — use ``abc adopt``
     for discovery and opt-in.
@@ -2609,16 +2903,27 @@ def _contribute_single(
     Returns a list of (path, status_label) tuples for contributed files.
     """
     is_skill = file_path.startswith("skills/") and bool(comparator.skills_paths)
+    is_agent = file_path.startswith("agents/") and bool(comparator.agents_paths)
 
     if is_skill:
         # Resolve the live agent source (may prompt user if multiple agents conflict)
         local_path = _resolve_skill_contribute_source(
-            comparator, file_path, artifacts_dir
+            comparator, file_path, artifacts_dir, dry_run=dry_run
         )
         if local_path is None:
             console.print(
                 f"[yellow]Nothing to contribute.[/yellow] "
                 f"'{file_path}' is identical to the warehouse version across all agents."
+            )
+            return []
+    elif is_agent:
+        local_path = _resolve_agent_contribute_source(
+            comparator, file_path, dry_run=dry_run
+        )
+        if local_path is None:
+            console.print(
+                f"[yellow]Nothing to contribute.[/yellow] "
+                f"'{file_path}' is identical to the warehouse version across all tools."
             )
             return []
     else:
@@ -2630,7 +2935,7 @@ def _contribute_single(
             )
             sys.exit(1)
 
-    if not is_skill:
+    if not is_skill and not is_agent:
         result = comparator.compare_file(file_path)
         if result.status == DeltaStatus.IDENTICAL:
             console.print(
@@ -2641,12 +2946,10 @@ def _contribute_single(
 
     dest_existed = (warehouse_path / file_path).exists()
     _copy_to_warehouse(local_path, warehouse_path / file_path, file_path, dry_run)
-    if not dry_run:
-        if is_skill:
-            _propagate_skill_to_agents(project_root, file_path, local_path)
-        status_label = "modified" if dest_existed else "added"
-        return [(file_path, status_label)]
-    return []
+    if is_skill and not dry_run:
+        _propagate_skill_to_agents(project_root, file_path, local_path)
+    status_label = "modified" if dest_existed else "added"
+    return [(file_path, status_label)]
 
 
 def _contribute_all(
@@ -2658,15 +2961,19 @@ def _contribute_all(
     project_root: Path,
     include_unregistered: bool = False,
 ) -> list[tuple[str, str]]:
-    """Contribute all tracked modified and added artifacts back to the warehouse.
+    """Contribute all tracked modified/added artifacts and modified agents to the warehouse.
 
-    Only contributes artifacts already tracked in beacon.yaml unless
-    ``include_unregistered`` is True, in which case locally-added files that are
-    not tracked in beacon.yaml are also copied to the warehouse (without
-    registering them).
+    Covers three sources:
+    1. Tracked artifacts (knowledge/skills/contexts) declared in beacon.yaml that
+       have local modifications or additions.
+    2. Unregistered local files not in beacon.yaml (when include_unregistered=True).
+    3. Agent definition files (~/.config/opencode/agents/, ~/.claude/agents/) that
+       differ from the warehouse — these are always included regardless of beacon.yaml.
 
     For skills: reads from live agent directories. If multiple agents have
     conflicting modifications the user is prompted to choose per-skill.
+    For agents: reads from the global agent directory. If multiple tools have
+    conflicting modifications the user is prompted to choose.
 
     Returns a list of (path, status_label) tuples for contributed files.
     """
@@ -2675,11 +2982,34 @@ def _contribute_all(
 
     unregistered_paths: list[str] = []
     if include_unregistered:
-        unregistered_paths = _find_untracked_local_files(
-            comparator, beacon_settings, artifacts_dir
-        )
+        unregistered_paths = [
+            p
+            for p, _agents in _find_untracked_local_files(
+                comparator, beacon_settings, artifacts_dir
+            )
+        ]
 
-    if not contributable and not unregistered_paths:
+    # Collect modified/added agent paths (no beacon.yaml entry needed)
+    # Discover from global dirs so agents not yet in warehouse appear as ADDED.
+    agent_paths: list[str] = []
+    if comparator.agents_paths:
+        seen_rel_paths: set[str] = set()
+        for _tool, agents_dir in comparator.agents_paths.items():
+            if agents_dir.is_dir():
+                for agent_file in sorted(agents_dir.rglob("*")):
+                    if agent_file.is_file() and agent_file.name != "README.md":
+                        seen_rel_paths.add("agents/" + agent_file.name)
+        warehouse_agents_dir = warehouse_path / "agents"
+        if warehouse_agents_dir.is_dir():
+            for agent_file in sorted(warehouse_agents_dir.rglob("*")):
+                if agent_file.is_file() and agent_file.name != "README.md":
+                    seen_rel_paths.add(str(agent_file.relative_to(warehouse_path)))
+        for rel_path in sorted(seen_rel_paths):
+            result = comparator._compare_agent_file(rel_path)
+            if result.status in (DeltaStatus.MODIFIED, DeltaStatus.ADDED):
+                agent_paths.append(rel_path)
+
+    if not contributable and not unregistered_paths and not agent_paths:
         console.print(
             "[green]Nothing to contribute.[/green] "
             "All local artifacts match the warehouse."
@@ -2693,7 +3023,7 @@ def _contribute_all(
 
         if is_skill:
             local_path = _resolve_skill_contribute_source(
-                comparator, result.path, artifacts_dir
+                comparator, result.path, artifacts_dir, dry_run=dry_run
             )
             if local_path is None:
                 console.print(
@@ -2712,19 +3042,48 @@ def _contribute_all(
         _copy_to_warehouse(
             local_path, warehouse_path / result.path, result.path, dry_run
         )
-        if not dry_run:
-            if is_skill:
-                _propagate_skill_to_agents(project_root, result.path, local_path)
-            status_label = (
-                "modified" if result.status == DeltaStatus.MODIFIED else "added"
-            )
-            contributed.append((result.path, status_label))
+        if is_skill and not dry_run:
+            _propagate_skill_to_agents(project_root, result.path, local_path)
+        status_label = "modified" if result.status == DeltaStatus.MODIFIED else "added"
+        contributed.append((result.path, status_label))
 
     for rel_path in unregistered_paths:
-        local_path = artifacts_dir / rel_path
+        is_skill = rel_path.startswith("skills/") and bool(comparator.skills_paths)
+        if is_skill:
+            # Skills live in live agent dirs, not in artifacts_dir.
+            # Pick the first agent copy that exists on disk.
+            local_path = None
+            for _agent, skills_root in comparator.skills_paths.items():
+                parts = Path(rel_path).parts
+                skill_relative = (
+                    Path(*parts[1:]) if parts[0] == "skills" else Path(rel_path)
+                )
+                candidate = skills_root / skill_relative
+                if candidate.exists():
+                    local_path = candidate
+                    break
+            if local_path is None:
+                console.print(
+                    f"  [yellow]Skipping[/yellow] {rel_path} (not found in any agent dir)"
+                )
+                continue
+        else:
+            local_path = artifacts_dir / rel_path
         _copy_to_warehouse(local_path, warehouse_path / rel_path, rel_path, dry_run)
-        if not dry_run:
-            contributed.append((rel_path, "added"))
+        contributed.append((rel_path, "added"))
+
+    # Contribute modified agent definitions (always included, no beacon.yaml entry)
+    for rel_path in agent_paths:
+        local_path = _resolve_agent_contribute_source(
+            comparator, rel_path, dry_run=dry_run
+        )
+        if local_path is None:
+            console.print(
+                f"  [yellow]Skipping[/yellow] {rel_path} (no modified copy found)"
+            )
+            continue
+        _copy_to_warehouse(local_path, warehouse_path / rel_path, rel_path, dry_run)
+        contributed.append((rel_path, "modified"))
 
     return contributed
 
@@ -3026,6 +3385,169 @@ def _init_claude_md(project_root: Path) -> None:
         claude_md.write_text("", encoding="utf-8")
 
 
+def _confirm_prune(orphans: list[OrphanInfo], *, dry_run: bool = False) -> list[str]:
+    """Prompt the user to confirm deletion of orphaned artifacts.
+
+    Orphans are files that exist in artifacts/ but are no longer listed in
+    beacon.yaml AND exist in the warehouse (so they were previously synced).
+    Files that do not exist in the warehouse are new contributions and are
+    never passed here.
+
+    Modified orphans (local content differs from warehouse) are listed
+    separately with a stronger warning.
+
+    In dry-run mode this function always returns an empty list (nothing to
+    actually delete) but still prints the preview list.
+
+    Returns:
+        List of relative paths the user confirmed for deletion.
+        Empty list if the user said no, or if dry_run=True.
+    """
+    if not orphans:
+        return []
+
+    safe = [o for o in orphans if not o.is_modified]
+    modified = [o for o in orphans if o.is_modified]
+
+    console.print(
+        "\n[yellow]The following artifact(s) are no longer in beacon.yaml:[/yellow]"
+    )
+    for o in safe:
+        console.print(f"  [dim]•[/dim] {o.rel_path}")
+    if modified:
+        console.print(
+            "\n[red]These artifact(s) have local modifications and are no longer in beacon.yaml:[/red]"
+        )
+        for o in modified:
+            console.print(f"  [red]•[/red] {o.rel_path} [dim](locally modified)[/dim]")
+
+    if dry_run:
+        console.print(
+            "\n  [dim]Dry run — no files will be deleted. "
+            "Run without --dry-run to apply.[/dim]"
+        )
+        return []
+
+    # Always ask, even for the safe (unmodified) list
+    if not click.confirm(
+        f"\nDelete {len(orphans)} artifact(s) from .agentic-beacon/artifacts/?",
+        default=False,
+    ):
+        console.print("  [dim]Skipped — orphaned artifacts left in place.[/dim]")
+        return []
+
+    # For modified files, ask again individually
+    confirmed: list[str] = []
+    for o in safe:
+        confirmed.append(o.rel_path)
+    for o in modified:
+        if click.confirm(
+            f"  Delete '{o.rel_path}' (has local changes — changes will be lost)?",
+            default=False,
+        ):
+            confirmed.append(o.rel_path)
+        else:
+            console.print(f"  [dim]Kept: {o.rel_path}[/dim]")
+
+    return confirmed
+
+
+def _unwire_pruned_artifacts(
+    project_root: Path, pruned_paths: list[str], artifacts_dir: Path
+) -> None:
+    """Remove wiring for pruned artifacts from agent config files.
+
+    For each pruned path:
+    - If it's a context (contexts/**/*.md): remove from opencode.json instructions
+      and from CLAUDE.md @-references.
+    - If it's a skill (skills/<name>/SKILL.md): remove .opencode/skills/<name>/
+      and .claude/skills/<name>/ directories.
+
+    Args:
+        project_root: Project root directory.
+        pruned_paths: Relative paths (under artifacts/) that were deleted.
+        artifacts_dir: Path to .agentic-beacon/artifacts/.
+    """
+    for rel_path in pruned_paths:
+        parts = Path(rel_path).parts
+        if not parts:
+            continue
+
+        artifact_type = parts[0]
+
+        if artifact_type == "contexts":
+            # Path inside artifacts_dir
+            artifact_abs = artifacts_dir / rel_path
+            rel_to_project = str(artifact_abs.relative_to(project_root))
+            _unwire_context_opencode(project_root, rel_to_project)
+            _unwire_context_claudecode(project_root, rel_to_project)
+
+        elif artifact_type == "skills" and len(parts) >= 2:
+            skill_name = parts[1]
+            _unwire_skill(project_root, skill_name)
+
+
+def _unwire_context_opencode(project_root: Path, rel_path: str) -> None:
+    """Remove a context path from opencode.json instructions."""
+    opencode_json = project_root / "opencode.json"
+    if not opencode_json.exists():
+        return
+    try:
+        data = json.loads(opencode_json.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return
+    instructions: list[str] = data.get("instructions", [])
+    if rel_path in instructions:
+        instructions.remove(rel_path)
+        data["instructions"] = instructions
+        opencode_json.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+        logger.debug("Unwired context from opencode.json: {}", rel_path)
+
+
+def _unwire_context_claudecode(project_root: Path, rel_path: str) -> None:
+    """Remove a context @-reference from CLAUDE.md."""
+    claude_md = next(
+        (
+            p
+            for p in [
+                project_root / ".claude" / "CLAUDE.md",
+                project_root / "CLAUDE.md",
+            ]
+            if p.exists()
+        ),
+        None,
+    )
+    if claude_md is None:
+        return
+    ref = f"@{rel_path}"
+    content = claude_md.read_text(encoding="utf-8")
+    if ref not in content:
+        return
+    # Remove the line containing the reference
+    lines = content.splitlines(keepends=True)
+    new_lines = [line for line in lines if line.strip() != ref]
+    claude_md.write_text("".join(new_lines), encoding="utf-8")
+    logger.debug("Unwired context from CLAUDE.md: {}", rel_path)
+
+
+def _unwire_skill(project_root: Path, skill_name: str) -> None:
+    """Remove a skill's wiring directories for all detected agents."""
+    opencode_skill = project_root / ".opencode" / "skills" / skill_name
+    if opencode_skill.exists():
+        shutil.rmtree(opencode_skill, ignore_errors=True)
+        logger.debug("Removed OpenCode skill dir: {}", opencode_skill)
+
+    opencode_cmd = project_root / ".opencode" / "command" / f"{skill_name}.md"
+    if opencode_cmd.exists():
+        opencode_cmd.unlink(missing_ok=True)
+        logger.debug("Removed OpenCode command stub: {}", opencode_cmd)
+
+    claude_skill = project_root / ".claude" / "skills" / skill_name
+    if claude_skill.exists():
+        shutil.rmtree(claude_skill, ignore_errors=True)
+        logger.debug("Removed Claude skill dir: {}", claude_skill)
+
+
 def _update_agent_gitignores(project_root: Path) -> None:
     """Add gitignore entries to agent subdirectory .gitignore files.
 
@@ -3252,7 +3774,6 @@ def _do_reset(project_root: Path) -> None:
 
     try:
         from .core.settings import BeaconSettings, WarehouseSettings
-        from .core.sync import SyncEngine
 
         warehouse_settings = WarehouseSettings()
         warehouse_path = Path(warehouse_settings.warehouse.local_path)

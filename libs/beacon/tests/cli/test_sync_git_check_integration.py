@@ -422,7 +422,11 @@ def test_contribute_stale_warning_clears_after_sync_with_zero_artifact_changes(
     synced.write_text("# Lesson\nImproved locally.\n")
 
     # Step 6 — contribute must no longer warn about a stale snapshot
-    result = runner.invoke(main, ["contribute", "knowledge/lesson.md", "--manual-git"])
+    result = runner.invoke(
+        main,
+        ["contribute", "knowledge/lesson.md", "--manual-git"],
+        input="y\n",
+    )
     assert result.exit_code == 0, (
         f"Expected contribute to succeed after sync, but got:\n{result.output}"
     )

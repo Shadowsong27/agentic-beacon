@@ -38,7 +38,7 @@ def project_with_artifacts(temp_dir, valid_warehouse):
     return project
 
 
-def test_delta_no_differences(project_with_artifacts, monkeypatch):
+def test_delta_no_differences(project_with_artifacts, monkeypatch, isolated_home):
     """TC2: No changes → "No differences found"."""
     runner = CliRunner()
     monkeypatch.chdir(project_with_artifacts)
@@ -57,7 +57,7 @@ def test_delta_modified_file(project_with_artifacts, monkeypatch):
     monkeypatch.chdir(project_with_artifacts)
     result = runner.invoke(main, ["delta"])
     assert result.exit_code == 0
-    assert "Modified" in result.output
+    assert "modified" in result.output
 
 
 def test_delta_no_warehouse_connected(temp_dir, monkeypatch):
@@ -90,8 +90,11 @@ def test_delta_no_beacon_yaml(temp_dir, valid_warehouse, monkeypatch):
     assert "No beacon.yaml found" in result.output
 
 
-def test_delta_shows_untracked_local_skill(temp_dir, valid_warehouse, monkeypatch):
-    """abc delta shows a locally-present skill not registered in beacon.yaml as Added."""
+def test_delta_ignores_skill_snapshot_in_artifacts_dir(
+    temp_dir, valid_warehouse, monkeypatch
+):
+    """.agentic-beacon/artifacts/skills/ is a one-way sync staging area and must not
+    surface as untracked in abc delta. Skills are only compared against live agent dirs."""
     project = temp_dir / "project"
     project.mkdir()
     beacon_dir = project / ".agentic-beacon"
@@ -104,7 +107,8 @@ def test_delta_shows_untracked_local_skill(temp_dir, valid_warehouse, monkeypatc
         "artifacts:\n  knowledge: []\n  skills: []\n  contexts: []\n"
     )
 
-    # Create opsx-handoff skill locally (untracked — not in beacon.yaml, not in warehouse)
+    # Drop a skill into the artifacts snapshot — this is the staging area, not a
+    # live agent dir. Delta must not report it as untracked.
     skill_dir = beacon_dir / "artifacts" / "skills" / "opsx-handoff"
     skill_dir.mkdir(parents=True)
     (skill_dir / "SKILL.md").write_text("# opsx-handoff\n")
@@ -114,8 +118,71 @@ def test_delta_shows_untracked_local_skill(temp_dir, valid_warehouse, monkeypatc
     result = runner.invoke(main, ["delta"])
 
     assert result.exit_code == 0
-    assert "opsx-handoff" in result.output
-    assert "Added" in result.output
+    # Skill snapshot in artifacts/ must be invisible to delta
+    assert "opsx-handoff" not in result.output
+
+
+def test_delta_shows_untracked_skill_in_live_opencode_dir(
+    temp_dir, valid_warehouse, monkeypatch
+):
+    """abc delta shows an untracked skill in .opencode/skills/ with opencode agent detail."""
+    project = temp_dir / "project"
+    project.mkdir()
+    (project / "opencode.json").write_text("{}")  # agent marker
+    beacon_dir = project / ".agentic-beacon"
+    beacon_dir.mkdir()
+    (beacon_dir / "config.toml").write_text(
+        f'[warehouse]\nlocal_path = "{valid_warehouse}"\n'
+    )
+    (beacon_dir / "beacon.yaml").write_text(
+        "artifacts:\n  knowledge: []\n  skills: []\n  contexts: []\n"
+    )
+
+    skill_dir = project / ".opencode" / "skills" / "hl-data-platform-status"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("# hl-data-platform-status\n")
+
+    runner = CliRunner()
+    monkeypatch.chdir(project)
+    result = runner.invoke(main, ["delta"])
+
+    assert result.exit_code == 0
+    assert "hl-data-platform-status" in result.output
+    assert "added" in result.output
+    assert "opencode" in result.output
+
+
+def test_delta_shows_untracked_skill_in_both_agent_dirs(
+    temp_dir, valid_warehouse, monkeypatch
+):
+    """abc delta shows an untracked skill present in both .opencode/skills/ and .claude/skills/."""
+    project = temp_dir / "project"
+    project.mkdir()
+    (project / "opencode.json").write_text("{}")  # opencode marker
+    (project / "CLAUDE.md").write_text("")  # claudecode marker
+    beacon_dir = project / ".agentic-beacon"
+    beacon_dir.mkdir()
+    (beacon_dir / "config.toml").write_text(
+        f'[warehouse]\nlocal_path = "{valid_warehouse}"\n'
+    )
+    (beacon_dir / "beacon.yaml").write_text(
+        "artifacts:\n  knowledge: []\n  skills: []\n  contexts: []\n"
+    )
+
+    for agent_dir in [".opencode", ".claude"]:
+        skill_dir = project / agent_dir / "skills" / "my-new-skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text("# my-new-skill\n")
+
+    runner = CliRunner()
+    monkeypatch.chdir(project)
+    result = runner.invoke(main, ["delta"])
+
+    assert result.exit_code == 0
+    assert "my-new-skill" in result.output
+    assert "added" in result.output
+    assert "opencode" in result.output
+    assert "claudecode" in result.output
 
 
 def test_delta_no_beacon_dir(temp_dir, monkeypatch):
@@ -173,7 +240,7 @@ def project_with_skill(temp_dir, valid_warehouse):
 
 
 def test_delta_skill_identical_live_shows_no_differences(
-    project_with_skill, valid_warehouse, monkeypatch
+    project_with_skill, valid_warehouse, monkeypatch, isolated_home
 ):
     """abc delta reports no differences when live skill matches warehouse."""
     project = project_with_skill
@@ -207,7 +274,7 @@ def test_delta_skill_modified_live_shows_modified(
     result = runner.invoke(main, ["delta"])
 
     assert result.exit_code == 0
-    assert "Modified" in result.output
+    assert "modified" in result.output
     assert "skills/my-skill/SKILL.md" in result.output
 
 
@@ -233,7 +300,7 @@ def test_delta_skill_snapshot_identical_but_live_modified_shows_modified(
     result = runner.invoke(main, ["delta"])
 
     assert result.exit_code == 0
-    assert "Modified" in result.output
+    assert "modified" in result.output
     assert "skills/my-skill/SKILL.md" in result.output
 
 
@@ -285,7 +352,7 @@ def test_delta_skill_shows_per_agent_breakdown_in_output(
     result = runner.invoke(main, ["delta"])
 
     assert result.exit_code == 0
-    assert "Modified" in result.output
+    assert "modified" in result.output
     assert "opencode" in result.output
     assert "claudecode" in result.output
     # opencode modified, claudecode identical
@@ -305,7 +372,7 @@ def test_delta_skill_no_live_dir_reports_missing(
     result = runner.invoke(main, ["delta"])
 
     assert result.exit_code == 0
-    assert "Missing" in result.output
+    assert "missing" in result.output
     assert "skills/my-skill/SKILL.md" in result.output
 
 
@@ -372,7 +439,7 @@ def test_delta_summary_shows_per_agent_breakdown_for_missing_skill(
     result = runner.invoke(main, ["delta"])
 
     assert result.exit_code == 0
-    assert "Missing" in result.output
+    assert "missing" in result.output
     assert "skills/my-skill/SKILL.md" in result.output
     # Per-agent breakdown should appear
     assert "opencode" in result.output
@@ -413,7 +480,7 @@ def test_delta_summary_shows_per_agent_breakdown_for_added_skill(
     result = runner.invoke(main, ["delta"])
 
     assert result.exit_code == 0
-    assert "Added" in result.output
+    assert "added" in result.output
     assert "skills/my-skill/SKILL.md" in result.output
     # Per-agent breakdown should appear
     assert "opencode" in result.output
@@ -491,3 +558,125 @@ def test_delta_sync_state_not_shown_as_untracked(project_with_artifacts, monkeyp
 
     assert result.exit_code == 0
     assert ".sync-state" not in result.output
+
+
+# ---------------------------------------------------------------------------
+# Agents section
+# ---------------------------------------------------------------------------
+
+
+def test_delta_agents_section_shows_when_global_agents_exist(
+    project_with_artifacts, monkeypatch, tmp_path
+):
+    """Agents with no warehouse counterpart appear in a dedicated Agents section."""
+    monkeypatch.chdir(project_with_artifacts)
+    from pathlib import Path
+
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+
+    oc_agents = home / ".config" / "opencode" / "agents"
+    oc_agents.mkdir(parents=True)
+    (oc_agents / "reviewer.md").write_text("# Reviewer\nv1\n")
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["delta"])
+
+    assert result.exit_code == 0
+    assert "Agents" in result.output
+    assert "agents/reviewer.md" in result.output
+    assert "added" in result.output
+    # Must NOT appear in "Tracked Artifacts"
+    assert (
+        "Tracked Artifacts" not in result.output
+        or "reviewer" not in result.output.split("Tracked Artifacts")[0]
+    )
+
+
+def test_delta_agents_section_shows_modified_agent(
+    project_with_artifacts, monkeypatch, tmp_path, valid_warehouse
+):
+    """An agent that exists in both warehouse and global dir but differs shows as modified."""
+    monkeypatch.chdir(project_with_artifacts)
+    from pathlib import Path
+
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+
+    # Put agent in warehouse
+    (valid_warehouse / "agents" / "reviewer.md").write_text("# Reviewer\nOriginal.\n")
+
+    # Put a modified copy globally
+    oc_agents = home / ".config" / "opencode" / "agents"
+    oc_agents.mkdir(parents=True)
+    (oc_agents / "reviewer.md").write_text("# Reviewer\nModified.\n")
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["delta"])
+
+    assert result.exit_code == 0
+    assert "Agents" in result.output
+    assert "modified" in result.output
+    assert "Modified agent(s): 1" in result.output
+
+
+def test_delta_agents_not_in_tracked_artifacts_section(
+    project_with_artifacts, monkeypatch, tmp_path
+):
+    """Agents must never appear inside the Tracked Artifacts table."""
+    monkeypatch.chdir(project_with_artifacts)
+    from pathlib import Path
+
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+
+    oc_agents = home / ".config" / "opencode" / "agents"
+    oc_agents.mkdir(parents=True)
+    (oc_agents / "reviewer.md").write_text("# Reviewer\nv1\n")
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["delta"])
+
+    assert result.exit_code == 0
+    # Tracked Artifacts section should not exist (only agents changed, no artifact diffs)
+    assert "Tracked Artifacts" not in result.output
+    # Agents section should exist
+    assert "Agents" in result.output
+
+
+def test_delta_no_agents_section_when_no_global_agents(
+    project_with_artifacts, monkeypatch, isolated_home
+):
+    """No Agents section rendered when no global agent dirs have files."""
+    monkeypatch.chdir(project_with_artifacts)
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["delta"])
+
+    assert result.exit_code == 0
+    assert "Agents" not in result.output
+
+
+def test_delta_summary_counts_new_agents(project_with_artifacts, monkeypatch, tmp_path):
+    """Summary line shows 'New agent(s)' count when agents exist globally but not in warehouse."""
+    monkeypatch.chdir(project_with_artifacts)
+    from pathlib import Path
+
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
+
+    oc_agents = home / ".config" / "opencode" / "agents"
+    oc_agents.mkdir(parents=True)
+    (oc_agents / "a.md").write_text("# A\n")
+    (oc_agents / "b.md").write_text("# B\n")
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["delta"])
+
+    assert result.exit_code == 0
+    assert "New agent(s): 2" in result.output
+    assert "abc contribute" in result.output

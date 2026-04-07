@@ -249,10 +249,8 @@ def test_sync_dry_run_reports_would_copy_count(valid_warehouse, temp_dir, monkey
     assert "2" in result.output
 
 
-def test_sync_dry_run_with_prune_reports_would_prune(
-    valid_warehouse, temp_dir, monkeypatch
-):
-    """--dry-run --prune shows which files would be removed without removing them."""
+def test_sync_dry_run_reports_would_remove(valid_warehouse, temp_dir, monkeypatch):
+    """--dry-run shows orphaned artifacts that would be removed."""
     runner = CliRunner()
 
     project_dir = temp_dir / "project"
@@ -260,24 +258,26 @@ def test_sync_dry_run_with_prune_reports_would_prune(
     monkeypatch.chdir(project_dir)
 
     (valid_warehouse / "knowledge" / "keep.md").write_text("keep")
+    # stale.md exists in warehouse so it is a genuine orphan (previously synced)
+    (valid_warehouse / "knowledge" / "stale.md").write_text("stale")
 
     runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
     runner.invoke(main, ["setup", "--manual"])
 
-    # Set up beacon.yaml tracking only "keep.md"
+    # Set up beacon.yaml tracking only "keep.md" — stale.md intentionally omitted
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
     beacon_yaml.write_text(
         "artifacts:\n  knowledge:\n    - knowledge/keep.md\n  skills: []\n  contexts: []\n"
     )
 
-    # Manually plant a stale file in artifacts
+    # Manually plant the stale file in artifacts (simulates a previous sync)
     artifacts_dir = project_dir / ".agentic-beacon" / "artifacts" / "knowledge"
     artifacts_dir.mkdir(parents=True)
     (artifacts_dir / "stale.md").write_text("stale")
 
-    result = runner.invoke(main, ["sync", "--dry-run", "--prune"])
+    result = runner.invoke(main, ["sync", "--dry-run"])
 
     assert result.exit_code == 0
-    assert "would" in result.output.lower() or "prune" in result.output.lower()
+    assert "would" in result.output.lower() or "remove" in result.output.lower()
     # Stale file must still exist (dry run)
     assert (artifacts_dir / "stale.md").exists()

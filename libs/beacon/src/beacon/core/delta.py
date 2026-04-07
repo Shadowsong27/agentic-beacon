@@ -204,7 +204,12 @@ class DeltaComparator:
     def _compare_agent_file(self, relative_path: str) -> ComparisonResult:
         """Compare an agent definition file against all global agent directories.
 
-        Returns ComparisonResult with per-agent statuses (MISSING/IDENTICAL/MODIFIED).
+        Returns ComparisonResult with per-agent statuses:
+        - ADDED    — file exists globally but not in warehouse (new, never committed)
+        - MODIFIED — file exists both globally and in warehouse but differs
+        - IDENTICAL — file matches warehouse exactly
+        - MISSING  — file is in warehouse but absent from this tool's global dir
+
         STALE is not returned here — it is enriched at the CLI layer after reading sync-state.
 
         Args:
@@ -222,6 +227,9 @@ class DeltaComparator:
 
             if not live_exists:
                 agent_statuses[agent] = DeltaStatus.MISSING
+            elif not warehouse_exists:
+                # File exists globally but has no warehouse counterpart yet
+                agent_statuses[agent] = DeltaStatus.ADDED
             else:
                 live_hash = self.compute_hash(live_file)
                 if live_hash == warehouse_hash:
@@ -229,9 +237,10 @@ class DeltaComparator:
                 else:
                     agent_statuses[agent] = DeltaStatus.MODIFIED
 
-        # Aggregate: MODIFIED > MISSING > IDENTICAL
+        # Aggregate: ADDED > MODIFIED > MISSING > IDENTICAL
         if agent_statuses:
             priority = {
+                DeltaStatus.ADDED: 3,
                 DeltaStatus.MODIFIED: 2,
                 DeltaStatus.MISSING: 1,
                 DeltaStatus.IDENTICAL: 0,

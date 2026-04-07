@@ -276,7 +276,7 @@ def test_e2e_status_shows_check_marks_for_synced(e2e_project):
 # ---------------------------------------------------------------------------
 
 
-def test_e2e_delta_clean(e2e_project):
+def test_e2e_delta_clean(e2e_project, isolated_home):
     project_dir, warehouse, runner = e2e_project
     runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
 
@@ -333,7 +333,7 @@ def test_e2e_delta_detects_modification(e2e_project):
 # ---------------------------------------------------------------------------
 
 
-def test_e2e_delta_skill_clean_after_sync(e2e_project):
+def test_e2e_delta_skill_clean_after_sync(e2e_project, isolated_home):
     """After abc sync, delta reports skill as identical (live dir matches warehouse)."""
     project_dir, warehouse, runner = e2e_project
     runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
@@ -504,7 +504,7 @@ def test_e2e_sync_preserve(e2e_project):
 
 
 # ---------------------------------------------------------------------------
-# Step 9 — sync --prune removes artifacts dropped from beacon.yaml
+# Step 9 — sync auto-prune removes artifacts dropped from beacon.yaml
 # ---------------------------------------------------------------------------
 
 
@@ -532,10 +532,11 @@ def test_e2e_sync_prune(e2e_project):
         "  contexts: []\n"
     )
 
-    result = runner.invoke(main, ["sync", "--prune"])
+    # Auto-prune: confirm deletion with "y"
+    result = runner.invoke(main, ["sync"], input="y\n")
 
     assert result.exit_code == 0
-    assert "Pruned: 1" in result.output
+    assert "Removed:" in result.output or "removed" in result.output.lower()
     dropped = (
         project_dir
         / ".agentic-beacon"
@@ -657,7 +658,9 @@ def test_e2e_contribute_skill_live_modification_goes_to_warehouse(e2e_project):
     original = live_skill.read_text()
     live_skill.write_text(original + "\n## Local Guardrail\nNo foo.\n")
 
-    result = runner.invoke(main, ["contribute", "skills/code-review/SKILL.md"])
+    result = runner.invoke(
+        main, ["contribute", "skills/code-review/SKILL.md"], input="y\n"
+    )
 
     assert result.exit_code == 0, result.output
     # Warehouse now contains the live version
@@ -702,7 +705,9 @@ def test_e2e_contribute_skill_regression_stale_snapshot(e2e_project):
     warehouse_content = (warehouse / "skills" / "code-review" / "SKILL.md").read_text()
     assert snapshot.read_text() == warehouse_content
 
-    result = runner.invoke(main, ["contribute", "skills/code-review/SKILL.md"])
+    result = runner.invoke(
+        main, ["contribute", "skills/code-review/SKILL.md"], input="y\n"
+    )
 
     assert result.exit_code == 0, result.output
     assert "nothing to contribute" not in result.output.lower(), (
@@ -735,7 +740,7 @@ def test_e2e_contribute_all_skill_live_modification(e2e_project):
     live_skill = project_dir / ".opencode" / "skills" / "code-review" / "SKILL.md"
     live_skill.write_text(live_skill.read_text() + "\n## Extra\n")
 
-    result = runner.invoke(main, ["contribute", "--manual-git"])
+    result = runner.invoke(main, ["contribute", "--manual-git"], input="y\n")
 
     assert result.exit_code == 0, result.output
     assert "code-review" in result.output or "✓" in result.output
@@ -760,7 +765,9 @@ def test_e2e_contribute_skill_identical_live_is_noop(e2e_project):
     runner.invoke(main, ["sync"])
     # Live dir is untouched after sync — identical to warehouse
 
-    result = runner.invoke(main, ["contribute", "skills/code-review/SKILL.md"])
+    result = runner.invoke(
+        main, ["contribute", "skills/code-review/SKILL.md"], input="y\n"
+    )
 
     assert result.exit_code == 0
     assert "nothing to contribute" in result.output.lower()
@@ -792,9 +799,9 @@ def test_e2e_contribute_skill_multi_agent_conflict_prompts(e2e_project):
     cc_skill = project_dir / ".claude" / "skills" / "code-review" / "SKILL.md"
     cc_skill.write_text(cc_skill.read_text() + "\n## Claude edit\n")
 
-    # User picks option 1 (opencode)
+    # Proceed confirm comes first, then conflict choice for the real run
     result = runner.invoke(
-        main, ["contribute", "skills/code-review/SKILL.md"], input="1\n"
+        main, ["contribute", "skills/code-review/SKILL.md"], input="y\n1\n"
     )
 
     assert result.exit_code == 0, result.output

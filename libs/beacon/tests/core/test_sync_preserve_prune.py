@@ -193,3 +193,107 @@ def test_sync_all_counts(valid_warehouse, temp_dir):
     assert summary.errors == 1
     assert len(summary.failed_files) == 1
     assert summary.failed_files[0][0] == "knowledge/missing.md"
+
+
+# ========== classify_orphans ==========
+
+
+def test_classify_orphans_returns_prune_candidates(valid_warehouse, temp_dir):
+    """Files in artifacts that exist in warehouse but not in beacon.yaml are prune candidates."""
+    artifacts_dir = temp_dir / "artifacts"
+    (artifacts_dir / "knowledge").mkdir(parents=True)
+
+    # File in beacon.yaml and warehouse
+    (valid_warehouse / "knowledge" / "keep.md").write_text("keep")
+    (artifacts_dir / "knowledge" / "keep.md").write_text("keep")
+
+    # Previously synced file, removed from beacon.yaml, still in warehouse
+    (valid_warehouse / "knowledge" / "orphan.md").write_text("orphan")
+    (artifacts_dir / "knowledge" / "orphan.md").write_text("orphan")
+
+    engine = SyncEngine(valid_warehouse, artifacts_dir)
+    orphans = engine.classify_orphans(["knowledge/keep.md"])
+
+    assert len(orphans) == 1
+    assert orphans[0].rel_path == "knowledge/orphan.md"
+    assert orphans[0].is_modified is False
+
+
+def test_classify_orphans_skips_new_contributions(valid_warehouse, temp_dir):
+    """Files in artifacts that do NOT exist in warehouse are new contributions — never pruned."""
+    artifacts_dir = temp_dir / "artifacts"
+    (artifacts_dir / "knowledge").mkdir(parents=True)
+
+    # File created locally, not in warehouse
+    (artifacts_dir / "knowledge" / "new-contribution.md").write_text("brand new")
+
+    engine = SyncEngine(valid_warehouse, artifacts_dir)
+    orphans = engine.classify_orphans([])
+
+    # No prune candidates — it's a new contribution
+    assert len(orphans) == 0
+
+
+def test_classify_orphans_detects_modified_orphan(valid_warehouse, temp_dir):
+    """Orphan with local edits relative to warehouse version is flagged is_modified=True."""
+    artifacts_dir = temp_dir / "artifacts"
+    (artifacts_dir / "knowledge").mkdir(parents=True)
+
+    (valid_warehouse / "knowledge" / "orphan.md").write_text("warehouse version")
+    (artifacts_dir / "knowledge" / "orphan.md").write_text("locally modified version")
+
+    engine = SyncEngine(valid_warehouse, artifacts_dir)
+    orphans = engine.classify_orphans([])
+
+    assert len(orphans) == 1
+    assert orphans[0].rel_path == "knowledge/orphan.md"
+    assert orphans[0].is_modified is True
+
+
+def test_classify_orphans_empty_when_artifacts_absent(valid_warehouse, temp_dir):
+    """Returns empty list when artifacts directory does not exist yet."""
+    artifacts_dir = temp_dir / "nonexistent_artifacts"
+    engine = SyncEngine(valid_warehouse, artifacts_dir)
+    orphans = engine.classify_orphans(["knowledge/doc.md"])
+    assert orphans == []
+
+
+def test_sync_all_paths_to_prune_explicit(valid_warehouse, temp_dir):
+    """paths_to_prune deletes exactly the specified files and records them in pruned_paths."""
+    artifacts_dir = temp_dir / "artifacts"
+    (artifacts_dir / "knowledge").mkdir(parents=True)
+
+    (valid_warehouse / "knowledge" / "keep.md").write_text("keep")
+    (artifacts_dir / "knowledge" / "keep.md").write_text("keep")
+    (artifacts_dir / "knowledge" / "remove.md").write_text("remove")
+
+    engine = SyncEngine(valid_warehouse, artifacts_dir)
+    summary = engine.sync_all(
+        artifact_paths=["knowledge/keep.md"],
+        paths_to_prune=["knowledge/remove.md"],
+    )
+
+    assert summary.pruned == 1
+    assert summary.pruned_paths == ["knowledge/remove.md"]
+    assert not (artifacts_dir / "knowledge" / "remove.md").exists()
+    assert (artifacts_dir / "knowledge" / "keep.md").exists()
+
+
+def test_sync_all_pruned_paths_tracked(valid_warehouse, temp_dir):
+    """SyncSummary.pruned_paths records each deleted file path."""
+    artifacts_dir = temp_dir / "artifacts"
+    (artifacts_dir / "knowledge").mkdir(parents=True)
+
+    (valid_warehouse / "knowledge" / "a.md").write_text("a")
+    (artifacts_dir / "knowledge" / "a.md").write_text("a")
+    (artifacts_dir / "knowledge" / "b.md").write_text("b")
+    (artifacts_dir / "knowledge" / "c.md").write_text("c")
+
+    engine = SyncEngine(valid_warehouse, artifacts_dir)
+    summary = engine.sync_all(
+        artifact_paths=["knowledge/a.md"],
+        paths_to_prune=["knowledge/b.md", "knowledge/c.md"],
+    )
+
+    assert summary.pruned == 2
+    assert set(summary.pruned_paths) == {"knowledge/b.md", "knowledge/c.md"}
