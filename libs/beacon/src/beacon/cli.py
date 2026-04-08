@@ -2096,6 +2096,43 @@ def _build_skills_paths(project_root: Path) -> dict[str, Path]:
     return skills_paths
 
 
+def _bundled_skill_names() -> set[str]:
+    """Return the set of skill names that are managed by abc (bundled)."""
+    bundled_dir = Path(__file__).parent / "data" / "skills"
+    if not bundled_dir.exists():
+        return set()
+    return {
+        d.name
+        for d in bundled_dir.iterdir()
+        if d.is_dir() and (d / "SKILL.md").exists()
+    }
+
+
+def _find_global_untracked_skills() -> dict[str, list[str]]:
+    """Return non-bundled skill directories found in the global skill dirs.
+
+    Scans ~/.claude/skills/ (Claude Code) and ~/.config/opencode/skills/ (OpenCode).
+    Excludes abc-bundled skills so only accidentally-global user skills are surfaced.
+    Returns a mapping of tool name → sorted list of skill names.
+    """
+    global_skill_dirs: dict[str, Path] = {
+        "claudecode": Path.home() / ".claude" / "skills",
+        "opencode": Path.home() / ".config" / "opencode" / "skills",
+    }
+    bundled = _bundled_skill_names()
+    result: dict[str, list[str]] = {}
+    for tool, skills_dir in global_skill_dirs.items():
+        if skills_dir.is_dir():
+            names = sorted(
+                d.name
+                for d in skills_dir.iterdir()
+                if d.is_dir() and (d / "SKILL.md").exists() and d.name not in bundled
+            )
+            if names:
+                result[tool] = names
+    return result
+
+
 def _find_project_level_agents(project_root: Path) -> dict[str, list[str]]:
     """Return project-scoped agent files per tool that live outside the global dirs.
 
@@ -2267,6 +2304,9 @@ def _show_delta_summary(
         _find_project_level_agents(project_root) if project_root is not None else {}
     )
 
+    # Detect non-bundled skills accidentally placed in global skill dirs
+    global_untracked_skills = _find_global_untracked_skills()
+
     has_agent_diffs = any(r.status != DeltaStatus.IDENTICAL for r in agent_results)
 
     if (
@@ -2274,6 +2314,7 @@ def _show_delta_summary(
         and not untracked
         and not has_agent_diffs
         and not project_level_agents
+        and not global_untracked_skills
     ):
         console.print(
             "[green]No differences found. Local artifacts match local warehouse.[/green]"
@@ -2425,6 +2466,41 @@ def _show_delta_summary(
         console.print()
         console.print(table)
 
+    # --- Global untracked skills reminder ---
+    if global_untracked_skills:
+        if project_level_agents or agent_results or tracked_diffs or untracked:
+            console.rule(style="dim")
+
+        global_skill_tools: list[str] = sorted(global_untracked_skills.keys())
+        global_skill_names: list[str] = sorted(
+            {s for names in global_untracked_skills.values() for s in names}
+        )
+
+        table = Table(
+            title="Global Skills [dim](not in project skill dirs — not tracked in warehouse)[/dim]",
+            title_style="bold yellow",
+            title_justify="left",
+            show_header=True,
+            header_style="dim",
+            box=None,
+            padding=(0, 2, 0, 0),
+        )
+        table.add_column("Skill")
+        for tool in global_skill_tools:
+            table.add_column(tool, no_wrap=True)
+
+        for skill_name in global_skill_names:
+            cells = [
+                "[yellow]global[/yellow]"
+                if skill_name in global_untracked_skills.get(tool, [])
+                else ""
+                for tool in global_skill_tools
+            ]
+            table.add_row(skill_name, *cells)
+
+        console.print()
+        console.print(table)
+
     # Summary counts
     console.print("\n[bold]Summary:[/bold]")
     if summary.modified:
@@ -2450,6 +2526,11 @@ def _show_delta_summary(
         console.print(
             f"  [yellow]Project-scoped agent(s):[/yellow] {total} (not in global dirs)"
         )
+    if global_untracked_skills:
+        total = sum(len(v) for v in global_untracked_skills.values())
+        console.print(
+            f"  [yellow]Global skill(s):[/yellow] {total} (in global dir, not tracked)"
+        )
 
     # Tips
     if summary.missing:
@@ -2460,11 +2541,15 @@ def _show_delta_summary(
         console.print(
             "[dim]Tip: Run 'abc delta <file>' to see detailed diff for a modified file.[/dim]"
         )
-    if untracked:
+    if untracked and (added_agents or modified_agents):
+        console.print(
+            "[dim]Tip: Run 'abc contribute' to push untracked artifacts and agent changes to the warehouse.[/dim]"
+        )
+    elif untracked:
         console.print(
             "[dim]Tip: Run 'abc contribute' to push untracked local artifacts to the warehouse.[/dim]"
         )
-    if added_agents or modified_agents:
+    elif added_agents or modified_agents:
         console.print(
             "[dim]Tip: Run 'abc contribute' to push agent changes to the warehouse.[/dim]"
         )
@@ -2476,6 +2561,12 @@ def _show_delta_summary(
         console.print(
             "[dim]Tip: To promote a project-scoped agent, move it to the global agents dir "
             "and run 'abc contribute' — or ask your coding agent to do it for you.[/dim]"
+        )
+    if global_untracked_skills:
+        console.print(
+            "[dim]Tip: Global skills are not tracked in the warehouse. Move them to the "
+            "project skill dir (.claude/skills/ or .opencode/skills/) and run "
+            "'abc contribute' — or ask your coding agent to do it for you.[/dim]"
         )
 
 
