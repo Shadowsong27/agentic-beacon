@@ -1934,6 +1934,30 @@ def _build_skills_paths(project_root: Path) -> dict[str, Path]:
     return skills_paths
 
 
+def _find_project_level_agents(project_root: Path) -> dict[str, list[str]]:
+    """Return project-scoped agent files per tool that live outside the global dirs.
+
+    Checks .claude/agents/ (Claude Code) and .opencode/agents/ (OpenCode) under
+    the given project root.  Returns a mapping of tool name → sorted list of
+    agent file names (README.md excluded).
+    """
+    project_agent_dirs: dict[str, Path] = {
+        "claudecode": project_root / ".claude" / "agents",
+        "opencode": project_root / ".opencode" / "agents",
+    }
+    result: dict[str, list[str]] = {}
+    for tool, agents_dir in project_agent_dirs.items():
+        if agents_dir.is_dir():
+            files = sorted(
+                f.name
+                for f in agents_dir.iterdir()
+                if f.is_file() and f.name != "README.md"
+            )
+            if files:
+                result[tool] = files
+    return result
+
+
 def _build_agents_paths() -> dict[str, Path]:
     """Return a mapping of tool name → global agents directory for detected tools.
 
@@ -2020,7 +2044,9 @@ def delta(*, file: str | None, no_color: bool) -> None:
             _show_detailed_diff(comparator, beacon_settings, file, no_color)
         else:
             # Summary view
-            _show_delta_summary(comparator, beacon_settings, warehouse_path)
+            _show_delta_summary(
+                comparator, beacon_settings, warehouse_path, project_root
+            )
 
     except Exception as e:
         console.print(f"\n[red]Error:[/red] Delta comparison failed: {e}")
@@ -2032,6 +2058,7 @@ def _show_delta_summary(
     comparator: DeltaComparator,
     beacon_settings: BeaconSettings,
     warehouse_path: Path | None = None,
+    project_root: Path | None = None,
 ) -> None:
     """Show summary of all artifact differences."""
     summary = comparator.compare_from_config(beacon_settings)
@@ -2073,9 +2100,19 @@ def _show_delta_summary(
         comparator, beacon_settings, comparator.artifacts_path
     )
 
+    # Detect project-scoped agents (not part of the global/contribution flow)
+    project_level_agents: dict[str, list[str]] = (
+        _find_project_level_agents(project_root) if project_root is not None else {}
+    )
+
     has_agent_diffs = any(r.status != DeltaStatus.IDENTICAL for r in agent_results)
 
-    if not summary.has_differences and not untracked and not has_agent_diffs:
+    if (
+        not summary.has_differences
+        and not untracked
+        and not has_agent_diffs
+        and not project_level_agents
+    ):
         console.print(
             "[green]No differences found. Local artifacts match local warehouse.[/green]"
         )
@@ -2185,10 +2222,46 @@ def _show_delta_summary(
         console.print(
             _render_delta_table(
                 rows,
-                "Agents [dim](global, not tracked in beacon.yaml)[/dim]",
+                "Agents [dim](global)[/dim]",
                 agent_tools,
             )
         )
+
+    # --- Project-scoped agents reminder ---
+    if project_level_agents:
+        if agent_results or tracked_diffs or untracked:
+            console.rule(style="dim")
+
+        # Collect all unique agent filenames and tools in a stable order
+        proj_tools: list[str] = sorted(project_level_agents.keys())
+        proj_files: list[str] = sorted(
+            {f for files in project_level_agents.values() for f in files}
+        )
+
+        table = Table(
+            title="Project-scoped Agents [dim](promote to global to include in contribution flow)[/dim]",
+            title_style="bold yellow",
+            title_justify="left",
+            show_header=True,
+            header_style="dim",
+            box=None,
+            padding=(0, 2, 0, 0),
+        )
+        table.add_column("Agent file")
+        for tool in proj_tools:
+            table.add_column(tool, no_wrap=True)
+
+        for fname in proj_files:
+            cells = [
+                "[yellow]project[/yellow]"
+                if fname in project_level_agents.get(tool, [])
+                else ""
+                for tool in proj_tools
+            ]
+            table.add_row(fname, *cells)
+
+        console.print()
+        console.print(table)
 
     # Summary counts
     console.print("\n[bold]Summary:[/bold]")
@@ -2210,6 +2283,11 @@ def _show_delta_summary(
         console.print(f"  [yellow]Modified agent(s):[/yellow] {len(modified_agents)}")
     if stale_agents:
         console.print(f"  [dim cyan]Stale:[/dim cyan] {len(stale_agents)} agent(s)")
+    if project_level_agents:
+        total = sum(len(v) for v in project_level_agents.values())
+        console.print(
+            f"  [yellow]Project-scoped agent(s):[/yellow] {total} (not in global dirs)"
+        )
 
     # Tips
     if summary.missing:
@@ -2231,6 +2309,11 @@ def _show_delta_summary(
     if stale_agents:
         console.print(
             "[dim]Tip: Run 'abc install agents/<name>' to update stale agent definitions.[/dim]"
+        )
+    if project_level_agents:
+        console.print(
+            "[dim]Tip: To promote a project-scoped agent, move it to the global agents dir "
+            "and run 'abc contribute' — or ask your coding agent to do it for you.[/dim]"
         )
 
 
