@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.4.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v2.3.0...agentic-beacon@v2.4.0) (2026-04-07)
+
+
+### Features
+
+* auto-prune sync, agent contribute, and dedicated agents delta section ([53490d2](https://github.com/Shadowsong27/agentic-beacon/commit/53490d26526f32869c19befdfe9ab8a86335d059))
+
+
+### Bug Fixes
+
+* always wire skills to agent dirs regardless of agent config (PER-56) ([#81](https://github.com/Shadowsong27/agentic-beacon/issues/81)) ([5657ef1](https://github.com/Shadowsong27/agentic-beacon/commit/5657ef13b6e862e0dfd4f624b754045f38a595bd))
+
 ## [2.3.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v2.2.0...agentic-beacon@v2.3.0) (2026-03-30)
 
 
