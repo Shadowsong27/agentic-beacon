@@ -489,9 +489,44 @@ class DeltaComparator:
                                     seen.add(rel_path)
                                     artifact_paths.append(rel_path)
                 else:
-                    if pattern not in seen:
-                        seen.add(pattern)
-                        artifact_paths.append(pattern)
+                    if artifact_type == "skills":
+                        # Normalize to directory form (handles old SKILL.md entries
+                        # and new directory entries) without importing from cli.py.
+                        p = Path(pattern.rstrip("/"))
+                        if p.suffix:  # file-level entry — strip filename
+                            p = p.parent
+                        if not p.parts or p.parts[0] != "skills":
+                            p = Path("skills") / p
+                        skill_dir_entry = str(p)
+                        skill_name = p.name
+
+                        # Expand files from warehouse
+                        for rel_path in sync_engine.expand_glob(
+                            f"{skill_dir_entry}/**/*"
+                        ):
+                            if rel_path not in seen:
+                                seen.add(rel_path)
+                                artifact_paths.append(rel_path)
+
+                        # Also scan live agent dirs to detect ADDED files
+                        if self.skills_paths:
+                            for _agent, agent_root in self.skills_paths.items():
+                                agent_skill_dir = agent_root / skill_name
+                                if agent_skill_dir.exists():
+                                    for f in agent_skill_dir.rglob("*"):
+                                        if f.is_file():
+                                            rel_path = str(
+                                                Path("skills")
+                                                / skill_name
+                                                / f.relative_to(agent_skill_dir)
+                                            )
+                                            if rel_path not in seen:
+                                                seen.add(rel_path)
+                                                artifact_paths.append(rel_path)
+                    else:
+                        if pattern not in seen:
+                            seen.add(pattern)
+                            artifact_paths.append(pattern)
 
         return self.compare_all(artifact_paths)
 

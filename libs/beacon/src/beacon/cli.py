@@ -1100,7 +1100,7 @@ def _create_beacon_template(path: Path) -> None:
 # Run 'abc sync' after editing to download artifacts.
 #
 # Supports glob patterns: knowledge/languages/python/**/*.md
-# Supports specific files: skills/code-review/SKILL.md
+# Skills are tracked at the directory level: skills/code-review/
 
 artifacts:
   knowledge: []
@@ -1110,8 +1110,8 @@ artifacts:
 
   skills: []
     # Examples:
-    # - skills/code-review/SKILL.md
-    # - skills/generate-unit-tests/SKILL.md
+    # - skills/code-review/
+    # - skills/generate-unit-tests/
     # Note: abc bundled skills (e.g. record-knowledge) are installed globally
     #       into ~/.config/opencode/skills/ and ~/.claude/skills/ by 'abc sync'
     #       — they are not project-scoped and need no entry here.
@@ -1220,7 +1220,7 @@ def _generate_warehouse_catalog(warehouse_path: Path) -> str:
             "    - knowledge/languages/python/**/*.md  # Glob pattern",
             "    - knowledge/infrastructure/docker-standards.md  # Specific file",
             "  skills:",
-            "    - skills/code-review/SKILL.md",
+            "    - skills/code-review/",
             "  contexts:",
             "    - contexts/README.md",
             "```",
@@ -1456,6 +1456,17 @@ def sync(
                             f"  [red]Error:[/red] Invalid glob pattern '{pattern}': {e}"
                         )
                         sys.exit(1)
+                elif artifact_type == "skills":
+                    # Normalize to directory form and expand all files within it
+                    skill_dir_entry = _normalize_skill_entry(pattern)
+                    matches = sync_engine.expand_glob(f"{skill_dir_entry}/**/*")
+                    if matches:
+                        artifact_paths.extend(matches)
+                    else:
+                        console.print(
+                            f"  [yellow]Warning:[/yellow] No files found for skill: "
+                            f"{_skill_name_from_entry(pattern)}"
+                        )
                 else:
                     artifact_paths.append(pattern)
 
@@ -1985,27 +1996,17 @@ def install_artifact(
     )
 
     if artifact_type == "skills":
-        # Skill name is the directory directly under skills/
-        skill_name = (
-            Path(artifact).parts[1]
-            if len(Path(artifact).parts) > 1
-            else Path(artifact).stem
-        )
-        skill_md = artifacts_dir / "skills" / skill_name / "SKILL.md"
-        if skill_md.exists() and agents:
-            content = skill_md.read_text(encoding="utf-8")
-            description = _extract_skill_description(content)
+        skill_name = _skill_name_from_entry(artifact)
+        skill_src_dir = artifacts_dir / "skills" / skill_name
+        if skill_src_dir.exists() and agents:
             for target_agent in agents:
-                if target_agent == "opencode":
-                    _install_skill_opencode(
-                        project_root, skill_name, content, description
-                    )
-                else:
-                    _install_skill_claudecode(project_root, skill_name, content)
+                _wire_single_skill(
+                    project_root, skill_name, skill_src_dir, target_agent
+                )
             console.print(f"[green]✓[/green] Installed skill: {skill_name}")
             _update_agent_gitignores(project_root)
             _print_skill_next_steps(agents)
-        elif skill_md.exists():
+        elif skill_src_dir.exists():
             console.print(
                 "[green]✓[/green] Skill copied (no agent detected for wiring)"
             )
@@ -2692,6 +2693,24 @@ def _collect_artifact_paths(
                     for match in comparator.artifacts_path.glob(pattern):
                         if match.is_file():
                             paths.add(str(match.relative_to(comparator.artifacts_path)))
+            elif artifact_type == "skills":
+                # Expand skill directory entry to individual file paths
+                skill_dir_entry = _normalize_skill_entry(pattern)
+                paths.update(sync_engine.expand_glob(f"{skill_dir_entry}/**/*"))
+                # Also scan live agent dirs to catch ADDED files
+                if comparator.skills_paths:
+                    skill_name = _skill_name_from_entry(pattern)
+                    for _agent, agent_root in comparator.skills_paths.items():
+                        agent_skill_dir = agent_root / skill_name
+                        if agent_skill_dir.exists():
+                            for f in agent_skill_dir.rglob("*"):
+                                if f.is_file():
+                                    rel = str(
+                                        Path("skills")
+                                        / skill_name
+                                        / f.relative_to(agent_skill_dir)
+                                    )
+                                    paths.add(rel)
             else:
                 paths.add(pattern)
     return paths
@@ -3066,32 +3085,33 @@ def _resolve_skill_contribute_source(
 def _propagate_skill_to_agents(
     project_root: Path, relative_path: str, source_path: Path
 ) -> None:
-    """After contributing a skill to the warehouse, propagate the contributed
-    content to all configured agents' live copies.
+    """After contributing a skill file to the warehouse, propagate all files in
+    that skill directory to every configured agent's live copy.
 
-    This prevents the infinite delta cycle where contributing one agent's
-    modified version leaves other agents' stale copies flagged as MODIFIED.
-    After this call all live copies converge to the contributed content.
+    This prevents the delta cycle where contributing one agent's modified version
+    leaves other agents' copies flagged as MODIFIED.
 
-    ``relative_path`` is the skill-relative warehouse path, e.g.
-    ``skills/foo/SKILL.md``.  ``source_path`` is the absolute path of the
-    file that was just written to the warehouse.
+    ``relative_path`` is the warehouse-relative path, e.g. ``skills/foo/SKILL.md``.
+    ``source_path`` is the absolute path of the file written to the warehouse.
     """
-    content = source_path.read_text(encoding="utf-8")
-    # Extract skill name from "skills/<name>/SKILL.md"
     parts = Path(relative_path).parts
     if len(parts) < 2:
         return
     skill_name = parts[1]
 
-    description = _extract_skill_description(content)
+    # Propagate the entire skill directory, not just the contributed file
+    warehouse_skill_dir = source_path.parent
+    # Walk up until we reach the skills/<name> level
+    while warehouse_skill_dir.name != skill_name:
+        parent = warehouse_skill_dir.parent
+        if parent == warehouse_skill_dir:
+            return  # Safety: avoid infinite loop
+        warehouse_skill_dir = parent
+
     agents = _detect_agents(project_root)
     for agent in agents:
         try:
-            if agent == "opencode":
-                _install_skill_opencode(project_root, skill_name, content, description)
-            else:
-                _install_skill_claudecode(project_root, skill_name, content)
+            _wire_single_skill(project_root, skill_name, warehouse_skill_dir, agent)
         except Exception as e:
             console.print(
                 f"  [yellow]Warning:[/yellow] could not propagate '{skill_name}' to {agent}: {e}"
@@ -3547,6 +3567,83 @@ def _auto_git_contribute(
 # ========== Skill Commands ==========
 
 
+def _normalize_skill_entry(entry: str) -> str:
+    """Normalize any skill beacon.yaml entry to canonical 'skills/<name>' form.
+
+    Accepts old file-level entries ('skills/my-skill/SKILL.md'),
+    new directory entries ('skills/my-skill/' or 'skills/my-skill'),
+    and bare names ('my-skill').  Always returns 'skills/<name>' with no
+    trailing slash.
+    """
+    p = Path(entry.rstrip("/"))
+    # Strip file extension — old-style file-level entries
+    if p.suffix:
+        p = p.parent
+    # Ensure the 'skills/' prefix is present
+    if not p.parts or p.parts[0] != "skills":
+        p = Path("skills") / p
+    return str(p)
+
+
+def _skill_name_from_entry(entry: str) -> str:
+    """Extract the skill directory name from any beacon.yaml skill entry."""
+    return Path(_normalize_skill_entry(entry)).name
+
+
+def _wire_single_skill(
+    project_root: Path,
+    skill_name: str,
+    skill_src_dir: Path,
+    agent: str,
+) -> bool:
+    """Copy all files from skill_src_dir into the agent's live skill directory.
+
+    Handles both Claude Code (.claude/skills/<name>/) and OpenCode
+    (.opencode/skills/<name>/), regenerating the OpenCode command stub from
+    SKILL.md frontmatter when present.
+
+    Returns True if any file was written or updated.
+    """
+    if agent == "opencode":
+        dest_root = project_root / ".opencode" / "skills" / skill_name
+    else:
+        dest_root = project_root / ".claude" / "skills" / skill_name
+
+    dest_root.mkdir(parents=True, exist_ok=True)
+
+    any_written = False
+    for src_file in sorted(skill_src_dir.rglob("*")):
+        if not src_file.is_file():
+            continue
+        rel = src_file.relative_to(skill_src_dir)
+        dest_file = dest_root / rel
+        dest_file.parent.mkdir(parents=True, exist_ok=True)
+        content = src_file.read_text(encoding="utf-8")
+        if not dest_file.exists() or dest_file.read_text(encoding="utf-8") != content:
+            dest_file.write_text(content, encoding="utf-8")
+            any_written = True
+
+    # OpenCode: regenerate command stub from SKILL.md frontmatter
+    if agent == "opencode":
+        skill_md = skill_src_dir / "SKILL.md"
+        if skill_md.exists():
+            description = _extract_skill_description(
+                skill_md.read_text(encoding="utf-8")
+            )
+            stub = (
+                f"---\ndescription: {description}\n---\n\n"
+                f"Use the **skill** tool to load and execute the `{skill_name}` skill "
+                f"with any provided arguments.\n"
+            )
+            command_dir = project_root / ".opencode" / "command"
+            command_dir.mkdir(parents=True, exist_ok=True)
+            stub_file = command_dir / f"{skill_name}.md"
+            if not stub_file.exists() or stub_file.read_text(encoding="utf-8") != stub:
+                stub_file.write_text(stub, encoding="utf-8")
+
+    return any_written
+
+
 def _update_beacon_yaml(beacon_dir: Path, files: list[str]) -> None:
     """Add installed file paths to beacon.yaml, creating it if absent."""
     beacon_yaml = beacon_dir / "beacon.yaml"
@@ -3563,8 +3660,14 @@ def _update_beacon_yaml(beacon_dir: Path, files: list[str]) -> None:
         parts = Path(path).parts
         artifact_type = parts[0] if parts else ""
         if artifact_type == "skills":
-            if path not in settings.artifacts.skills:
-                settings.artifacts.skills.append(path)
+            # Normalize to directory form and deduplicate across old/new formats
+            dir_entry = _normalize_skill_entry(path)
+            already_tracked = any(
+                _normalize_skill_entry(e) == dir_entry
+                for e in settings.artifacts.skills
+            )
+            if not already_tracked:
+                settings.artifacts.skills.append(dir_entry)
         elif artifact_type == "contexts":
             if path not in settings.artifacts.contexts:
                 settings.artifacts.contexts.append(path)
@@ -3886,21 +3989,24 @@ def _wire_skills_post_sync(
     if not skill_dirs:
         return [], []
 
-    # Compute wiring conflicts (live skill files that differ from what we'd write)
+    # Compute wiring conflicts: any live skill file that differs from what we'd write
     wiring_conflicts: list[tuple[str, str, str]] = []  # (agent, skill_name, dest_path)
     for skill_dir in skill_dirs:
-        skill_md = skill_dir / "SKILL.md"
-        if not skill_md.exists():
-            continue
-        content = skill_md.read_text(encoding="utf-8")
         name = skill_dir.name
-        for agent in agents:
-            if agent == "opencode":
-                dest = project_root / ".opencode" / "skills" / name / "SKILL.md"
-            else:
-                dest = project_root / ".claude" / "skills" / name / "SKILL.md"
-            if dest.exists() and dest.read_text(encoding="utf-8") != content:
-                wiring_conflicts.append((agent, name, str(dest)))
+        for src_file in sorted(skill_dir.rglob("*")):
+            if not src_file.is_file():
+                continue
+            rel_within_skill = src_file.relative_to(skill_dir)
+            content = src_file.read_text(encoding="utf-8")
+            for agent in agents:
+                if agent == "opencode":
+                    dest = (
+                        project_root / ".opencode" / "skills" / name / rel_within_skill
+                    )
+                else:
+                    dest = project_root / ".claude" / "skills" / name / rel_within_skill
+                if dest.exists() and dest.read_text(encoding="utf-8") != content:
+                    wiring_conflicts.append((agent, name, str(dest)))
 
     if wiring_conflicts:
         conflict_paths = [str(dest) for _, _, dest in wiring_conflicts]
@@ -3910,28 +4016,15 @@ def _wire_skills_post_sync(
 
     installed: list[str] = []
     errors: list[str] = []
+    conflicting_agents_skills = {(a, n) for a, n, _ in wiring_conflicts}
 
     for skill_dir in skill_dirs:
-        skill_md = skill_dir / "SKILL.md"
-        if not skill_md.exists():
-            continue
-        content = skill_md.read_text(encoding="utf-8")
-        description = _extract_skill_description(content)
         name = skill_dir.name
-
         for agent in agents:
-            # Check if this specific wiring target is a conflict we should skip
-            conflicting_agents_skills = {(a, n) for a, n, _ in wiring_conflicts}
             if preserve and (agent, name) in conflicting_agents_skills:
                 continue  # Skip this wiring target
-
             try:
-                if agent == "opencode":
-                    changed = _install_skill_opencode(
-                        project_root, name, content, description
-                    )
-                else:
-                    changed = _install_skill_claudecode(project_root, name, content)
+                changed = _wire_single_skill(project_root, name, skill_dir, agent)
                 if changed:
                     installed.append(f"{name} ({agent})")
             except Exception as e:
@@ -4102,14 +4195,13 @@ def _do_reset(project_root: Path) -> None:
             else:
                 artifact_paths.append(pattern)
 
-        for skill_name in beacon_settings.artifacts.skills:
-            skill_dir = warehouse_path / "skills" / skill_name
+        for skill_entry in beacon_settings.artifacts.skills:
+            normalized = _normalize_skill_entry(skill_entry)
+            skill_dir = warehouse_path / normalized
             if skill_dir.exists() and skill_dir.is_dir():
-                artifact_paths.extend(
-                    sync_engine.expand_glob(f"skills/{skill_name}/**/*")
-                )
+                artifact_paths.extend(sync_engine.expand_glob(f"{normalized}/**/*"))
             else:
-                artifact_paths.append(f"skills/{skill_name}")
+                artifact_paths.append(normalized)
 
         copied_count = 0
         overwritten_count = 0
