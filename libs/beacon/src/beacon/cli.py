@@ -1320,6 +1320,11 @@ def _handle_soft_block(
     is_flag=True,
     help="Skip warehouse uncommitted-changes check",
 )
+@click.option(
+    "--skip-migration-check",
+    is_flag=True,
+    help="Skip legacy skill entry migration check (not recommended)",
+)
 def sync(
     *,
     preserve: bool,
@@ -1327,6 +1332,7 @@ def sync(
     verbose_flag: bool,
     dry_run: bool,
     skip_git_check: bool,
+    skip_migration_check: bool,
 ) -> None:
     """
     Sync artifacts from warehouse to project.
@@ -1402,6 +1408,11 @@ def sync(
 
         # Load beacon.yaml
         beacon_settings = BeaconSettings.from_yaml(beacon_yaml)
+
+        # Check for legacy skill entries and prompt migration before proceeding
+        beacon_settings = _check_and_migrate_legacy_skills(
+            beacon_settings, beacon_yaml, skip_migration_check=skip_migration_check
+        )
 
         # Check if there are any artifacts to sync
         total_artifacts = (
@@ -3565,6 +3576,97 @@ def _auto_git_contribute(
 
 
 # ========== Skill Commands ==========
+
+
+def _detect_legacy_skill_entries(beacon_settings: BeaconSettings) -> list[str]:
+    """Return skill entries in beacon.yaml that use the old file-level format.
+
+    Legacy entries look like 'skills/my-skill/SKILL.md' (has a file extension).
+    New directory entries look like 'skills/my-skill' or 'skills/my-skill/'.
+    """
+    legacy = []
+    for entry in beacon_settings.artifacts.skills:
+        p = Path(entry.rstrip("/"))
+        if p.suffix:  # has a file extension → old-style
+            legacy.append(entry)
+    return legacy
+
+
+def _migrate_beacon_yaml_skill_entries(
+    beacon_yaml: Path, legacy_entries: list[str]
+) -> None:
+    """Rewrite beacon.yaml replacing legacy file-level skill entries with directory form."""
+    settings = BeaconSettings.from_yaml(beacon_yaml)
+    migrated = []
+    for entry in settings.artifacts.skills:
+        if entry in legacy_entries:
+            migrated.append(_normalize_skill_entry(entry))
+        else:
+            migrated.append(entry)
+    # Deduplicate while preserving order
+    seen: set[str] = set()
+    deduped = []
+    for e in migrated:
+        if e not in seen:
+            seen.add(e)
+            deduped.append(e)
+    settings.artifacts.skills = deduped
+    settings.to_yaml(beacon_yaml)
+
+
+def _check_and_migrate_legacy_skills(
+    beacon_settings: BeaconSettings,
+    beacon_yaml: Path,
+    skip_migration_check: bool = False,
+) -> BeaconSettings:
+    """Detect legacy skill entries and prompt for migration before sync.
+
+    Interactive: warns, offers to auto-migrate. If declined, blocks.
+    Non-interactive: warns and blocks (use --skip-migration-check to bypass).
+
+    Returns updated BeaconSettings (re-read after migration if migrated).
+    """
+    if skip_migration_check:
+        return beacon_settings
+
+    legacy = _detect_legacy_skill_entries(beacon_settings)
+    if not legacy:
+        return beacon_settings
+
+    entry_list = "\n".join(f"  • {e}" for e in legacy)
+    console.print(
+        f"\n[yellow]Warning:[/yellow] beacon.yaml has {len(legacy)} legacy skill "
+        f"entr{'y' if len(legacy) == 1 else 'ies'} using the old file-level format:\n"
+        f"{entry_list}\n\n"
+        "Skills are now tracked at the directory level so that companion files\n"
+        "(scripts, config, etc.) are included in sync and wiring.\n"
+    )
+
+    if not _is_interactive():
+        # Non-interactive (CI/scripts): warn but proceed — backward compat is guaranteed.
+        # Use --skip-migration-check to suppress this warning.
+        console.print(
+            "[dim]Non-interactive mode: proceeding with legacy entries (backward "
+            "compatible). Run 'abc sync' interactively to auto-migrate, or update "
+            "beacon.yaml manually.[/dim]"
+        )
+        return beacon_settings
+
+    if not click.confirm(
+        "Migrate beacon.yaml to directory-style entries now?", default=True
+    ):
+        console.print(
+            "[red]Aborted.[/red] Update beacon.yaml manually before running 'abc sync'.\n"
+            "Change each skill entry from 'skills/<name>/SKILL.md' to 'skills/<name>/'."
+        )
+        sys.exit(1)
+
+    _migrate_beacon_yaml_skill_entries(beacon_yaml, legacy)
+    console.print(
+        f"[green]✓[/green] Migrated {len(legacy)} skill "
+        f"entr{'y' if len(legacy) == 1 else 'ies'} in beacon.yaml.\n"
+    )
+    return BeaconSettings.from_yaml(beacon_yaml)
 
 
 def _normalize_skill_entry(entry: str) -> str:
