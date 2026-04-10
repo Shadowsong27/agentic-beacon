@@ -5,6 +5,7 @@ Covers:
 - _find_global_untracked_skills: detection of non-bundled skills in global dirs
 - _bundled_skill_names: reads bundled skill names from data/skills/
 - Integration: delta output shows/hides each reminder section correctly
+- GlobalSettings ignore patterns: skills filtered by fnmatch patterns
 """
 
 from pathlib import Path
@@ -14,8 +15,11 @@ from beacon.cli import (
     _bundled_skill_names,
     _find_global_untracked_skills,
     _find_project_level_agents,
+    _find_untracked_local_files,
     main,
 )
+from beacon.core.delta import DeltaComparator
+from beacon.core.settings import BeaconSettings
 from click.testing import CliRunner
 
 # ---------------------------------------------------------------------------
@@ -444,3 +448,244 @@ def test_delta_no_differences_still_shows_reminder_sections(
     assert result.exit_code == 0
     assert "No differences found" not in result.output
     assert "Project-scoped Agents" in result.output
+
+
+# ---------------------------------------------------------------------------
+# GlobalSettings ignore patterns — _find_global_untracked_skills
+# ---------------------------------------------------------------------------
+
+
+def test_find_global_untracked_skills_respects_exact_ignore(isolated_home_for_skills):
+    """A skill name listed exactly in ignore_patterns is excluded."""
+    skill_dir = (
+        isolated_home_for_skills / ".claude" / "skills" / "openspec-apply-change"
+    )
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("# Skill\n")
+
+    result = _find_global_untracked_skills(ignore_patterns=["openspec-apply-change"])
+
+    assert result == {}
+
+
+def test_find_global_untracked_skills_respects_glob_ignore(isolated_home_for_skills):
+    """Glob patterns in ignore_patterns filter matching skills."""
+    for name in ["openspec-apply-change", "openspec-propose", "my-custom-skill"]:
+        d = isolated_home_for_skills / ".claude" / "skills" / name
+        d.mkdir(parents=True)
+        (d / "SKILL.md").write_text("# Skill\n")
+
+    result = _find_global_untracked_skills(ignore_patterns=["openspec-*"])
+
+    assert "claudecode" in result
+    assert result["claudecode"] == ["my-custom-skill"]
+
+
+def test_find_global_untracked_skills_no_ignore_patterns(isolated_home_for_skills):
+    """Without ignore_patterns, all non-bundled skills are returned."""
+    for name in ["openspec-apply-change", "my-skill"]:
+        d = isolated_home_for_skills / ".claude" / "skills" / name
+        d.mkdir(parents=True)
+        (d / "SKILL.md").write_text("# Skill\n")
+
+    result = _find_global_untracked_skills()
+
+    assert result["claudecode"] == ["my-skill", "openspec-apply-change"]
+
+
+def test_find_global_untracked_skills_multiple_patterns(isolated_home_for_skills):
+    """Multiple ignore patterns all apply."""
+    for name in ["openspec-apply-change", "opsx-enhance", "keep-this"]:
+        d = isolated_home_for_skills / ".claude" / "skills" / name
+        d.mkdir(parents=True)
+        (d / "SKILL.md").write_text("# Skill\n")
+
+    result = _find_global_untracked_skills(ignore_patterns=["openspec-*", "opsx-*"])
+
+    assert result["claudecode"] == ["keep-this"]
+
+
+# ---------------------------------------------------------------------------
+# GlobalSettings ignore patterns — _find_untracked_local_files
+# ---------------------------------------------------------------------------
+
+
+def test_find_untracked_local_files_skill_ignore_exact(tmp_path):
+    """Exact skill name in ignore_patterns suppresses that skill."""
+    warehouse = tmp_path / "warehouse"
+    warehouse.mkdir()
+    artifacts = tmp_path / "artifacts"
+    artifacts.mkdir()
+    skills_root = tmp_path / "skills"
+    skill_dir = skills_root / "openspec-apply-change"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("# Skill\n")
+
+    comparator = DeltaComparator(
+        warehouse_path=warehouse,
+        artifacts_path=artifacts,
+        skills_paths={"claudecode": skills_root},
+    )
+    beacon_settings = BeaconSettings(
+        artifacts={"knowledge": [], "skills": [], "contexts": []}
+    )
+
+    result = _find_untracked_local_files(
+        comparator,
+        beacon_settings,
+        artifacts,
+        ignore_patterns=["openspec-apply-change"],
+    )
+
+    assert result == []
+
+
+def test_find_untracked_local_files_skill_ignore_glob(tmp_path):
+    """Glob pattern in ignore_patterns filters matching skills, keeps others."""
+    warehouse = tmp_path / "warehouse"
+    warehouse.mkdir()
+    artifacts = tmp_path / "artifacts"
+    artifacts.mkdir()
+    skills_root = tmp_path / "skills"
+    for name in ["openspec-apply-change", "openspec-propose", "my-skill"]:
+        d = skills_root / name
+        d.mkdir(parents=True)
+        (d / "SKILL.md").write_text("# Skill\n")
+
+    comparator = DeltaComparator(
+        warehouse_path=warehouse,
+        artifacts_path=artifacts,
+        skills_paths={"claudecode": skills_root},
+    )
+    beacon_settings = BeaconSettings(
+        artifacts={"knowledge": [], "skills": [], "contexts": []}
+    )
+
+    result = _find_untracked_local_files(
+        comparator, beacon_settings, artifacts, ignore_patterns=["openspec-*"]
+    )
+
+    paths = [rel for rel, _ in result]
+    assert all("openspec" not in p for p in paths)
+    assert any("my-skill" in p for p in paths)
+
+
+def test_find_untracked_local_files_no_ignore_returns_all(tmp_path):
+    """Without ignore_patterns, all untracked skills are returned."""
+    warehouse = tmp_path / "warehouse"
+    warehouse.mkdir()
+    artifacts = tmp_path / "artifacts"
+    artifacts.mkdir()
+    skills_root = tmp_path / "skills"
+    for name in ["openspec-apply-change", "my-skill"]:
+        d = skills_root / name
+        d.mkdir(parents=True)
+        (d / "SKILL.md").write_text("# Skill\n")
+
+    comparator = DeltaComparator(
+        warehouse_path=warehouse,
+        artifacts_path=artifacts,
+        skills_paths={"claudecode": skills_root},
+    )
+    beacon_settings = BeaconSettings(
+        artifacts={"knowledge": [], "skills": [], "contexts": []}
+    )
+
+    result = _find_untracked_local_files(comparator, beacon_settings, artifacts)
+
+    paths = [rel for rel, _ in result]
+    assert any("openspec-apply-change" in p for p in paths)
+    assert any("my-skill" in p for p in paths)
+
+
+# ---------------------------------------------------------------------------
+# BeaconSettings ignore field
+# ---------------------------------------------------------------------------
+
+
+def test_beacon_settings_ignore_defaults_empty(tmp_path):
+    """BeaconSettings without ignore section defaults to empty ignore.skills."""
+    yaml_path = tmp_path / "beacon.yaml"
+    yaml_path.write_text("artifacts:\n  knowledge: []\n  skills: []\n  contexts: []\n")
+
+    settings = BeaconSettings.from_yaml(yaml_path)
+
+    assert settings.ignore.skills == []
+
+
+def test_beacon_settings_ignore_skills_parsed(tmp_path):
+    """beacon.yaml with ignore.skills is parsed into BeaconSettings.ignore.skills."""
+    yaml_path = tmp_path / "beacon.yaml"
+    yaml_path.write_text(
+        "artifacts:\n  knowledge: []\n  skills: []\n  contexts: []\n"
+        'ignore:\n  skills:\n    - "openspec-*"\n    - "opsx-*"\n'
+    )
+
+    settings = BeaconSettings.from_yaml(yaml_path)
+
+    assert settings.ignore.skills == ["openspec-*", "opsx-*"]
+
+
+def test_beacon_settings_ignore_empty_section(tmp_path):
+    """An ignore section with no skills key defaults to empty list."""
+    yaml_path = tmp_path / "beacon.yaml"
+    yaml_path.write_text(
+        "artifacts:\n  knowledge: []\n  skills: []\n  contexts: []\nignore: {}\n"
+    )
+
+    settings = BeaconSettings.from_yaml(yaml_path)
+
+    assert settings.ignore.skills == []
+
+
+# ---------------------------------------------------------------------------
+# Integration: abc delta respects beacon.yaml ignore patterns
+# ---------------------------------------------------------------------------
+
+
+def test_delta_ignores_global_skill_matching_pattern(
+    project_base, monkeypatch, isolated_home
+):
+    """Global Skills section omits skills matching the beacon.yaml ignore pattern."""
+    # Create openspec-style skill in global dir
+    skill_dir = isolated_home / ".claude" / "skills" / "openspec-apply-change"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("# Skill\n")
+    # Also create a skill that should still appear
+    keep_dir = isolated_home / ".claude" / "skills" / "my-custom-skill"
+    keep_dir.mkdir(parents=True)
+    (keep_dir / "SKILL.md").write_text("# Custom\n")
+    # Write ignore pattern into beacon.yaml
+    (project_base / ".agentic-beacon" / "beacon.yaml").write_text(
+        "artifacts:\n  knowledge: []\n  skills: []\n  contexts: []\n"
+        'ignore:\n  skills:\n    - "openspec-*"\n'
+    )
+
+    runner = CliRunner()
+    monkeypatch.chdir(project_base)
+    result = runner.invoke(main, ["delta"])
+
+    assert result.exit_code == 0
+    assert "openspec-apply-change" not in result.output
+    assert "my-custom-skill" in result.output
+
+
+def test_delta_hides_global_skills_section_when_all_ignored(
+    project_base, monkeypatch, isolated_home
+):
+    """Global Skills section disappears entirely when all skills are ignored."""
+    skill_dir = isolated_home / ".claude" / "skills" / "openspec-propose"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("# Skill\n")
+    # Write ignore pattern into beacon.yaml
+    (project_base / ".agentic-beacon" / "beacon.yaml").write_text(
+        "artifacts:\n  knowledge: []\n  skills: []\n  contexts: []\n"
+        'ignore:\n  skills:\n    - "openspec-*"\n'
+    )
+
+    runner = CliRunner()
+    monkeypatch.chdir(project_base)
+    result = runner.invoke(main, ["delta"])
+
+    assert result.exit_code == 0
+    assert "Global Skills" not in result.output

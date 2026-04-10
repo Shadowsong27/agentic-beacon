@@ -1,6 +1,7 @@
 """CLI interface for Beacon - Distribute knowledge contexts for AI development."""
 
 import datetime
+import fnmatch
 import json
 import os
 import shutil
@@ -1120,6 +1121,14 @@ artifacts:
     # Examples:
     # - contexts/README.md
     # - contexts/teams/backend/README.md
+
+# ignore: Suppress skills installed by external tools (e.g. openspec) from
+#   appearing in 'abc delta' and 'abc contribute'. Supports fnmatch patterns.
+#
+# ignore:
+#   skills:
+#     - "openspec-*"
+#     - "opsx-*"
 """
     path.write_text(template)
 
@@ -2120,11 +2129,13 @@ def _bundled_skill_names() -> set[str]:
     }
 
 
-def _find_global_untracked_skills() -> dict[str, list[str]]:
+def _find_global_untracked_skills(
+    ignore_patterns: list[str] | None = None,
+) -> dict[str, list[str]]:
     """Return non-bundled skill directories found in the global skill dirs.
 
     Scans ~/.claude/skills/ (Claude Code) and ~/.config/opencode/skills/ (OpenCode).
-    Excludes abc-bundled skills so only accidentally-global user skills are surfaced.
+    Excludes abc-bundled skills and any skill names matching ignore_patterns (fnmatch).
     Returns a mapping of tool name → sorted list of skill names.
     """
     global_skill_dirs: dict[str, Path] = {
@@ -2132,13 +2143,17 @@ def _find_global_untracked_skills() -> dict[str, list[str]]:
         "opencode": Path.home() / ".config" / "opencode" / "skills",
     }
     bundled = _bundled_skill_names()
+    patterns = ignore_patterns or []
     result: dict[str, list[str]] = {}
     for tool, skills_dir in global_skill_dirs.items():
         if skills_dir.is_dir():
             names = sorted(
                 d.name
                 for d in skills_dir.iterdir()
-                if d.is_dir() and (d / "SKILL.md").exists() and d.name not in bundled
+                if d.is_dir()
+                and (d / "SKILL.md").exists()
+                and d.name not in bundled
+                and not any(fnmatch.fnmatch(d.name, p) for p in patterns)
             )
             if names:
                 result[tool] = names
@@ -2307,8 +2322,10 @@ def _show_delta_summary(
             )
             agent_results.append(result)
 
+    ignore_skill_patterns = beacon_settings.ignore.skills
+
     untracked = _find_untracked_local_files(
-        comparator, beacon_settings, comparator.artifacts_path
+        comparator, beacon_settings, comparator.artifacts_path, ignore_skill_patterns
     )
 
     # Detect project-scoped agents (not part of the global/contribution flow)
@@ -2317,7 +2334,7 @@ def _show_delta_summary(
     )
 
     # Detect non-bundled skills accidentally placed in global skill dirs
-    global_untracked_skills = _find_global_untracked_skills()
+    global_untracked_skills = _find_global_untracked_skills(ignore_skill_patterns)
 
     has_agent_diffs = any(r.status != DeltaStatus.IDENTICAL for r in agent_results)
 
@@ -2761,12 +2778,15 @@ def _find_untracked_local_files(
     comparator: DeltaComparator,
     beacon_settings: BeaconSettings,
     artifacts_dir: Path,
+    ignore_patterns: list[str] | None = None,
 ) -> list[tuple[str, list[str]]]:
     """Return local artifact files that are not covered by any beacon.yaml pattern.
 
     Returns a list of (relative_path, agents) tuples. For skills found in live
     agent directories, agents lists which agents have the skill (e.g. ["opencode",
     "claudecode"]). For knowledge/context files from artifacts_dir, agents is [].
+
+    Skills whose names match any of ignore_patterns (fnmatch) are excluded.
 
     NOTE: .agentic-beacon/artifacts/skills/ is intentionally excluded from the
     artifacts_dir scan. That directory is a one-way intermediary used only during
@@ -2775,6 +2795,7 @@ def _find_untracked_local_files(
     skills are always compared against their live agent installation, not the snapshot.
     """
     tracked = _collect_artifact_paths(comparator, beacon_settings)
+    patterns = ignore_patterns or []
 
     # Scan artifacts_dir for untracked knowledge and context files.
     # Explicitly skip the skills/ subdirectory — it is a one-way sync staging area
@@ -2799,6 +2820,15 @@ def _find_untracked_local_files(
                 if file_path.is_file():
                     rel = str(Path("skills") / file_path.relative_to(skills_root))
                     if rel not in tracked:
+                        # Extract the skill directory name (parts[1]) for pattern matching.
+                        # e.g. "skills/openspec-apply-change/SKILL.md" → "openspec-apply-change"
+                        skill_name = (
+                            Path(rel).parts[1] if len(Path(rel).parts) > 1 else ""
+                        )
+                        if patterns and any(
+                            fnmatch.fnmatch(skill_name, p) for p in patterns
+                        ):
+                            continue
                         skill_agents.setdefault(rel, []).append(agent)
 
     result: list[tuple[str, list[str]]] = []
@@ -2922,6 +2952,7 @@ def contribute(
             skills_paths=_build_skills_paths(project_root),
             agents_paths=_build_agents_paths(),
         )
+        ignore_skill_patterns = beacon_settings.ignore.skills
 
         if dry_run:
             console.print("[dim]Dry run — no files will be copied.[/dim]\n")
@@ -2965,6 +2996,7 @@ def contribute(
                     dry_run=True,
                     project_root=project_root,
                     include_unregistered=not exclude_unregistered,
+                    ignore_skill_patterns=ignore_skill_patterns,
                 )
                 if preview and not click.confirm(
                     "\nProceed with contribute?", default=True
@@ -2979,6 +3011,7 @@ def contribute(
                 dry_run,
                 project_root=project_root,
                 include_unregistered=not exclude_unregistered,
+                ignore_skill_patterns=ignore_skill_patterns,
             )
 
         if not dry_run and contributed:
@@ -3289,6 +3322,7 @@ def _contribute_all(
     dry_run: bool,
     project_root: Path,
     include_unregistered: bool = False,
+    ignore_skill_patterns: list[str] | None = None,
 ) -> list[tuple[str, str]]:
     """Contribute all tracked modified/added artifacts and modified agents to the warehouse.
 
@@ -3314,7 +3348,7 @@ def _contribute_all(
         unregistered_paths = [
             p
             for p, _agents in _find_untracked_local_files(
-                comparator, beacon_settings, artifacts_dir
+                comparator, beacon_settings, artifacts_dir, ignore_skill_patterns
             )
         ]
 
