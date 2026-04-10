@@ -3173,10 +3173,10 @@ def _resolve_agent_contribute_source(
     ~/.claude/agents/). The logic mirrors _resolve_skill_contribute_source:
 
     - No agents configured → return None (nothing to contribute).
-    - One tool has a modified copy → use it.
-    - Multiple tools modified with identical content → use any.
-    - Multiple tools modified with different content → prompt user to choose.
-    - No tool has a modified copy → return None (identical to warehouse).
+    - One tool has a modified or new copy → use it.
+    - Multiple tools modified/added with identical content → use any.
+    - Multiple tools modified/added with different content → prompt user to choose.
+    - No tool has a modified or new copy → return None (identical to warehouse).
 
     Returns the absolute Path of the file to copy, or None if nothing to contribute.
     """
@@ -3185,17 +3185,17 @@ def _resolve_agent_contribute_source(
 
     result = comparator._compare_agent_file(relative_path)
 
-    modified_tools = [
+    contributable_tools = [
         tool
         for tool, status in result.agent_statuses.items()
-        if status == DeltaStatus.MODIFIED
+        if status in (DeltaStatus.MODIFIED, DeltaStatus.ADDED)
     ]
 
-    if not modified_tools:
+    if not contributable_tools:
         return None
 
     candidates: dict[str, Path] = {}
-    for tool in modified_tools:
+    for tool in contributable_tools:
         live_path = comparator._agent_live_path(tool, relative_path)
         if live_path.exists():
             candidates[tool] = live_path
