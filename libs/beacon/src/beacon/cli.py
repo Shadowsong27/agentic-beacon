@@ -4272,24 +4272,6 @@ def _print_skill_next_steps(agents: list[str]) -> None:
         )
 
 
-# ========== Legacy Commands ==========
-
-
-@main.command(name="init", hidden=True)
-@click.argument("name", required=False)
-def deprecated_init(name: str | None = None) -> None:
-    """Deprecated: Use 'abc warehouse init' instead."""
-    console.print(
-        "[red]Error:[/red] 'abc init' has been moved to 'abc warehouse init'."
-    )
-    console.print("\n[bold]New command:[/bold]")
-    if name:
-        console.print(f"  abc warehouse init {name}")
-    else:
-        console.print("  abc warehouse init <name>")
-    sys.exit(1)
-
-
 def _do_reset(project_root: Path) -> None:
     """Force-overwrite all synced artifacts from warehouse. Used by both reset and update."""
     beacon_dir = project_root / ".agentic-beacon"

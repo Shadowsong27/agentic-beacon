@@ -227,7 +227,7 @@ def test_contribute_cold_start_agent_no_warehouse_counterpart(project, fake_home
     proj, warehouse, runner = project
 
     oc_agents = fake_home / ".config" / "opencode" / "agents"
-    oc_agents.mkdir(parents=True)
+    oc_agents.mkdir(parents=True, exist_ok=True)
     (oc_agents / "brand-new-agent.md").write_text("# Brand New Agent\nFirst version.\n")
 
     # Confirm no warehouse counterpart exists before contributing
