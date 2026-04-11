@@ -183,7 +183,7 @@ def test_e2e_sync_copies_artifacts(e2e_project):
         "    - knowledge/python/standards.md\n"
         "    - knowledge/decisions/use-uv.md\n"
         "  skills:\n"
-        "    - skills/code-review/SKILL.md\n"
+        "    - skills/code-review/\n"
         "  contexts:\n"
         "    - contexts/README.md\n"
     )
@@ -257,7 +257,7 @@ def test_e2e_status_shows_check_marks_for_synced(e2e_project):
         "artifacts:\n"
         "  knowledge: []\n"
         "  skills:\n"
-        "    - skills/code-review/SKILL.md\n"
+        "    - skills/code-review/\n"
         "  contexts:\n"
         "    - contexts/README.md\n"
     )
@@ -346,7 +346,7 @@ def test_e2e_delta_skill_clean_after_sync(e2e_project, isolated_home):
         "artifacts:\n"
         "  knowledge: []\n"
         "  skills:\n"
-        "    - skills/code-review/SKILL.md\n"
+        "    - skills/code-review/\n"
         "  contexts: []\n"
     )
     sync_result = runner.invoke(main, ["sync"])
@@ -373,7 +373,7 @@ def test_e2e_delta_skill_detects_live_modification(e2e_project):
         "artifacts:\n"
         "  knowledge: []\n"
         "  skills:\n"
-        "    - skills/code-review/SKILL.md\n"
+        "    - skills/code-review/\n"
         "  contexts: []\n"
     )
     runner.invoke(main, ["sync"])
@@ -405,7 +405,7 @@ def test_e2e_delta_skill_snapshot_identical_but_live_modified(e2e_project):
         "artifacts:\n"
         "  knowledge: []\n"
         "  skills:\n"
-        "    - skills/code-review/SKILL.md\n"
+        "    - skills/code-review/\n"
         "  contexts: []\n"
     )
     runner.invoke(main, ["sync"])
@@ -448,7 +448,7 @@ def test_e2e_delta_skill_per_agent_detail_in_output(e2e_project):
         "artifacts:\n"
         "  knowledge: []\n"
         "  skills:\n"
-        "    - skills/code-review/SKILL.md\n"
+        "    - skills/code-review/\n"
         "  contexts: []\n"
     )
     runner.invoke(main, ["sync"])
@@ -648,7 +648,7 @@ def test_e2e_contribute_skill_live_modification_goes_to_warehouse(e2e_project):
         "artifacts:\n"
         "  knowledge: []\n"
         "  skills:\n"
-        "    - skills/code-review/SKILL.md\n"
+        "    - skills/code-review/\n"
         "  contexts: []\n"
     )
     runner.invoke(main, ["sync"])
@@ -684,7 +684,7 @@ def test_e2e_contribute_skill_regression_stale_snapshot(e2e_project):
         "artifacts:\n"
         "  knowledge: []\n"
         "  skills:\n"
-        "    - skills/code-review/SKILL.md\n"
+        "    - skills/code-review/\n"
         "  contexts: []\n"
     )
     runner.invoke(main, ["sync"])
@@ -731,7 +731,7 @@ def test_e2e_contribute_all_skill_live_modification(e2e_project):
         "  knowledge:\n"
         "    - knowledge/python/standards.md\n"
         "  skills:\n"
-        "    - skills/code-review/SKILL.md\n"
+        "    - skills/code-review/\n"
         "  contexts: []\n"
     )
     runner.invoke(main, ["sync"])
@@ -759,7 +759,7 @@ def test_e2e_contribute_skill_identical_live_is_noop(e2e_project):
         "artifacts:\n"
         "  knowledge: []\n"
         "  skills:\n"
-        "    - skills/code-review/SKILL.md\n"
+        "    - skills/code-review/\n"
         "  contexts: []\n"
     )
     runner.invoke(main, ["sync"])
@@ -787,7 +787,7 @@ def test_e2e_contribute_skill_multi_agent_conflict_prompts(e2e_project):
         "artifacts:\n"
         "  knowledge: []\n"
         "  skills:\n"
-        "    - skills/code-review/SKILL.md\n"
+        "    - skills/code-review/\n"
         "  contexts: []\n"
     )
     runner.invoke(main, ["sync"])

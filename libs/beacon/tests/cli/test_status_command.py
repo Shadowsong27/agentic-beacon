@@ -35,7 +35,7 @@ def connected_project(valid_warehouse, temp_dir, monkeypatch):
         "  knowledge:\n"
         "    - knowledge/python.md\n"
         "  skills:\n"
-        "    - skills/code-review/SKILL.md\n"
+        "    - skills/code-review/\n"
         "  contexts:\n"
         "    - contexts/AGENTS.md\n"
     )
