@@ -10,7 +10,8 @@ Following TDD workflow for tasks 7.1-7.7:
 - Task 7.7: Invalid glob pattern handling
 """
 
-from beacon.cli import main
+import pytest
+from beacon.cli import _validate_skill_entries, main
 from beacon.core.settings import ArtifactsConfig, BeaconSettings
 from click.testing import CliRunner
 
@@ -285,7 +286,7 @@ def test_sync_dry_run_reports_would_remove(valid_warehouse, temp_dir, monkeypatc
 
 
 # ---------------------------------------------------------------------------
-# Legacy skill entry migration check
+# Skill entry validation — boundary: skills must be directory entries
 # ---------------------------------------------------------------------------
 
 
@@ -295,11 +296,73 @@ def _make_beacon_settings(skills: list[str]) -> BeaconSettings:
     )
 
 
+class TestValidateSkillEntriesUnit:
+    """Unit tests for _validate_skill_entries — tests the function directly."""
+
+    def test_file_entry_exits(self):
+        """A file-level entry causes SystemExit."""
+        s = _make_beacon_settings(["skills/my-skill/SKILL.md"])
+        with pytest.raises(SystemExit) as exc:
+            _validate_skill_entries(s)
+        assert exc.value.code != 0
+
+    def test_non_skill_md_file_entry_exits(self):
+        """Any file extension, not just SKILL.md, is rejected."""
+        for entry in [
+            "skills/foo/config.yaml",
+            "skills/foo/runner.py",
+            "skills/foo/README.md",
+        ]:
+            s = _make_beacon_settings([entry])
+            with pytest.raises(SystemExit):
+                _validate_skill_entries(s)
+
+    def test_multiple_file_entries_all_exit(self):
+        """Multiple file-level entries still cause a single SystemExit."""
+        s = _make_beacon_settings(
+            [
+                "skills/alpha/SKILL.md",
+                "skills/beta/SKILL.md",
+            ]
+        )
+        with pytest.raises(SystemExit) as exc:
+            _validate_skill_entries(s)
+        assert exc.value.code != 0
+
+    def test_mixed_entries_exits_on_any_file_entry(self):
+        """A mix of valid directories and one file entry still errors."""
+        s = _make_beacon_settings(["skills/good/", "skills/bad/SKILL.md"])
+        with pytest.raises(SystemExit):
+            _validate_skill_entries(s)
+
+    def test_directory_with_trailing_slash_passes(self):
+        """Canonical directory form with trailing slash is accepted."""
+        s = _make_beacon_settings(["skills/my-skill/"])
+        _validate_skill_entries(s)  # must not raise
+
+    def test_directory_without_trailing_slash_passes(self):
+        """Directory form without trailing slash is also accepted."""
+        s = _make_beacon_settings(["skills/my-skill"])
+        _validate_skill_entries(s)  # must not raise
+
+    def test_empty_skills_list_passes(self):
+        """An empty skills list is valid."""
+        s = _make_beacon_settings([])
+        _validate_skill_entries(s)  # must not raise
+
+    def test_multiple_valid_directory_entries_pass(self):
+        """Multiple directory entries are all accepted."""
+        s = _make_beacon_settings(["skills/alpha/", "skills/beta/", "skills/gamma"])
+        _validate_skill_entries(s)  # must not raise
+
+
 class TestSyncSkillEntryValidation:
-    """abc sync rejects file-level skill entries as a hard boundary."""
+    """Integration: abc sync rejects file-level skill entries as a hard boundary."""
 
     @staticmethod
-    def _make_project(tmp_path, monkeypatch, skill_entry: str):
+    def _make_project(tmp_path, monkeypatch, skill_entries: list[str] | str):
+        if isinstance(skill_entries, str):
+            skill_entries = [skill_entries]
         wh = tmp_path / "warehouse"
         for d in ("agents", "knowledge", "skills", "contexts", "docs"):
             (wh / d).mkdir(parents=True)
@@ -312,34 +375,110 @@ class TestSyncSkillEntryValidation:
         beacon_dir = project / ".agentic-beacon"
         beacon_dir.mkdir()
         (beacon_dir / "config.toml").write_text(f'[warehouse]\nlocal_path = "{wh}"\n')
+        if skill_entries:
+            entries_yaml = "".join(f"    - {e}\n" for e in skill_entries)
+            skills_yaml = f"  skills:\n{entries_yaml}"
+        else:
+            skills_yaml = "  skills: []\n"
         (beacon_dir / "beacon.yaml").write_text(
-            f"artifacts:\n  knowledge: []\n  skills:\n    - {skill_entry}\n  contexts: []\n"
+            f"artifacts:\n  knowledge: []\n{skills_yaml}  contexts: []\n"
         )
         monkeypatch.chdir(project)
         return project
 
     def test_file_entry_is_hard_error(self, tmp_path, monkeypatch):
-        """File-level skill entries always cause a non-zero exit."""
+        """File-level entry always causes a non-zero exit."""
         self._make_project(tmp_path, monkeypatch, "skills/my-skill/SKILL.md")
-        runner = CliRunner()
-        result = runner.invoke(main, ["sync", "--skip-git-check"])
+        result = CliRunner().invoke(main, ["sync", "--skip-git-check"])
+
+        assert result.exit_code != 0
+
+    def test_error_names_the_offending_entry(self, tmp_path, monkeypatch):
+        """Error output identifies the specific file-level entry."""
+        self._make_project(tmp_path, monkeypatch, "skills/my-skill/SKILL.md")
+        result = CliRunner().invoke(main, ["sync", "--skip-git-check"])
+
+        assert "skills/my-skill/SKILL.md" in result.output
+
+    def test_error_tells_user_correct_format(self, tmp_path, monkeypatch):
+        """Error output tells the user skills must be directory entries."""
+        self._make_project(tmp_path, monkeypatch, "skills/my-skill/SKILL.md")
+        result = CliRunner().invoke(main, ["sync", "--skip-git-check"])
+
+        assert "skills/my-skill/" in result.output  # shows the corrected form
+
+    def test_multiple_file_entries_all_listed(self, tmp_path, monkeypatch):
+        """All offending entries are listed in the error, not just the first."""
+        self._make_project(
+            tmp_path,
+            monkeypatch,
+            [
+                "skills/my-skill/SKILL.md",
+                "skills/my-skill/SKILL.md",  # second distinct path for listing check
+            ],
+        )
+        # Use two distinct skill names by writing beacon.yaml directly
+        project = tmp_path / "project"
+        beacon_dir = project / ".agentic-beacon"
+        (beacon_dir / "beacon.yaml").write_text(
+            "artifacts:\n  knowledge: []\n  skills:\n"
+            "    - skills/my-skill/SKILL.md\n"
+            "    - skills/other-skill/SKILL.md\n"
+            "  contexts: []\n"
+        )
+        result = CliRunner().invoke(main, ["sync", "--skip-git-check"])
+
+        assert result.exit_code != 0
+        assert "skills/my-skill/SKILL.md" in result.output
+        assert "skills/other-skill/SKILL.md" in result.output
+
+    def test_mixed_entries_error_only_lists_file_entries(self, tmp_path, monkeypatch):
+        """Valid directory entry is not mentioned in the error output."""
+        self._make_project(
+            tmp_path,
+            monkeypatch,
+            [
+                "skills/my-skill/",
+                "skills/my-skill/SKILL.md",
+            ],
+        )
+        result = CliRunner().invoke(main, ["sync", "--skip-git-check"])
 
         assert result.exit_code != 0
         assert "skills/my-skill/SKILL.md" in result.output
 
+    def test_error_fires_before_any_sync_work(self, tmp_path, monkeypatch):
+        """No artifacts are written when validation fails."""
+        project = self._make_project(tmp_path, monkeypatch, "skills/my-skill/SKILL.md")
+        CliRunner().invoke(main, ["sync", "--skip-git-check"])
+
+        artifacts_dir = project / ".agentic-beacon" / "artifacts"
+        assert not artifacts_dir.exists() or not any(artifacts_dir.rglob("*"))
+
     def test_any_file_extension_is_rejected(self, tmp_path, monkeypatch):
-        """Any file-level entry (not just SKILL.md) is rejected."""
+        """File extensions other than .md are also rejected."""
         self._make_project(tmp_path, monkeypatch, "skills/my-skill/config.yaml")
-        runner = CliRunner()
-        result = runner.invoke(main, ["sync", "--skip-git-check"])
+        result = CliRunner().invoke(main, ["sync", "--skip-git-check"])
 
         assert result.exit_code != 0
 
-    def test_directory_entry_passes(self, tmp_path, monkeypatch):
-        """Directory-style entries do not trigger the validation error."""
+    def test_directory_with_trailing_slash_passes(self, tmp_path, monkeypatch):
+        """Canonical directory entry with trailing slash is accepted."""
         self._make_project(tmp_path, monkeypatch, "skills/my-skill/")
-        runner = CliRunner()
-        result = runner.invoke(main, ["sync", "--skip-git-check"])
+        result = CliRunner().invoke(main, ["sync", "--skip-git-check"])
 
         assert result.exit_code == 0
-        assert "Error" not in result.output or "skill" not in result.output.lower()
+
+    def test_directory_without_trailing_slash_passes(self, tmp_path, monkeypatch):
+        """Directory entry without trailing slash is also accepted."""
+        self._make_project(tmp_path, monkeypatch, "skills/my-skill")
+        result = CliRunner().invoke(main, ["sync", "--skip-git-check"])
+
+        assert result.exit_code == 0
+
+    def test_empty_skills_list_passes(self, tmp_path, monkeypatch):
+        """An empty skills list does not trigger validation."""
+        self._make_project(tmp_path, monkeypatch, [])
+        result = CliRunner().invoke(main, ["sync", "--skip-git-check"])
+
+        assert result.exit_code == 0
