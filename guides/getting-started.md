@@ -185,7 +185,7 @@ artifacts:
     - knowledge/testing/**/*.md
 
   skills:
-    - skills/code-review/**/*
+    - skills/code-review/
 
   contexts:
     - contexts/global.md

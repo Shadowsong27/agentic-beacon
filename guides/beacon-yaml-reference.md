@@ -18,16 +18,20 @@ my-project/
 artifacts:
   knowledge:
     - <pattern-or-path>
-    - <pattern-or-path>
 
   skills:
-    - <pattern-or-path>
+    - skills/<name>/      # directory-level entry (canonical form)
 
   contexts:
     - <pattern-or-path>
+
+# Optional — suppress skills from abc delta and abc contribute
+ignore:
+  skills:
+    - "openspec-*"        # fnmatch glob patterns
 ```
 
-All three keys are required (can be empty lists). The file is validated on `abc sync` and `abc setup`.
+All three `artifacts` keys are required (can be empty lists). The file is validated on `abc sync` and `abc setup`.
 
 ---
 
@@ -62,23 +66,33 @@ artifacts:
 
 ## `artifacts.skills`
 
-Skills are directory-based — a skill is a directory with a `SKILL.md` entry point plus optional supporting files.
+Skills are tracked at the **directory level** — a skill is a directory with a `SKILL.md` entry point plus optional supporting files (scripts, config, etc.). All files in the directory are synced together.
 
 ```yaml
 artifacts:
   skills:
-    # Sync all files in a skill directory
-    - skills/code-review/**/*
-
-    # Multiple skills
-    - skills/generate-tests/**/*
-    - skills/api-design/**/*
-
-    # All skills under a category
-    - skills/python/**/*
+    # Canonical form — directory path with trailing slash
+    - skills/code-review/
+    - skills/generate-tests/
+    - skills/api-design/
 ```
 
-**Note:** Skills need `/**/*` (or at minimum `/**`) to match the files inside them. A pattern like `skills/code-review` matches nothing — the path resolves to a directory, not files.
+**Note:** Use the directory path (e.g. `skills/code-review/`), not a file glob. The old `/**/*` file-glob form is still accepted for backwards compatibility, but `abc sync` will prompt you to migrate to the directory form.
+
+---
+
+## `ignore`
+
+Suppress skills from appearing in `abc delta` and `abc contribute`. Useful for skills installed by external tools (e.g. OpenSpec) that you don't want to track through the warehouse.
+
+```yaml
+ignore:
+  skills:
+    - "openspec-*"
+    - "opsx-*"
+```
+
+Patterns use [`fnmatch`](https://docs.python.org/3/library/fnmatch.html) glob syntax and are matched against the skill name (the directory name, without the `skills/` prefix).
 
 ---
 
@@ -128,8 +142,8 @@ artifacts:
     - knowledge/infrastructure/docker-python.md
 
   skills:
-    - skills/code-review/**/*
-    - skills/generate-tests/**/*
+    - skills/code-review/
+    - skills/generate-tests/
 
   contexts:
     - contexts/global.md
