@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.5.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v2.4.0...agentic-beacon@v2.5.0) (2026-04-11)
+
+
+### Features
+
+* add abc agents sync command and include agents in abc sync ([#85](https://github.com/Shadowsong27/agentic-beacon/issues/85)) ([b1d551d](https://github.com/Shadowsong27/agentic-beacon/commit/b1d551d4acef0758c73587baf2857830fc281495))
+* delta/contribute improvements — directory-level skills, project agents reminder, ignore patterns ([#84](https://github.com/Shadowsong27/agentic-beacon/issues/84)) ([7a5d140](https://github.com/Shadowsong27/agentic-beacon/commit/7a5d140f3787801222e2e977baf88ce96c51de9a))
+* enforce directory-level skill entries as a hard boundary ([db958c5](https://github.com/Shadowsong27/agentic-beacon/commit/db958c57e079880969d1dd00e7f6a614f4cdd14a))
+* show project-scoped agents in abc delta as promotion reminder ([3a4e615](https://github.com/Shadowsong27/agentic-beacon/commit/3a4e61523158bfb0ceb0b7f8f0f8bc94f150ea6f))
+
+
+### Tests
+
+* comprehensive coverage for skill entry directory boundary ([7f5ca0d](https://github.com/Shadowsong27/agentic-beacon/commit/7f5ca0d55263b1637fb9ba2cc16a99ea4511c410))
+
 ## [2.4.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v2.3.0...agentic-beacon@v2.4.0) (2026-04-07)
 
 
