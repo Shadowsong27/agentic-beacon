@@ -909,3 +909,169 @@ def test_sync_fallback_wires_for_both_even_when_one_config_exists(
     assert (project / ".opencode" / "skills" / "my-skill" / "SKILL.md").exists()
     # claudecode NOT wired — detection found opencode, fallback not triggered
     assert not (project / ".claude" / "skills" / "my-skill" / "SKILL.md").exists()
+
+
+# ---------------------------------------------------------------------------
+# Agent sync: _sync_agents_from_warehouse via abc sync
+# ---------------------------------------------------------------------------
+
+SAMPLE_AGENT_MD = "You are a helpful assistant specialized in Python.\n"
+
+
+def _make_agent_project(tmp_path, monkeypatch):
+    """Build a minimal connected project with an agents/ dir in the warehouse."""
+    wh = tmp_path / "warehouse"
+    for d in ("agents", "knowledge", "skills", "contexts", "docs"):
+        (wh / d).mkdir(parents=True)
+    (wh / "README.md").write_text("# WH")
+    (wh / "agents" / "code-reviewer.md").write_text(SAMPLE_AGENT_MD)
+
+    project = tmp_path / "project"
+    project.mkdir()
+    beacon_dir = project / ".agentic-beacon"
+    beacon_dir.mkdir()
+    (beacon_dir / "config.toml").write_text(f'[warehouse]\nlocal_path = "{wh}"\n')
+    (beacon_dir / "beacon.yaml").write_text(
+        "artifacts:\n  knowledge: []\n  skills: []\n  contexts: []\n"
+    )
+    monkeypatch.chdir(project)
+    return wh, project
+
+
+class TestSyncAgentsFromWarehouse:
+    def test_installs_agent_to_opencode_global_dir(
+        self, tmp_path, monkeypatch, isolated_home
+    ):
+        """abc sync installs warehouse agents into ~/.config/opencode/agents/."""
+        (isolated_home / ".config" / "opencode").mkdir(parents=True)
+        wh, project = _make_agent_project(tmp_path, monkeypatch)
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["sync", "--skip-git-check"])
+
+        assert result.exit_code == 0, result.output
+        dest = isolated_home / ".config" / "opencode" / "agents" / "code-reviewer.md"
+        assert dest.exists()
+        assert dest.read_text() == SAMPLE_AGENT_MD
+
+    def test_installs_agent_to_claudecode_global_dir(
+        self, tmp_path, monkeypatch, isolated_home
+    ):
+        """abc sync installs warehouse agents into ~/.claude/agents/."""
+        (isolated_home / ".claude").mkdir(parents=True)
+        wh, project = _make_agent_project(tmp_path, monkeypatch)
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["sync", "--skip-git-check"])
+
+        assert result.exit_code == 0, result.output
+        dest = isolated_home / ".claude" / "agents" / "code-reviewer.md"
+        assert dest.exists()
+        assert dest.read_text() == SAMPLE_AGENT_MD
+
+    def test_installs_to_both_tools_when_both_present(
+        self, tmp_path, monkeypatch, isolated_home
+    ):
+        """When both opencode and claudecode are installed, both get the agent."""
+        (isolated_home / ".config" / "opencode").mkdir(parents=True)
+        (isolated_home / ".claude").mkdir(parents=True)
+        wh, project = _make_agent_project(tmp_path, monkeypatch)
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["sync", "--skip-git-check"])
+
+        assert result.exit_code == 0, result.output
+        assert (
+            isolated_home / ".config" / "opencode" / "agents" / "code-reviewer.md"
+        ).exists()
+        assert (isolated_home / ".claude" / "agents" / "code-reviewer.md").exists()
+        assert "code-reviewer" in result.output
+
+    def test_skips_agents_when_warehouse_has_no_agents_dir(
+        self, tmp_path, monkeypatch, isolated_home
+    ):
+        """Warehouse without agents/ dir: sync completes without installing any agents."""
+        (isolated_home / ".config" / "opencode").mkdir(parents=True)
+
+        wh = tmp_path / "warehouse"
+        for d in ("knowledge", "skills", "contexts", "docs"):
+            (wh / d).mkdir(parents=True)
+        (wh / "README.md").write_text("# WH")
+
+        project = tmp_path / "project"
+        project.mkdir()
+        beacon_dir = project / ".agentic-beacon"
+        beacon_dir.mkdir()
+        (beacon_dir / "config.toml").write_text(f'[warehouse]\nlocal_path = "{wh}"\n')
+        (beacon_dir / "beacon.yaml").write_text(
+            "artifacts:\n  knowledge: []\n  skills: []\n  contexts: []\n"
+        )
+        monkeypatch.chdir(project)
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["sync", "--skip-git-check"])
+
+        assert result.exit_code == 0, result.output
+        assert not (isolated_home / ".config" / "opencode" / "agents").exists()
+
+    def test_idempotent_when_already_up_to_date(
+        self, tmp_path, monkeypatch, isolated_home
+    ):
+        """Running sync twice does not re-write agent files that are already current."""
+        agents_dir = isolated_home / ".config" / "opencode" / "agents"
+        agents_dir.mkdir(parents=True)
+        (agents_dir / "code-reviewer.md").write_text(SAMPLE_AGENT_MD)
+        mtime_before = (agents_dir / "code-reviewer.md").stat().st_mtime
+
+        wh, project = _make_agent_project(tmp_path, monkeypatch)
+        runner = CliRunner()
+        runner.invoke(main, ["sync", "--skip-git-check"])
+
+        mtime_after = (agents_dir / "code-reviewer.md").stat().st_mtime
+        assert mtime_before == mtime_after
+
+    def test_force_overwrites_conflicting_agent(
+        self, tmp_path, monkeypatch, isolated_home
+    ):
+        """--force overwrites a diverged local agent without prompting."""
+        agents_dir = isolated_home / ".config" / "opencode" / "agents"
+        agents_dir.mkdir(parents=True)
+        (agents_dir / "code-reviewer.md").write_text("old local content\n")
+
+        wh, project = _make_agent_project(tmp_path, monkeypatch)
+        runner = CliRunner()
+        result = runner.invoke(main, ["sync", "--force", "--skip-git-check"])
+
+        assert result.exit_code == 0, result.output
+        assert (agents_dir / "code-reviewer.md").read_text() == SAMPLE_AGENT_MD
+
+    def test_preserve_skips_conflicting_agent(
+        self, tmp_path, monkeypatch, isolated_home
+    ):
+        """--preserve leaves diverged local agent files untouched."""
+        agents_dir = isolated_home / ".config" / "opencode" / "agents"
+        agents_dir.mkdir(parents=True)
+        (agents_dir / "code-reviewer.md").write_text("old local content\n")
+
+        wh, project = _make_agent_project(tmp_path, monkeypatch)
+        runner = CliRunner()
+        result = runner.invoke(main, ["sync", "--preserve", "--skip-git-check"])
+
+        assert result.exit_code == 0, result.output
+        assert (agents_dir / "code-reviewer.md").read_text() == "old local content\n"
+        assert "Skipped" in result.output
+
+    def test_non_interactive_conflict_skips_without_prompt(
+        self, tmp_path, monkeypatch, isolated_home
+    ):
+        """In non-interactive mode, conflicting agents are skipped automatically."""
+        agents_dir = isolated_home / ".config" / "opencode" / "agents"
+        agents_dir.mkdir(parents=True)
+        (agents_dir / "code-reviewer.md").write_text("diverged content\n")
+
+        wh, project = _make_agent_project(tmp_path, monkeypatch)
+        runner = CliRunner()
+        result = runner.invoke(main, ["sync", "--skip-git-check"])
+
+        assert result.exit_code == 0, result.output
+        assert (agents_dir / "code-reviewer.md").read_text() == "diverged content\n"
