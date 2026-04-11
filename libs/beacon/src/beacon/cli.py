@@ -1414,8 +1414,9 @@ def sync(
             console.print(
                 "[yellow]No artifacts configured in beacon.yaml. Nothing to sync.[/yellow]"
             )
-            # Still install bundled skills even when no warehouse artifacts are configured
+            # Still install bundled skills and sync agents even when no warehouse artifacts configured
             _print_bundled_install_result(*_install_bundled_skills_globally())
+            _sync_agents_from_warehouse(warehouse_path, force=force, preserve=preserve)
             sys.exit(0)
 
         # Create artifacts directory
@@ -1621,10 +1622,113 @@ def sync(
         # Install abc-bundled skills directly from data/skills/ (no beacon.yaml entry needed)
         _print_bundled_install_result(*_install_bundled_skills_globally())
 
+        # Sync global agents from warehouse
+        _sync_agents_from_warehouse(warehouse_path, force=force, preserve=preserve)
+
     except Exception as e:
         console.print(f"\n[red]Error:[/red] Sync failed: {e}")
         logger.exception("Sync failed")
         sys.exit(1)
+
+
+def _sync_agents_from_warehouse(
+    warehouse_path: Path,
+    *,
+    force: bool = False,
+    preserve: bool = False,
+) -> None:
+    """Sync all agent definition files from the warehouse into global tool directories.
+
+    Called as part of `abc sync`. Finds every *.md under warehouse/agents/,
+    compares each against the global agent dirs for detected tools, and installs
+    any that are out-of-date.  A single Y/N prompt is shown when conflicts exist
+    (unless --force or --preserve are supplied).
+
+    Args:
+        warehouse_path: Absolute path to the connected warehouse root.
+        force: Overwrite conflicting files without prompting.
+        preserve: Skip conflicting files without prompting.
+    """
+    agents_dir = warehouse_path / "agents"
+    if not agents_dir.is_dir():
+        return
+
+    agent_files = sorted(agents_dir.rglob("*.md"))
+    if not agent_files:
+        return
+
+    tools = _detect_agents_global()
+    if not tools:
+        return
+
+    agent_dirs = _global_agent_dirs()
+
+    # Build list of (relative_path, content, agent_name) tuples
+    entries: list[tuple[str, str, str]] = []
+    for af in agent_files:
+        rel = str(af.relative_to(warehouse_path))  # e.g. "agents/code-reviewer.md"
+        content = af.read_text(encoding="utf-8")
+        agent_name = af.name
+        entries.append((rel, content, agent_name))
+
+    # Detect conflicts: files that exist in global dirs but differ from warehouse
+    conflicts: list[str] = []
+    for _rel, content, agent_name in entries:
+        for tool in tools:
+            dest = agent_dirs[tool] / agent_name
+            if dest.exists() and dest.read_text(encoding="utf-8") != content:
+                conflicts.append(str(dest))
+
+    # Single Y/N prompt for all conflicts together
+    effective_preserve = preserve
+    if conflicts and not force and not preserve:
+        conflict_list = "\n".join(f"  • {p}" for p in conflicts)
+        console.print(
+            f"\n[yellow]Warning:[/yellow] {len(conflicts)} global agent file(s) "
+            f"differ from the warehouse and will be overwritten:\n{conflict_list}\n"
+        )
+        is_interactive = sys.stdin.isatty()
+        if is_interactive:
+            if not click.confirm(
+                "Overwrite local agent files with warehouse versions?", default=False
+            ):
+                effective_preserve = True
+        else:
+            console.print(
+                "[dim]Non-interactive mode — skipping agent overwrite. "
+                "Use --force to overwrite or --preserve to suppress this warning.[/dim]"
+            )
+            effective_preserve = True
+
+    # Install
+    installed: list[str] = []
+    skipped: list[str] = []
+    for rel, content, agent_name in entries:
+        for tool in tools:
+            dest = agent_dirs[tool] / agent_name
+            is_conflict = str(dest) in conflicts
+
+            if effective_preserve and is_conflict:
+                skipped.append(agent_name)
+                continue
+
+            written = _install_agent_global(tool, agent_name, content)
+            if written:
+                installed.append(agent_name)
+                _write_agent_sync_state(warehouse_path, rel, _hash_content(content))
+
+    if installed:
+        unique = sorted(set(installed))
+        console.print(
+            f"\n[green]✓[/green] Synced {len(unique)} global agent(s) from warehouse "
+            f"({', '.join(unique)})"
+        )
+    if skipped:
+        unique_skipped = sorted(set(skipped))
+        console.print(
+            f"  [yellow]Skipped {len(unique_skipped)} agent(s) with local changes "
+            f"(use --force to overwrite): {', '.join(unique_skipped)}[/yellow]"
+        )
 
 
 def _handle_install_agent(
@@ -1710,6 +1814,64 @@ def _hash_content(content: str) -> str:
     import hashlib
 
     return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+
+@main.group()
+def agents() -> None:
+    """Agent definition commands (sync)."""
+    pass
+
+
+@agents.command(name="sync")
+@click.option("--preserve", is_flag=True, help="Skip files with local modifications")
+@click.option(
+    "--force", is_flag=True, help="Overwrite conflicting files without prompting"
+)
+@click.option(
+    "--skip-git-check",
+    is_flag=True,
+    help="Skip warehouse uncommitted-changes check",
+)
+def agents_sync(*, preserve: bool, force: bool, skip_git_check: bool) -> None:
+    """Sync all agent definitions from warehouse into global tool directories.
+
+    Reads the connected warehouse, finds every agent definition under agents/,
+    and installs them into the global directories for all detected tools
+    (~/.config/opencode/agents/ and/or ~/.claude/agents/).
+
+    A confirmation prompt is shown when local agent files differ from the
+    warehouse version. Use --force to overwrite without prompting, or
+    --preserve to skip conflicts silently.
+
+    Example:
+        abc agents sync            # Sync all agents, prompt on conflicts
+        abc agents sync --force    # Overwrite all conflicts without prompting
+        abc agents sync --preserve # Skip conflicting agents
+    """
+    if force and preserve:
+        console.print(
+            "[red]Error:[/red] --force and --preserve are mutually exclusive."
+        )
+        sys.exit(1)
+
+    beacon_dir = Path.cwd() / ".agentic-beacon"
+    if not beacon_dir.exists():
+        console.print("[red]Error:[/red] No .agentic-beacon directory found.")
+        console.print("Run 'abc warehouse connect' to connect to a warehouse first.")
+        sys.exit(1)
+
+    try:
+        warehouse_settings = WarehouseSettings()
+        warehouse_path = Path(warehouse_settings.warehouse.local_path)
+    except Exception as e:
+        console.print(f"[red]Error:[/red] Could not load warehouse settings: {e}")
+        sys.exit(1)
+
+    if not skip_git_check:
+        _check_warehouse_git_clean(warehouse_path)
+        _check_warehouse_on_main_branch(warehouse_path)
+
+    _sync_agents_from_warehouse(warehouse_path, force=force, preserve=preserve)
 
 
 @main.command(name="install")

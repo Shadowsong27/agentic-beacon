@@ -72,7 +72,7 @@ def test_contribute_single_modified_agent(project, fake_home):
 
     # Globally modified agent
     oc_agents = fake_home / ".config" / "opencode" / "agents"
-    oc_agents.mkdir(parents=True)
+    oc_agents.mkdir(parents=True, exist_ok=True)
     (oc_agents / "reviewer.md").write_text("# Reviewer\nImproved version.\n")
 
     result = runner.invoke(
@@ -95,7 +95,7 @@ def test_contribute_all_includes_modified_agent(project, fake_home):
     proj, warehouse, runner = project
 
     oc_agents = fake_home / ".config" / "opencode" / "agents"
-    oc_agents.mkdir(parents=True)
+    oc_agents.mkdir(parents=True, exist_ok=True)
     (oc_agents / "reviewer.md").write_text("# Reviewer\nImproved version.\n")
 
     result = runner.invoke(main, ["contribute"], input="y\n")
@@ -114,7 +114,7 @@ def test_contribute_agent_dry_run(project, fake_home):
     proj, warehouse, runner = project
 
     oc_agents = fake_home / ".config" / "opencode" / "agents"
-    oc_agents.mkdir(parents=True)
+    oc_agents.mkdir(parents=True, exist_ok=True)
     (oc_agents / "reviewer.md").write_text("# Reviewer\nImproved version.\n")
 
     result = runner.invoke(
@@ -138,7 +138,7 @@ def test_contribute_agent_identical_is_noop(project, fake_home):
 
     # Install identical copy globally
     oc_agents = fake_home / ".config" / "opencode" / "agents"
-    oc_agents.mkdir(parents=True)
+    oc_agents.mkdir(parents=True, exist_ok=True)
     (oc_agents / "reviewer.md").write_text("# Reviewer\nWarehouse version.\n")
 
     result = runner.invoke(
@@ -163,7 +163,7 @@ def test_contribute_new_agent_added_to_warehouse(project, fake_home):
     proj, warehouse, runner = project
 
     oc_agents = fake_home / ".config" / "opencode" / "agents"
-    oc_agents.mkdir(parents=True)
+    oc_agents.mkdir(parents=True, exist_ok=True)
     (oc_agents / "new-agent.md").write_text("# New Agent\nBrand new.\n")
     # Add to warehouse agents dir so comparator finds it
     (warehouse / "agents" / "new-agent.md").write_text("# New Agent\nOld.\n")
@@ -190,11 +190,11 @@ def test_contribute_agent_two_identical_tools_no_prompt(project, fake_home):
     content = "# Reviewer\nSame improvement everywhere.\n"
 
     oc_agents = fake_home / ".config" / "opencode" / "agents"
-    oc_agents.mkdir(parents=True)
+    oc_agents.mkdir(parents=True, exist_ok=True)
     (oc_agents / "reviewer.md").write_text(content)
 
     cc_agents = fake_home / ".claude" / "agents"
-    cc_agents.mkdir(parents=True)
+    cc_agents.mkdir(parents=True, exist_ok=True)
     (cc_agents / "reviewer.md").write_text(content)
 
     # input only has the confirm "y" — no conflict choice prompt expected
