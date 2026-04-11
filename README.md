@@ -103,12 +103,18 @@ When a session produces something worth sharing — a better pattern, a new less
 
 ### The Framework Components
 
-Four artifact types form the core of a warehouse:
+Four artifact types form the core of a warehouse, each defined by two axes: **where it lives** (project-scoped vs. global) and **whether it is tied to a specific AI tool**:
 
-- 📄 **Contexts** - Boot instructions and coding standards loaded at agent session start
-- 🧠 **Knowledge** - Atomic decisions, lessons, and facts
-- ⚡ **Skills** - Reusable workflows and procedures available as slash commands
-- 🤖 **Agents** - Sub-agent definitions installed globally to all detected AI tools
+|  | Tool-agnostic | Tool-specific |
+|---|---|---|
+| **Project-scoped** | 📄 Contexts · 🧠 Knowledge | ⚡ Skills |
+| **Global** | — | 🤖 Agents |
+
+- **Contexts and Knowledge** are project-scoped and tool-agnostic — synced into `.agentic-beacon/artifacts/` and referenced from whatever agent config the project uses (`AGENTS.md`, `opencode.json`, etc.).
+- **Skills** are project-scoped but tool-specific — installed into the live skill and command directories of each detected AI tool (`.opencode/skills/`, `.claude/skills/`).
+- **Agents** are global and tool-specific — installed once into the user's global agent directories (`~/.claude/agents/`, `~/.config/opencode/agents/`) and available across every project without per-project configuration.
+
+This matrix directly drives how each command works. See [Artifact Type Matrix](./docs/artifact-type-matrix.md) for the full design rationale.
 
 The `abc` CLI handles the rest: initializing warehouses, connecting projects, syncing artifacts, and contributing improvements back. Everything is plain markdown files in Git — no infrastructure required.
 
@@ -317,6 +323,7 @@ The AI context management space is growing. Here's how Agentic Beacon compares:
 ## 📚 Documentation
 
 ### Conceptual Design (docs/)
+- **[Artifact Type Matrix](./docs/artifact-type-matrix.md)** - How the four artifact types differ by scope and tool-specificity, and how this shapes command design
 - **[Agentic Warehouse Design](./docs/agentic-warehouse-design.md)** - High-level design and architecture
 - **[Boot Context Design](./docs/boot-context-design/)** - AGENTS.md architecture and patterns
   - [Three-Tier Context Model](./docs/boot-context-design/agents-md-architecture.md)
