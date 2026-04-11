@@ -69,7 +69,7 @@ def e2e_warehouse(tmp_path):
 
 
 @pytest.fixture
-def e2e_project(tmp_path, e2e_warehouse, monkeypatch):
+def e2e_project(tmp_path, e2e_warehouse, monkeypatch, isolated_home):
     """A project directory wired up to e2e_warehouse, ready for workflow steps."""
     project_dir = tmp_path / "my-project"
     project_dir.mkdir()

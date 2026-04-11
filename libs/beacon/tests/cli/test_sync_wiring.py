@@ -15,9 +15,12 @@ import pytest
 from beacon.cli import (
     _install_skill_claudecode,
     _install_skill_opencode,
+    _normalize_skill_entry,
+    _skill_name_from_entry,
     _update_agent_gitignores,
     _wire_contexts_claudecode,
     _wire_contexts_opencode,
+    _wire_single_skill,
     _wire_skills_post_sync,
     main,
 )
@@ -1075,3 +1078,236 @@ class TestSyncAgentsFromWarehouse:
 
         assert result.exit_code == 0, result.output
         assert (agents_dir / "code-reviewer.md").read_text() == "diverged content\n"
+
+
+# ---------------------------------------------------------------------------
+# Multi-file skill: _normalize_skill_entry, _skill_name_from_entry,
+# _wire_single_skill, _wire_skills_post_sync, abc sync
+# ---------------------------------------------------------------------------
+
+SAMPLE_SKILL_MD_MULTI = """\
+---
+name: pipeline-helper
+description: Pipeline helper skill
+---
+# Pipeline Helper
+"""
+
+
+class TestNormalizeSkillEntry:
+    def test_file_level_entry(self):
+        assert _normalize_skill_entry("skills/my-skill/SKILL.md") == "skills/my-skill"
+
+    def test_directory_entry_with_slash(self):
+        assert _normalize_skill_entry("skills/my-skill/") == "skills/my-skill"
+
+    def test_directory_entry_no_slash(self):
+        assert _normalize_skill_entry("skills/my-skill") == "skills/my-skill"
+
+    def test_bare_name_gets_prefix(self):
+        assert _normalize_skill_entry("my-skill") == "skills/my-skill"
+
+    def test_skill_name_from_entry_file(self):
+        assert (
+            _skill_name_from_entry("skills/pipeline-helper/SKILL.md")
+            == "pipeline-helper"
+        )
+
+    def test_skill_name_from_entry_dir(self):
+        assert _skill_name_from_entry("skills/pipeline-helper/") == "pipeline-helper"
+
+
+class TestWireSingleSkill:
+    def test_copies_all_files_to_claude(self, tmp_path):
+        skill_src = tmp_path / "artifacts" / "skills" / "my-skill"
+        skill_src.mkdir(parents=True)
+        (skill_src / "SKILL.md").write_text(SAMPLE_SKILL_MD_MULTI)
+        (skill_src / "helper.py").write_text("def run(): pass\n")
+
+        _wire_single_skill(tmp_path, "my-skill", skill_src, "claudecode")
+
+        dest = tmp_path / ".claude" / "skills" / "my-skill"
+        assert (dest / "SKILL.md").read_text() == SAMPLE_SKILL_MD_MULTI
+        assert (dest / "helper.py").read_text() == "def run(): pass\n"
+
+    def test_copies_all_files_to_opencode(self, tmp_path):
+        skill_src = tmp_path / "artifacts" / "skills" / "my-skill"
+        skill_src.mkdir(parents=True)
+        (skill_src / "SKILL.md").write_text(SAMPLE_SKILL_MD_MULTI)
+        (skill_src / "config.yaml").write_text("key: value\n")
+
+        _wire_single_skill(tmp_path, "my-skill", skill_src, "opencode")
+
+        dest = tmp_path / ".opencode" / "skills" / "my-skill"
+        assert (dest / "SKILL.md").exists()
+        assert (dest / "config.yaml").read_text() == "key: value\n"
+
+    def test_opencode_generates_command_stub(self, tmp_path):
+        skill_src = tmp_path / "artifacts" / "skills" / "my-skill"
+        skill_src.mkdir(parents=True)
+        (skill_src / "SKILL.md").write_text(SAMPLE_SKILL_MD_MULTI)
+
+        _wire_single_skill(tmp_path, "my-skill", skill_src, "opencode")
+
+        stub = tmp_path / ".opencode" / "command" / "my-skill.md"
+        assert stub.exists()
+        assert "Pipeline helper skill" in stub.read_text()
+
+    def test_returns_true_when_file_written(self, tmp_path):
+        skill_src = tmp_path / "artifacts" / "skills" / "s"
+        skill_src.mkdir(parents=True)
+        (skill_src / "SKILL.md").write_text("# S\n")
+
+        assert _wire_single_skill(tmp_path, "s", skill_src, "claudecode") is True
+
+    def test_returns_false_when_already_up_to_date(self, tmp_path):
+        skill_src = tmp_path / "artifacts" / "skills" / "s"
+        skill_src.mkdir(parents=True)
+        (skill_src / "SKILL.md").write_text("# S\n")
+
+        _wire_single_skill(tmp_path, "s", skill_src, "claudecode")
+        assert _wire_single_skill(tmp_path, "s", skill_src, "claudecode") is False
+
+    def test_subdirectory_files_preserved(self, tmp_path):
+        skill_src = tmp_path / "artifacts" / "skills" / "s"
+        (skill_src / "sub").mkdir(parents=True)
+        (skill_src / "SKILL.md").write_text("# S\n")
+        (skill_src / "sub" / "util.py").write_text("x = 1\n")
+
+        _wire_single_skill(tmp_path, "s", skill_src, "claudecode")
+
+        assert (tmp_path / ".claude" / "skills" / "s" / "sub" / "util.py").exists()
+
+
+class TestWireSkillsPostSyncMultiFile:
+    def test_all_files_wired_to_claude(self, tmp_path):
+        """_wire_skills_post_sync copies every file in the skill dir, not just SKILL.md."""
+        skill_dir = tmp_path / ".agentic-beacon" / "artifacts" / "skills" / "my-skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text(SAMPLE_SKILL_MD_MULTI)
+        (skill_dir / "helper.py").write_text("def run(): pass\n")
+        (tmp_path / ".claude").mkdir()
+
+        _wire_skills_post_sync(tmp_path, tmp_path / ".agentic-beacon" / "artifacts")
+
+        dest = tmp_path / ".claude" / "skills" / "my-skill"
+        assert (dest / "SKILL.md").exists()
+        assert (dest / "helper.py").read_text() == "def run(): pass\n"
+
+    def test_conflict_detected_on_companion_file(self, tmp_path):
+        """Conflict detection triggers when a companion file (not SKILL.md) differs."""
+        skill_dir = tmp_path / ".agentic-beacon" / "artifacts" / "skills" / "my-skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text(SAMPLE_SKILL_MD_MULTI)
+        (skill_dir / "helper.py").write_text("def run(): pass\n")
+
+        # Pre-install a different helper.py
+        live_dir = tmp_path / ".claude" / "skills" / "my-skill"
+        live_dir.mkdir(parents=True)
+        (live_dir / "SKILL.md").write_text(SAMPLE_SKILL_MD_MULTI)
+        (live_dir / "helper.py").write_text("def run(): return 42\n")
+
+        installed, errors = _wire_skills_post_sync(
+            tmp_path,
+            tmp_path / ".agentic-beacon" / "artifacts",
+            preserve=True,
+        )
+
+        # Should be skipped due to conflict + preserve
+        assert not installed
+        # helper.py must remain unchanged
+        assert (live_dir / "helper.py").read_text() == "def run(): return 42\n"
+
+
+class TestSyncMultiFileSkillIntegration:
+    """Integration: abc sync with a multi-file skill in the warehouse."""
+
+    @pytest.fixture
+    def multi_file_skill_project(self, tmp_path):
+        wh = tmp_path / "warehouse"
+        for d in ("agents", "knowledge", "skills", "contexts", "docs"):
+            (wh / d).mkdir(parents=True)
+        (wh / "README.md").write_text("# WH")
+
+        skill_dir = wh / "skills" / "pipeline-helper"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text(SAMPLE_SKILL_MD_MULTI)
+        (skill_dir / "runner.py").write_text("def main(): pass\n")
+        (skill_dir / "config.yaml").write_text("timeout: 30\n")
+
+        project = tmp_path / "project"
+        project.mkdir()
+        beacon_dir = project / ".agentic-beacon"
+        beacon_dir.mkdir()
+        (beacon_dir / "config.toml").write_text(f'[warehouse]\nlocal_path = "{wh}"\n')
+        # New directory-style entry
+        (beacon_dir / "beacon.yaml").write_text(
+            "artifacts:\n  knowledge: []\n"
+            "  skills:\n    - skills/pipeline-helper/\n  contexts: []\n"
+        )
+        (project / ".claude").mkdir()
+        return project, wh
+
+    def test_all_skill_files_synced_to_artifacts(
+        self, multi_file_skill_project, monkeypatch
+    ):
+        project, _ = multi_file_skill_project
+        monkeypatch.chdir(project)
+        runner = CliRunner()
+        result = runner.invoke(main, ["sync", "--skip-git-check"])
+
+        assert result.exit_code == 0
+        artifacts = (
+            project / ".agentic-beacon" / "artifacts" / "skills" / "pipeline-helper"
+        )
+        assert (artifacts / "SKILL.md").exists()
+        assert (artifacts / "runner.py").exists()
+        assert (artifacts / "config.yaml").exists()
+
+    def test_all_skill_files_wired_to_live_dir(
+        self, multi_file_skill_project, monkeypatch
+    ):
+        project, _ = multi_file_skill_project
+        monkeypatch.chdir(project)
+        runner = CliRunner()
+        runner.invoke(main, ["sync", "--skip-git-check"])
+
+        live = project / ".claude" / "skills" / "pipeline-helper"
+        assert (live / "SKILL.md").exists()
+        assert (live / "runner.py").read_text() == "def main(): pass\n"
+        assert (live / "config.yaml").read_text() == "timeout: 30\n"
+
+    def test_backward_compat_old_skill_md_entry(self, tmp_path, monkeypatch):
+        """Old 'skills/foo/SKILL.md' entry in beacon.yaml still syncs all files."""
+        wh = tmp_path / "warehouse"
+        for d in ("agents", "knowledge", "skills", "contexts", "docs"):
+            (wh / d).mkdir(parents=True)
+        (wh / "README.md").write_text("# WH")
+        skill_dir = wh / "skills" / "old-style"
+        skill_dir.mkdir()
+        (skill_dir / "SKILL.md").write_text("# Old\n")
+        (skill_dir / "extra.py").write_text("# extra\n")
+
+        project = tmp_path / "project"
+        project.mkdir()
+        beacon_dir = project / ".agentic-beacon"
+        beacon_dir.mkdir()
+        (beacon_dir / "config.toml").write_text(f'[warehouse]\nlocal_path = "{wh}"\n')
+        # Old-style file-level entry
+        (beacon_dir / "beacon.yaml").write_text(
+            "artifacts:\n  knowledge: []\n"
+            "  skills:\n    - skills/old-style/SKILL.md\n  contexts: []\n"
+        )
+        (project / ".claude").mkdir()
+        monkeypatch.chdir(project)
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["sync", "--skip-git-check"])
+
+        assert result.exit_code == 0
+        artifacts = project / ".agentic-beacon" / "artifacts" / "skills" / "old-style"
+        assert (artifacts / "SKILL.md").exists()
+        assert (artifacts / "extra.py").exists()
+        live = project / ".claude" / "skills" / "old-style"
+        assert (live / "SKILL.md").exists()
+        assert (live / "extra.py").exists()

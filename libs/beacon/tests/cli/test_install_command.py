@@ -276,7 +276,7 @@ def test_install_creates_beacon_yaml_when_absent(connected_project):
     beacon_yaml = connected_project / ".agentic-beacon" / "beacon.yaml"
     assert beacon_yaml.exists()
     data = yaml.safe_load(beacon_yaml.read_text())
-    assert "skills/code-reviewer/SKILL.md" in data["artifacts"]["skills"]
+    assert "skills/code-reviewer" in data["artifacts"]["skills"]
 
 
 def test_install_updates_existing_beacon_yaml(connected_project):

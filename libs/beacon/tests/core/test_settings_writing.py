@@ -206,3 +206,40 @@ class TestSettingsSelfWriting:
         # Load from written file
         settings2 = BeaconSettings.from_yaml(str(output_file))
         assert len(settings2.artifacts.knowledge) == len(settings1.artifacts.knowledge)
+
+    def test_tc11_to_yaml_emits_ignore_when_non_empty(self, temp_dir):
+        """TC11: to_yaml includes ignore section when ignore.skills is non-empty."""
+        settings = BeaconSettings(
+            artifacts={"knowledge": [], "skills": [], "contexts": []},
+            ignore={"skills": ["openspec-*", "opsx-*"]},
+        )
+        output_file = temp_dir / "beacon.yaml"
+        settings.to_yaml(str(output_file))
+
+        content = output_file.read_text()
+        assert "ignore" in content
+        assert "openspec-*" in content
+        assert "opsx-*" in content
+
+    def test_tc12_to_yaml_omits_ignore_when_empty(self, temp_dir):
+        """TC12: to_yaml omits ignore section when ignore.skills is empty."""
+        settings = BeaconSettings(
+            artifacts={"knowledge": [], "skills": [], "contexts": []},
+        )
+        output_file = temp_dir / "beacon.yaml"
+        settings.to_yaml(str(output_file))
+
+        content = output_file.read_text()
+        assert "ignore" not in content
+
+    def test_tc13_roundtrip_preserves_ignore_skills(self, temp_dir):
+        """TC13: Write then read roundtrip preserves ignore.skills values."""
+        settings1 = BeaconSettings(
+            artifacts={"knowledge": [], "skills": [], "contexts": []},
+            ignore={"skills": ["openspec-*"]},
+        )
+        output_file = temp_dir / "beacon.yaml"
+        settings1.to_yaml(str(output_file))
+
+        settings2 = BeaconSettings.from_yaml(str(output_file))
+        assert settings2.ignore.skills == ["openspec-*"]

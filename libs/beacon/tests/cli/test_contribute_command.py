@@ -30,7 +30,7 @@ artifacts:
 
 
 @pytest.fixture
-def project_with_delta(tmp_path, monkeypatch):
+def project_with_delta(tmp_path, monkeypatch, isolated_home):
     """Project with a warehouse, beacon config, and local artifact changes."""
     monkeypatch.chdir(tmp_path)
 
@@ -131,7 +131,7 @@ def test_contribute_identical_file_is_noop(project_with_delta):
 # ---------------------------------------------------------------------------
 
 
-def test_contribute_all_copies_modified_and_added(project_with_delta):
+def test_contribute_all_copies_modified_and_added(project_with_delta, isolated_home):
     tmp_path, warehouse = project_with_delta
     runner = CliRunner()
 
@@ -304,7 +304,7 @@ artifacts:
 
 
 @pytest.fixture
-def project_with_untracked(tmp_path, monkeypatch):
+def project_with_untracked(tmp_path, monkeypatch, isolated_home):
     """Project where a local artifact is NOT listed in beacon.yaml."""
     monkeypatch.chdir(tmp_path)
 
@@ -359,7 +359,7 @@ def test_contribute_single_untracked_file_copies_without_registering(
     assert beacon_yaml.read_text() == original_content
 
 
-def test_contribute_all_ignores_untracked_files(project_with_untracked):
+def test_contribute_all_ignores_untracked_files(project_with_untracked, isolated_home):
     """--exclude-unregistered only contributes tracked artifacts; untracked files are ignored."""
     tmp_path, warehouse = project_with_untracked
     runner = CliRunner()
@@ -604,7 +604,7 @@ SKILL_OTHER_MODIFIED_CONTENT = (
 
 
 @pytest.fixture
-def project_with_skill_setup(tmp_path, monkeypatch):
+def project_with_skill_setup(tmp_path, monkeypatch, isolated_home):
     """Project connected to warehouse with a skill installed in the live agent dir."""
     monkeypatch.chdir(tmp_path)
 

@@ -10,6 +10,7 @@ Test Cases:
 - TC4: contribute <agents/file> — agent identical to warehouse → nothing to contribute
 - TC5: contribute <agents/file> — agent not in warehouse (new file) → added
 - TC6: Two tools have identical modified copies → one copy contributed (no prompt)
+- TC7: Cold start — agent exists in global dir, no warehouse counterpart at all → added
 """
 
 from pathlib import Path
@@ -209,3 +210,35 @@ def test_contribute_agent_two_identical_tools_no_prompt(project, fake_home):
         "Same improvement everywhere."
         in (warehouse / "agents" / "reviewer.md").read_text()
     )
+
+
+# ---------------------------------------------------------------------------
+# TC7: Cold start — agent exists only in global dir (no warehouse counterpart)
+# ---------------------------------------------------------------------------
+
+
+def test_contribute_cold_start_agent_no_warehouse_counterpart(project, fake_home):
+    """TC7: Agent exists in global dir but has NO warehouse counterpart.
+
+    This is the 'cold start' scenario: a user has agents installed globally that
+    have never been contributed to the warehouse. The contribute command must
+    copy the file rather than skipping with 'no modified copy found'.
+    """
+    proj, warehouse, runner = project
+
+    oc_agents = fake_home / ".config" / "opencode" / "agents"
+    oc_agents.mkdir(parents=True, exist_ok=True)
+    (oc_agents / "brand-new-agent.md").write_text("# Brand New Agent\nFirst version.\n")
+
+    # Confirm no warehouse counterpart exists before contributing
+    assert not (warehouse / "agents" / "brand-new-agent.md").exists()
+
+    result = runner.invoke(
+        main,
+        ["contribute", "--skip-git-check"],
+        input="y\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    assert (warehouse / "agents" / "brand-new-agent.md").exists()
+    assert "First version." in (warehouse / "agents" / "brand-new-agent.md").read_text()

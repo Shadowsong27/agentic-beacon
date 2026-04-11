@@ -1,6 +1,7 @@
 """CLI interface for Beacon - Distribute knowledge contexts for AI development."""
 
 import datetime
+import fnmatch
 import json
 import os
 import shutil
@@ -1100,7 +1101,7 @@ def _create_beacon_template(path: Path) -> None:
 # Run 'abc sync' after editing to download artifacts.
 #
 # Supports glob patterns: knowledge/languages/python/**/*.md
-# Supports specific files: skills/code-review/SKILL.md
+# Skills are tracked at the directory level: skills/code-review/
 
 artifacts:
   knowledge: []
@@ -1110,8 +1111,8 @@ artifacts:
 
   skills: []
     # Examples:
-    # - skills/code-review/SKILL.md
-    # - skills/generate-unit-tests/SKILL.md
+    # - skills/code-review/
+    # - skills/generate-unit-tests/
     # Note: abc bundled skills (e.g. record-knowledge) are installed globally
     #       into ~/.config/opencode/skills/ and ~/.claude/skills/ by 'abc sync'
     #       — they are not project-scoped and need no entry here.
@@ -1120,6 +1121,14 @@ artifacts:
     # Examples:
     # - contexts/README.md
     # - contexts/teams/backend/README.md
+
+# ignore: Suppress skills installed by external tools (e.g. openspec) from
+#   appearing in 'abc delta' and 'abc contribute'. Supports fnmatch patterns.
+#
+# ignore:
+#   skills:
+#     - "openspec-*"
+#     - "opsx-*"
 """
     path.write_text(template)
 
@@ -1220,7 +1229,7 @@ def _generate_warehouse_catalog(warehouse_path: Path) -> str:
             "    - knowledge/languages/python/**/*.md  # Glob pattern",
             "    - knowledge/infrastructure/docker-standards.md  # Specific file",
             "  skills:",
-            "    - skills/code-review/SKILL.md",
+            "    - skills/code-review/",
             "  contexts:",
             "    - contexts/README.md",
             "```",
@@ -1320,6 +1329,11 @@ def _handle_soft_block(
     is_flag=True,
     help="Skip warehouse uncommitted-changes check",
 )
+@click.option(
+    "--skip-migration-check",
+    is_flag=True,
+    help="Skip legacy skill entry migration check (not recommended)",
+)
 def sync(
     *,
     preserve: bool,
@@ -1327,6 +1341,7 @@ def sync(
     verbose_flag: bool,
     dry_run: bool,
     skip_git_check: bool,
+    skip_migration_check: bool,
 ) -> None:
     """
     Sync artifacts from warehouse to project.
@@ -1403,6 +1418,11 @@ def sync(
         # Load beacon.yaml
         beacon_settings = BeaconSettings.from_yaml(beacon_yaml)
 
+        # Check for legacy skill entries and prompt migration before proceeding
+        beacon_settings = _check_and_migrate_legacy_skills(
+            beacon_settings, beacon_yaml, skip_migration_check=skip_migration_check
+        )
+
         # Check if there are any artifacts to sync
         total_artifacts = (
             len(beacon_settings.artifacts.knowledge)
@@ -1456,6 +1476,17 @@ def sync(
                             f"  [red]Error:[/red] Invalid glob pattern '{pattern}': {e}"
                         )
                         sys.exit(1)
+                elif artifact_type == "skills":
+                    # Normalize to directory form and expand all files within it
+                    skill_dir_entry = _normalize_skill_entry(pattern)
+                    matches = sync_engine.expand_glob(f"{skill_dir_entry}/**/*")
+                    if matches:
+                        artifact_paths.extend(matches)
+                    else:
+                        console.print(
+                            f"  [yellow]Warning:[/yellow] No files found for skill: "
+                            f"{_skill_name_from_entry(pattern)}"
+                        )
                 else:
                     artifact_paths.append(pattern)
 
@@ -1985,27 +2016,17 @@ def install_artifact(
     )
 
     if artifact_type == "skills":
-        # Skill name is the directory directly under skills/
-        skill_name = (
-            Path(artifact).parts[1]
-            if len(Path(artifact).parts) > 1
-            else Path(artifact).stem
-        )
-        skill_md = artifacts_dir / "skills" / skill_name / "SKILL.md"
-        if skill_md.exists() and agents:
-            content = skill_md.read_text(encoding="utf-8")
-            description = _extract_skill_description(content)
+        skill_name = _skill_name_from_entry(artifact)
+        skill_src_dir = artifacts_dir / "skills" / skill_name
+        if skill_src_dir.exists() and agents:
             for target_agent in agents:
-                if target_agent == "opencode":
-                    _install_skill_opencode(
-                        project_root, skill_name, content, description
-                    )
-                else:
-                    _install_skill_claudecode(project_root, skill_name, content)
+                _wire_single_skill(
+                    project_root, skill_name, skill_src_dir, target_agent
+                )
             console.print(f"[green]✓[/green] Installed skill: {skill_name}")
             _update_agent_gitignores(project_root)
             _print_skill_next_steps(agents)
-        elif skill_md.exists():
+        elif skill_src_dir.exists():
             console.print(
                 "[green]✓[/green] Skill copied (no agent detected for wiring)"
             )
@@ -2094,6 +2115,49 @@ def _build_skills_paths(project_root: Path) -> dict[str, Path]:
         elif agent == "claudecode":
             skills_paths["claudecode"] = project_root / ".claude" / "skills"
     return skills_paths
+
+
+def _bundled_skill_names() -> set[str]:
+    """Return the set of skill names that are managed by abc (bundled)."""
+    bundled_dir = Path(__file__).parent / "data" / "skills"
+    if not bundled_dir.exists():
+        return set()
+    return {
+        d.name
+        for d in bundled_dir.iterdir()
+        if d.is_dir() and (d / "SKILL.md").exists()
+    }
+
+
+def _find_global_untracked_skills(
+    ignore_patterns: list[str] | None = None,
+) -> dict[str, list[str]]:
+    """Return non-bundled skill directories found in the global skill dirs.
+
+    Scans ~/.claude/skills/ (Claude Code) and ~/.config/opencode/skills/ (OpenCode).
+    Excludes abc-bundled skills and any skill names matching ignore_patterns (fnmatch).
+    Returns a mapping of tool name → sorted list of skill names.
+    """
+    global_skill_dirs: dict[str, Path] = {
+        "claudecode": Path.home() / ".claude" / "skills",
+        "opencode": Path.home() / ".config" / "opencode" / "skills",
+    }
+    bundled = _bundled_skill_names()
+    patterns = ignore_patterns or []
+    result: dict[str, list[str]] = {}
+    for tool, skills_dir in global_skill_dirs.items():
+        if skills_dir.is_dir():
+            names = sorted(
+                d.name
+                for d in skills_dir.iterdir()
+                if d.is_dir()
+                and (d / "SKILL.md").exists()
+                and d.name not in bundled
+                and not any(fnmatch.fnmatch(d.name, p) for p in patterns)
+            )
+            if names:
+                result[tool] = names
+    return result
 
 
 def _find_project_level_agents(project_root: Path) -> dict[str, list[str]]:
@@ -2258,14 +2322,19 @@ def _show_delta_summary(
             )
             agent_results.append(result)
 
+    ignore_skill_patterns = beacon_settings.ignore.skills
+
     untracked = _find_untracked_local_files(
-        comparator, beacon_settings, comparator.artifacts_path
+        comparator, beacon_settings, comparator.artifacts_path, ignore_skill_patterns
     )
 
     # Detect project-scoped agents (not part of the global/contribution flow)
     project_level_agents: dict[str, list[str]] = (
         _find_project_level_agents(project_root) if project_root is not None else {}
     )
+
+    # Detect non-bundled skills accidentally placed in global skill dirs
+    global_untracked_skills = _find_global_untracked_skills(ignore_skill_patterns)
 
     has_agent_diffs = any(r.status != DeltaStatus.IDENTICAL for r in agent_results)
 
@@ -2274,6 +2343,7 @@ def _show_delta_summary(
         and not untracked
         and not has_agent_diffs
         and not project_level_agents
+        and not global_untracked_skills
     ):
         console.print(
             "[green]No differences found. Local artifacts match local warehouse.[/green]"
@@ -2425,6 +2495,41 @@ def _show_delta_summary(
         console.print()
         console.print(table)
 
+    # --- Global untracked skills reminder ---
+    if global_untracked_skills:
+        if project_level_agents or agent_results or tracked_diffs or untracked:
+            console.rule(style="dim")
+
+        global_skill_tools: list[str] = sorted(global_untracked_skills.keys())
+        global_skill_names: list[str] = sorted(
+            {s for names in global_untracked_skills.values() for s in names}
+        )
+
+        table = Table(
+            title="Global Skills [dim](not in project skill dirs — not tracked in warehouse)[/dim]",
+            title_style="bold yellow",
+            title_justify="left",
+            show_header=True,
+            header_style="dim",
+            box=None,
+            padding=(0, 2, 0, 0),
+        )
+        table.add_column("Skill")
+        for tool in global_skill_tools:
+            table.add_column(tool, no_wrap=True)
+
+        for skill_name in global_skill_names:
+            cells = [
+                "[yellow]global[/yellow]"
+                if skill_name in global_untracked_skills.get(tool, [])
+                else ""
+                for tool in global_skill_tools
+            ]
+            table.add_row(skill_name, *cells)
+
+        console.print()
+        console.print(table)
+
     # Summary counts
     console.print("\n[bold]Summary:[/bold]")
     if summary.modified:
@@ -2450,6 +2555,11 @@ def _show_delta_summary(
         console.print(
             f"  [yellow]Project-scoped agent(s):[/yellow] {total} (not in global dirs)"
         )
+    if global_untracked_skills:
+        total = sum(len(v) for v in global_untracked_skills.values())
+        console.print(
+            f"  [yellow]Global skill(s):[/yellow] {total} (in global dir, not tracked)"
+        )
 
     # Tips
     if summary.missing:
@@ -2460,11 +2570,15 @@ def _show_delta_summary(
         console.print(
             "[dim]Tip: Run 'abc delta <file>' to see detailed diff for a modified file.[/dim]"
         )
-    if untracked:
+    if untracked and (added_agents or modified_agents):
+        console.print(
+            "[dim]Tip: Run 'abc contribute' to push untracked artifacts and agent changes to the warehouse.[/dim]"
+        )
+    elif untracked:
         console.print(
             "[dim]Tip: Run 'abc contribute' to push untracked local artifacts to the warehouse.[/dim]"
         )
-    if added_agents or modified_agents:
+    elif added_agents or modified_agents:
         console.print(
             "[dim]Tip: Run 'abc contribute' to push agent changes to the warehouse.[/dim]"
         )
@@ -2476,6 +2590,12 @@ def _show_delta_summary(
         console.print(
             "[dim]Tip: To promote a project-scoped agent, move it to the global agents dir "
             "and run 'abc contribute' — or ask your coding agent to do it for you.[/dim]"
+        )
+    if global_untracked_skills:
+        console.print(
+            "[dim]Tip: Global skills are not tracked in the warehouse. Move them to the "
+            "project skill dir (.claude/skills/ or .opencode/skills/) and run "
+            "'abc contribute' — or ask your coding agent to do it for you.[/dim]"
         )
 
 
@@ -2601,6 +2721,24 @@ def _collect_artifact_paths(
                     for match in comparator.artifacts_path.glob(pattern):
                         if match.is_file():
                             paths.add(str(match.relative_to(comparator.artifacts_path)))
+            elif artifact_type == "skills":
+                # Expand skill directory entry to individual file paths
+                skill_dir_entry = _normalize_skill_entry(pattern)
+                paths.update(sync_engine.expand_glob(f"{skill_dir_entry}/**/*"))
+                # Also scan live agent dirs to catch ADDED files
+                if comparator.skills_paths:
+                    skill_name = _skill_name_from_entry(pattern)
+                    for _agent, agent_root in comparator.skills_paths.items():
+                        agent_skill_dir = agent_root / skill_name
+                        if agent_skill_dir.exists():
+                            for f in agent_skill_dir.rglob("*"):
+                                if f.is_file():
+                                    rel = str(
+                                        Path("skills")
+                                        / skill_name
+                                        / f.relative_to(agent_skill_dir)
+                                    )
+                                    paths.add(rel)
             else:
                 paths.add(pattern)
     return paths
@@ -2640,12 +2778,15 @@ def _find_untracked_local_files(
     comparator: DeltaComparator,
     beacon_settings: BeaconSettings,
     artifacts_dir: Path,
+    ignore_patterns: list[str] | None = None,
 ) -> list[tuple[str, list[str]]]:
     """Return local artifact files that are not covered by any beacon.yaml pattern.
 
     Returns a list of (relative_path, agents) tuples. For skills found in live
     agent directories, agents lists which agents have the skill (e.g. ["opencode",
     "claudecode"]). For knowledge/context files from artifacts_dir, agents is [].
+
+    Skills whose names match any of ignore_patterns (fnmatch) are excluded.
 
     NOTE: .agentic-beacon/artifacts/skills/ is intentionally excluded from the
     artifacts_dir scan. That directory is a one-way intermediary used only during
@@ -2654,6 +2795,7 @@ def _find_untracked_local_files(
     skills are always compared against their live agent installation, not the snapshot.
     """
     tracked = _collect_artifact_paths(comparator, beacon_settings)
+    patterns = ignore_patterns or []
 
     # Scan artifacts_dir for untracked knowledge and context files.
     # Explicitly skip the skills/ subdirectory — it is a one-way sync staging area
@@ -2678,6 +2820,15 @@ def _find_untracked_local_files(
                 if file_path.is_file():
                     rel = str(Path("skills") / file_path.relative_to(skills_root))
                     if rel not in tracked:
+                        # Extract the skill directory name (parts[1]) for pattern matching.
+                        # e.g. "skills/openspec-apply-change/SKILL.md" → "openspec-apply-change"
+                        skill_name = (
+                            Path(rel).parts[1] if len(Path(rel).parts) > 1 else ""
+                        )
+                        if patterns and any(
+                            fnmatch.fnmatch(skill_name, p) for p in patterns
+                        ):
+                            continue
                         skill_agents.setdefault(rel, []).append(agent)
 
     result: list[tuple[str, list[str]]] = []
@@ -2801,6 +2952,7 @@ def contribute(
             skills_paths=_build_skills_paths(project_root),
             agents_paths=_build_agents_paths(),
         )
+        ignore_skill_patterns = beacon_settings.ignore.skills
 
         if dry_run:
             console.print("[dim]Dry run — no files will be copied.[/dim]\n")
@@ -2844,6 +2996,7 @@ def contribute(
                     dry_run=True,
                     project_root=project_root,
                     include_unregistered=not exclude_unregistered,
+                    ignore_skill_patterns=ignore_skill_patterns,
                 )
                 if preview and not click.confirm(
                     "\nProceed with contribute?", default=True
@@ -2858,6 +3011,7 @@ def contribute(
                 dry_run,
                 project_root=project_root,
                 include_unregistered=not exclude_unregistered,
+                ignore_skill_patterns=ignore_skill_patterns,
             )
 
         if not dry_run and contributed:
@@ -2975,32 +3129,33 @@ def _resolve_skill_contribute_source(
 def _propagate_skill_to_agents(
     project_root: Path, relative_path: str, source_path: Path
 ) -> None:
-    """After contributing a skill to the warehouse, propagate the contributed
-    content to all configured agents' live copies.
+    """After contributing a skill file to the warehouse, propagate all files in
+    that skill directory to every configured agent's live copy.
 
-    This prevents the infinite delta cycle where contributing one agent's
-    modified version leaves other agents' stale copies flagged as MODIFIED.
-    After this call all live copies converge to the contributed content.
+    This prevents the delta cycle where contributing one agent's modified version
+    leaves other agents' copies flagged as MODIFIED.
 
-    ``relative_path`` is the skill-relative warehouse path, e.g.
-    ``skills/foo/SKILL.md``.  ``source_path`` is the absolute path of the
-    file that was just written to the warehouse.
+    ``relative_path`` is the warehouse-relative path, e.g. ``skills/foo/SKILL.md``.
+    ``source_path`` is the absolute path of the file written to the warehouse.
     """
-    content = source_path.read_text(encoding="utf-8")
-    # Extract skill name from "skills/<name>/SKILL.md"
     parts = Path(relative_path).parts
     if len(parts) < 2:
         return
     skill_name = parts[1]
 
-    description = _extract_skill_description(content)
+    # Propagate the entire skill directory, not just the contributed file
+    warehouse_skill_dir = source_path.parent
+    # Walk up until we reach the skills/<name> level
+    while warehouse_skill_dir.name != skill_name:
+        parent = warehouse_skill_dir.parent
+        if parent == warehouse_skill_dir:
+            return  # Safety: avoid infinite loop
+        warehouse_skill_dir = parent
+
     agents = _detect_agents(project_root)
     for agent in agents:
         try:
-            if agent == "opencode":
-                _install_skill_opencode(project_root, skill_name, content, description)
-            else:
-                _install_skill_claudecode(project_root, skill_name, content)
+            _wire_single_skill(project_root, skill_name, warehouse_skill_dir, agent)
         except Exception as e:
             console.print(
                 f"  [yellow]Warning:[/yellow] could not propagate '{skill_name}' to {agent}: {e}"
@@ -3018,10 +3173,10 @@ def _resolve_agent_contribute_source(
     ~/.claude/agents/). The logic mirrors _resolve_skill_contribute_source:
 
     - No agents configured → return None (nothing to contribute).
-    - One tool has a modified copy → use it.
-    - Multiple tools modified with identical content → use any.
-    - Multiple tools modified with different content → prompt user to choose.
-    - No tool has a modified copy → return None (identical to warehouse).
+    - One tool has a modified or new copy → use it.
+    - Multiple tools modified/added with identical content → use any.
+    - Multiple tools modified/added with different content → prompt user to choose.
+    - No tool has a modified or new copy → return None (identical to warehouse).
 
     Returns the absolute Path of the file to copy, or None if nothing to contribute.
     """
@@ -3030,17 +3185,17 @@ def _resolve_agent_contribute_source(
 
     result = comparator._compare_agent_file(relative_path)
 
-    modified_tools = [
+    contributable_tools = [
         tool
         for tool, status in result.agent_statuses.items()
-        if status == DeltaStatus.MODIFIED
+        if status in (DeltaStatus.MODIFIED, DeltaStatus.ADDED)
     ]
 
-    if not modified_tools:
+    if not contributable_tools:
         return None
 
     candidates: dict[str, Path] = {}
-    for tool in modified_tools:
+    for tool in contributable_tools:
         live_path = comparator._agent_live_path(tool, relative_path)
         if live_path.exists():
             candidates[tool] = live_path
@@ -3167,6 +3322,7 @@ def _contribute_all(
     dry_run: bool,
     project_root: Path,
     include_unregistered: bool = False,
+    ignore_skill_patterns: list[str] | None = None,
 ) -> list[tuple[str, str]]:
     """Contribute all tracked modified/added artifacts and modified agents to the warehouse.
 
@@ -3192,7 +3348,7 @@ def _contribute_all(
         unregistered_paths = [
             p
             for p, _agents in _find_untracked_local_files(
-                comparator, beacon_settings, artifacts_dir
+                comparator, beacon_settings, artifacts_dir, ignore_skill_patterns
             )
         ]
 
@@ -3456,6 +3612,174 @@ def _auto_git_contribute(
 # ========== Skill Commands ==========
 
 
+def _detect_legacy_skill_entries(beacon_settings: BeaconSettings) -> list[str]:
+    """Return skill entries in beacon.yaml that use the old file-level format.
+
+    Legacy entries look like 'skills/my-skill/SKILL.md' (has a file extension).
+    New directory entries look like 'skills/my-skill' or 'skills/my-skill/'.
+    """
+    legacy = []
+    for entry in beacon_settings.artifacts.skills:
+        p = Path(entry.rstrip("/"))
+        if p.suffix:  # has a file extension → old-style
+            legacy.append(entry)
+    return legacy
+
+
+def _migrate_beacon_yaml_skill_entries(
+    beacon_yaml: Path, legacy_entries: list[str]
+) -> None:
+    """Rewrite beacon.yaml replacing legacy file-level skill entries with directory form."""
+    settings = BeaconSettings.from_yaml(beacon_yaml)
+    migrated = []
+    for entry in settings.artifacts.skills:
+        if entry in legacy_entries:
+            migrated.append(_normalize_skill_entry(entry))
+        else:
+            migrated.append(entry)
+    # Deduplicate while preserving order
+    seen: set[str] = set()
+    deduped = []
+    for e in migrated:
+        if e not in seen:
+            seen.add(e)
+            deduped.append(e)
+    settings.artifacts.skills = deduped
+    settings.to_yaml(beacon_yaml)
+
+
+def _check_and_migrate_legacy_skills(
+    beacon_settings: BeaconSettings,
+    beacon_yaml: Path,
+    skip_migration_check: bool = False,
+) -> BeaconSettings:
+    """Detect legacy skill entries and prompt for migration before sync.
+
+    Interactive: warns, offers to auto-migrate. If declined, blocks.
+    Non-interactive: warns and blocks (use --skip-migration-check to bypass).
+
+    Returns updated BeaconSettings (re-read after migration if migrated).
+    """
+    if skip_migration_check:
+        return beacon_settings
+
+    legacy = _detect_legacy_skill_entries(beacon_settings)
+    if not legacy:
+        return beacon_settings
+
+    entry_list = "\n".join(f"  • {e}" for e in legacy)
+    console.print(
+        f"\n[yellow]Warning:[/yellow] beacon.yaml has {len(legacy)} legacy skill "
+        f"entr{'y' if len(legacy) == 1 else 'ies'} using the old file-level format:\n"
+        f"{entry_list}\n\n"
+        "Skills are now tracked at the directory level so that companion files\n"
+        "(scripts, config, etc.) are included in sync and wiring.\n"
+    )
+
+    if not _is_interactive():
+        # Non-interactive (CI/scripts): warn but proceed — backward compat is guaranteed.
+        # Use --skip-migration-check to suppress this warning.
+        console.print(
+            "[dim]Non-interactive mode: proceeding with legacy entries (backward "
+            "compatible). Run 'abc sync' interactively to auto-migrate, or update "
+            "beacon.yaml manually.[/dim]"
+        )
+        return beacon_settings
+
+    if not click.confirm(
+        "Migrate beacon.yaml to directory-style entries now?", default=True
+    ):
+        console.print(
+            "[red]Aborted.[/red] Update beacon.yaml manually before running 'abc sync'.\n"
+            "Change each skill entry from 'skills/<name>/SKILL.md' to 'skills/<name>/'."
+        )
+        sys.exit(1)
+
+    _migrate_beacon_yaml_skill_entries(beacon_yaml, legacy)
+    console.print(
+        f"[green]✓[/green] Migrated {len(legacy)} skill "
+        f"entr{'y' if len(legacy) == 1 else 'ies'} in beacon.yaml.\n"
+    )
+    return BeaconSettings.from_yaml(beacon_yaml)
+
+
+def _normalize_skill_entry(entry: str) -> str:
+    """Normalize any skill beacon.yaml entry to canonical 'skills/<name>' form.
+
+    Accepts old file-level entries ('skills/my-skill/SKILL.md'),
+    new directory entries ('skills/my-skill/' or 'skills/my-skill'),
+    and bare names ('my-skill').  Always returns 'skills/<name>' with no
+    trailing slash.
+    """
+    p = Path(entry.rstrip("/"))
+    # Strip file extension — old-style file-level entries
+    if p.suffix:
+        p = p.parent
+    # Ensure the 'skills/' prefix is present
+    if not p.parts or p.parts[0] != "skills":
+        p = Path("skills") / p
+    return str(p)
+
+
+def _skill_name_from_entry(entry: str) -> str:
+    """Extract the skill directory name from any beacon.yaml skill entry."""
+    return Path(_normalize_skill_entry(entry)).name
+
+
+def _wire_single_skill(
+    project_root: Path,
+    skill_name: str,
+    skill_src_dir: Path,
+    agent: str,
+) -> bool:
+    """Copy all files from skill_src_dir into the agent's live skill directory.
+
+    Handles both Claude Code (.claude/skills/<name>/) and OpenCode
+    (.opencode/skills/<name>/), regenerating the OpenCode command stub from
+    SKILL.md frontmatter when present.
+
+    Returns True if any file was written or updated.
+    """
+    if agent == "opencode":
+        dest_root = project_root / ".opencode" / "skills" / skill_name
+    else:
+        dest_root = project_root / ".claude" / "skills" / skill_name
+
+    dest_root.mkdir(parents=True, exist_ok=True)
+
+    any_written = False
+    for src_file in sorted(skill_src_dir.rglob("*")):
+        if not src_file.is_file():
+            continue
+        rel = src_file.relative_to(skill_src_dir)
+        dest_file = dest_root / rel
+        dest_file.parent.mkdir(parents=True, exist_ok=True)
+        content = src_file.read_text(encoding="utf-8")
+        if not dest_file.exists() or dest_file.read_text(encoding="utf-8") != content:
+            dest_file.write_text(content, encoding="utf-8")
+            any_written = True
+
+    # OpenCode: regenerate command stub from SKILL.md frontmatter
+    if agent == "opencode":
+        skill_md = skill_src_dir / "SKILL.md"
+        if skill_md.exists():
+            description = _extract_skill_description(
+                skill_md.read_text(encoding="utf-8")
+            )
+            stub = (
+                f"---\ndescription: {description}\n---\n\n"
+                f"Use the **skill** tool to load and execute the `{skill_name}` skill "
+                f"with any provided arguments.\n"
+            )
+            command_dir = project_root / ".opencode" / "command"
+            command_dir.mkdir(parents=True, exist_ok=True)
+            stub_file = command_dir / f"{skill_name}.md"
+            if not stub_file.exists() or stub_file.read_text(encoding="utf-8") != stub:
+                stub_file.write_text(stub, encoding="utf-8")
+
+    return any_written
+
+
 def _update_beacon_yaml(beacon_dir: Path, files: list[str]) -> None:
     """Add installed file paths to beacon.yaml, creating it if absent."""
     beacon_yaml = beacon_dir / "beacon.yaml"
@@ -3472,8 +3796,14 @@ def _update_beacon_yaml(beacon_dir: Path, files: list[str]) -> None:
         parts = Path(path).parts
         artifact_type = parts[0] if parts else ""
         if artifact_type == "skills":
-            if path not in settings.artifacts.skills:
-                settings.artifacts.skills.append(path)
+            # Normalize to directory form and deduplicate across old/new formats
+            dir_entry = _normalize_skill_entry(path)
+            already_tracked = any(
+                _normalize_skill_entry(e) == dir_entry
+                for e in settings.artifacts.skills
+            )
+            if not already_tracked:
+                settings.artifacts.skills.append(dir_entry)
         elif artifact_type == "contexts":
             if path not in settings.artifacts.contexts:
                 settings.artifacts.contexts.append(path)
@@ -3795,21 +4125,24 @@ def _wire_skills_post_sync(
     if not skill_dirs:
         return [], []
 
-    # Compute wiring conflicts (live skill files that differ from what we'd write)
+    # Compute wiring conflicts: any live skill file that differs from what we'd write
     wiring_conflicts: list[tuple[str, str, str]] = []  # (agent, skill_name, dest_path)
     for skill_dir in skill_dirs:
-        skill_md = skill_dir / "SKILL.md"
-        if not skill_md.exists():
-            continue
-        content = skill_md.read_text(encoding="utf-8")
         name = skill_dir.name
-        for agent in agents:
-            if agent == "opencode":
-                dest = project_root / ".opencode" / "skills" / name / "SKILL.md"
-            else:
-                dest = project_root / ".claude" / "skills" / name / "SKILL.md"
-            if dest.exists() and dest.read_text(encoding="utf-8") != content:
-                wiring_conflicts.append((agent, name, str(dest)))
+        for src_file in sorted(skill_dir.rglob("*")):
+            if not src_file.is_file():
+                continue
+            rel_within_skill = src_file.relative_to(skill_dir)
+            content = src_file.read_text(encoding="utf-8")
+            for agent in agents:
+                if agent == "opencode":
+                    dest = (
+                        project_root / ".opencode" / "skills" / name / rel_within_skill
+                    )
+                else:
+                    dest = project_root / ".claude" / "skills" / name / rel_within_skill
+                if dest.exists() and dest.read_text(encoding="utf-8") != content:
+                    wiring_conflicts.append((agent, name, str(dest)))
 
     if wiring_conflicts:
         conflict_paths = [str(dest) for _, _, dest in wiring_conflicts]
@@ -3819,28 +4152,15 @@ def _wire_skills_post_sync(
 
     installed: list[str] = []
     errors: list[str] = []
+    conflicting_agents_skills = {(a, n) for a, n, _ in wiring_conflicts}
 
     for skill_dir in skill_dirs:
-        skill_md = skill_dir / "SKILL.md"
-        if not skill_md.exists():
-            continue
-        content = skill_md.read_text(encoding="utf-8")
-        description = _extract_skill_description(content)
         name = skill_dir.name
-
         for agent in agents:
-            # Check if this specific wiring target is a conflict we should skip
-            conflicting_agents_skills = {(a, n) for a, n, _ in wiring_conflicts}
             if preserve and (agent, name) in conflicting_agents_skills:
                 continue  # Skip this wiring target
-
             try:
-                if agent == "opencode":
-                    changed = _install_skill_opencode(
-                        project_root, name, content, description
-                    )
-                else:
-                    changed = _install_skill_claudecode(project_root, name, content)
+                changed = _wire_single_skill(project_root, name, skill_dir, agent)
                 if changed:
                     installed.append(f"{name} ({agent})")
             except Exception as e:
@@ -3952,24 +4272,6 @@ def _print_skill_next_steps(agents: list[str]) -> None:
         )
 
 
-# ========== Legacy Commands ==========
-
-
-@main.command(name="init", hidden=True)
-@click.argument("name", required=False)
-def deprecated_init(name: str | None = None) -> None:
-    """Deprecated: Use 'abc warehouse init' instead."""
-    console.print(
-        "[red]Error:[/red] 'abc init' has been moved to 'abc warehouse init'."
-    )
-    console.print("\n[bold]New command:[/bold]")
-    if name:
-        console.print(f"  abc warehouse init {name}")
-    else:
-        console.print("  abc warehouse init <name>")
-    sys.exit(1)
-
-
 def _do_reset(project_root: Path) -> None:
     """Force-overwrite all synced artifacts from warehouse. Used by both reset and update."""
     beacon_dir = project_root / ".agentic-beacon"
@@ -4011,14 +4313,13 @@ def _do_reset(project_root: Path) -> None:
             else:
                 artifact_paths.append(pattern)
 
-        for skill_name in beacon_settings.artifacts.skills:
-            skill_dir = warehouse_path / "skills" / skill_name
+        for skill_entry in beacon_settings.artifacts.skills:
+            normalized = _normalize_skill_entry(skill_entry)
+            skill_dir = warehouse_path / normalized
             if skill_dir.exists() and skill_dir.is_dir():
-                artifact_paths.extend(
-                    sync_engine.expand_glob(f"skills/{skill_name}/**/*")
-                )
+                artifact_paths.extend(sync_engine.expand_glob(f"{normalized}/**/*"))
             else:
-                artifact_paths.append(f"skills/{skill_name}")
+                artifact_paths.append(normalized)
 
         copied_count = 0
         overwritten_count = 0

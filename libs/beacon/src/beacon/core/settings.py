@@ -36,6 +36,15 @@ class ArtifactsConfig(BaseModel):
     contexts: list[str] = Field(default_factory=list)
 
 
+class IgnoreConfig(BaseModel):
+    """Patterns to ignore in contribute and delta commands.
+
+    Supports fnmatch glob patterns, e.g. ``openspec-*``.
+    """
+
+    skills: list[str] = Field(default_factory=list)
+
+
 class BeaconSettings(BaseModel):
     """Beacon.yaml settings structure.
 
@@ -44,6 +53,7 @@ class BeaconSettings(BaseModel):
     """
 
     artifacts: ArtifactsConfig = Field(default_factory=ArtifactsConfig)
+    ignore: IgnoreConfig = Field(default_factory=IgnoreConfig)
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> "BeaconSettings":
@@ -136,7 +146,9 @@ class BeaconSettings(BaseModel):
         path.parent.mkdir(parents=True, exist_ok=True)
 
         # Create beacon config structure
-        config_dict = {"artifacts": self.artifacts.model_dump()}
+        config_dict: dict = {"artifacts": self.artifacts.model_dump()}
+        if self.ignore.skills:
+            config_dict["ignore"] = self.ignore.model_dump()
 
         try:
             with open(path, "w", encoding="utf-8") as f:
