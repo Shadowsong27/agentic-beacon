@@ -66,7 +66,7 @@ def synced_project(connected_project):
         "  knowledge:\n"
         "    - knowledge/python/standards.md\n"
         "  skills:\n"
-        "    - skills/code-review/SKILL.md\n"
+        "    - skills/code-review/\n"
         "  contexts:\n"
         "    - contexts/AGENTS.md\n"
     )

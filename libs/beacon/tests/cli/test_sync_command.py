@@ -10,12 +10,7 @@ Following TDD workflow for tasks 7.1-7.7:
 - Task 7.7: Invalid glob pattern handling
 """
 
-import yaml
-from beacon.cli import (
-    _detect_legacy_skill_entries,
-    _migrate_beacon_yaml_skill_entries,
-    main,
-)
+from beacon.cli import main
 from beacon.core.settings import ArtifactsConfig, BeaconSettings
 from click.testing import CliRunner
 
@@ -300,73 +295,11 @@ def _make_beacon_settings(skills: list[str]) -> BeaconSettings:
     )
 
 
-class TestDetectLegacySkillEntries:
-    def test_detects_skill_md_entry(self):
-        s = _make_beacon_settings(["skills/my-skill/SKILL.md"])
-        assert _detect_legacy_skill_entries(s) == ["skills/my-skill/SKILL.md"]
-
-    def test_detects_multiple_legacy_entries(self):
-        s = _make_beacon_settings(
-            ["skills/a/SKILL.md", "skills/b/SKILL.md", "skills/c/"]
-        )
-        legacy = _detect_legacy_skill_entries(s)
-        assert legacy == ["skills/a/SKILL.md", "skills/b/SKILL.md"]
-
-    def test_no_legacy_when_directory_entries(self):
-        s = _make_beacon_settings(["skills/my-skill/", "skills/other"])
-        assert _detect_legacy_skill_entries(s) == []
-
-    def test_empty_skills_list(self):
-        s = _make_beacon_settings([])
-        assert _detect_legacy_skill_entries(s) == []
-
-
-class TestMigrateBeaconYamlSkillEntries:
-    def test_rewrites_file_entry_to_directory(self, tmp_path):
-        beacon_yaml = tmp_path / "beacon.yaml"
-        beacon_yaml.write_text(
-            "artifacts:\n  knowledge: []\n"
-            "  skills:\n    - skills/my-skill/SKILL.md\n  contexts: []\n"
-        )
-        _migrate_beacon_yaml_skill_entries(beacon_yaml, ["skills/my-skill/SKILL.md"])
-
-        data = yaml.safe_load(beacon_yaml.read_text())
-        assert data["artifacts"]["skills"] == ["skills/my-skill"]
-
-    def test_rewrites_only_legacy_entries(self, tmp_path):
-        beacon_yaml = tmp_path / "beacon.yaml"
-        beacon_yaml.write_text(
-            "artifacts:\n  knowledge: []\n"
-            "  skills:\n    - skills/old/SKILL.md\n    - skills/new/\n  contexts: []\n"
-        )
-        _migrate_beacon_yaml_skill_entries(beacon_yaml, ["skills/old/SKILL.md"])
-
-        data = yaml.safe_load(beacon_yaml.read_text())
-        skills = data["artifacts"]["skills"]
-        assert any(
-            s.startswith("skills/old") and not s.endswith("SKILL.md") for s in skills
-        )
-        assert any(s.startswith("skills/new") for s in skills)
-        assert "skills/old/SKILL.md" not in skills
-
-    def test_deduplicates_after_migration(self, tmp_path):
-        """If the directory entry already exists, don't add a duplicate."""
-        beacon_yaml = tmp_path / "beacon.yaml"
-        beacon_yaml.write_text(
-            "artifacts:\n  knowledge: []\n"
-            "  skills:\n    - skills/my-skill/SKILL.md\n    - skills/my-skill/\n  contexts: []\n"
-        )
-        _migrate_beacon_yaml_skill_entries(beacon_yaml, ["skills/my-skill/SKILL.md"])
-
-        data = yaml.safe_load(beacon_yaml.read_text())
-        assert data["artifacts"]["skills"].count("skills/my-skill") == 1
-
-
-class TestSyncLegacyMigrationCheck:
-    """Integration: abc sync migration check via CLI."""
+class TestSyncSkillEntryValidation:
+    """abc sync rejects file-level skill entries as a hard boundary."""
 
     @staticmethod
-    def _project_with_legacy_skill(tmp_path, monkeypatch):
+    def _make_project(tmp_path, monkeypatch, skill_entry: str):
         wh = tmp_path / "warehouse"
         for d in ("agents", "knowledge", "skills", "contexts", "docs"):
             (wh / d).mkdir(parents=True)
@@ -380,81 +313,33 @@ class TestSyncLegacyMigrationCheck:
         beacon_dir.mkdir()
         (beacon_dir / "config.toml").write_text(f'[warehouse]\nlocal_path = "{wh}"\n')
         (beacon_dir / "beacon.yaml").write_text(
-            "artifacts:\n  knowledge: []\n"
-            "  skills:\n    - skills/my-skill/SKILL.md\n  contexts: []\n"
+            f"artifacts:\n  knowledge: []\n  skills:\n    - {skill_entry}\n  contexts: []\n"
         )
         monkeypatch.chdir(project)
         return project
 
-    def test_warning_shown_for_legacy_entry(self, tmp_path, monkeypatch):
-        """Legacy entries produce a warning in sync output."""
-        self._project_with_legacy_skill(tmp_path, monkeypatch)
+    def test_file_entry_is_hard_error(self, tmp_path, monkeypatch):
+        """File-level skill entries always cause a non-zero exit."""
+        self._make_project(tmp_path, monkeypatch, "skills/my-skill/SKILL.md")
         runner = CliRunner()
         result = runner.invoke(main, ["sync", "--skip-git-check"])
-
-        assert result.exit_code == 0
-        assert "legacy" in result.output.lower() or "SKILL.md" in result.output
-
-    def test_skip_migration_check_suppresses_warning(self, tmp_path, monkeypatch):
-        """--skip-migration-check suppresses the migration warning entirely."""
-        self._project_with_legacy_skill(tmp_path, monkeypatch)
-        runner = CliRunner()
-        result = runner.invoke(
-            main, ["sync", "--skip-git-check", "--skip-migration-check"]
-        )
-
-        assert result.exit_code == 0
-        assert "legacy" not in result.output.lower()
-        assert "migrate" not in result.output.lower()
-
-    def test_interactive_yes_migrates_beacon_yaml(self, tmp_path, monkeypatch):
-        """Answering 'y' to the migration prompt rewrites beacon.yaml."""
-        project = self._project_with_legacy_skill(tmp_path, monkeypatch)
-        monkeypatch.setattr("beacon.cli._is_interactive", lambda: True)
-        runner = CliRunner()
-        result = runner.invoke(
-            main, ["sync", "--skip-git-check"], input="y\n", catch_exceptions=False
-        )
-
-        assert result.exit_code == 0
-        beacon_yaml = project / ".agentic-beacon" / "beacon.yaml"
-        data = yaml.safe_load(beacon_yaml.read_text())
-        assert "skills/my-skill" in data["artifacts"]["skills"]
-        assert "skills/my-skill/SKILL.md" not in data["artifacts"]["skills"]
-
-    def test_interactive_no_blocks_sync(self, tmp_path, monkeypatch):
-        """Answering 'n' to the migration prompt exits with an error."""
-        self._project_with_legacy_skill(tmp_path, monkeypatch)
-        monkeypatch.setattr("beacon.cli._is_interactive", lambda: True)
-        runner = CliRunner()
-        result = runner.invoke(main, ["sync", "--skip-git-check"], input="n\n")
 
         assert result.exit_code != 0
-        assert "Aborted" in result.output or "manually" in result.output
+        assert "skills/my-skill/SKILL.md" in result.output
 
-    def test_no_warning_when_no_legacy_entries(self, tmp_path, monkeypatch):
-        """No migration warning when beacon.yaml uses directory-style entries."""
-        wh = tmp_path / "warehouse"
-        for d in ("agents", "knowledge", "skills", "contexts", "docs"):
-            (wh / d).mkdir(parents=True)
-        (wh / "README.md").write_text("# WH")
-        (wh / "skills" / "my-skill").mkdir()
-        (wh / "skills" / "my-skill" / "SKILL.md").write_text("# Skill\n")
+    def test_any_file_extension_is_rejected(self, tmp_path, monkeypatch):
+        """Any file-level entry (not just SKILL.md) is rejected."""
+        self._make_project(tmp_path, monkeypatch, "skills/my-skill/config.yaml")
+        runner = CliRunner()
+        result = runner.invoke(main, ["sync", "--skip-git-check"])
 
-        project = tmp_path / "project2"
-        project.mkdir()
-        beacon_dir = project / ".agentic-beacon"
-        beacon_dir.mkdir()
-        (beacon_dir / "config.toml").write_text(f'[warehouse]\nlocal_path = "{wh}"\n')
-        (beacon_dir / "beacon.yaml").write_text(
-            "artifacts:\n  knowledge: []\n"
-            "  skills:\n    - skills/my-skill/\n  contexts: []\n"
-        )
-        monkeypatch.chdir(project)
+        assert result.exit_code != 0
 
+    def test_directory_entry_passes(self, tmp_path, monkeypatch):
+        """Directory-style entries do not trigger the validation error."""
+        self._make_project(tmp_path, monkeypatch, "skills/my-skill/")
         runner = CliRunner()
         result = runner.invoke(main, ["sync", "--skip-git-check"])
 
         assert result.exit_code == 0
-        assert "legacy" not in result.output.lower()
-        assert "migrate" not in result.output.lower()
+        assert "Error" not in result.output or "skill" not in result.output.lower()

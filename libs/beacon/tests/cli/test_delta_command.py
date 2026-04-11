@@ -218,7 +218,7 @@ def project_with_skill(temp_dir, valid_warehouse):
         "artifacts:\n"
         "  knowledge: []\n"
         "  skills:\n"
-        "    - skills/my-skill/SKILL.md\n"
+        "    - skills/my-skill/\n"
         "  contexts: []\n"
     )
 
@@ -320,7 +320,7 @@ def test_delta_skill_shows_per_agent_breakdown_in_output(
         "artifacts:\n"
         "  knowledge: []\n"
         "  skills:\n"
-        "    - skills/my-skill/SKILL.md\n"
+        "    - skills/my-skill/\n"
         "  contexts: []\n"
     )
 
@@ -418,7 +418,7 @@ def test_delta_summary_shows_per_agent_breakdown_for_missing_skill(
         "artifacts:\n"
         "  knowledge: []\n"
         "  skills:\n"
-        "    - skills/my-skill/SKILL.md\n"
+        "    - skills/my-skill/\n"
         "  contexts: []\n"
     )
 
@@ -461,7 +461,7 @@ def test_delta_summary_shows_per_agent_breakdown_for_added_skill(
         "artifacts:\n"
         "  knowledge: []\n"
         "  skills:\n"
-        "    - skills/my-skill/SKILL.md\n"
+        "    - skills/my-skill/\n"
         "  contexts: []\n"
     )
 
@@ -502,7 +502,7 @@ def test_delta_detailed_diff_multi_agent_shows_both_sections(
         "artifacts:\n"
         "  knowledge: []\n"
         "  skills:\n"
-        "    - skills/my-skill/SKILL.md\n"
+        "    - skills/my-skill/\n"
         "  contexts: []\n"
     )
 

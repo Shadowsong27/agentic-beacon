@@ -1277,8 +1277,8 @@ class TestSyncMultiFileSkillIntegration:
         assert (live / "runner.py").read_text() == "def main(): pass\n"
         assert (live / "config.yaml").read_text() == "timeout: 30\n"
 
-    def test_backward_compat_old_skill_md_entry(self, tmp_path, monkeypatch):
-        """Old 'skills/foo/SKILL.md' entry in beacon.yaml still syncs all files."""
+    def test_file_level_skill_entry_is_rejected(self, tmp_path, monkeypatch):
+        """File-level skill entries (e.g. 'skills/foo/SKILL.md') are a hard error."""
         wh = tmp_path / "warehouse"
         for d in ("agents", "knowledge", "skills", "contexts", "docs"):
             (wh / d).mkdir(parents=True)
@@ -1286,28 +1286,20 @@ class TestSyncMultiFileSkillIntegration:
         skill_dir = wh / "skills" / "old-style"
         skill_dir.mkdir()
         (skill_dir / "SKILL.md").write_text("# Old\n")
-        (skill_dir / "extra.py").write_text("# extra\n")
 
         project = tmp_path / "project"
         project.mkdir()
         beacon_dir = project / ".agentic-beacon"
         beacon_dir.mkdir()
         (beacon_dir / "config.toml").write_text(f'[warehouse]\nlocal_path = "{wh}"\n')
-        # Old-style file-level entry
         (beacon_dir / "beacon.yaml").write_text(
             "artifacts:\n  knowledge: []\n"
             "  skills:\n    - skills/old-style/SKILL.md\n  contexts: []\n"
         )
-        (project / ".claude").mkdir()
         monkeypatch.chdir(project)
 
         runner = CliRunner()
         result = runner.invoke(main, ["sync", "--skip-git-check"])
 
-        assert result.exit_code == 0
-        artifacts = project / ".agentic-beacon" / "artifacts" / "skills" / "old-style"
-        assert (artifacts / "SKILL.md").exists()
-        assert (artifacts / "extra.py").exists()
-        live = project / ".claude" / "skills" / "old-style"
-        assert (live / "SKILL.md").exists()
-        assert (live / "extra.py").exists()
+        assert result.exit_code != 0
+        assert "skills/old-style/SKILL.md" in result.output

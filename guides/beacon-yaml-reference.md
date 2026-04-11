@@ -77,7 +77,7 @@ artifacts:
     - skills/api-design/
 ```
 
-**Note:** Use the directory path (e.g. `skills/code-review/`), not a file glob. The old `/**/*` file-glob form is still accepted for backwards compatibility, but `abc sync` will prompt you to migrate to the directory form.
+**Note:** Skills must be declared as directories. File-level entries (e.g. `skills/code-review/SKILL.md`) are rejected by `abc sync` with an error.
 
 ---
 
