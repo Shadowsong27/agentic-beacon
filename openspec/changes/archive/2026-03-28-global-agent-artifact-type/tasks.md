@@ -4,7 +4,7 @@
 
 | Repo | Path | Branch | Role |
 |------|------|--------|------|
-| `agentic-beacon` | `~/Code/agentic-beacon` | `global-agent-artifact-type` | Code changes — all implementation, tests, and templates |
+| `agentic-beacon` | `~/Code/oss/agentic-beacon` | `global-agent-artifact-type` | Code changes — all implementation, tests, and templates |
 
 ---
 

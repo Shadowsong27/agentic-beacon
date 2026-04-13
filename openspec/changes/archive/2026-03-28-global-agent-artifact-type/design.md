@@ -204,7 +204,7 @@ If the user confirms, rename the key in `sync-state.json` from the old path to t
 - Template parity test (`agents/README.md` in sample warehouse matches template)
 
 **Repository Branch Strategy:**
-- Repository: `agentic-beacon` at `~/Code/agentic-beacon`
+- Repository: `agentic-beacon` at `~/Code/oss/agentic-beacon`
 - Feature branch: `global-agent-artifact-type`
 - Base branch: `main`
 

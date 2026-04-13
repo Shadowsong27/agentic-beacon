@@ -4,7 +4,7 @@
 
 | Repo | Path | Branch | Role |
 |------|------|--------|------|
-| `agentic-beacon` | `~/Code/agentic-beacon` | `feat/warehouse-template-upgrade` | Code changes — all implementation |
+| `agentic-beacon` | `~/Code/oss/agentic-beacon` | `feat/warehouse-template-upgrade` | Code changes — all implementation |
 
 ---
 

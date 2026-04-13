@@ -13,7 +13,7 @@ The user-level AGENTS.md at `~/.config/opencode/AGENTS.md` is loaded by OpenCode
 Its purpose is narrow: **personal behavioral preferences that apply to how agents interact with you**, regardless of which project you're in.
 
 This is NOT the place for:
-- Technical standards → those live in the warehouse (`~/Code/hl-knowledge-market/contexts/`)
+- Technical standards → those live in the warehouse (`~/Code/knowledge/hl-knowledge-market/contexts/`)
 - Project architecture → that lives in the project's own `AGENTS.md`
 - Domain knowledge → that lives in the warehouse knowledge files
 
