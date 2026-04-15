@@ -10,6 +10,9 @@ Following TDD workflow for tasks 3.1-3.7:
 - Task 3.7: Progress indicators
 """
 
+import json
+from pathlib import Path
+
 import pytest
 from beacon.cli import main
 from click.testing import CliRunner
@@ -428,3 +431,67 @@ def test_connect_progress_indicators_appear_in_order(
     connected_pos = output.find("✓ Connected to warehouse")
 
     assert validating_pos < validated_pos < saved_pos < connected_pos
+
+
+def test_connect_relinks_agent_sync_state_on_warehouse_move(
+    valid_warehouse, temp_dir, monkeypatch
+):
+    """TC: connect relinks agent sync-state when warehouse path changes.
+
+    When a warehouse is moved to a new path and the user re-runs
+    'abc warehouse connect --path /new/path', the global sync-state
+    (keyed by warehouse path) should be migrated from the old key to the
+    new one so that 'abc delta' no longer reports agents as stale.
+    """
+    fake_home = temp_dir / "home"
+    fake_home.mkdir()
+    monkeypatch.setattr(Path, "home", staticmethod(lambda: fake_home))
+
+    # Pre-populate sync-state with entries under the old warehouse path.
+    # The new warehouse has the same directory name ("valid_warehouse" here
+    # won't match by name, so we rename to match the relink heuristic).
+    new_name = valid_warehouse.name  # use whatever name valid_warehouse has
+    old_path_key = str(temp_dir / "old_location" / new_name)
+
+    state_file = fake_home / ".config" / "agentic-beacon" / "sync-state.json"
+    state_file.parent.mkdir(parents=True, exist_ok=True)
+    state_file.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "warehouses": {
+                    old_path_key: {
+                        "agents/code-reviewer.md": {
+                            "content_hash": "abc123",
+                            "warehouse_head": "deadbeef",
+                            "installed_at": "2026-01-01T00:00:00+00:00",
+                        }
+                    }
+                },
+            }
+        )
+    )
+
+    project_dir = temp_dir / "project"
+    project_dir.mkdir()
+    monkeypatch.chdir(project_dir)
+
+    runner = CliRunner()
+    # Simulate reconnecting after a warehouse move — user says "y" to relink prompt
+    result = runner.invoke(
+        main,
+        ["warehouse", "connect", "--path", str(valid_warehouse)],
+        input="y\n",
+    )
+
+    assert result.exit_code == 0
+
+    updated_state = json.loads(state_file.read_text())
+    # Resolve both to handle macOS /var → /private/var symlinks
+    new_key = str(valid_warehouse.resolve())
+    assert new_key in updated_state["warehouses"], (
+        "sync-state should be relinked to the new warehouse path after connect"
+    )
+    assert old_path_key not in updated_state["warehouses"], (
+        "old warehouse path key should be removed after relink"
+    )

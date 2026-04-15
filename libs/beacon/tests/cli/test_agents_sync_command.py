@@ -15,7 +15,11 @@ Test Cases:
 - TC8: Non-interactive mode with conflict → skipped automatically
 - TC9: No .agentic-beacon → error
 - TC10: --force and --preserve are mutually exclusive
+- TC11: Sync updates sync-state HEAD even when agent content is already identical
 """
+
+import json
+import subprocess
 
 import pytest
 from beacon.cli import main
@@ -239,6 +243,87 @@ def test_agents_sync_no_beacon_dir_errors(tmp_path, monkeypatch, isolated_home):
 
     assert result.exit_code != 0
     assert "No .agentic-beacon directory found" in result.output
+
+
+# ---------------------------------------------------------------------------
+# TC11: Sync updates sync-state HEAD even when agent content is already identical
+# ---------------------------------------------------------------------------
+
+
+def test_agents_sync_updates_sync_state_when_content_unchanged(
+    connected_project, isolated_home
+):
+    """TC11: sync updates sync-state HEAD even when agent file is already up-to-date.
+
+    Regression test for: warehouse advances (e.g. a commit that doesn't touch agents),
+    content stays identical, but 'abc delta' keeps reporting agents as stale because
+    agents sync skipped writing the file and never bumped the recorded HEAD.
+    """
+
+    project, wh = connected_project
+
+    # Make wh a real git repo so we can get a HEAD SHA
+    subprocess.run(["git", "init", str(wh)], check=True, capture_output=True)
+    subprocess.run(
+        ["git", "-C", str(wh), "config", "user.email", "test@test.com"],
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(wh), "config", "user.name", "Test"],
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(["git", "-C", str(wh), "add", "."], check=True, capture_output=True)
+    subprocess.run(
+        ["git", "-C", str(wh), "commit", "-m", "init"],
+        check=True,
+        capture_output=True,
+    )
+    current_head = subprocess.run(
+        ["git", "-C", str(wh), "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+
+    # Pre-install the agent with the correct content (no write needed on sync)
+    opencode_agents = isolated_home / ".config" / "opencode" / "agents"
+    opencode_agents.mkdir(parents=True)
+    (opencode_agents / "code-reviewer.md").write_text(SAMPLE_AGENT_MD)
+
+    # Pre-populate sync-state with a stale (old) warehouse HEAD
+    state_file = isolated_home / ".config" / "agentic-beacon" / "sync-state.json"
+    state_file.parent.mkdir(parents=True, exist_ok=True)
+    state_file.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "warehouses": {
+                    str(wh): {
+                        "agents/code-reviewer.md": {
+                            "content_hash": "oldhash",
+                            "warehouse_head": "old_sha_before_advance",
+                            "installed_at": "2026-01-01T00:00:00+00:00",
+                        }
+                    }
+                },
+            }
+        )
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["agents", "sync", "--skip-git-check"])
+    assert result.exit_code == 0, result.output
+
+    # Sync-state HEAD must be updated to the current warehouse HEAD
+    updated_state = json.loads(state_file.read_text())
+    entry = updated_state["warehouses"][str(wh)]["agents/code-reviewer.md"]
+    assert entry["warehouse_head"] == current_head, (
+        f"Expected sync-state HEAD to be updated to {current_head!r}, "
+        f"got {entry['warehouse_head']!r}. "
+        "'abc delta' would still report this agent as stale."
+    )
 
 
 # ---------------------------------------------------------------------------
