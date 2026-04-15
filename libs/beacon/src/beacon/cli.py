@@ -655,6 +655,11 @@ def connect(*, path: Path | None) -> None:
             console.print("[green]✓[/green] Updated .gitignore")
         _update_agent_gitignores(Path.cwd())
 
+        # Relink agent sync-state if the warehouse was moved/renamed.
+        # This migrates tracking entries from the old path key to the new one
+        # so that 'abc delta' does not report agents as stale after a move.
+        _relink_global_sync_state(warehouse_path)
+
         # Success message
         console.print("\n[bold green]✓ Connected to warehouse[/bold green]")
         console.print(f"  [blue]Location:[/blue] {warehouse_path}")
@@ -1736,9 +1741,12 @@ def _sync_agents_from_warehouse(
                 continue
 
             written = _install_agent_global(tool, agent_name, content)
+            # Always update sync-state HEAD, even when content is unchanged.
+            # Without this, 'abc delta' keeps reporting agents as stale after a
+            # sync that found nothing to write (warehouse advanced, content same).
+            _write_agent_sync_state(warehouse_path, rel, _hash_content(content))
             if written:
                 installed.append(agent_name)
-                _write_agent_sync_state(warehouse_path, rel, _hash_content(content))
 
     if installed:
         unique = sorted(set(installed))
@@ -1819,9 +1827,12 @@ def _handle_install_agent(
             continue
 
         written = _install_agent_global(tool, agent_name, content)
+        # Always update sync-state HEAD, even when content is unchanged.
+        # Without this, 'abc delta' keeps reporting the agent as stale after
+        # install finds nothing to write (warehouse advanced, content same).
+        _write_agent_sync_state(warehouse_path, artifact, _hash_content(content))
         if written:
             console.print(f"[green]Installed[/green] {artifact} → {dest}")
-            _write_agent_sync_state(warehouse_path, artifact, _hash_content(content))
             written_any = True
         else:
             console.print(f"[dim]Up to date[/dim] {dest}")

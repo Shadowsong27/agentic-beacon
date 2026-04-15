@@ -142,8 +142,13 @@ def test_tc3_beacon_yaml_unchanged(connected_project):
         assert not beacon_yaml.exists() or "agents" not in beacon_yaml.read_text()
 
 
-def test_tc4_identical_content_noop(connected_project):
-    """TC4: Content identical → no-op, sync-state NOT updated, exit 0."""
+def test_tc4_identical_content_updates_sync_state_head(connected_project):
+    """TC4: Content identical → no file write, but sync-state HEAD is still updated.
+
+    Even when the agent file content hasn't changed, install must bump the recorded
+    warehouse_head so that 'abc delta' does not keep reporting the agent as stale
+    after the warehouse advances past commits that don't touch agent files.
+    """
     project, warehouse, runner, fake_home = connected_project
     opencode_dir, claude_dir = _make_tool_dirs(fake_home)
 
@@ -157,17 +162,19 @@ def test_tc4_identical_content_noop(connected_project):
 
     assert result.exit_code == 0
 
-    # Sync-state should NOT be updated (no-op)
+    # Sync-state SHOULD be updated even though no file write happened
     state_file = _global_sync_state_file()
-    if state_file.exists():
-        state = json.loads(state_file.read_text())
-        warehouse_key = str(warehouse)
-        warehouses = state.get("warehouses", {})
-        # Either no state for this warehouse, or no entry for this file
-        agent_state = warehouses.get(warehouse_key, {}).get(
-            "agents/code-reviewer.md", {}
-        )
-        assert agent_state == {}
+    assert state_file.exists(), "sync-state file should exist after install"
+    state = json.loads(state_file.read_text())
+    agent_state = (
+        state.get("warehouses", {})
+        .get(str(warehouse), {})
+        .get("agents/code-reviewer.md", {})
+    )
+    assert agent_state != {}, (
+        "sync-state entry should be written even for identical content"
+    )
+    assert "warehouse_head" in agent_state
 
 
 def test_tc6_force_overwrites_without_prompt(connected_project):
