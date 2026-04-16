@@ -1523,6 +1523,9 @@ def sync(
                 else:
                     artifact_paths.append(pattern)
 
+        # Capture old sync SHA before overwriting — needed for post-sync notification.
+        old_sync_sha = _read_sync_sha(artifacts_dir)
+
         # Record sync state now — before the conflict check which may sys.exit(1).
         # Semantics: "I've verified the warehouse at this HEAD."  Even when sync exits
         # early (non-interactive conflict), the stale-snapshot warning in `abc contribute`
@@ -1688,6 +1691,22 @@ def sync(
 
         # Sync global agents from warehouse
         _sync_agents_from_warehouse(warehouse_path, force=force, preserve=preserve)
+
+        # Post-sync adoption notification: inform user if new unadopted artifacts exist
+        if old_sync_sha is not None:
+            try:
+                from .adopt import _count_unadopted_since
+
+                unadopted_count = _count_unadopted_since(
+                    warehouse_path, beacon_settings, old_sync_sha
+                )
+                if unadopted_count > 0:
+                    console.print(
+                        f"\n[cyan]{unadopted_count} new artifact(s) available "
+                        f"-- run [bold]abc adopt[/bold] to review[/cyan]"
+                    )
+            except Exception:
+                pass  # Notification is best-effort; never break sync
 
     except Exception as e:
         console.print(f"\n[red]Error:[/red] Sync failed: {e}")
@@ -4839,6 +4858,213 @@ def _interactive_select(
     except (ValueError, IndexError):
         console.print("[red]Invalid selection. Using none.[/red]")
         return []
+
+
+@main.command()
+@click.option(
+    "--all",
+    "show_all",
+    is_flag=True,
+    help="Show all unadopted warehouse artifacts, not just new since last sync.",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Preview adoptable artifacts without modifying beacon.yaml.",
+)
+def adopt(*, show_all: bool, dry_run: bool) -> None:
+    """Discover and adopt new warehouse artifacts into beacon.yaml."""
+    from rich.table import Table
+
+    from .adopt import (
+        AdoptApp,
+        AdoptCandidate,
+        apply_adoption,
+        discover_adoptable,
+    )
+
+    project_root = find_project_root()
+    beacon_dir = project_root / ".agentic-beacon"
+    artifacts_dir = beacon_dir / "artifacts"
+    beacon_yaml = beacon_dir / "beacon.yaml"
+
+    # Prerequisite: warehouse connected
+    if not beacon_dir.exists():
+        console.print(f"[red]Error:[/red] No warehouse connected at {project_root}")
+        console.print("Run 'abc warehouse connect' first.")
+        sys.exit(1)
+
+    if not beacon_yaml.exists():
+        console.print("[red]Error:[/red] No beacon.yaml found.")
+        console.print("Run 'abc setup' to create artifact configuration.")
+        sys.exit(1)
+
+    # Load warehouse settings
+    try:
+        warehouse_settings = WarehouseSettings()
+        warehouse_path = Path(warehouse_settings.warehouse.local_path)
+    except Exception:
+        console.print("[red]Error:[/red] Could not read warehouse connection settings.")
+        console.print("Run 'abc warehouse connect' to connect to a warehouse.")
+        sys.exit(1)
+
+    # Prerequisite: sync-state must exist (unless --all mode)
+    sync_sha: str | None = None
+    if not show_all:
+        sync_sha = _read_sync_sha(artifacts_dir)
+        if sync_sha is None:
+            console.print(
+                "[red]Error:[/red] No sync baseline found. "
+                "Run [bold]abc sync[/bold] first to establish a warehouse cursor, "
+                "then re-run [bold]abc adopt[/bold]."
+            )
+            sys.exit(1)
+
+    # Load beacon.yaml
+    beacon_settings = BeaconSettings.from_yaml(beacon_yaml)
+
+    # Discover adoptable artifacts
+    try:
+        candidates, updated_adopted = discover_adoptable(
+            warehouse_path, beacon_settings, sync_sha, show_all=show_all
+        )
+    except ValueError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
+
+    # Handle "all already adopted" case
+    if not candidates:
+        console.print("[green]✓[/green] All warehouse artifacts are already adopted.")
+        if updated_adopted:
+            console.print(
+                f"\n[dim]{len(updated_adopted)} adopted artifact(s) have been updated "
+                f"in the warehouse. Run [bold]abc sync[/bold] to refresh.[/dim]"
+            )
+        return
+
+    # Dry-run: print table and exit
+    if dry_run:
+        table = Table(title="Adoptable Artifacts")
+        table.add_column("Type", style="cyan")
+        table.add_column("Path", style="white")
+        table.add_column("Description", style="dim")
+        table.add_column("Status", style="yellow")
+
+        for c in candidates:
+            status = "new" if c.is_new else "existing"
+            table.add_row(c.artifact_type, c.path, c.description, status)
+
+        console.print(table)
+        if updated_adopted:
+            console.print(
+                f"\n[dim]Already adopted (updated): {', '.join(updated_adopted)}[/dim]"
+            )
+        console.print("\n[dim]Run without --dry-run to interactively adopt.[/dim]")
+        return
+
+    # Non-interactive fallback
+    if not _is_interactive():
+        console.print("[bold]Adoptable artifacts:[/bold]")
+        for c in candidates:
+            desc = f" — {c.description}" if c.description else ""
+            console.print(f"  [{c.artifact_type}] {c.path}{desc}")
+        console.print(
+            "\n[dim]Non-interactive mode. Edit beacon.yaml manually to adopt artifacts, "
+            "then run [bold]abc sync[/bold].[/dim]"
+        )
+        return
+
+    # Interactive TUI
+    app = AdoptApp(candidates, updated_adopted)
+    selected_paths = app.run()
+
+    if not selected_paths:
+        console.print("[dim]No artifacts adopted.[/dim]")
+        return
+
+    # Match selected paths back to candidates
+    path_to_candidate: dict[str, AdoptCandidate] = {c.path: c for c in candidates}
+    selections = [
+        path_to_candidate[p] for p in selected_paths if p in path_to_candidate
+    ]
+
+    if not selections:
+        console.print("[dim]No artifacts adopted.[/dim]")
+        return
+
+    # Update beacon.yaml
+    apply_adoption(beacon_yaml, selections)
+    console.print(
+        f"[green]✓[/green] Added {len(selections)} artifact(s) to beacon.yaml"
+    )
+
+    # Post-adoption sync and wire
+    try:
+        sync_engine = SyncEngine(
+            warehouse_path=warehouse_path,
+            artifacts_path=artifacts_dir,
+        )
+
+        # Build artifact paths for newly adopted items only
+        adopted_paths: list[str] = []
+        for c in selections:
+            if c.artifact_type == "skills":
+                # Just use the directory entry as stored in beacon.yaml
+                adopted_paths.append(c.path.rstrip("/") + "/")
+            else:
+                adopted_paths.append(c.path)
+
+        # Expand glob patterns to actual file paths
+        expanded: list[str] = []
+        for pattern in adopted_paths:
+            if "*" in pattern or "?" in pattern:
+                import glob as glob_mod
+
+                matches = [
+                    str(Path(p).relative_to(warehouse_path))
+                    for p in glob_mod.glob(
+                        str(warehouse_path / pattern), recursive=True
+                    )
+                    if Path(p).is_file()
+                ]
+                expanded.extend(matches)
+            elif pattern.endswith("/"):
+                # Skill directory — expand to all files under it
+                skill_dir = warehouse_path / pattern.rstrip("/")
+                if skill_dir.is_dir():
+                    for f in skill_dir.rglob("*"):
+                        if f.is_file():
+                            expanded.append(str(f.relative_to(warehouse_path)))
+            else:
+                expanded.append(pattern)
+
+        if expanded:
+            sync_engine.sync_all(
+                artifact_paths=expanded,
+                preserve=False,
+                dry_run=False,
+            )
+            console.print(
+                f"[green]✓[/green] Synced and wired: "
+                f"{', '.join(c.path for c in selections)}"
+            )
+
+            # Wire contexts and skills
+            for c in selections:
+                if c.artifact_type == "contexts":
+                    _wire_contexts_opencode(project_root, artifacts_dir)
+                    _wire_contexts_claudecode(project_root, artifacts_dir)
+                    break  # Wire once for all contexts
+
+            has_skills = any(c.artifact_type == "skills" for c in selections)
+            if has_skills:
+                _wire_skills_post_sync(project_root, artifacts_dir)
+
+    except Exception as e:
+        console.print(
+            f"[yellow]⚠[/yellow] Post-adoption sync failed: {e}\n"
+            "  Run [bold]abc sync[/bold] to sync and wire adopted artifacts."
+        )
 
 
 if __name__ == "__main__":

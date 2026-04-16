@@ -19,12 +19,14 @@ agentic-beacon = { workspace = true }
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
+    "pytest-asyncio>=0.21.0",
     "pre-commit>=3.0.0",
     "ruff>=0.9.2",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["libs/beacon/tests"]
+asyncio_mode = "auto"
 markers = [
     "integration: end-to-end tests that exercise the full CLI workflow (run with -m integration)",
 ]

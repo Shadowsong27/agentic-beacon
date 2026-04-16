@@ -248,6 +248,41 @@ cd my-project && abc sync
 
 The sync is idempotent — only files that changed are re-copied.
 
+### Discovering new artifacts
+
+After `abc sync`, if a teammate contributed new artifacts to the warehouse since your last sync, you'll see a notification:
+
+```
+✓ Sync complete
+  Copied: 0 files
+  Unchanged: 3 files
+
+1 new artifact(s) available -- run abc adopt to review
+```
+
+Run `abc adopt` to open an interactive selector and add them to your `beacon.yaml`:
+
+```bash
+abc adopt
+```
+
+This opens a TUI where you can browse new artifacts grouped by type (contexts, skills, knowledge), check the ones you want, and press **Enter** to confirm. Selected artifacts are added to `beacon.yaml` and immediately synced and wired into your agent config.
+
+**Flags:**
+
+| Flag | Effect |
+|------|--------|
+| `--all` | Show every warehouse artifact not yet in `beacon.yaml` (not just since last sync) |
+| `--dry-run` | Preview what's available without making any changes |
+
+```bash
+# Preview available artifacts
+abc adopt --dry-run
+
+# See everything in the warehouse you haven't adopted yet
+abc adopt --all
+```
+
 ---
 
 ## Common Issues

@@ -126,9 +126,9 @@ abc sync
 
 ### Pattern 2: Progressive Artifact Adoption
 
-Start minimal, grow as needed:
+Start minimal, grow as needed. Use `abc adopt` to discover and add new artifacts as the warehouse grows — no manual `beacon.yaml` editing required.
 
-**Sprint 1 - Basics:**
+**Sprint 1 - Start minimal:**
 ```yaml
 artifacts:
   knowledge:
@@ -141,26 +141,17 @@ artifacts:
     - teams/backend/AGENTS.md
 ```
 
-**Sprint 3 - Add Testing:**
-```yaml
-artifacts:
-  knowledge:
-    - languages/python/type-hints.md
-    - languages/python/pytest/**/*.md
-    - best-practices/code-review.md
-    - best-practices/tdd-workflow.md
-
-  skills:
-    - python/generate-unit-tests
-
-  contexts:
-    - teams/backend/AGENTS.md
-```
-
-After each update:
+**Sprint 3 - Discover what's new:**
 ```bash
-abc sync  # Gets new artifacts
+# After warehouse has grown with new testing artifacts
+abc sync
+# → "2 new artifact(s) available -- run abc adopt to review"
+
+abc adopt
+# → TUI: check pytest guide, tdd-workflow, generate-unit-tests skill → Enter
 ```
+
+The new artifacts are appended to `beacon.yaml` automatically and synced immediately.
 
 ### Pattern 3: Team-Specific Contexts
 
@@ -223,14 +214,27 @@ git commit -m "Add error handling best practices"
 git push
 ```
 
-Team members update:
+Team members discover and adopt it:
+
 ```bash
 cd ~/team-warehouse
 git pull
 
 # In each project
 cd my-project
-abc sync  # Automatically picks up if pattern matches
+abc sync
+# Output: "1 new artifact(s) available -- run abc adopt to review"
+
+abc adopt
+# Opens TUI — select the new artifact, press Enter to adopt
+```
+
+Once adopted, `abc sync` will keep the artifact up to date on future runs.
+
+If you prefer to review before committing, use `--dry-run`:
+
+```bash
+abc adopt --dry-run
 ```
 
 ### Updating Existing Knowledge
@@ -244,14 +248,17 @@ git commit -m "Update type hints guide with Python 3.12 features"
 git push
 ```
 
-Team members get updates:
+Team members get updates (for artifacts already in their `beacon.yaml`):
+
 ```bash
 cd ~/team-warehouse
 git pull
 
 cd my-project
-abc sync  # Re-syncs changed files
+abc sync  # Re-syncs changed files automatically
 ```
+
+Artifacts not yet adopted won't be pulled by `abc sync` — use `abc adopt` to add them first.
 
 ## Team Coordination
 
@@ -478,9 +485,14 @@ abc sync
 
 **4. Stay updated:**
 ```bash
-# Weekly
+# Pull warehouse changes
 cd ~/our-team-warehouse && git pull
+
+# Sync existing artifacts and discover new ones
 cd my-project && abc sync
+
+# If the sync output mentions new artifacts, adopt them interactively
+abc adopt
 ```
 
 ## Troubleshooting

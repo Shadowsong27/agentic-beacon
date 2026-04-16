@@ -7,19 +7,9 @@ TDD Test Cases (9.1):
 - TC4: Warehouse agents/ files differ from global installs → abc contribute ignores them, exits 0
 """
 
-from pathlib import Path
-
 import pytest
 from beacon.cli import main
 from click.testing import CliRunner
-
-
-@pytest.fixture
-def fake_home(tmp_path, monkeypatch):
-    home = tmp_path / "home"
-    home.mkdir()
-    monkeypatch.setattr(Path, "home", staticmethod(lambda: home))
-    return home
 
 
 @pytest.fixture
@@ -36,7 +26,7 @@ def warehouse_with_agent(tmp_path):
 
 
 @pytest.fixture
-def connected_project(tmp_path, warehouse_with_agent, monkeypatch):
+def connected_project(tmp_path, warehouse_with_agent, monkeypatch, isolated_home):
     project = tmp_path / "project"
     project.mkdir()
     monkeypatch.chdir(project)
@@ -52,7 +42,7 @@ def connected_project(tmp_path, warehouse_with_agent, monkeypatch):
 
 
 def test_tc1_identical_artifacts_nothing_to_contribute(
-    connected_project, isolated_home
+    connected_project,
 ):
     """TC1: All project artifacts identical → Nothing to contribute, exit 0."""
     project, warehouse, runner = connected_project
@@ -83,13 +73,13 @@ def test_tc2_modified_artifact_proceeds(connected_project):
     assert "Improved." in (warehouse / "knowledge" / "lesson.md").read_text()
 
 
-def test_tc4_agents_in_contribute_scope(connected_project, fake_home):
+def test_tc4_agents_in_contribute_scope(connected_project, isolated_home):
     """TC4: Warehouse agents/ files differ from global installs → abc contribute includes them."""
     project, warehouse, runner = connected_project
 
     # Install agent globally with different content
-    claude_agents = fake_home / ".claude" / "agents"
-    claude_agents.mkdir(parents=True)
+    claude_agents = isolated_home / ".claude" / "agents"
+    claude_agents.mkdir(parents=True, exist_ok=True)
     (claude_agents / "code-reviewer.md").write_text(
         "# Reviewer\nLocally modified version.\n"
     )
