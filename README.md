@@ -75,7 +75,7 @@ Four types form the core of a warehouse, each defined by two axes: **project sco
 `abc adopt` opens an interactive TUI to browse and select warehouse artifacts. Scroll through contexts, skills, and knowledge nodes — press `Space` to select, `Enter` to confirm.
 
 <p align="center">
-  <img src="docs/screenshots/adopt-tui.svg" alt="abc adopt TUI" width="100%" />
+  <img src="docs/screenshots/adopt-tui.png" alt="abc adopt TUI" width="100%" />
 </p>
 
 **Keyboard shortcuts:**
