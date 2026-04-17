@@ -778,6 +778,251 @@ class TestAdoptTUI:
 
 
 # ---------------------------------------------------------------------------
+# 7.4b Tree TUI tests — verifies the Tree-based AdoptApp toggle behaviour
+# ---------------------------------------------------------------------------
+
+
+def _make_tree_app(candidates, updated_adopted=None):
+    """Build a self-contained Tree-based test app mirroring AdoptApp._InnerApp."""
+    from textual.app import App, ComposeResult
+    from textual.binding import Binding
+    from textual.widgets import Footer, Header, Static, Tree
+
+    _ARTIFACT_ICONS = {"contexts": "📄", "skills": "🔧", "knowledge": "📚"}
+
+    def _leaf_label(path: str, selected: bool) -> str:
+        cb = "[bold cyan]\\[x][/bold cyan]" if selected else "[dim]\\[ ][/dim]"
+        return f"{cb} [cyan]{path}[/cyan]"
+
+    class _TestApp(App[list[str]]):
+        BINDINGS = [
+            Binding("enter", "confirm", "Confirm", priority=True),
+            Binding("escape", "cancel", "Cancel", priority=True),
+            Binding("space", "toggle_selection", "Toggle", priority=True),
+            Binding("a", "select_all", "Select All"),
+            Binding("n", "select_none", "Select None"),
+        ]
+
+        def compose(self) -> ComposeResult:
+            yield Header(show_clock=False)
+            yield Tree("root", id="tree")
+            yield Static("", id="desc-panel")
+            yield Footer()
+
+        def on_mount(self) -> None:
+            tree = self.query_one("#tree", Tree)
+            tree.show_root = False
+            tree.root.expand()
+            by_type: dict[str, list] = {}
+            for c in candidates:
+                by_type.setdefault(c.artifact_type, []).append(c)
+            for atype in ["contexts", "skills", "knowledge"]:
+                tc = by_type.get(atype, [])
+                if not tc:
+                    continue
+                icon = _ARTIFACT_ICONS.get(atype, "📂")
+                folder = tree.root.add(
+                    f"[bold white]{icon} {atype}[/bold white]", expand=True
+                )
+                for c in tc:
+                    folder.add_leaf(
+                        _leaf_label(c.path, False),
+                        data={"path": c.path, "desc": c.description, "selected": False},
+                    )
+            if updated_adopted:
+                uf = tree.root.add(
+                    "[bold yellow]✅ already adopted (updated)[/bold yellow]",
+                    expand=True,
+                )
+                for p in updated_adopted:
+                    uf.add_leaf(f"[dim]{p}[/dim]", data={"path": p, "readonly": True})
+
+        def _toggle_node_selection(self, node) -> None:
+            if node is None:
+                return
+            data = node.data
+            if data is not None and not data.get("readonly") and "selected" in data:
+                data["selected"] = not data["selected"]
+                node.set_label(_leaf_label(data["path"], data["selected"]))
+            else:
+                node.toggle()
+
+        def action_toggle_selection(self) -> None:
+            tree = self.query_one("#tree", Tree)
+            self._toggle_node_selection(tree.cursor_node)
+
+        def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
+            self._toggle_node_selection(event.node)
+
+        def action_select_all(self) -> None:
+            tree = self.query_one("#tree", Tree)
+            for folder in tree.root.children:
+                for leaf in folder.children:
+                    if leaf.data and not leaf.data.get("readonly"):
+                        leaf.data["selected"] = True
+                        leaf.set_label(_leaf_label(leaf.data["path"], True))
+
+        def action_select_none(self) -> None:
+            tree = self.query_one("#tree", Tree)
+            for folder in tree.root.children:
+                for leaf in folder.children:
+                    if leaf.data and not leaf.data.get("readonly"):
+                        leaf.data["selected"] = False
+                        leaf.set_label(_leaf_label(leaf.data["path"], False))
+
+        def action_confirm(self) -> None:
+            tree = self.query_one("#tree", Tree)
+            selected = []
+            for folder in tree.root.children:
+                for leaf in folder.children:
+                    if (
+                        leaf.data
+                        and not leaf.data.get("readonly")
+                        and leaf.data.get("selected")
+                    ):
+                        selected.append(leaf.data["path"])
+            self.exit(selected)
+
+        def action_cancel(self) -> None:
+            self.exit([])
+
+    return _TestApp()
+
+
+def _get_leaf_data(app) -> list[dict]:
+    """Collect all selectable leaf node data dicts from the tree (call inside run_test context)."""
+    from textual.widgets import Tree
+
+    tree = app.query_one("#tree", Tree)
+    leaves = []
+    for folder in tree.root.children:
+        for leaf in folder.children:
+            if leaf.data and not leaf.data.get("readonly"):
+                leaves.append(dict(leaf.data))
+    return leaves
+
+
+@pytest.mark.asyncio
+class TestAdoptTreeTUI:
+    async def test_space_toggles_leaf_on(self):
+        """TC1: space on a leaf node toggles its selected state to True."""
+        candidates = [
+            AdoptCandidate("contexts", "contexts/a.md", "Alpha"),
+            AdoptCandidate("contexts", "contexts/b.md", "Beta"),
+        ]
+        app = _make_tree_app(candidates)
+        async with app.run_test(headless=True) as pilot:
+            await pilot.pause(0.2)
+            await pilot.press("down")  # folder node
+            await pilot.press("down")  # first leaf
+            await pilot.pause(0.1)
+            await pilot.press("space")
+            await pilot.pause(0.1)
+            leaves = _get_leaf_data(app)
+
+        selected = [d["path"] for d in leaves if d["selected"]]
+        assert len(selected) == 1
+
+    async def test_space_toggles_leaf_off(self):
+        """TC2: pressing space twice returns the leaf to unselected."""
+        candidates = [AdoptCandidate("contexts", "contexts/a.md", "Alpha")]
+        app = _make_tree_app(candidates)
+        async with app.run_test(headless=True) as pilot:
+            await pilot.pause(0.2)
+            await pilot.press("down")
+            await pilot.press("down")
+            await pilot.pause(0.1)
+            await pilot.press("space")
+            await pilot.press("space")
+            await pilot.pause(0.1)
+            leaves = _get_leaf_data(app)
+
+        assert not any(d["selected"] for d in leaves)
+
+    async def test_select_all_marks_all_items(self):
+        """TC3: press `a` -> all selectable leaf nodes become selected."""
+        candidates = [
+            AdoptCandidate("contexts", "contexts/a.md", "Alpha"),
+            AdoptCandidate("skills", "skills/tool/", "Tool"),
+            AdoptCandidate("knowledge", "knowledge/python", "Python"),
+        ]
+        app = _make_tree_app(candidates)
+        async with app.run_test(headless=True) as pilot:
+            await pilot.pause(0.2)
+            await pilot.press("a")
+            await pilot.pause(0.1)
+            leaves = _get_leaf_data(app)
+
+        assert all(d["selected"] for d in leaves)
+
+    async def test_select_none_clears_all(self):
+        """TC4: press `n` after select-all -> all leaf nodes unselected."""
+        candidates = [
+            AdoptCandidate("contexts", "contexts/a.md", "Alpha"),
+            AdoptCandidate("contexts", "contexts/b.md", "Beta"),
+        ]
+        app = _make_tree_app(candidates)
+        async with app.run_test(headless=True) as pilot:
+            await pilot.pause(0.2)
+            await pilot.press("a")
+            await pilot.press("n")
+            await pilot.pause(0.1)
+            leaves = _get_leaf_data(app)
+
+        assert not any(d["selected"] for d in leaves)
+
+    async def test_enter_returns_selected_paths(self):
+        """TC5: select one item then press enter -> only that path returned."""
+        candidates = [
+            AdoptCandidate("contexts", "contexts/a.md", "Alpha"),
+            AdoptCandidate("contexts", "contexts/b.md", "Beta"),
+        ]
+        app = _make_tree_app(candidates)
+        async with app.run_test(headless=True) as pilot:
+            await pilot.pause(0.2)
+            await pilot.press("down")  # folder
+            await pilot.press("down")  # first leaf
+            await pilot.pause(0.1)
+            await pilot.press("space")  # select it
+            await pilot.pause(0.1)
+            await pilot.press("enter")  # confirm
+            await pilot.pause(0.1)
+
+        result = app.return_value or []
+        assert len(result) == 1
+
+    async def test_escape_returns_empty(self):
+        """TC6: press escape -> returns empty list regardless of selection state."""
+        candidates = [AdoptCandidate("contexts", "contexts/a.md", "Alpha")]
+        app = _make_tree_app(candidates)
+        async with app.run_test(headless=True) as pilot:
+            await pilot.pause(0.2)
+            await pilot.press("a")  # select all first
+            await pilot.press("escape")
+            await pilot.pause(0.1)
+
+        assert app.return_value == []
+
+    async def test_readonly_nodes_not_toggled_by_select_all(self):
+        """TC7: readonly nodes (already-adopted) are unaffected by select-all."""
+        candidates = [AdoptCandidate("contexts", "contexts/a.md", "Alpha")]
+        app = _make_tree_app(candidates, updated_adopted=["contexts/old.md"])
+        async with app.run_test(headless=True) as pilot:
+            await pilot.pause(0.2)
+            await pilot.press("a")
+            await pilot.pause(0.1)
+            from textual.widgets import Tree
+
+            tree = app.query_one("#tree", Tree)
+            for folder in tree.root.children:
+                for leaf in folder.children:
+                    if leaf.data and leaf.data.get("readonly"):
+                        assert not leaf.data.get("selected"), (
+                            "readonly node must not be selected"
+                        )
+
+
+# ---------------------------------------------------------------------------
 # 7.5 Integration test for abc adopt --dry-run
 # ---------------------------------------------------------------------------
 

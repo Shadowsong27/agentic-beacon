@@ -61,6 +61,17 @@ def _skill_dir_from_path(path: str) -> str:
     return path
 
 
+def _knowledge_subdir_from_path(path: str) -> str:
+    """Convert knowledge/subdomain/... to knowledge/subdomain.
+
+    E.g. "knowledge/python/decisions/foo.md" → "knowledge/python"
+    """
+    parts = path.split("/")
+    if len(parts) >= 2:
+        return f"knowledge/{parts[1]}"
+    return path
+
+
 def _is_adopted(path: str, beacon_settings: BeaconSettings) -> bool:
     """Return True if path is already declared in beacon.yaml.
 
@@ -157,10 +168,10 @@ def _build_candidates(
 ) -> list[AdoptCandidate]:
     """Build AdoptCandidate list from a list of warehouse-relative file paths.
 
-    Skills are grouped by directory so multiple files in one skill produce a
-    single candidate.
+    Skills are grouped by directory; knowledge is grouped at subdomain level.
     """
     seen_skill_dirs: set[str] = set()
+    seen_knowledge_subdirs: set[str] = set()
     candidates: list[AdoptCandidate] = []
 
     for path in paths:
@@ -189,6 +200,21 @@ def _build_candidates(
                     artifact_type="skills",
                     path=skill_dir,
                     description=desc,
+                    is_new=is_new,
+                )
+            )
+        elif artifact_type == "knowledge":
+            knowledge_dir = _knowledge_subdir_from_path(path)
+            if knowledge_dir in seen_knowledge_subdirs:
+                continue
+            if _is_adopted(knowledge_dir, beacon_settings):
+                continue
+            seen_knowledge_subdirs.add(knowledge_dir)
+            candidates.append(
+                AdoptCandidate(
+                    artifact_type="knowledge",
+                    path=knowledge_dir,
+                    description="",
                     is_new=is_new,
                 )
             )
@@ -416,6 +442,33 @@ def apply_adoption(beacon_yaml_path: Path, selections: list[AdoptCandidate]) -> 
 # Textual TUI
 # ─────────────────────────────────────────────────────────────
 
+_ADOPT_CSS = """
+Screen {
+    background: $surface-darken-1;
+}
+
+#tree {
+    background: transparent;
+    padding: 1 2;
+    scrollbar-gutter: stable;
+    height: 1fr;
+}
+
+#tree > .tree--cursor {
+    background: $surface-lighten-1;
+    color: $text;
+    text-style: none;
+}
+
+#desc-panel {
+    height: 4;
+    background: $surface;
+    border-top: solid $surface-lighten-2;
+    padding: 0 2;
+    color: $text-muted;
+}
+"""
+
 
 def _make_cb_id(path: str) -> str:
     """Generate a valid Textual widget ID from a warehouse path."""
@@ -446,75 +499,149 @@ class AdoptApp:
         """Launch TUI and return selected artifact paths (empty list on cancel)."""
         from textual.app import App, ComposeResult
         from textual.binding import Binding
-        from textual.containers import VerticalScroll
-        from textual.widgets import Checkbox, Footer, Header, Static
+        from textual.widgets import Footer, Header, Static, Tree
 
         candidates = self.candidates
         updated_adopted = self.updated_adopted
 
+        _ARTIFACT_ICONS: dict[str, str] = {
+            "contexts": "📄",
+            "skills": "🔧",
+            "knowledge": "📚",
+        }
+
+        def _leaf_label(path: str, selected: bool) -> str:
+            checkbox = (
+                "[bold cyan]\\[x][/bold cyan]" if selected else "[dim]\\[ ][/dim]"
+            )
+            return f"{checkbox} [cyan]{path}[/cyan]"
+
         class _InnerApp(App[list[str]]):
+            CSS = _ADOPT_CSS
             BINDINGS = [  # type: ignore[assignment]
-                Binding("enter", "confirm", "Confirm"),
-                Binding("escape", "cancel", "Cancel"),
+                Binding("enter", "confirm", "Confirm", priority=True),
+                Binding("escape", "cancel", "Cancel", priority=True),
                 Binding("q", "cancel", "Quit"),
+                Binding("space", "toggle_selection", "Toggle", priority=True),
                 Binding("a", "select_all", "Select All"),
                 Binding("n", "select_none", "Select None"),
             ]
 
             def __init__(self_inner) -> None:  # noqa: N805
                 super().__init__()
-                # Map checkbox widget id → candidate path
-                self_inner._path_by_id: dict[str, str] = {}
                 self_inner._candidates = candidates
                 self_inner._updated_adopted = updated_adopted
 
             def compose(self_inner) -> ComposeResult:  # noqa: N805
                 yield Header(show_clock=False)
-                with VerticalScroll():
-                    # Group candidates by artifact_type
-                    by_type: dict[str, list[AdoptCandidate]] = {}
-                    for c in self_inner._candidates:
-                        by_type.setdefault(c.artifact_type, []).append(c)
-
-                    for atype in ["contexts", "skills", "knowledge"]:
-                        type_candidates = by_type.get(atype, [])
-                        if not type_candidates:
-                            continue
-                        yield Static(f"[bold]{atype.capitalize()}[/bold]")
-                        for c in type_candidates:
-                            cb_id = _make_cb_id(c.path)
-                            self_inner._path_by_id[cb_id] = c.path
-                            label = c.path
-                            if c.description:
-                                label = f"{c.path} — {c.description}"
-                            yield Checkbox(label, id=cb_id, value=False)
-
-                    if self_inner._updated_adopted:
-                        yield Static(
-                            "\n[dim]Already adopted (updated) — run `abc sync` to refresh:[/dim]"
-                        )
-                        for upd_path in self_inner._updated_adopted:
-                            yield Static(f"  [dim]{upd_path}[/dim]")
-
+                yield Tree("root", id="tree")
+                yield Static("", id="desc-panel")
                 yield Footer()
 
+            def on_mount(self_inner) -> None:  # noqa: N805
+                self_inner.theme = "catppuccin-mocha"
+                tree = self_inner.query_one("#tree", Tree)
+                tree.show_root = False
+                tree.root.expand()
+
+                by_type: dict[str, list[AdoptCandidate]] = {}
+                for c in self_inner._candidates:
+                    by_type.setdefault(c.artifact_type, []).append(c)
+
+                for atype in ["contexts", "skills", "knowledge"]:
+                    type_candidates = by_type.get(atype, [])
+                    if not type_candidates:
+                        continue
+                    icon = _ARTIFACT_ICONS.get(atype, "📂")
+                    folder = tree.root.add(
+                        f"[bold white]{icon} {atype}[/bold white]", expand=True
+                    )
+                    for c in type_candidates:
+                        folder.add_leaf(
+                            _leaf_label(c.path, False),
+                            data={
+                                "path": c.path,
+                                "desc": c.description,
+                                "selected": False,
+                            },
+                        )
+
+                if self_inner._updated_adopted:
+                    upd_folder = tree.root.add(
+                        "[bold yellow]✅ already adopted (updated)[/bold yellow]",
+                        expand=True,
+                    )
+                    for upd_path in self_inner._updated_adopted:
+                        upd_folder.add_leaf(
+                            f"[dim]{upd_path}[/dim]",
+                            data={
+                                "path": upd_path,
+                                "desc": "Run abc sync to refresh.",
+                                "readonly": True,
+                            },
+                        )
+
+            def on_tree_node_highlighted(
+                self_inner, event: Tree.NodeHighlighted
+            ) -> None:  # noqa: N805
+                data = event.node.data
+                panel = self_inner.query_one("#desc-panel", Static)
+                if data and data.get("desc"):
+                    panel.update(f"[dim]desc:[/dim]  {data['desc']}")
+                else:
+                    panel.update(
+                        "[dim]space[/dim] toggle  [dim]enter[/dim] confirm  [dim]a[/dim] all  [dim]n[/dim] none"
+                    )
+
+            def _toggle_node_selection(self_inner, node) -> None:  # noqa: N805
+                """Toggle a leaf node's selection state, or expand/collapse a folder."""
+                if node is None:
+                    return
+                data = node.data
+                if data is not None and not data.get("readonly") and "selected" in data:
+                    data["selected"] = not data["selected"]
+                    node.set_label(_leaf_label(data["path"], data["selected"]))
+                else:
+                    node.toggle()
+
+            def action_toggle_selection(self_inner) -> None:  # noqa: N805
+                tree = self_inner.query_one("#tree", Tree)
+                self_inner._toggle_node_selection(tree.cursor_node)
+
+            def on_tree_node_selected(self_inner, event: Tree.NodeSelected) -> None:  # noqa: N805
+                self_inner._toggle_node_selection(event.node)
+
             def action_confirm(self_inner) -> None:  # noqa: N805
-                selected = []
-                for cb in self_inner.query(Checkbox):
-                    if cb.value and cb.id and cb.id in self_inner._path_by_id:
-                        selected.append(self_inner._path_by_id[cb.id])
+                tree = self_inner.query_one("#tree", Tree)
+                selected: list[str] = []
+                for folder in tree.root.children:
+                    for leaf in folder.children:
+                        if (
+                            leaf.data
+                            and not leaf.data.get("readonly")
+                            and leaf.data.get("selected")
+                        ):
+                            selected.append(leaf.data["path"])
                 self_inner.exit(selected)
 
             def action_cancel(self_inner) -> None:  # noqa: N805
                 self_inner.exit([])
 
             def action_select_all(self_inner) -> None:  # noqa: N805
-                for cb in self_inner.query(Checkbox):
-                    cb.value = True
+                tree = self_inner.query_one("#tree", Tree)
+                for folder in tree.root.children:
+                    for leaf in folder.children:
+                        if leaf.data and not leaf.data.get("readonly"):
+                            leaf.data["selected"] = True
+                            leaf.set_label(_leaf_label(leaf.data["path"], True))
 
             def action_select_none(self_inner) -> None:  # noqa: N805
-                for cb in self_inner.query(Checkbox):
-                    cb.value = False
+                tree = self_inner.query_one("#tree", Tree)
+                for folder in tree.root.children:
+                    for leaf in folder.children:
+                        if leaf.data and not leaf.data.get("readonly"):
+                            leaf.data["selected"] = False
+                            leaf.set_label(_leaf_label(leaf.data["path"], False))
 
         result = _InnerApp().run()
         return result if result is not None else []
