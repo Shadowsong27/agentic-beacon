@@ -116,24 +116,58 @@ abc delta
 2. Decide: keep local, contribute to warehouse, or discard
 3. If contributing: run `abc contribute` — automatically creates a branch, commits, pushes, and opens a PR
 
-### Phase 6: Syncing Updates (Refreshing Snapshot)
+### Phase 6: Discovering and Adopting New Artifacts
 
-When another team member updates their local warehouse:
+When another team member contributes a new artifact to the warehouse (via `abc contribute`), you'll discover it during your next sync.
 
 ```bash
 cd ~/org-warehouse
 git pull origin main
+
+cd ~/their-project
+abc sync
 ```
 
-Their local projects **don't change automatically**. When ready to adopt the newest standards:
+If new artifacts were added since your last sync, you'll see a notification at the end of sync output:
+
+```
+✓ Sync complete
+  Copied: 1 files
+  Unchanged: 5 files
+
+2 new artifact(s) available -- run abc adopt to review
+```
+
+Run `abc adopt` to open an interactive TUI and choose which new artifacts to add to your `beacon.yaml`:
 
 ```bash
-cd ~/their-project
-abc update
+abc adopt
 ```
 
 **What happens:**
-- `abc update` re-syncs all artifacts declared in `beacon.yaml`, force-overwriting local copies with the latest from the warehouse
+- Shows all warehouse artifacts added since your last sync that aren't yet in `beacon.yaml`
+- Categorized checkboxes: contexts, skills, knowledge
+- Press `a` (select all), `n` (deselect all), `Enter` (confirm), `Escape`/`q` (cancel)
+- On confirm: selected artifacts are appended to `beacon.yaml` and immediately synced + wired
+
+**Useful flags:**
+
+```bash
+abc adopt --dry-run   # Preview what's available without changing anything
+abc adopt --all       # Show everything in the warehouse you haven't adopted yet
+```
+
+### Phase 7: Syncing Updates to Existing Artifacts (Refreshing Snapshot)
+
+To refresh already-adopted artifacts that have been updated in the warehouse:
+
+```bash
+cd ~/their-project
+abc sync
+```
+
+**What happens:**
+- `abc sync` re-syncs all artifacts declared in `beacon.yaml`, overwriting stale local copies with the latest from the warehouse
 - Any local modifications to artifacts will be lost — use `abc delta` first to review and save changes worth keeping
 
 ## Benefits of This Workflow
@@ -159,7 +193,10 @@ abc update
 |---------|---------|
 | `abc warehouse connect --path <path>` | Connect project to local warehouse |
 | `abc setup --manual` | Create `beacon.yaml` to declare which artifacts to sync |
-| `abc sync` | Initial snapshot: copy declared artifacts to project |
+| `abc sync` | Snapshot declared artifacts from warehouse; notifies of new unadopted artifacts |
+| `abc adopt` | Interactively adopt new warehouse artifacts into `beacon.yaml` |
+| `abc adopt --dry-run` | Preview adoptable artifacts without modifying anything |
+| `abc adopt --all` | Show every warehouse artifact not yet in `beacon.yaml` |
 | `abc update` | Refresh artifacts from warehouse (force-overwrites local copies) |
 | `abc delta` | Compare local artifact changes against warehouse |
 | `git pull` (in warehouse) | Update local warehouse from remote |

@@ -355,9 +355,9 @@ def test_delta_skill_shows_per_agent_breakdown_in_output(
     assert "modified" in result.output
     assert "opencode" in result.output
     assert "claudecode" in result.output
-    # opencode modified, claudecode identical
+    # opencode modified, claudecode synced (per-agent identical shown as "synced")
     assert "modified" in result.output.lower()
-    assert "identical" in result.output.lower()
+    assert "synced" in result.output.lower()
 
 
 def test_delta_skill_no_live_dir_reports_missing(
