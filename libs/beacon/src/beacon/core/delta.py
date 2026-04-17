@@ -71,6 +71,10 @@ class DeltaSummary:
         return [r for r in self.results if r.status == DeltaStatus.IDENTICAL]
 
     @property
+    def stale(self) -> list[ComparisonResult]:
+        return [r for r in self.results if r.status == DeltaStatus.STALE]
+
+    @property
     def has_differences(self) -> bool:
         return any(r.status != DeltaStatus.IDENTICAL for r in self.results)
 

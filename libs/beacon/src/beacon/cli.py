@@ -15,7 +15,7 @@ from loguru import logger
 from rich.console import Console
 from rich.table import Table
 
-from .core.delta import ComparisonResult, DeltaComparator, DeltaStatus
+from .core.delta import ComparisonResult, DeltaComparator, DeltaStatus, DeltaSummary
 from .core.gitignore import GitignoreManager
 from .core.settings import ArtifactsConfig, BeaconSettings, WarehouseSettings
 from .core.sync import OrphanInfo, SyncEngine
@@ -199,6 +199,42 @@ def _get_warehouse_head_sha(warehouse_path: Path) -> str | None:
     if result.returncode != 0:
         return None
     return result.stdout.strip() or None
+
+
+def _get_file_hash_at_sha(
+    warehouse_path: Path, relative_path: str, sha: str
+) -> str | None:
+    """Return SHA-256 of a file in the warehouse repo at a specific commit, or None.
+
+    Uses ``git show <sha>:<relative_path>`` so no working-tree checkout is needed.
+    Returns None if git is unavailable, the commit is missing, or the file did not
+    exist at that commit.
+    """
+    import hashlib
+
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(warehouse_path), "show", f"{sha}:{relative_path}"],
+            capture_output=True,
+            timeout=10,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    return hashlib.sha256(result.stdout).hexdigest()
+
+
+def _read_sync_sha(artifacts_dir: Path) -> str | None:
+    """Read the recorded warehouse HEAD SHA from the artifacts sync-state file.
+
+    Returns the SHA string, or None if the file does not exist.
+    """
+    state_file = artifacts_dir / _SYNC_STATE_FILENAME
+    if not state_file.exists():
+        return None
+    content = state_file.read_text().strip()
+    return content or None
 
 
 def _write_sync_state(artifacts_dir: Path, warehouse_path: Path) -> None:
@@ -1487,6 +1523,9 @@ def sync(
                 else:
                     artifact_paths.append(pattern)
 
+        # Capture old sync SHA before overwriting — needed for post-sync notification.
+        old_sync_sha = _read_sync_sha(artifacts_dir)
+
         # Record sync state now — before the conflict check which may sys.exit(1).
         # Semantics: "I've verified the warehouse at this HEAD."  Even when sync exits
         # early (non-interactive conflict), the stale-snapshot warning in `abc contribute`
@@ -1652,6 +1691,22 @@ def sync(
 
         # Sync global agents from warehouse
         _sync_agents_from_warehouse(warehouse_path, force=force, preserve=preserve)
+
+        # Post-sync adoption notification: inform user if new unadopted artifacts exist
+        if old_sync_sha is not None:
+            try:
+                from .adopt import _count_unadopted_since
+
+                unadopted_count = _count_unadopted_since(
+                    warehouse_path, beacon_settings, old_sync_sha
+                )
+                if unadopted_count > 0:
+                    console.print(
+                        f"\n[cyan]{unadopted_count} new artifact(s) available "
+                        f"-- run [bold]abc adopt[/bold] to review[/cyan]"
+                    )
+            except Exception:
+                pass  # Notification is best-effort; never break sync
 
     except Exception as e:
         console.print(f"\n[red]Error:[/red] Sync failed: {e}")
@@ -2067,18 +2122,35 @@ def _enrich_agent_stale(
     *,
     warehouse_path: Path,
     current_head: str,
+    comparator: "DeltaComparator | None" = None,
 ) -> ComparisonResult:
-    """Enrich an IDENTICAL agent ComparisonResult to STALE if the sync-state HEAD differs.
+    """Enrich agent ComparisonResults to STALE when the warehouse has advanced.
 
-    Only applies to IDENTICAL results — MODIFIED/MISSING are returned unchanged.
-    If no sync-state entry exists, the result is returned unchanged (no enrichment).
+    Handles two cases:
+
+    IDENTICAL → STALE:
+        The installed file still matches the warehouse, but the warehouse HEAD has
+        advanced AND the warehouse file content changed.  Without enrichment this
+        would look fine but a newer version is available.
+
+    MODIFIED → STALE (per-agent):
+        The installed file no longer matches the warehouse, but the *user* didn't
+        touch it — the warehouse updated it.  Detected by comparing the live global
+        agent hash against the recorded content_hash; if they match the user's copy
+        is still at the installed version, so the difference is purely upstream.
+        Requires ``comparator`` to hash the live files.
+
+    MISSING / ADDED results are returned unchanged.
+    If no sync-state entry exists, the result is returned unchanged.
 
     Args:
         result: ComparisonResult to potentially enrich.
         warehouse_path: Path to the warehouse (used as sync-state key).
         current_head: Current warehouse HEAD SHA.
+        comparator: DeltaComparator used to hash live agent files (needed for
+            MODIFIED → STALE detection).  If None, that branch is skipped.
     """
-    if result.status != DeltaStatus.IDENTICAL:
+    if result.status not in (DeltaStatus.IDENTICAL, DeltaStatus.MODIFIED):
         return result
 
     state = _read_global_sync_state()
@@ -2090,8 +2162,24 @@ def _enrich_agent_stale(
         return result  # No sync-state entry — can't determine STALE
 
     recorded_head = entry.get("warehouse_head", "")
-    if recorded_head and recorded_head != current_head:
-        # Warehouse has advanced since last install — mark as STALE
+    recorded_content_hash = entry.get("content_hash", "")
+    current_warehouse_hash = result.warehouse_hash
+
+    if not recorded_head or recorded_head == current_head:
+        return result  # Warehouse hasn't advanced — no enrichment needed
+
+    # Warehouse HEAD has advanced. Check whether the warehouse file content changed.
+    if (
+        recorded_content_hash
+        and current_warehouse_hash
+        and recorded_content_hash == current_warehouse_hash
+    ):
+        return result  # Content unchanged despite HEAD advancing — not stale
+
+    # Warehouse file content has changed since last install.
+
+    if result.status == DeltaStatus.IDENTICAL:
+        # All agents still match the warehouse — but warehouse has a newer version.
         stale_statuses = {agent: DeltaStatus.STALE for agent in result.agent_statuses}
         return ComparisonResult(
             path=result.path,
@@ -2101,7 +2189,172 @@ def _enrich_agent_stale(
             agent_statuses=stale_statuses,
         )
 
-    return result
+    # result.status == MODIFIED: check each MODIFIED agent individually.
+    # If the live global file still has the installed content_hash the user
+    # hasn't changed it — the warehouse changed it.  That agent is STALE.
+    # If the live file hash differs from both warehouse and installed hash the
+    # user made a local edit — that agent stays MODIFIED.
+    if comparator is None or not recorded_content_hash:
+        return result  # Can't distinguish — leave as MODIFIED
+
+    new_agent_statuses = dict(result.agent_statuses)
+    changed = False
+    for agent, status in result.agent_statuses.items():
+        if status != DeltaStatus.MODIFIED:
+            continue
+        live_file = comparator._agent_live_path(agent, result.path)
+        if not live_file.exists():
+            continue
+        live_hash = comparator.compute_hash(live_file)
+        if live_hash == recorded_content_hash:
+            # Live file is still at the installed version → warehouse updated it
+            new_agent_statuses[agent] = DeltaStatus.STALE
+            changed = True
+
+    if not changed:
+        return result
+
+    # Recompute aggregate across the updated per-agent statuses.
+    # Priority: ADDED > MODIFIED > STALE > MISSING > IDENTICAL
+    _priority = {
+        DeltaStatus.ADDED: 4,
+        DeltaStatus.MODIFIED: 3,
+        DeltaStatus.STALE: 2,
+        DeltaStatus.MISSING: 1,
+        DeltaStatus.IDENTICAL: 0,
+    }
+    new_aggregate = max(new_agent_statuses.values(), key=lambda s: _priority.get(s, 0))
+    return ComparisonResult(
+        path=result.path,
+        status=new_aggregate,
+        local_hash=result.local_hash,
+        warehouse_hash=result.warehouse_hash,
+        agent_statuses=new_agent_statuses,
+    )
+
+
+def _enrich_tracked_stale(
+    summary: DeltaSummary,
+    *,
+    warehouse_path: Path,
+    artifacts_path: Path,
+    comparator: DeltaComparator,
+) -> DeltaSummary:
+    """Re-classify MODIFIED tracked artifacts to STALE when the difference is purely upstream.
+
+    A tracked artifact (skill / knowledge / context) is STALE — not MODIFIED — when:
+    - The local file content matches the warehouse file at the last recorded sync SHA
+      (meaning the user has *not* touched the local copy since the last sync), AND
+    - The current warehouse file differs from that sync-SHA content
+      (meaning the warehouse moved forward after the user's last sync).
+
+    This is the tracked-artifact analogue of the per-agent MODIFIED→STALE enrichment.
+    It uses ``git show <sync_sha>:<path>`` on the warehouse repo instead of a stored
+    content_hash, so no format changes to .sync-state are required.
+
+    Falls back silently when:
+    - The warehouse has no git repo
+    - No sync SHA is recorded
+    - The snapshot is already current
+    - git is unavailable or returns an error for a given path
+
+    For skills (compared against live agent dirs):
+        Each per-agent MODIFIED status is checked independently.
+        If the live skill file matches the synced version, that agent→STALE.
+        The aggregate status is recomputed across the updated per-agent map.
+
+    For knowledge / contexts (compared against artifacts_path):
+        The local artifact hash is compared against the synced warehouse content.
+        If they match, the result is upgraded to STALE.
+    """
+
+    if not (warehouse_path / ".git").exists():
+        return summary
+
+    sync_sha = _read_sync_sha(artifacts_path)
+    if not sync_sha:
+        return summary
+
+    current_sha = _get_warehouse_head_sha(warehouse_path)
+    if not current_sha or current_sha == sync_sha:
+        return summary  # Snapshot is current — no enrichment needed
+
+    # Priority map for re-aggregating skill per-agent statuses
+    _priority = {
+        DeltaStatus.ADDED: 4,
+        DeltaStatus.MODIFIED: 3,
+        DeltaStatus.STALE: 2,
+        DeltaStatus.MISSING: 1,
+        DeltaStatus.IDENTICAL: 0,
+    }
+
+    new_results = []
+    for result in summary.results:
+        if result.status != DeltaStatus.MODIFIED:
+            new_results.append(result)
+            continue
+
+        # Fetch the warehouse file content at the last sync SHA once per result.
+        synced_hash = _get_file_hash_at_sha(warehouse_path, result.path, sync_sha)
+        if synced_hash is None:
+            new_results.append(result)
+            continue
+
+        is_skill = result.path.startswith("skills/") and bool(comparator.skills_paths)
+
+        if is_skill:
+            # Per-agent check: if live skill file == synced content → STALE for that agent
+            new_agent_statuses = dict(result.agent_statuses)
+            changed = False
+            for agent, status in result.agent_statuses.items():
+                if status != DeltaStatus.MODIFIED:
+                    continue
+                live_file = comparator._skill_live_path(agent, result.path)
+                if not live_file.exists():
+                    continue
+                live_hash = comparator.compute_hash(live_file)
+                if live_hash == synced_hash:
+                    new_agent_statuses[agent] = DeltaStatus.STALE
+                    changed = True
+
+            if not changed:
+                new_results.append(result)
+                continue
+
+            new_aggregate = max(
+                new_agent_statuses.values(), key=lambda s: _priority.get(s, 0)
+            )
+            new_results.append(
+                ComparisonResult(
+                    path=result.path,
+                    status=new_aggregate,
+                    local_hash=result.local_hash,
+                    warehouse_hash=result.warehouse_hash,
+                    agent_statuses=new_agent_statuses,
+                )
+            )
+        else:
+            # Knowledge / context: compare local artifact hash against synced content
+            local_file = artifacts_path / result.path
+            if not local_file.exists():
+                new_results.append(result)
+                continue
+            local_hash = result.local_hash or comparator.compute_hash(local_file)
+            if local_hash == synced_hash:
+                new_results.append(
+                    ComparisonResult(
+                        path=result.path,
+                        status=DeltaStatus.STALE,
+                        local_hash=result.local_hash,
+                        warehouse_hash=result.warehouse_hash,
+                        agent_statuses=result.agent_statuses,
+                    )
+                )
+            else:
+                new_results.append(result)
+
+    summary.results = new_results
+    return summary
 
 
 def _build_skills_paths(project_root: Path) -> dict[str, Path]:
@@ -2292,6 +2545,26 @@ def _show_delta_summary(
     """Show summary of all artifact differences."""
     summary = comparator.compare_from_config(beacon_settings)
 
+    # Re-classify MODIFIED tracked artifacts as STALE when the local copy has not been
+    # touched since the last sync and the warehouse has since moved forward.
+    # Falls back silently when git is unavailable or the snapshot is current.
+    if warehouse_path is not None:
+        summary = _enrich_tracked_stale(
+            summary,
+            warehouse_path=warehouse_path,
+            artifacts_path=comparator.artifacts_path,
+            comparator=comparator,
+        )
+
+    # After enrichment, detect if any artifacts are still MODIFIED while the snapshot
+    # is stale — these represent genuine local edits on top of an outdated snapshot.
+    snapshot_stale = False
+    if warehouse_path is not None:
+        recorded_sha = _read_sync_sha(comparator.artifacts_path)
+        current_sha = _get_warehouse_head_sha(warehouse_path)
+        if recorded_sha and current_sha and recorded_sha != current_sha:
+            snapshot_stale = True
+
     # Gather agent comparison results — discover from global agent dirs + warehouse
     # so agents that exist globally but not yet in the warehouse show as ADDED.
     agent_results = []
@@ -2321,7 +2594,10 @@ def _show_delta_summary(
         for rel_path in sorted(seen_rel_paths):
             result = comparator._compare_agent_file(rel_path)
             result = _enrich_agent_stale(
-                result, warehouse_path=warehouse_path, current_head=current_head
+                result,
+                warehouse_path=warehouse_path,
+                current_head=current_head,
+                comparator=comparator,
             )
             agent_results.append(result)
 
@@ -2365,7 +2641,7 @@ def _show_delta_summary(
         DeltaStatus.MODIFIED: "[yellow]modified[/yellow]",
         DeltaStatus.ADDED: "[green]added[/green]",
         DeltaStatus.MISSING: "[red]missing[/red]",
-        DeltaStatus.IDENTICAL: "[dim]identical[/dim]",
+        DeltaStatus.IDENTICAL: "[dim]synced[/dim]",
         DeltaStatus.STALE: "[dim cyan]stale[/dim cyan]",
     }
 
@@ -2429,8 +2705,8 @@ def _show_delta_summary(
             )
         )
 
-    # --- Agents section ---
-    if agent_results:
+    # --- Agents section — only show when there are diffs ---
+    if has_agent_diffs:
         if tracked_diffs or untracked:
             console.rule(style="dim")
 
@@ -2464,7 +2740,7 @@ def _show_delta_summary(
 
     # --- Project-scoped agents reminder ---
     if project_level_agents:
-        if agent_results or tracked_diffs or untracked:
+        if has_agent_diffs or tracked_diffs or untracked:
             console.rule(style="dim")
 
         # Collect all unique agent filenames and tools in a stable order
@@ -2509,9 +2785,6 @@ def _show_delta_summary(
         )
 
         table = Table(
-            title="Global Skills [dim](not in project skill dirs — not tracked in warehouse)[/dim]",
-            title_style="bold yellow",
-            title_justify="left",
             show_header=True,
             header_style="dim",
             box=None,
@@ -2531,10 +2804,17 @@ def _show_delta_summary(
             table.add_row(skill_name, *cells)
 
         console.print()
+        console.print(
+            "[bold yellow]Global Skills[/bold yellow] [dim](not tracked in warehouse)[/dim]"
+        )
         console.print(table)
 
     # Summary counts
     console.print("\n[bold]Summary:[/bold]")
+    if summary.stale:
+        console.print(
+            f"  [dim cyan]Stale:[/dim cyan] {len(summary.stale)} artifact(s) — warehouse updated, run 'abc sync'"
+        )
     if summary.modified:
         console.print(f"  [yellow]Modified:[/yellow] {len(summary.modified)} files")
     if summary.added:
@@ -2552,7 +2832,7 @@ def _show_delta_summary(
     if modified_agents:
         console.print(f"  [yellow]Modified agent(s):[/yellow] {len(modified_agents)}")
     if stale_agents:
-        console.print(f"  [dim cyan]Stale:[/dim cyan] {len(stale_agents)} agent(s)")
+        console.print(f"  [dim cyan]Stale agent(s):[/dim cyan] {len(stale_agents)}")
     if project_level_agents:
         total = sum(len(v) for v in project_level_agents.values())
         console.print(
@@ -2565,11 +2845,27 @@ def _show_delta_summary(
         )
 
     # Tips
+    if summary.stale or stale_agents:
+        console.print(
+            "\n[dim]Tip: Run 'abc sync' to pull upstream artifact changes.[/dim]"
+        )
+    if stale_agents:
+        console.print(
+            "[dim]Tip: Run 'abc install agents/<name>' to update stale agent definitions.[/dim]"
+        )
     if summary.missing:
         console.print(
-            "\n[dim]Tip: Run 'abc sync' to download missing artifacts from warehouse.[/dim]"
+            "[dim]Tip: Run 'abc sync' to download missing artifacts from warehouse.[/dim]"
         )
-    if summary.modified:
+    if summary.modified and snapshot_stale:
+        # Snapshot is stale AND some files are still genuinely MODIFIED (user edited them
+        # on top of an old snapshot). Warn that sync won't overwrite local edits.
+        console.print(
+            "\n[yellow]Note:[/yellow] Your snapshot is outdated and some artifacts have local edits.\n"
+            "  Run 'abc sync' first — locally modified files will be preserved by default.\n"
+            "    abc sync"
+        )
+    elif summary.modified:
         console.print(
             "[dim]Tip: Run 'abc delta <file>' to see detailed diff for a modified file.[/dim]"
         )
@@ -2584,10 +2880,6 @@ def _show_delta_summary(
     elif added_agents or modified_agents:
         console.print(
             "[dim]Tip: Run 'abc contribute' to push agent changes to the warehouse.[/dim]"
-        )
-    if stale_agents:
-        console.print(
-            "[dim]Tip: Run 'abc install agents/<name>' to update stale agent definitions.[/dim]"
         )
     if project_level_agents:
         console.print(
@@ -4566,6 +4858,213 @@ def _interactive_select(
     except (ValueError, IndexError):
         console.print("[red]Invalid selection. Using none.[/red]")
         return []
+
+
+@main.command()
+@click.option(
+    "--all",
+    "show_all",
+    is_flag=True,
+    help="Show all unadopted warehouse artifacts, not just new since last sync.",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Preview adoptable artifacts without modifying beacon.yaml.",
+)
+def adopt(*, show_all: bool, dry_run: bool) -> None:
+    """Discover and adopt new warehouse artifacts into beacon.yaml."""
+    from rich.table import Table
+
+    from .adopt import (
+        AdoptApp,
+        AdoptCandidate,
+        apply_adoption,
+        discover_adoptable,
+    )
+
+    project_root = find_project_root()
+    beacon_dir = project_root / ".agentic-beacon"
+    artifacts_dir = beacon_dir / "artifacts"
+    beacon_yaml = beacon_dir / "beacon.yaml"
+
+    # Prerequisite: warehouse connected
+    if not beacon_dir.exists():
+        console.print(f"[red]Error:[/red] No warehouse connected at {project_root}")
+        console.print("Run 'abc warehouse connect' first.")
+        sys.exit(1)
+
+    if not beacon_yaml.exists():
+        console.print("[red]Error:[/red] No beacon.yaml found.")
+        console.print("Run 'abc setup' to create artifact configuration.")
+        sys.exit(1)
+
+    # Load warehouse settings
+    try:
+        warehouse_settings = WarehouseSettings()
+        warehouse_path = Path(warehouse_settings.warehouse.local_path)
+    except Exception:
+        console.print("[red]Error:[/red] Could not read warehouse connection settings.")
+        console.print("Run 'abc warehouse connect' to connect to a warehouse.")
+        sys.exit(1)
+
+    # Prerequisite: sync-state must exist (unless --all mode)
+    sync_sha: str | None = None
+    if not show_all:
+        sync_sha = _read_sync_sha(artifacts_dir)
+        if sync_sha is None:
+            console.print(
+                "[red]Error:[/red] No sync baseline found. "
+                "Run [bold]abc sync[/bold] first to establish a warehouse cursor, "
+                "then re-run [bold]abc adopt[/bold]."
+            )
+            sys.exit(1)
+
+    # Load beacon.yaml
+    beacon_settings = BeaconSettings.from_yaml(beacon_yaml)
+
+    # Discover adoptable artifacts
+    try:
+        candidates, updated_adopted = discover_adoptable(
+            warehouse_path, beacon_settings, sync_sha, show_all=show_all
+        )
+    except ValueError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
+
+    # Handle "all already adopted" case
+    if not candidates:
+        console.print("[green]✓[/green] All warehouse artifacts are already adopted.")
+        if updated_adopted:
+            console.print(
+                f"\n[dim]{len(updated_adopted)} adopted artifact(s) have been updated "
+                f"in the warehouse. Run [bold]abc sync[/bold] to refresh.[/dim]"
+            )
+        return
+
+    # Dry-run: print table and exit
+    if dry_run:
+        table = Table(title="Adoptable Artifacts")
+        table.add_column("Type", style="cyan")
+        table.add_column("Path", style="white")
+        table.add_column("Description", style="dim")
+        table.add_column("Status", style="yellow")
+
+        for c in candidates:
+            status = "new" if c.is_new else "existing"
+            table.add_row(c.artifact_type, c.path, c.description, status)
+
+        console.print(table)
+        if updated_adopted:
+            console.print(
+                f"\n[dim]Already adopted (updated): {', '.join(updated_adopted)}[/dim]"
+            )
+        console.print("\n[dim]Run without --dry-run to interactively adopt.[/dim]")
+        return
+
+    # Non-interactive fallback
+    if not _is_interactive():
+        console.print("[bold]Adoptable artifacts:[/bold]")
+        for c in candidates:
+            desc = f" — {c.description}" if c.description else ""
+            console.print(f"  [{c.artifact_type}] {c.path}{desc}")
+        console.print(
+            "\n[dim]Non-interactive mode. Edit beacon.yaml manually to adopt artifacts, "
+            "then run [bold]abc sync[/bold].[/dim]"
+        )
+        return
+
+    # Interactive TUI
+    app = AdoptApp(candidates, updated_adopted)
+    selected_paths = app.run()
+
+    if not selected_paths:
+        console.print("[dim]No artifacts adopted.[/dim]")
+        return
+
+    # Match selected paths back to candidates
+    path_to_candidate: dict[str, AdoptCandidate] = {c.path: c for c in candidates}
+    selections = [
+        path_to_candidate[p] for p in selected_paths if p in path_to_candidate
+    ]
+
+    if not selections:
+        console.print("[dim]No artifacts adopted.[/dim]")
+        return
+
+    # Update beacon.yaml
+    apply_adoption(beacon_yaml, selections)
+    console.print(
+        f"[green]✓[/green] Added {len(selections)} artifact(s) to beacon.yaml"
+    )
+
+    # Post-adoption sync and wire
+    try:
+        sync_engine = SyncEngine(
+            warehouse_path=warehouse_path,
+            artifacts_path=artifacts_dir,
+        )
+
+        # Build artifact paths for newly adopted items only
+        adopted_paths: list[str] = []
+        for c in selections:
+            if c.artifact_type == "skills":
+                # Just use the directory entry as stored in beacon.yaml
+                adopted_paths.append(c.path.rstrip("/") + "/")
+            else:
+                adopted_paths.append(c.path)
+
+        # Expand glob patterns to actual file paths
+        expanded: list[str] = []
+        for pattern in adopted_paths:
+            if "*" in pattern or "?" in pattern:
+                import glob as glob_mod
+
+                matches = [
+                    str(Path(p).relative_to(warehouse_path))
+                    for p in glob_mod.glob(
+                        str(warehouse_path / pattern), recursive=True
+                    )
+                    if Path(p).is_file()
+                ]
+                expanded.extend(matches)
+            elif pattern.endswith("/"):
+                # Skill directory — expand to all files under it
+                skill_dir = warehouse_path / pattern.rstrip("/")
+                if skill_dir.is_dir():
+                    for f in skill_dir.rglob("*"):
+                        if f.is_file():
+                            expanded.append(str(f.relative_to(warehouse_path)))
+            else:
+                expanded.append(pattern)
+
+        if expanded:
+            sync_engine.sync_all(
+                artifact_paths=expanded,
+                preserve=False,
+                dry_run=False,
+            )
+            console.print(
+                f"[green]✓[/green] Synced and wired: "
+                f"{', '.join(c.path for c in selections)}"
+            )
+
+            # Wire contexts and skills
+            for c in selections:
+                if c.artifact_type == "contexts":
+                    _wire_contexts_opencode(project_root, artifacts_dir)
+                    _wire_contexts_claudecode(project_root, artifacts_dir)
+                    break  # Wire once for all contexts
+
+            has_skills = any(c.artifact_type == "skills" for c in selections)
+            if has_skills:
+                _wire_skills_post_sync(project_root, artifacts_dir)
+
+    except Exception as e:
+        console.print(
+            f"[yellow]⚠[/yellow] Post-adoption sync failed: {e}\n"
+            "  Run [bold]abc sync[/bold] to sync and wire adopted artifacts."
+        )
 
 
 if __name__ == "__main__":
