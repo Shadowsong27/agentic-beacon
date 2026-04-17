@@ -70,6 +70,24 @@ Four types form the core of a warehouse, each defined by two axes: **project sco
 
 > See **[Artifact Type Matrix](./docs/artifact-type-matrix.md)** for the full design rationale and how this drives command behaviour.
 
+## Interactive Artifact Adoption
+
+`abc adopt` opens an interactive TUI to browse and select warehouse artifacts. Scroll through contexts, skills, and knowledge nodes — press `Space` to select, `Enter` to confirm.
+
+<p align="center">
+  <img src="docs/screenshots/adopt-tui.svg" alt="abc adopt TUI" width="100%" />
+</p>
+
+**Keyboard shortcuts:**
+
+| Key | Action |
+|-----|--------|
+| `Space` | Toggle selection |
+| `Enter` | Confirm and write to beacon.yaml |
+| `a` / `n` | Select all / Select none |
+| `t` | Toggle show-all (view already-adopted artifacts) |
+| `Esc` / `q` | Cancel |
+
 ## Quickstart
 
 ### Installation
@@ -96,8 +114,8 @@ cd my-org-warehouse
 cd ~/my-project
 abc warehouse connect --path ~/my-org-warehouse
 
-# 3. Declare what you need and sync
-abc setup --manual   # creates beacon.yaml — edit to declare artifacts
+# 3. Adopt artifacts interactively, then sync
+abc adopt            # browse + select artifacts via TUI, writes beacon.yaml
 abc sync             # copies artifacts, wires agent config, installs agents globally
 ```
 
@@ -108,7 +126,7 @@ git clone git@github.com:your-org/warehouse.git ~/my-org-warehouse
 
 cd ~/my-project
 abc warehouse connect --path ~/my-org-warehouse
-abc setup --manual
+abc adopt
 abc sync
 ```
 
@@ -160,8 +178,9 @@ abc sync
 |---------|-------------|
 | `abc warehouse init` | Initialize a new warehouse repository |
 | `abc warehouse connect` | Connect a project to a warehouse |
-| `abc setup` | Create `beacon.yaml` (manual or agent-assisted) |
+| `abc adopt` | Interactively browse and select warehouse artifacts via TUI; writes selections to `beacon.yaml` |
 | `abc sync` | Sync and wire all artifacts declared in `beacon.yaml`; includes agent global install; auto-prunes removed artifacts |
+| `abc doctor` | Validate project health: warehouse connection, beacon.yaml validity, missing artifacts; `--fix` auto-migrates stale paths |
 | `abc agents sync` | Sync agent definitions from warehouse into global tool directories; supports `--force` / `--preserve` |
 | `abc install <artifact>` | Sync and wire a single artifact (e.g. `abc install skills/code-reviewer`) |
 | `abc contribute` | Copy local artifact changes back to the warehouse |
@@ -175,4 +194,4 @@ abc sync
 
 If you find Agentic Beacon useful, consider [giving it a star](https://github.com/Shadowsong27/agentic-beacon) — it helps others discover the project.
 
-**Last Updated:** 2026-04-12
+**Last Updated:** 2026-04-17

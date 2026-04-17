@@ -1520,6 +1520,17 @@ def sync(
                             f"  [yellow]Warning:[/yellow] No files found for skill: "
                             f"{_skill_name_from_entry(pattern)}"
                         )
+                elif (
+                    artifact_type == "knowledge" and (warehouse_path / pattern).is_dir()
+                ):
+                    # Node-level knowledge path (e.g. "knowledge/python") — expand to all .md files
+                    matches = sync_engine.expand_glob(f"{pattern}/**/*.md")
+                    if matches:
+                        artifact_paths.extend(matches)
+                    else:
+                        console.print(
+                            f"  [yellow]Warning:[/yellow] No .md files found under: {pattern}"
+                        )
                 else:
                     artifact_paths.append(pattern)
 
@@ -4862,23 +4873,23 @@ def _interactive_select(
 
 @main.command()
 @click.option(
-    "--all",
-    "show_all",
-    is_flag=True,
-    help="Show all unadopted warehouse artifacts, not just new since last sync.",
-)
-@click.option(
     "--dry-run",
     is_flag=True,
     help="Preview adoptable artifacts without modifying beacon.yaml.",
 )
-def adopt(*, show_all: bool, dry_run: bool) -> None:
-    """Discover and adopt new warehouse artifacts into beacon.yaml."""
+def adopt(*, dry_run: bool) -> None:
+    """Adopt warehouse artifacts into beacon.yaml.
+
+    Shows all unadopted artifacts by default. Press ``t`` in the TUI to toggle
+    to a full view where you can also unadopt currently adopted artifacts.
+    Artifacts added within the last few commits are tagged with how recent they are.
+    """
     from rich.table import Table
 
     from .adopt import (
         AdoptApp,
         AdoptCandidate,
+        _is_agent_installed,
         apply_adoption,
         discover_adoptable,
     )
@@ -4908,162 +4919,471 @@ def adopt(*, show_all: bool, dry_run: bool) -> None:
         console.print("Run 'abc warehouse connect' to connect to a warehouse.")
         sys.exit(1)
 
-    # Prerequisite: sync-state must exist (unless --all mode)
-    sync_sha: str | None = None
-    if not show_all:
-        sync_sha = _read_sync_sha(artifacts_dir)
-        if sync_sha is None:
-            console.print(
-                "[red]Error:[/red] No sync baseline found. "
-                "Run [bold]abc sync[/bold] first to establish a warehouse cursor, "
-                "then re-run [bold]abc adopt[/bold]."
-            )
-            sys.exit(1)
-
     # Load beacon.yaml
     beacon_settings = BeaconSettings.from_yaml(beacon_yaml)
 
-    # Discover adoptable artifacts
-    try:
-        candidates, updated_adopted = discover_adoptable(
-            warehouse_path, beacon_settings, sync_sha, show_all=show_all
-        )
-    except ValueError as e:
-        console.print(f"[red]Error:[/red] {e}")
-        sys.exit(1)
+    # Discover all unadopted artifacts (full scan, annotated with commits_ago)
+    candidates, _ = discover_adoptable(warehouse_path, beacon_settings)
 
-    # Handle "all already adopted" case
+    # Handle "nothing to adopt" case
     if not candidates:
-        console.print("[green]✓[/green] All warehouse artifacts are already adopted.")
-        if updated_adopted:
-            console.print(
-                f"\n[dim]{len(updated_adopted)} adopted artifact(s) have been updated "
-                f"in the warehouse. Run [bold]abc sync[/bold] to refresh.[/dim]"
-            )
+        console.print("[green]✓[/green] No unadopted warehouse artifacts found.")
         return
 
     # Dry-run: print table and exit
     if dry_run:
-        table = Table(title="Adoptable Artifacts")
+        table = Table(title="Unadopted Artifacts")
         table.add_column("Type", style="cyan")
         table.add_column("Path", style="white")
         table.add_column("Description", style="dim")
-        table.add_column("Status", style="yellow")
+        table.add_column("Recently Added", style="yellow")
 
         for c in candidates:
-            status = "new" if c.is_new else "existing"
-            table.add_row(c.artifact_type, c.path, c.description, status)
+            recently = (
+                f"{c.commits_ago} commit{'s' if c.commits_ago != 1 else ''} ago"
+                if c.commits_ago is not None
+                else ""
+            )
+            table.add_row(c.artifact_type, c.path, c.description, recently)
 
         console.print(table)
-        if updated_adopted:
-            console.print(
-                f"\n[dim]Already adopted (updated): {', '.join(updated_adopted)}[/dim]"
-            )
         console.print("\n[dim]Run without --dry-run to interactively adopt.[/dim]")
         return
 
     # Non-interactive fallback
     if not _is_interactive():
-        console.print("[bold]Adoptable artifacts:[/bold]")
+        console.print("[bold]Unadopted artifacts:[/bold]")
         for c in candidates:
             desc = f" — {c.description}" if c.description else ""
-            console.print(f"  [{c.artifact_type}] {c.path}{desc}")
+            tag = (
+                f" [added {c.commits_ago} commits ago]"
+                if c.commits_ago is not None
+                else ""
+            )
+            console.print(f"  [{c.artifact_type}] {c.path}{desc}{tag}")
         console.print(
             "\n[dim]Non-interactive mode. Edit beacon.yaml manually to adopt artifacts, "
             "then run [bold]abc sync[/bold].[/dim]"
         )
         return
 
-    # Interactive TUI
-    app = AdoptApp(candidates, updated_adopted)
-    selected_paths = app.run()
+    # Build currently adopted paths for the toggle view:
+    # beacon.yaml entries + warehouse agents that are installed globally
+    adopted_paths: list[str] = (
+        beacon_settings.artifacts.contexts
+        + beacon_settings.artifacts.skills
+        + beacon_settings.artifacts.knowledge
+    )
+    try:
+        from .distributor import WarehouseDistributor
 
-    if not selected_paths:
-        console.print("[dim]No artifacts adopted.[/dim]")
+        distributor = WarehouseDistributor(
+            warehouse_root=warehouse_path, target_root=warehouse_path
+        )
+        available_agents = distributor.list_available().get("agents", [])
+        adopted_paths += [p for p in available_agents if _is_agent_installed(p)]
+    except Exception:
+        pass  # graceful — toggle view loses agent pre-checks but still works
+
+    # Interactive TUI
+    app = AdoptApp(
+        candidates,
+        adopted_paths,
+        project_name=project_root.name,
+        warehouse_name=warehouse_path.name,
+    )
+    result = app.run()
+
+    if not result.to_adopt and not result.to_unadopt:
+        console.print("[dim]No changes made.[/dim]")
         return
 
-    # Match selected paths back to candidates
+    # Partition by type: agents handled globally, others via beacon.yaml
     path_to_candidate: dict[str, AdoptCandidate] = {c.path: c for c in candidates}
-    selections = [
-        path_to_candidate[p] for p in selected_paths if p in path_to_candidate
+    agent_adoptions = [p for p in result.to_adopt if p.startswith("agents/")]
+    non_agent_selections = [
+        path_to_candidate[p]
+        for p in result.to_adopt
+        if p in path_to_candidate and not p.startswith("agents/")
+    ]
+    agent_unadoptions = [p for p in result.to_unadopt if p.startswith("agents/")]
+    non_agent_unadoptions = [
+        p for p in result.to_unadopt if not p.startswith("agents/")
     ]
 
-    if not selections:
-        console.print("[dim]No artifacts adopted.[/dim]")
-        return
-
-    # Update beacon.yaml
-    apply_adoption(beacon_yaml, selections)
-    console.print(
-        f"[green]✓[/green] Added {len(selections)} artifact(s) to beacon.yaml"
-    )
-
-    # Post-adoption sync and wire
-    try:
-        sync_engine = SyncEngine(
-            warehouse_path=warehouse_path,
-            artifacts_path=artifacts_dir,
+    # --- beacon.yaml update for non-agents ---
+    apply_adoption(beacon_yaml, non_agent_selections, unadoptions=non_agent_unadoptions)
+    if non_agent_selections:
+        console.print(
+            f"[green]✓[/green] Added {len(non_agent_selections)} artifact(s) to beacon.yaml"
+        )
+    if non_agent_unadoptions:
+        console.print(
+            f"[yellow]−[/yellow] Removed {len(non_agent_unadoptions)} artifact(s) from beacon.yaml"
         )
 
-        # Build artifact paths for newly adopted items only
-        adopted_paths: list[str] = []
-        for c in selections:
-            if c.artifact_type == "skills":
-                # Just use the directory entry as stored in beacon.yaml
-                adopted_paths.append(c.path.rstrip("/") + "/")
-            else:
-                adopted_paths.append(c.path)
+    # --- Agent install ---
+    if agent_adoptions:
+        tools = _detect_agents_global()
+        installed_count = 0
+        for agent_path in agent_adoptions:
+            agent_file = warehouse_path / agent_path
+            if not agent_file.exists():
+                continue
+            content = agent_file.read_text(encoding="utf-8")
+            agent_name = agent_file.name
+            for tool in tools:
+                _install_agent_global(tool, agent_name, content)
+            installed_count += 1
+        if installed_count:
+            console.print(
+                f"[green]✓[/green] Installed {installed_count} agent(s) globally"
+                + (f" for: {', '.join(tools)}" if tools else "")
+            )
 
-        # Expand glob patterns to actual file paths
-        expanded: list[str] = []
-        for pattern in adopted_paths:
-            if "*" in pattern or "?" in pattern:
-                import glob as glob_mod
+    # --- Agent uninstall ---
+    if agent_unadoptions:
+        removed_count = 0
+        for agent_path in agent_unadoptions:
+            agent_name = Path(agent_path).name
+            for agent_dir in _global_agent_dirs().values():
+                target = agent_dir / agent_name
+                if target.exists():
+                    target.unlink()
+                    removed_count += 1
+        if removed_count:
+            console.print(
+                f"[yellow]−[/yellow] Uninstalled {removed_count} agent(s) from global directories"
+            )
 
-                matches = [
-                    str(Path(p).relative_to(warehouse_path))
-                    for p in glob_mod.glob(
-                        str(warehouse_path / pattern), recursive=True
-                    )
-                    if Path(p).is_file()
-                ]
-                expanded.extend(matches)
-            elif pattern.endswith("/"):
-                # Skill directory — expand to all files under it
-                skill_dir = warehouse_path / pattern.rstrip("/")
-                if skill_dir.is_dir():
-                    for f in skill_dir.rglob("*"):
+    # --- Post-adoption sync and wire for non-agent artifacts ---
+    if non_agent_selections:
+        try:
+            sync_engine = SyncEngine(
+                warehouse_path=warehouse_path,
+                artifacts_path=artifacts_dir,
+            )
+
+            new_artifact_paths: list[str] = []
+            for c in non_agent_selections:
+                if c.artifact_type == "skills":
+                    new_artifact_paths.append(c.path.rstrip("/") + "/")
+                else:
+                    new_artifact_paths.append(c.path)
+
+            # Expand glob patterns and skill directories to file paths
+            expanded: list[str] = []
+            for pattern in new_artifact_paths:
+                if "*" in pattern or "?" in pattern:
+                    import glob as glob_mod
+
+                    matches = [
+                        str(Path(p).relative_to(warehouse_path))
+                        for p in glob_mod.glob(
+                            str(warehouse_path / pattern), recursive=True
+                        )
+                        if Path(p).is_file()
+                    ]
+                    expanded.extend(matches)
+                elif pattern.endswith("/"):
+                    skill_dir = warehouse_path / pattern.rstrip("/")
+                    if skill_dir.is_dir():
+                        for f in skill_dir.rglob("*"):
+                            if f.is_file():
+                                expanded.append(str(f.relative_to(warehouse_path)))
+                elif (warehouse_path / pattern).is_dir():
+                    # Node-level knowledge path — expand to all .md files within
+                    for f in (warehouse_path / pattern).rglob("*.md"):
                         if f.is_file():
                             expanded.append(str(f.relative_to(warehouse_path)))
-            else:
-                expanded.append(pattern)
+                else:
+                    expanded.append(pattern)
 
-        if expanded:
-            sync_engine.sync_all(
-                artifact_paths=expanded,
-                preserve=False,
-                dry_run=False,
-            )
+            if expanded:
+                sync_engine.sync_all(
+                    artifact_paths=expanded,
+                    preserve=False,
+                    dry_run=False,
+                )
+                console.print(
+                    f"[green]✓[/green] Synced and wired: "
+                    f"{', '.join(c.path for c in non_agent_selections)}"
+                )
+
+                for c in non_agent_selections:
+                    if c.artifact_type == "contexts":
+                        _wire_contexts_opencode(project_root, artifacts_dir)
+                        _wire_contexts_claudecode(project_root, artifacts_dir)
+                        break
+
+                has_skills = any(
+                    c.artifact_type == "skills" for c in non_agent_selections
+                )
+                if has_skills:
+                    _wire_skills_post_sync(project_root, artifacts_dir)
+
+        except Exception as e:
             console.print(
-                f"[green]✓[/green] Synced and wired: "
-                f"{', '.join(c.path for c in selections)}"
+                f"[yellow]⚠[/yellow] Post-adoption sync failed: {e}\n"
+                "  Run [bold]abc sync[/bold] to sync and wire adopted artifacts."
             )
 
-            # Wire contexts and skills
-            for c in selections:
-                if c.artifact_type == "contexts":
-                    _wire_contexts_opencode(project_root, artifacts_dir)
-                    _wire_contexts_claudecode(project_root, artifacts_dir)
-                    break  # Wire once for all contexts
-
-            has_skills = any(c.artifact_type == "skills" for c in selections)
-            if has_skills:
-                _wire_skills_post_sync(project_root, artifacts_dir)
-
-    except Exception as e:
+    if non_agent_unadoptions:
         console.print(
-            f"[yellow]⚠[/yellow] Post-adoption sync failed: {e}\n"
-            "  Run [bold]abc sync[/bold] to sync and wire adopted artifacts."
+            "[dim]Run [bold]abc sync[/bold] to clean up files for unadopted artifacts.[/dim]"
+        )
+
+
+@main.command()
+@click.option(
+    "--fix",
+    is_flag=True,
+    help="Automatically repair fixable issues (e.g. migrate file-level knowledge paths to node-level).",
+)
+def doctor(*, fix: bool) -> None:
+    """Diagnose the health of the current project's beacon configuration.
+
+    Checks:
+    \b
+      • Warehouse connection (config.toml present, local_path reachable)
+      • beacon.yaml parseable and structurally valid
+      • Knowledge entries: file-level paths migrated to node-level
+      • Knowledge entries: node directories exist in the warehouse
+      • Skill entries: skill directories exist in the warehouse
+      • Context entries: context files exist in the warehouse
+
+    Use --fix to automatically repair file-level knowledge path entries.
+    """
+    from .adopt import _find_knowledge_node_for_file, _is_knowledge_node
+
+    issues: list[str] = []
+    fixes_applied: list[str] = []
+
+    def _ok(msg: str) -> None:
+        console.print(f"  [green]✓[/green] {msg}")
+
+    def _warn(msg: str, detail: str = "") -> None:
+        issues.append(msg)
+        console.print(f"  [yellow]⚠[/yellow]  {msg}")
+        if detail:
+            console.print(f"       [dim]{detail}[/dim]")
+
+    def _err(msg: str, detail: str = "") -> None:
+        issues.append(msg)
+        console.print(f"  [red]✗[/red]  {msg}")
+        if detail:
+            console.print(f"       [dim]{detail}[/dim]")
+
+    console.print("[bold]Running beacon doctor…[/bold]\n")
+
+    # ── 1. Project root ─────────────────────────────────────────────────────
+    try:
+        project_root = find_project_root()
+        beacon_dir = project_root / ".agentic-beacon"
+        beacon_yaml = beacon_dir / "beacon.yaml"
+        _ok(f"Project root: {project_root}")
+    except SystemExit:
+        _err("Could not locate project root (.agentic-beacon directory not found)")
+        console.print(
+            "\n[dim]Run [bold]abc warehouse connect[/bold] to set up a project.[/dim]"
+        )
+        return
+
+    # ── 2. Warehouse connection ──────────────────────────────────────────────
+    config_toml = beacon_dir / "config.toml"
+    warehouse_path: Path | None = None
+
+    if not config_toml.exists():
+        _err(
+            "Warehouse not connected (config.toml missing)",
+            "Run: abc warehouse connect",
+        )
+    else:
+        try:
+            ws = WarehouseSettings()
+            warehouse_path = Path(ws.warehouse.local_path)
+            if warehouse_path.is_dir():
+                _ok(f"Warehouse connected: {warehouse_path}")
+            else:
+                _err(
+                    f"Warehouse path does not exist: {warehouse_path}",
+                    "Run: abc warehouse connect",
+                )
+                warehouse_path = None
+        except Exception as exc:
+            _err(f"Could not read warehouse settings: {exc}")
+            warehouse_path = None
+
+    # ── 3. beacon.yaml parseable ─────────────────────────────────────────────
+    beacon_settings = None
+    if not beacon_yaml.exists():
+        _err("beacon.yaml not found", "Run: abc setup")
+    else:
+        try:
+            beacon_settings = BeaconSettings.from_yaml(beacon_yaml)
+            _ok("beacon.yaml is valid YAML")
+        except Exception as exc:
+            _err(f"beacon.yaml parse error: {exc}")
+
+    if beacon_settings is None:
+        console.print(
+            "\n[bold red]Cannot continue checks without a valid beacon.yaml.[/bold red]"
+        )
+        _print_doctor_summary(issues, fixes_applied)
+        return
+
+    knowledge_entries: list[str] = list(beacon_settings.artifacts.knowledge)
+    skill_entries: list[str] = list(beacon_settings.artifacts.skills)
+    context_entries: list[str] = list(beacon_settings.artifacts.contexts)
+
+    # ── 4. Knowledge: file-level paths ──────────────────────────────────────
+    file_level: list[tuple[str, str | None]] = []  # (old_path, suggested_node | None)
+    for entry in knowledge_entries:
+        if entry.endswith(".md") or any(
+            seg in entry.split("/") for seg in ("decisions", "lessons", "facts")
+        ):
+            node = _find_knowledge_node_for_file(entry)
+            file_level.append((entry, node))
+
+    if not file_level:
+        _ok(
+            f"Knowledge entries: {len(knowledge_entries)} registered, all at node level"
+        )
+    else:
+        _warn(
+            f"Knowledge entries: {len(file_level)} file-level path(s) should be node-level",
+            "Use --fix to auto-migrate, or update beacon.yaml manually.",
+        )
+        for old, suggested in file_level:
+            arrow = (
+                f"  →  [green]{suggested}[/green]"
+                if suggested
+                else "  [red](no node found — check warehouse structure)[/red]"
+            )
+            console.print(f"       [dim]{old}[/dim]{arrow}")
+
+        if fix:
+            # Build replacement map: deduplicate to node-level
+            new_entries: list[str] = []
+            seen: set[str] = set()
+            for entry in knowledge_entries:
+                if entry.endswith(".md") or any(
+                    seg in entry.split("/") for seg in ("decisions", "lessons", "facts")
+                ):
+                    node = _find_knowledge_node_for_file(entry)
+                    if node and node not in seen:
+                        new_entries.append(node)
+                        seen.add(node)
+                        fixes_applied.append(f"  {entry}  →  {node}")
+                    elif not node:
+                        # Can't migrate; keep as-is
+                        if entry not in seen:
+                            new_entries.append(entry)
+                            seen.add(entry)
+                else:
+                    if entry not in seen:
+                        new_entries.append(entry)
+                        seen.add(entry)
+            beacon_settings.artifacts.knowledge = new_entries
+            beacon_settings.to_yaml(beacon_yaml)
+            # Reload
+            beacon_settings = BeaconSettings.from_yaml(beacon_yaml)
+            knowledge_entries = list(beacon_settings.artifacts.knowledge)
+            console.print(
+                f"       [green]Fixed:[/green] migrated {len(fixes_applied)} knowledge path(s) to node level"
+            )
+
+    # ── 5. Knowledge: node directories exist ────────────────────────────────
+    if warehouse_path:
+        missing_nodes: list[str] = []
+        invalid_nodes: list[str] = []
+        for entry in knowledge_entries:
+            node_dir = warehouse_path / entry
+            if not node_dir.exists():
+                missing_nodes.append(entry)
+            elif not _is_knowledge_node(node_dir):
+                invalid_nodes.append(entry)
+
+        if missing_nodes:
+            _err(
+                f"Knowledge entries: {len(missing_nodes)} node(s) missing from warehouse",
+                "These paths do not exist in the warehouse directory.",
+            )
+            for p in missing_nodes:
+                console.print(f"       [dim]{p}[/dim]")
+        else:
+            pass  # reported below
+
+        if invalid_nodes:
+            _warn(
+                f"Knowledge entries: {len(invalid_nodes)} path(s) point to non-node directories",
+                "These directories have no decisions/, lessons/, or facts/ subfolders.",
+            )
+            for p in invalid_nodes:
+                console.print(f"       [dim]{p}[/dim]")
+        else:
+            pass
+
+        if not missing_nodes and not invalid_nodes:
+            _ok(
+                f"Knowledge entries: all {len(knowledge_entries)} node(s) exist in warehouse"
+            )
+
+    # ── 6. Skill entries exist ───────────────────────────────────────────────
+    if warehouse_path:
+        missing_skills: list[str] = []
+        for entry in skill_entries:
+            skill_dir = warehouse_path / entry.rstrip("/")
+            if not skill_dir.is_dir():
+                missing_skills.append(entry)
+        if missing_skills:
+            _err(
+                f"Skill entries: {len(missing_skills)} skill(s) missing from warehouse",
+            )
+            for p in missing_skills:
+                console.print(f"       [dim]{p}[/dim]")
+        else:
+            _ok(f"Skill entries: all {len(skill_entries)} skill(s) exist in warehouse")
+
+    # ── 7. Context entries exist ─────────────────────────────────────────────
+    if warehouse_path:
+        missing_contexts: list[str] = []
+        for entry in context_entries:
+            ctx_file = warehouse_path / entry
+            if not ctx_file.exists():
+                missing_contexts.append(entry)
+        if missing_contexts:
+            _err(
+                f"Context entries: {len(missing_contexts)} context(s) missing from warehouse",
+            )
+            for p in missing_contexts:
+                console.print(f"       [dim]{p}[/dim]")
+        else:
+            _ok(
+                f"Context entries: all {len(context_entries)} context(s) exist in warehouse"
+            )
+
+    _print_doctor_summary(issues, fixes_applied)
+
+
+def _print_doctor_summary(issues: list[str], fixes_applied: list[str]) -> None:
+    console.print()
+    if fixes_applied:
+        console.print(f"[green]Applied {len(fixes_applied)} fix(es):[/green]")
+        for f in fixes_applied:
+            console.print(f"  {f}")
+        console.print()
+    if not issues:
+        console.print("[bold green]Everything looks good.[/bold green]")
+    else:
+        count = len(issues)
+        console.print(
+            f"[bold yellow]{count} issue(s) found.[/bold yellow]"
+            + (
+                " Run [bold]abc doctor --fix[/bold] to repair fixable issues."
+                if any("file-level" in i for i in issues)
+                else ""
+            )
         )
 
 

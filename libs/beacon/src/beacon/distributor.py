@@ -326,7 +326,7 @@ class WarehouseDistributor:
 
         agents = []
         for file in sorted(agents_dir.rglob("*.md")):
-            if not file.name.startswith("."):
+            if not file.name.startswith(".") and file.name.upper() != "README.MD":
                 rel = file.relative_to(agents_dir.parent)
                 agents.append(str(rel))
 
@@ -339,7 +339,7 @@ class WarehouseDistributor:
 
         contexts = []
         for file in sorted(contexts_dir.rglob("*.md")):
-            if not file.name.startswith("."):
+            if not file.name.startswith(".") and file.name.upper() != "README.MD":
                 rel = file.relative_to(contexts_dir.parent)
                 contexts.append(str(rel))
 

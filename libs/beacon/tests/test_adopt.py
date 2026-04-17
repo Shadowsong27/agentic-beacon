@@ -21,6 +21,8 @@ from beacon.adopt import (
     _count_unadopted_since,
     _extract_heading_description,
     _extract_skill_description,
+    _find_knowledge_node_for_file,
+    _list_knowledge_nodes,
     apply_adoption,
     discover_adoptable,
 )
@@ -133,6 +135,107 @@ class TestExtractHeadingDescription:
 
 
 # ---------------------------------------------------------------------------
+# Knowledge node helpers
+# ---------------------------------------------------------------------------
+
+
+class TestFindKnowledgeNodeForFile:
+    def test_flat_node_decisions(self):
+        assert (
+            _find_knowledge_node_for_file("knowledge/global/decisions/foo.md")
+            == "knowledge/global"
+        )
+
+    def test_flat_node_lessons(self):
+        assert (
+            _find_knowledge_node_for_file("knowledge/global/lessons/bar.md")
+            == "knowledge/global"
+        )
+
+    def test_flat_node_facts(self):
+        assert (
+            _find_knowledge_node_for_file("knowledge/global/facts/baz.md")
+            == "knowledge/global"
+        )
+
+    def test_nested_node(self):
+        assert (
+            _find_knowledge_node_for_file(
+                "knowledge/languages/python/decisions/typing.md"
+            )
+            == "knowledge/languages/python"
+        )
+
+    def test_file_not_under_subtype(self):
+        assert _find_knowledge_node_for_file("knowledge/python/basics.md") is None
+
+    def test_file_outside_knowledge(self):
+        assert _find_knowledge_node_for_file("contexts/foo.md") is None
+
+
+class TestListKnowledgeNodes:
+    def test_flat_node(self, tmp_path):
+        warehouse = _make_warehouse(tmp_path)
+        (warehouse / "knowledge" / "global" / "facts").mkdir(parents=True)
+        (warehouse / "knowledge" / "global" / "facts" / "foo.md").write_text("# Foo")
+        nodes = _list_knowledge_nodes(warehouse)
+        assert nodes == ["knowledge/global"]
+
+    def test_nested_nodes(self, tmp_path):
+        warehouse = _make_warehouse(tmp_path)
+        (warehouse / "knowledge" / "languages" / "python" / "decisions").mkdir(
+            parents=True
+        )
+        (warehouse / "knowledge" / "languages" / "typescript" / "lessons").mkdir(
+            parents=True
+        )
+        nodes = _list_knowledge_nodes(warehouse)
+        assert set(nodes) == {
+            "knowledge/languages/python",
+            "knowledge/languages/typescript",
+        }
+
+    def test_grouping_folder_excluded(self, tmp_path):
+        warehouse = _make_warehouse(tmp_path)
+        # languages/ has no decisions/lessons/facts directly — it's just a grouping folder
+        (warehouse / "knowledge" / "languages").mkdir(parents=True)
+        (warehouse / "knowledge" / "languages" / "README.md").write_text("# Languages")
+        nodes = _list_knowledge_nodes(warehouse)
+        assert nodes == []
+
+    def test_empty_knowledge_dir(self, tmp_path):
+        warehouse = _make_warehouse(tmp_path)
+        assert _list_knowledge_nodes(warehouse) == []
+
+    def test_mixed_flat_and_nested(self, tmp_path):
+        warehouse = _make_warehouse(tmp_path)
+        (warehouse / "knowledge" / "global" / "facts").mkdir(parents=True)
+        (warehouse / "knowledge" / "domains" / "web-services" / "decisions").mkdir(
+            parents=True
+        )
+        nodes = _list_knowledge_nodes(warehouse)
+        assert set(nodes) == {"knowledge/global", "knowledge/domains/web-services"}
+
+    def test_dual_role_node_and_parent(self, tmp_path):
+        """A directory with its own decisions/ AND child nodes is discovered at both levels."""
+        warehouse = _make_warehouse(tmp_path)
+        # data-platform is itself a node (has decisions/) AND has child nodes
+        (warehouse / "knowledge" / "data-platform" / "decisions").mkdir(parents=True)
+        (warehouse / "knowledge" / "data-platform" / "clickhouse" / "facts").mkdir(
+            parents=True
+        )
+        (warehouse / "knowledge" / "data-platform" / "dbt" / "decisions").mkdir(
+            parents=True
+        )
+        nodes = _list_knowledge_nodes(warehouse)
+        assert set(nodes) == {
+            "knowledge/data-platform",
+            "knowledge/data-platform/clickhouse",
+            "knowledge/data-platform/dbt",
+        }
+
+
+# ---------------------------------------------------------------------------
 # 7.1 discover_adoptable() — git-diff mode
 # ---------------------------------------------------------------------------
 
@@ -159,7 +262,7 @@ class TestDiscoverAdoptableGitDiff:
         paths = {c.path for c in candidates}
         assert "contexts/alpha.md" in paths
         assert "contexts/beta.md" in paths
-        assert updated == []
+        assert updated == []  # always empty in new API
 
     def test_new_skill_already_adopted(self, tmp_path):
         """TC2: New skill since last sync already in beacon.yaml -> empty list."""
@@ -207,21 +310,22 @@ class TestDiscoverAdoptableGitDiff:
         assert "contexts/team.md" in paths
         assert "skills/new-skill/" in paths
 
-    def test_no_changes_since_sha(self, tmp_path):
-        """TC4: No changes since sync SHA -> empty candidates."""
+    def test_all_adopted_returns_empty(self, tmp_path):
+        """TC4: All warehouse artifacts in beacon.yaml -> empty candidates."""
         warehouse = _make_warehouse(tmp_path)
         _git_init(warehouse)
         (warehouse / "contexts" / "existing.md").write_text("# Existing")
         sha = _git_add_commit(warehouse, "init")
 
-        beacon = _make_beacon_settings()
+        # Mark the artifact as adopted — full scan should return nothing
+        beacon = _make_beacon_settings(contexts=["contexts/existing.md"])
         candidates, updated = discover_adoptable(warehouse, beacon, sha)
 
         assert candidates == []
-        assert updated == []
+        assert updated == []  # always empty in new API
 
     def test_files_outside_adoptable_dirs_filtered(self, tmp_path):
-        """TC5: New files outside contexts/skills/knowledge are filtered out."""
+        """TC5: New files under docs/ are filtered out; agents/ are now adoptable."""
         warehouse = _make_warehouse(tmp_path)
         _git_init(warehouse)
         (warehouse / "README.md").write_text("# Warehouse")
@@ -231,12 +335,14 @@ class TestDiscoverAdoptableGitDiff:
         (warehouse / "docs" / "guide.md").write_text("# Guide")
         (warehouse / "agents").mkdir()
         (warehouse / "agents" / "claude.md").write_text("# Claude Agent")
-        _git_add_commit(warehouse, "add non-adoptable files")
+        _git_add_commit(warehouse, "add files")
 
         beacon = _make_beacon_settings()
         candidates, _ = discover_adoptable(warehouse, beacon, old_sha)
 
-        assert candidates == []
+        # docs/ is not adoptable; agents/ is adoptable (when not installed globally)
+        assert not any(c.path.startswith("docs/") for c in candidates)
+        assert any(c.artifact_type == "agents" for c in candidates)
 
     def test_skill_multiple_files_one_candidate(self, tmp_path):
         """TC6: New skill with multiple files -> single candidate with directory path."""
@@ -258,12 +364,15 @@ class TestDiscoverAdoptableGitDiff:
         assert candidates[0].artifact_type == "skills"
         assert candidates[0].path == "skills/my-skill/"
 
-    def test_no_sync_sha_raises(self, tmp_path):
-        """sync_sha=None raises ValueError."""
+    def test_no_sync_sha_does_full_scan(self, tmp_path):
+        """sync_sha=None no longer raises — full scan is always used."""
         warehouse = _make_warehouse(tmp_path)
+        (warehouse / "contexts" / "new.md").write_text("# New")
         beacon = _make_beacon_settings()
-        with pytest.raises(ValueError, match="No sync baseline"):
-            discover_adoptable(warehouse, beacon, None)
+        candidates, updated = discover_adoptable(warehouse, beacon, None)
+        # Full scan finds the unadopted context
+        assert any(c.path == "contexts/new.md" for c in candidates)
+        assert updated == []
 
 
 # ---------------------------------------------------------------------------
@@ -285,9 +394,11 @@ class TestDiscoverAdoptableAllMode:
         (warehouse / "skills" / "skill1" / "SKILL.md").write_text(
             "---\ndescription: Skill 1\n---\n"
         )
-        # 1 knowledge
-        (warehouse / "knowledge" / "python").mkdir()
-        (warehouse / "knowledge" / "python" / "basics.md").write_text("# Python Basics")
+        # 1 knowledge node (must have decisions/lessons/facts subdir)
+        (warehouse / "knowledge" / "python" / "facts").mkdir(parents=True)
+        (warehouse / "knowledge" / "python" / "facts" / "basics.md").write_text(
+            "# Python Basics"
+        )
 
         beacon = _make_beacon_settings(
             contexts=["contexts/ctx1.md", "contexts/ctx2.md"]
@@ -295,7 +406,9 @@ class TestDiscoverAdoptableAllMode:
         candidates, _ = discover_adoptable(warehouse, beacon, None, show_all=True)
 
         assert len(candidates) == 3
-        assert all(c.is_new is False for c in candidates)
+        assert all(
+            c.commits_ago is None for c in candidates
+        )  # no git repo → no annotation
 
     def test_all_already_adopted(self, tmp_path):
         """TC2: All warehouse artifacts in beacon.yaml -> empty list."""
@@ -316,8 +429,10 @@ class TestDiscoverAdoptableAllMode:
     def test_beacon_glob_patterns_match(self, tmp_path):
         """TC3: beacon.yaml has glob patterns -> correctly matches expanded paths."""
         warehouse = _make_warehouse(tmp_path)
-        (warehouse / "knowledge" / "python").mkdir()
-        (warehouse / "knowledge" / "python" / "async.md").write_text("# Async")
+        (warehouse / "knowledge" / "python" / "decisions").mkdir(parents=True)
+        (warehouse / "knowledge" / "python" / "decisions" / "async.md").write_text(
+            "# Async"
+        )
 
         # Glob pattern that matches the knowledge path
         beacon = _make_beacon_settings(knowledge=["knowledge/**/*.md"])
@@ -471,6 +586,33 @@ class TestApplyAdoption:
         updated = BeaconSettings.from_yaml(beacon_yaml)
         assert "contexts/old.md" in updated.artifacts.contexts
         assert "contexts/new.md" in updated.artifacts.contexts
+
+    def test_unadopt_removes_entry(self, tmp_path):
+        """Unadopting a path removes it from beacon.yaml."""
+        beacon_yaml = tmp_path / "beacon.yaml"
+        beacon_yaml.write_text(
+            "artifacts:\n  contexts:\n    - contexts/a.md\n    - contexts/b.md\n"
+            "  skills:\n    - skills/tool/\n  knowledge: []\n"
+        )
+
+        apply_adoption(beacon_yaml, [], unadoptions=["contexts/a.md", "skills/tool/"])
+
+        updated = BeaconSettings.from_yaml(beacon_yaml)
+        assert "contexts/a.md" not in updated.artifacts.contexts
+        assert "contexts/b.md" in updated.artifacts.contexts
+        assert "skills/tool/" not in updated.artifacts.skills
+
+    def test_unadopt_trailing_slash_normalised(self, tmp_path):
+        """Unadoption normalises trailing slashes when matching."""
+        beacon_yaml = tmp_path / "beacon.yaml"
+        beacon_yaml.write_text(
+            "artifacts:\n  contexts: []\n  skills:\n    - skills/foo/\n  knowledge: []\n"
+        )
+
+        apply_adoption(beacon_yaml, [], unadoptions=["skills/foo"])  # no trailing slash
+
+        updated = BeaconSettings.from_yaml(beacon_yaml)
+        assert "skills/foo/" not in updated.artifacts.skills
 
 
 # ---------------------------------------------------------------------------
@@ -854,32 +996,41 @@ def _make_tree_app(candidates, updated_adopted=None):
         def on_tree_node_selected(self, event: Tree.NodeSelected) -> None:
             self._toggle_node_selection(event.node)
 
+        def _iter_leaves(self, node):
+            if node.data and "selected" in node.data and not node.data.get("readonly"):
+                yield node
+            else:
+                for child in node.children:
+                    yield from self._iter_leaves(child)
+
         def action_select_all(self) -> None:
             tree = self.query_one("#tree", Tree)
-            for folder in tree.root.children:
-                for leaf in folder.children:
-                    if leaf.data and not leaf.data.get("readonly"):
-                        leaf.data["selected"] = True
-                        leaf.set_label(_leaf_label(leaf.data["path"], True))
+            for section in tree.root.children:
+                for leaf in self._iter_leaves(section):
+                    leaf.data["selected"] = True
+                    leaf.set_label(
+                        _leaf_label(
+                            leaf.data.get("display_name") or leaf.data["path"], True
+                        )
+                    )
 
         def action_select_none(self) -> None:
             tree = self.query_one("#tree", Tree)
-            for folder in tree.root.children:
-                for leaf in folder.children:
-                    if leaf.data and not leaf.data.get("readonly"):
-                        leaf.data["selected"] = False
-                        leaf.set_label(_leaf_label(leaf.data["path"], False))
+            for section in tree.root.children:
+                for leaf in self._iter_leaves(section):
+                    leaf.data["selected"] = False
+                    leaf.set_label(
+                        _leaf_label(
+                            leaf.data.get("display_name") or leaf.data["path"], False
+                        )
+                    )
 
         def action_confirm(self) -> None:
             tree = self.query_one("#tree", Tree)
             selected = []
-            for folder in tree.root.children:
-                for leaf in folder.children:
-                    if (
-                        leaf.data
-                        and not leaf.data.get("readonly")
-                        and leaf.data.get("selected")
-                    ):
+            for section in tree.root.children:
+                for leaf in self._iter_leaves(section):
+                    if leaf.data.get("selected"):
                         selected.append(leaf.data["path"])
             self.exit(selected)
 
@@ -894,11 +1045,16 @@ def _get_leaf_data(app) -> list[dict]:
     from textual.widgets import Tree
 
     tree = app.query_one("#tree", Tree)
+
+    def _collect(node, results):
+        if node.data and "selected" in node.data and not node.data.get("readonly"):
+            results.append(dict(node.data))
+        for child in node.children:
+            _collect(child, results)
+
     leaves = []
-    for folder in tree.root.children:
-        for leaf in folder.children:
-            if leaf.data and not leaf.data.get("readonly"):
-                leaves.append(dict(leaf.data))
+    for section in tree.root.children:
+        _collect(section, leaves)
     return leaves
 
 
@@ -1014,12 +1170,16 @@ class TestAdoptTreeTUI:
             from textual.widgets import Tree
 
             tree = app.query_one("#tree", Tree)
-            for folder in tree.root.children:
-                for leaf in folder.children:
-                    if leaf.data and leaf.data.get("readonly"):
-                        assert not leaf.data.get("selected"), (
-                            "readonly node must not be selected"
-                        )
+
+            def check_readonly(node):
+                if node.data and node.data.get("readonly"):
+                    assert not node.data.get("selected"), (
+                        "readonly node must not be selected"
+                    )
+                for child in node.children:
+                    check_readonly(child)
+
+            check_readonly(tree.root)
 
 
 # ---------------------------------------------------------------------------
@@ -1072,8 +1232,8 @@ class TestAdoptDryRunIntegration:
         updated = BeaconSettings.from_yaml(beacon_yaml)
         assert updated.artifacts.contexts == []
 
-    def test_no_sync_state_exits_with_error(self, tmp_path, monkeypatch):
-        """abc adopt without sync state exits with error directing user to run abc sync."""
+    def test_no_sync_state_shows_full_scan(self, tmp_path, monkeypatch):
+        """abc adopt without sync state performs full scan (no longer requires sync first)."""
         from beacon.cli import main
 
         project = tmp_path / "project"
@@ -1100,9 +1260,9 @@ class TestAdoptDryRunIntegration:
         runner = CliRunner()
         result = runner.invoke(main, ["adopt"])
 
-        assert result.exit_code != 0
-        output = result.output.lower()
-        assert "sync" in output
+        # Full scan of empty warehouse → clean exit with "no unadopted" message
+        assert result.exit_code == 0
+        assert "no unadopted" in result.output.lower() or "no" in result.output.lower()
 
     def test_all_adopted_exits_cleanly(self, tmp_path, monkeypatch):
         """abc adopt when all artifacts already adopted exits cleanly with message."""

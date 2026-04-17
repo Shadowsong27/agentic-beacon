@@ -53,6 +53,9 @@ def e2e_warehouse(tmp_path):
     wh = tmp_path / "my-warehouse"
 
     # Add real artifacts so sync has something to copy
+    (wh / "contexts" / "team.md").write_text(
+        "# Team Context\nStandards for the team.\n"
+    )
     (wh / "knowledge" / "python").mkdir(parents=True, exist_ok=True)
     (wh / "knowledge" / "python" / "standards.md").write_text(
         "# Python Standards\n- Use type annotations\n"
@@ -113,7 +116,8 @@ def test_e2e_warehouse_list_shows_contexts(e2e_project):
 
     assert result.exit_code == 0
     assert "Contexts" in result.output
-    assert "contexts/README.md" in result.output
+    assert "contexts/team.md" in result.output
+    assert "contexts/README.md" not in result.output
     assert "Knowledge" in result.output
     assert "Skills" in result.output
 

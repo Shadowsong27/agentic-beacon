@@ -482,3 +482,72 @@ class TestSyncSkillEntryValidation:
         result = CliRunner().invoke(main, ["sync", "--skip-git-check"])
 
         assert result.exit_code == 0
+
+
+def test_sync_knowledge_node_path_expands_to_files(
+    valid_warehouse, temp_dir, monkeypatch
+):
+    """TC: beacon.yaml with node-level knowledge path syncs all .md files within the node."""
+    runner = CliRunner()
+    project_dir = temp_dir / "project"
+    project_dir.mkdir()
+    monkeypatch.chdir(project_dir)
+
+    # Create a proper knowledge node (with decisions/ subdir)
+    node_dir = valid_warehouse / "knowledge" / "python"
+    (node_dir / "decisions").mkdir(parents=True)
+    (node_dir / "decisions" / "typing.md").write_text("# Typing Decision")
+    (node_dir / "lessons").mkdir()
+    (node_dir / "lessons" / "async.md").write_text("# Async Lessons")
+
+    runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
+    runner.invoke(main, ["setup", "--manual"])
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n  knowledge:\n    - knowledge/python\n  skills: []\n  contexts: []\n"
+    )
+
+    result = runner.invoke(main, ["sync", "--skip-git-check"])
+    assert result.exit_code == 0
+
+    artifacts_dir = project_dir / ".agentic-beacon" / "artifacts"
+    assert (artifacts_dir / "knowledge" / "python" / "decisions" / "typing.md").exists()
+    assert (artifacts_dir / "knowledge" / "python" / "lessons" / "async.md").exists()
+
+
+def test_sync_knowledge_nested_node_path_expands(
+    valid_warehouse, temp_dir, monkeypatch
+):
+    """TC: Sub-domain node path like knowledge/data-platform/clickhouse syncs correctly."""
+    runner = CliRunner()
+    project_dir = temp_dir / "project"
+    project_dir.mkdir()
+    monkeypatch.chdir(project_dir)
+
+    node_dir = valid_warehouse / "knowledge" / "data-platform" / "clickhouse"
+    (node_dir / "facts").mkdir(parents=True)
+    (node_dir / "facts" / "schema.md").write_text("# Schema Facts")
+
+    runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
+    runner.invoke(main, ["setup", "--manual"])
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n  knowledge:\n"
+        "    - knowledge/data-platform/clickhouse\n"
+        "  skills: []\n  contexts: []\n"
+    )
+
+    result = runner.invoke(main, ["sync", "--skip-git-check"])
+    assert result.exit_code == 0
+
+    artifacts_dir = project_dir / ".agentic-beacon" / "artifacts"
+    assert (
+        artifacts_dir
+        / "knowledge"
+        / "data-platform"
+        / "clickhouse"
+        / "facts"
+        / "schema.md"
+    ).exists()
