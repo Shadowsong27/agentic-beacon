@@ -15,7 +15,8 @@ import json
 from pathlib import Path
 
 import pytest
-from beacon.cli import _global_sync_state_file, main
+from beacon.cli import main
+from beacon.utils.sync_state import _global_sync_state_file
 from click.testing import CliRunner
 
 AGENT_CONTENT = """\

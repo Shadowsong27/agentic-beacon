@@ -12,7 +12,7 @@ TDD Test Cases (6.1):
 from pathlib import Path
 
 import pytest
-from beacon.cli import _install_agent_global
+from beacon.utils.agents import _install_agent_global
 
 AGENT_CONTENT = """\
 ---

@@ -21,7 +21,8 @@ import json
 from pathlib import Path
 
 import pytest
-from beacon.cli import _wire_skills_post_sync, main
+from beacon.cli import main
+from beacon.utils.skills import _wire_skills_post_sync
 from click.testing import CliRunner
 
 SAMPLE_SKILL_MD = """\

@@ -7,8 +7,8 @@ Regression tests for:
 """
 
 import pytest
-from beacon.cli import _generate_warehouse_catalog
 from beacon.distributor import WarehouseDistributor
+from beacon.utils.catalog import _generate_warehouse_catalog
 
 
 @pytest.fixture

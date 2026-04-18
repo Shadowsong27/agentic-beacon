@@ -15,13 +15,13 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from beacon.cli import _enrich_tracked_stale
 from beacon.core.delta import (
     ComparisonResult,
     DeltaComparator,
     DeltaStatus,
     DeltaSummary,
 )
+from beacon.utils.delta import _enrich_tracked_stale
 
 
 def _sha256(data: bytes) -> str:

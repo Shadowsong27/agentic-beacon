@@ -19,7 +19,7 @@ TDD Test Cases for _relink_global_sync_state (4.3):
 
 import json
 
-from beacon.cli import (
+from beacon.utils.sync_state import (
     _read_global_sync_state,
     _relink_global_sync_state,
     _write_global_sync_state,

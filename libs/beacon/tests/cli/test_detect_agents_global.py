@@ -8,7 +8,7 @@ TDD Test Cases:
 - TC5: ~/.config/opencode is a file (not dir) → not counted
 """
 
-from beacon.cli import _detect_agents_global
+from beacon.utils.agents import _detect_agents_global
 
 
 class TestDetectAgentsGlobal:

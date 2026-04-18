@@ -5,12 +5,9 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from beacon.cli import (
-    _check_sync_state,
-    _check_warehouse_git_clean,
-    _write_sync_state,
-    main,
-)
+from beacon.cli import main
+from beacon.utils.git import _check_warehouse_git_clean
+from beacon.utils.sync_state import _check_sync_state, _write_sync_state
 from click.testing import CliRunner
 
 # ========== Unit tests for _check_warehouse_git_clean ==========
@@ -549,7 +546,7 @@ def test_auto_git_uses_targeted_add(tmp_path):
 
 # ========== Unit tests for _check_warehouse_on_main_branch ==========
 
-from beacon.cli import _check_warehouse_on_main_branch  # noqa: E402
+from beacon.utils.git import _check_warehouse_on_main_branch  # noqa: E402
 
 
 def test_on_main_branch_returns_none(tmp_path):

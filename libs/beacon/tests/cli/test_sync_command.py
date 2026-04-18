@@ -11,8 +11,9 @@ Following TDD workflow for tasks 7.1-7.7:
 """
 
 import pytest
-from beacon.cli import _validate_skill_entries, main
+from beacon.cli import main
 from beacon.core.settings import ArtifactsConfig, BeaconSettings
+from beacon.utils.skills import _validate_skill_entries
 from click.testing import CliRunner
 
 # ========== Task 7.1: ABC Sync Command Implementation ==========

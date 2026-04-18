@@ -11,15 +11,12 @@ Covers:
 from pathlib import Path
 
 import pytest
-from beacon.cli import (
-    _bundled_skill_names,
-    _find_global_untracked_skills,
-    _find_project_level_agents,
-    _find_untracked_local_files,
-    main,
-)
+from beacon.cli import main
 from beacon.core.delta import DeltaComparator
 from beacon.core.settings import BeaconSettings
+from beacon.utils.agents import _find_project_level_agents
+from beacon.utils.delta import _find_untracked_local_files
+from beacon.utils.skills import _bundled_skill_names, _find_global_untracked_skills
 from click.testing import CliRunner
 
 # ---------------------------------------------------------------------------

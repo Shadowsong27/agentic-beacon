@@ -12,18 +12,17 @@ import json
 from unittest.mock import patch
 
 import pytest
-from beacon.cli import (
+from beacon.cli import main
+from beacon.utils.agents import _update_agent_gitignores
+from beacon.utils.skills import (
     _install_skill_claudecode,
     _install_skill_opencode,
     _normalize_skill_entry,
     _skill_name_from_entry,
-    _update_agent_gitignores,
-    _wire_contexts_claudecode,
-    _wire_contexts_opencode,
     _wire_single_skill,
     _wire_skills_post_sync,
-    main,
 )
+from beacon.utils.wiring import _wire_contexts_claudecode, _wire_contexts_opencode
 from click.testing import CliRunner
 
 # ---------------------------------------------------------------------------

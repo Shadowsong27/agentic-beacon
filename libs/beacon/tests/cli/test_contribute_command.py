@@ -4,13 +4,10 @@ import subprocess
 from unittest.mock import MagicMock, patch
 
 import pytest
-from beacon.cli import (
-    _build_pr_body,
-    _build_skills_paths,
-    _resolve_skill_contribute_source,
-    main,
-)
+from beacon.cli import main
 from beacon.core.delta import DeltaComparator, DeltaStatus
+from beacon.utils.contribute import _build_pr_body, _resolve_skill_contribute_source
+from beacon.utils.skills import _build_skills_paths
 from click.testing import CliRunner
 
 KNOWLEDGE_CONTENT_ORIGINAL = "# Type Hints\n\nUse type hints.\n"

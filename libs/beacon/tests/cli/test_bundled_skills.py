@@ -18,10 +18,10 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
-from beacon.cli import (
+from beacon.cli import main
+from beacon.utils.skills import (
     _install_bundled_skills_globally,
     _show_bundled_skills_status,
-    main,
 )
 from click.testing import CliRunner
 from rich.console import Console

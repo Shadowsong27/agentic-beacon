@@ -17,8 +17,8 @@ import json
 from pathlib import Path
 
 import pytest
-from beacon.cli import _enrich_agent_stale
 from beacon.core.delta import ComparisonResult, DeltaComparator, DeltaStatus
+from beacon.utils.agents import _enrich_agent_stale
 
 
 def _sha256(text: str) -> str:
