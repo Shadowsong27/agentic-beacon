@@ -26,7 +26,7 @@ from beacon.adopt import (
     apply_adoption,
     discover_adoptable,
 )
-from beacon.core.manifest import ArtifactsConfig, BeaconManifest
+from beacon.core.manifest.beacon import ArtifactsConfig, BeaconManifest
 from click.testing import CliRunner
 
 # ---------------------------------------------------------------------------

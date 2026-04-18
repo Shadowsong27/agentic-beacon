@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 from beacon.core.exceptions import ValidationError, YAMLParseError
-from beacon.core.manifest import BeaconManifest
+from beacon.core.manifest.beacon import BeaconManifest
 
 
 class TestBeaconYAMLParser:

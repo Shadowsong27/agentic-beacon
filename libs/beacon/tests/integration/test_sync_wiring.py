@@ -531,7 +531,7 @@ def test_sync_prints_manual_instructions_when_no_agent_config_non_interactive(
     monkeypatch.chdir(project)
     # No opencode.json, no CLAUDE.md; simulate non-interactive (CI) environment
 
-    with patch("beacon.cli._is_interactive", return_value=False):
+    with patch("beacon.core.cli.main._is_interactive", return_value=False):
         result = runner.invoke(main, ["sync"])
 
     assert result.exit_code == 0
@@ -543,7 +543,7 @@ def test_sync_interactive_init_opencode_json(full_sync_project, monkeypatch):
     monkeypatch.chdir(project)
     # No opencode.json, no CLAUDE.md; user answers yes/no to prompts
 
-    with patch("beacon.cli._is_interactive", return_value=True):
+    with patch("beacon.core.cli.main._is_interactive", return_value=True):
         # "y" for opencode.json prompt, "n" for CLAUDE.md prompt
         result = runner.invoke(main, ["sync"], input="y\nn\n")
 
@@ -559,7 +559,7 @@ def test_sync_interactive_init_claude_md(full_sync_project, monkeypatch):
     monkeypatch.chdir(project)
     # No opencode.json, no CLAUDE.md; user answers no/yes to prompts
 
-    with patch("beacon.cli._is_interactive", return_value=True):
+    with patch("beacon.core.cli.main._is_interactive", return_value=True):
         # "n" for opencode.json (contexts), "y" for CLAUDE.md (contexts),
         # "n" for opencode.json (skills), "n" for CLAUDE.md (skills)
         # (CLAUDE.md alone doesn't create .claude/ so skill prompt also fires)
@@ -666,7 +666,7 @@ def test_sync_skill_no_agent_config_no_prompt(skills_only_project, monkeypatch):
     project, runner = skills_only_project
     monkeypatch.chdir(project)
 
-    with patch("beacon.cli._is_interactive", return_value=True):
+    with patch("beacon.core.cli.main._is_interactive", return_value=True):
         result = runner.invoke(main, ["sync"])
 
     assert result.exit_code == 0
@@ -680,7 +680,7 @@ def test_sync_skill_dry_run_does_not_prompt(skills_only_project, monkeypatch):
     project, runner = skills_only_project
     monkeypatch.chdir(project)
 
-    with patch("beacon.cli._is_interactive", return_value=True):
+    with patch("beacon.core.cli.main._is_interactive", return_value=True):
         result = runner.invoke(main, ["sync", "--dry-run"])
 
     assert result.exit_code == 0
@@ -707,7 +707,7 @@ def test_sync_skill_empty_skills_dir_no_prompt(tmp_path, valid_warehouse, monkey
     monkeypatch.chdir(project)
     runner = CliRunner()
 
-    with patch("beacon.cli._is_interactive", return_value=False):
+    with patch("beacon.core.cli.main._is_interactive", return_value=False):
         result = runner.invoke(main, ["sync"])
 
     assert result.exit_code == 0
@@ -736,7 +736,7 @@ def test_sync_skill_dir_without_skill_md_no_prompt(
         "  knowledge: []\n"
     )
 
-    with patch("beacon.cli._is_interactive", return_value=False):
+    with patch("beacon.core.cli.main._is_interactive", return_value=False):
         result = runner.invoke(main, ["sync"])
 
     assert result.exit_code == 0
@@ -869,7 +869,7 @@ def test_sync_full_project_skills_wired_even_when_contexts_need_agent_config(
     project, runner = full_sync_project
     monkeypatch.chdir(project)
 
-    with patch("beacon.cli._is_interactive", return_value=False):
+    with patch("beacon.core.cli.main._is_interactive", return_value=False):
         result = runner.invoke(main, ["sync"])
 
     assert result.exit_code == 0

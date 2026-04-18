@@ -4,7 +4,7 @@ from pathlib import Path
 
 from rich.console import Console
 
-from ..core.manifest import BeaconManifest
+from beacon.core.manifest.beacon import BeaconManifest
 
 console = Console()
 

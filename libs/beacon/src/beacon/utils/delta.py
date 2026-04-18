@@ -6,8 +6,14 @@ from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 
-from ..core.delta import ComparisonResult, DeltaComparator, DeltaStatus, DeltaSummary
-from ..core.manifest import BeaconManifest
+from beacon.core.delta import (
+    ComparisonResult,
+    DeltaComparator,
+    DeltaStatus,
+    DeltaSummary,
+)
+from beacon.core.manifest.beacon import BeaconManifest
+
 from .git import _get_file_hash_at_sha, _get_warehouse_head_sha
 from .sync_state import _SYNC_STATE_FILENAME, _read_sync_sha
 
@@ -48,7 +54,7 @@ def _enrich_tracked_stale(
         The local artifact hash is compared against the synced warehouse content.
         If they match, the result is upgraded to STALE.
     """
-    from ..core.delta import DeltaStatus
+    from beacon.core.delta import DeltaStatus
 
     if not (warehouse_path / ".git").exists():
         return summary
@@ -254,7 +260,7 @@ def _show_delta_summary(
 
     # --- Tracked Artifacts section ---
     if tracked_diffs:
-        # Collect all agent names present across skill rows to build columns
+        # Collect agent names for skill columns
         tracked_agents: list[str] = []
         for result in tracked_diffs:
             if result.is_skill and result.agent_statuses:
@@ -262,17 +268,39 @@ def _show_delta_summary(
                     if a not in tracked_agents:
                         tracked_agents.append(a)
 
-        rows: list[tuple[str, str, dict[str, str]]] = []
-        for result in tracked_diffs:
-            status_markup = _STATUS_MARKUP.get(result.status, result.status.value)
-            agent_cells: dict[str, str] = {}
-            if result.is_skill and result.agent_statuses:
-                for a, s in result.agent_statuses.items():
-                    agent_cells[a] = _AGENT_STATUS_MARKUP.get(s, s.value)
-            rows.append((status_markup, result.path, agent_cells))
+        # Group knowledge node file results separately from standalone entries
+        node_entries = _knowledge_node_entries(
+            beacon_settings, comparator.warehouse_path
+        )
+        node_file_groups, standalone_results = _partition_tracked_diffs(
+            tracked_diffs, node_entries
+        )
 
         console.print()
-        console.print(_render_delta_table(rows, "Tracked Artifacts", tracked_agents))
+
+        if standalone_results:
+            rows: list[tuple[str, str, dict[str, str]]] = []
+            for result in standalone_results:
+                sm = _STATUS_MARKUP.get(result.status, result.status.value)
+                agent_cells: dict[str, str] = {}
+                if result.is_skill and result.agent_statuses:
+                    for a, s in result.agent_statuses.items():
+                        agent_cells[a] = _AGENT_STATUS_MARKUP.get(s, s.value)
+                rows.append((sm, result.path, agent_cells))
+            console.print(
+                _render_delta_table(rows, "Tracked Artifacts", tracked_agents)
+            )
+        elif node_file_groups:
+            console.print("[bold]Tracked Artifacts[/bold]")
+
+        for node_path in sorted(node_file_groups.keys()):
+            console.print()
+            _render_knowledge_node_group(
+                node_path,
+                node_file_groups[node_path],
+                _STATUS_MARKUP,
+                comparator.warehouse_path,
+            )
 
     # Classify agents for summary counts (always, even if no section rendered)
     stale_agents: list[str] = []
@@ -569,6 +597,112 @@ def _format_skill_agent_statuses(agent_statuses: dict) -> str:
     return ", ".join(parts)
 
 
+def _knowledge_node_entries(
+    beacon_settings: BeaconManifest, warehouse_path: Path
+) -> list[str]:
+    """Return the knowledge node paths (directory entries) declared in beacon.yaml.
+
+    Only non-glob patterns that point to a warehouse directory are treated as nodes.
+    Returned longest-first so that nested nodes match before their parents.
+    """
+    nodes = []
+    for pattern in beacon_settings.artifacts.knowledge:
+        if "*" not in pattern and "?" not in pattern:
+            node_path = pattern.rstrip("/")
+            if (warehouse_path / node_path).is_dir():
+                nodes.append(node_path)
+    return sorted(nodes, key=len, reverse=True)
+
+
+def _partition_tracked_diffs(
+    tracked_diffs: list[ComparisonResult],
+    node_entries: list[str],
+) -> tuple[dict[str, list[ComparisonResult]], list[ComparisonResult]]:
+    """Split tracked diffs into per-node file groups and standalone results.
+
+    Returns (node_file_groups, standalone_results).
+    node_file_groups maps node_path → list of file-level ComparisonResults that live
+    under that node (path starts with node + "/").
+    standalone_results contains everything else — including single-node MISSING results
+    whose path equals the node path exactly (not a sub-file).
+    """
+    node_file_groups: dict[str, list[ComparisonResult]] = {}
+    standalone_results: list[ComparisonResult] = []
+
+    for result in tracked_diffs:
+        matched_node = None
+        for node in node_entries:
+            if result.path.startswith(node + "/"):
+                matched_node = node
+                break
+        if matched_node:
+            node_file_groups.setdefault(matched_node, []).append(result)
+        else:
+            standalone_results.append(result)
+
+    return node_file_groups, standalone_results
+
+
+def _render_knowledge_node_group(
+    node_path: str,
+    results: list[ComparisonResult],
+    status_markup: dict[DeltaStatus, str],
+    warehouse_path: Path,
+) -> None:
+    """Render a knowledge node group: a header line + indented file table.
+
+    The header shows the node path and a breakdown badge.  Missing files are shown
+    as a fraction of the total in the warehouse node (e.g. "2/5 missing") so the
+    user can see at a glance whether the whole node or only part of it is absent.
+    Other statuses show plain counts (e.g. "1 modified").
+    """
+    _STATUS_ORDER = [
+        (DeltaStatus.MODIFIED, "modified", "[yellow]", "[/yellow]"),
+        (DeltaStatus.MISSING, "missing", "[red]", "[/red]"),
+        (DeltaStatus.ADDED, "added", "[green]", "[/green]"),
+        (DeltaStatus.STALE, "stale", "[dim cyan]", "[/dim cyan]"),
+    ]
+
+    counts: dict[DeltaStatus, int] = {}
+    for r in results:
+        counts[r.status] = counts.get(r.status, 0) + 1
+
+    # Total .md files in this node in the local warehouse — used to render
+    # missing as a fraction so the user knows whether it's partial or complete.
+    node_dir = warehouse_path / node_path
+    total_in_node = sum(1 for f in node_dir.rglob("*.md") if f.is_file())
+
+    badge_parts = []
+    for status, label, open_tag, close_tag in _STATUS_ORDER:
+        n = counts.get(status, 0)
+        if not n:
+            continue
+        if status == DeltaStatus.MISSING and total_in_node > 0:
+            badge_parts.append(f"{open_tag}{n}/{total_in_node} {label}{close_tag}")
+        else:
+            badge_parts.append(f"{open_tag}{n} {label}{close_tag}")
+
+    badge = "  [dim][" + " · ".join(badge_parts) + "][/dim]" if badge_parts else ""
+    console.print(f"[bold]{node_path}[/bold]{badge}")
+
+    prefix = node_path + "/"
+    table = Table(
+        show_header=True,
+        header_style="dim",
+        box=None,
+        padding=(0, 2, 0, 2),
+    )
+    table.add_column("Status", no_wrap=True)
+    table.add_column("File")
+
+    for result in sorted(results, key=lambda r: r.path):
+        rel = result.path.removeprefix(prefix)
+        sm = status_markup.get(result.status, result.status.value)
+        table.add_row(sm, rel)
+
+    console.print(table)
+
+
 def _render_delta_table(
     rows: list[tuple[str, str, dict[str, str]]],
     title: str,
@@ -609,7 +743,8 @@ def _collect_artifact_paths(
     Globs both the warehouse and local artifacts directory so that locally-added
     files (not yet in the warehouse) are included.
     """
-    from ..core.sync import SyncEngine
+    from beacon.core.sync import SyncEngine
+
     from .skills import _normalize_skill_entry, _skill_name_from_entry
 
     sync_engine = SyncEngine(
@@ -645,6 +780,22 @@ def _collect_artifact_paths(
                                         / f.relative_to(agent_skill_dir)
                                     )
                                     paths.add(rel)
+            elif artifact_type == "knowledge" and (
+                pattern.endswith("/") or (comparator.warehouse_path / pattern).is_dir()
+            ):
+                # Node-level knowledge directory — expand to individual .md file paths,
+                # mirroring the sync command which uses expand_glob(f"{pattern}/**/*.md").
+                # Without this, delta sees synced files like knowledge/python/decisions/a.md
+                # as untracked because `tracked` only contains the raw directory string.
+                node_path = pattern.rstrip("/")
+                paths.update(sync_engine.expand_glob(f"{node_path}/**/*.md"))
+                # Also scan local artifacts to catch locally-added .md files not yet in warehouse
+                if comparator.artifacts_path.exists():
+                    local_node = comparator.artifacts_path / node_path
+                    if local_node.exists():
+                        for f in local_node.rglob("*.md"):
+                            if f.is_file():
+                                paths.add(str(f.relative_to(comparator.artifacts_path)))
             else:
                 paths.add(pattern)
     return paths

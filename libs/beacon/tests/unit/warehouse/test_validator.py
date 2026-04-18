@@ -16,8 +16,8 @@ Test Coverage:
 from pathlib import Path
 
 import pytest
-from beacon.core.manifest import ValidationResult
-from beacon.warehouse import WarehouseValidator
+from beacon.core.manifest.beacon import ValidationResult
+from beacon.warehouse.validator import WarehouseValidator
 
 
 class TestWarehouseValidator:

@@ -680,3 +680,254 @@ def test_delta_summary_counts_new_agents(project_with_artifacts, monkeypatch, tm
     assert result.exit_code == 0
     assert "New agent(s): 2" in result.output
     assert "abc contribute" in result.output
+
+
+# ---------------------------------------------------------------------------
+# Knowledge node expansion regression tests
+# ---------------------------------------------------------------------------
+
+
+def test_delta_knowledge_node_no_false_positives(
+    temp_dir, valid_warehouse, monkeypatch, isolated_home
+):
+    """Regression: abc delta must not report synced knowledge node files as new contributions.
+
+    Bug: When beacon.yaml has a node-level knowledge entry (directory path like
+    ``knowledge/python``), _collect_artifact_paths added the raw directory string to
+    the tracked set. delta then saw every synced file (e.g. knowledge/python/decisions/a.md)
+    as untracked and showed them all as new artifacts to contribute.
+    """
+    runner = CliRunner()
+    project = temp_dir / "project"
+    project.mkdir()
+    monkeypatch.chdir(project)
+
+    # Build a proper knowledge node in the warehouse
+    node = valid_warehouse / "knowledge" / "python"
+    (node / "decisions").mkdir(parents=True)
+    (node / "decisions" / "typing.md").write_text("# Use type hints everywhere.")
+    (node / "lessons").mkdir()
+    (node / "lessons" / "async.md").write_text("# Prefer asyncio over threads.")
+
+    runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
+
+    beacon_yaml = project / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n  knowledge:\n    - knowledge/python\n  skills: []\n  contexts: []\n"
+    )
+
+    sync_result = runner.invoke(main, ["sync", "--skip-git-check"])
+    assert sync_result.exit_code == 0, sync_result.output
+
+    result = runner.invoke(main, ["delta"])
+
+    assert result.exit_code == 0
+    assert "No differences" in result.output, (
+        f"Expected 'No differences' but got:\n{result.output}"
+    )
+
+
+def test_delta_knowledge_node_not_yet_synced_shows_single_missing_entry(
+    temp_dir, valid_warehouse, monkeypatch, isolated_home
+):
+    """Regression: when a knowledge node has not been synced yet, abc delta must show
+    a single MISSING entry for the node — not N individual missing file entries.
+
+    This was the "back and forth" UX problem: adding a new node to beacon.yaml and
+    running delta before abc sync would flood the output with one missing line per file.
+    """
+    runner = CliRunner()
+    project = temp_dir / "project"
+    project.mkdir()
+    monkeypatch.chdir(project)
+
+    # Node with several files — none of which have been synced to local artifacts
+    node = valid_warehouse / "knowledge" / "python"
+    (node / "decisions").mkdir(parents=True)
+    (node / "decisions" / "typing.md").write_text("# Typing")
+    (node / "decisions" / "imports.md").write_text("# Imports")
+    (node / "lessons").mkdir()
+    (node / "lessons" / "async.md").write_text("# Async")
+    (node / "lessons" / "testing.md").write_text("# Testing")
+
+    runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
+
+    # Write beacon.yaml with node entry but do NOT run abc sync
+    beacon_yaml = project / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n  knowledge:\n    - knowledge/python\n  skills: []\n  contexts: []\n"
+    )
+
+    result = runner.invoke(main, ["delta"])
+
+    assert result.exit_code == 0
+    # Must show the node path as a single entry — not individual files
+    assert "knowledge/python" in result.output
+    assert "knowledge/python/decisions/typing.md" not in result.output
+    assert "knowledge/python/decisions/imports.md" not in result.output
+    assert "knowledge/python/lessons/async.md" not in result.output
+    assert "knowledge/python/lessons/testing.md" not in result.output
+    # The status must be missing (not "new contribution")
+    assert "missing" in result.output.lower()
+
+
+def test_delta_knowledge_node_detects_modification(
+    temp_dir, valid_warehouse, monkeypatch
+):
+    """After syncing a knowledge node, modifying a file shows it as Modified in delta."""
+    runner = CliRunner()
+    project = temp_dir / "project"
+    project.mkdir()
+    monkeypatch.chdir(project)
+
+    node = valid_warehouse / "knowledge" / "python"
+    (node / "decisions").mkdir(parents=True)
+    (node / "decisions" / "typing.md").write_text("# Use type hints.")
+
+    runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
+
+    beacon_yaml = project / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n  knowledge:\n    - knowledge/python\n  skills: []\n  contexts: []\n"
+    )
+
+    runner.invoke(main, ["sync", "--skip-git-check"])
+
+    # Locally modify the synced file
+    synced_file = (
+        project
+        / ".agentic-beacon"
+        / "artifacts"
+        / "knowledge"
+        / "python"
+        / "decisions"
+        / "typing.md"
+    )
+    synced_file.write_text("# Use type hints everywhere. (local edit)")
+
+    result = runner.invoke(main, ["delta"])
+
+    assert result.exit_code == 0
+    assert "modified" in result.output.lower()
+    # With node grouping, the file is shown as "decisions/typing.md" under the node header
+    assert "knowledge/python" in result.output
+    assert "decisions/typing.md" in result.output
+
+
+def test_delta_knowledge_node_grouped_output(temp_dir, valid_warehouse, monkeypatch):
+    """Knowledge node files are grouped under their node header in delta output.
+
+    When a knowledge node has multiple files with different statuses, the delta
+    output shows:
+      - A node header line with an aggregate badge (e.g. "knowledge/python  [1 modified]")
+      - Individual files listed with paths relative to the node
+    Not the full warehouse-relative paths that would repeat the node prefix on every line.
+    """
+    runner = CliRunner()
+    project = temp_dir / "project"
+    project.mkdir()
+    monkeypatch.chdir(project)
+
+    node = valid_warehouse / "knowledge" / "python"
+    (node / "decisions").mkdir(parents=True)
+    (node / "decisions" / "typing.md").write_text("# Typing")
+    (node / "decisions" / "imports.md").write_text("# Imports")
+    (node / "lessons").mkdir()
+    (node / "lessons" / "async.md").write_text("# Async")
+
+    runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
+    beacon_yaml = project / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n  knowledge:\n    - knowledge/python\n  skills: []\n  contexts: []\n"
+    )
+    runner.invoke(main, ["sync", "--skip-git-check"])
+
+    # Modify one synced file
+    synced_typing = (
+        project
+        / ".agentic-beacon"
+        / "artifacts"
+        / "knowledge"
+        / "python"
+        / "decisions"
+        / "typing.md"
+    )
+    synced_typing.write_text("# Typing — local edit")
+
+    result = runner.invoke(main, ["delta"])
+
+    assert result.exit_code == 0
+    # Node header must appear
+    assert "knowledge/python" in result.output
+    # Relative path (not full path) must appear under the node
+    assert "decisions/typing.md" in result.output
+    # Full path must NOT appear — that would mean grouping didn't kick in
+    assert "knowledge/python/decisions/typing.md" not in result.output
+    # Aggregate badge shows the modification count
+    assert "modified" in result.output.lower()
+
+
+def test_delta_knowledge_node_missing_fraction_in_output(
+    temp_dir, valid_warehouse, monkeypatch, isolated_home
+):
+    """When only some files in a knowledge node are synced, the badge shows X/N missing.
+
+    Warehouse has 3 files.  Project syncs only 1 then deletes it to simulate
+    a partial-missing scenario.  Delta should show '2/3 missing' in the output.
+    """
+    runner = CliRunner()
+    project = temp_dir / "project"
+    project.mkdir()
+    monkeypatch.chdir(project)
+
+    node = valid_warehouse / "knowledge" / "python"
+    (node / "decisions").mkdir(parents=True)
+    for name in ("typing.md", "imports.md", "async.md"):
+        (node / "decisions" / name).write_text(f"# {name}")
+
+    runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
+    beacon_yaml = project / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n  knowledge:\n    - knowledge/python\n  skills: []\n  contexts: []\n"
+    )
+    runner.invoke(main, ["sync", "--skip-git-check"])
+
+    # Delete 2 of the 3 synced files to force 2/3 missing
+    artifacts_node = (
+        project / ".agentic-beacon" / "artifacts" / "knowledge" / "python" / "decisions"
+    )
+    (artifacts_node / "imports.md").unlink()
+    (artifacts_node / "async.md").unlink()
+
+    result = runner.invoke(main, ["delta"])
+
+    assert result.exit_code == 0
+    assert "2/3 missing" in result.output
+
+
+def test_delta_knowledge_node_trailing_slash_no_false_positives(
+    temp_dir, valid_warehouse, monkeypatch, isolated_home
+):
+    """Trailing slash in beacon.yaml entry (``knowledge/python/``) must not cause false positives."""
+    runner = CliRunner()
+    project = temp_dir / "project"
+    project.mkdir()
+    monkeypatch.chdir(project)
+
+    node = valid_warehouse / "knowledge" / "python"
+    (node / "facts").mkdir(parents=True)
+    (node / "facts" / "basics.md").write_text("# Python basics.")
+
+    runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
+
+    beacon_yaml = project / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n  knowledge:\n    - knowledge/python/\n  skills: []\n  contexts: []\n"
+    )
+
+    runner.invoke(main, ["sync", "--skip-git-check"])
+
+    result = runner.invoke(main, ["delta"])
+
+    assert result.exit_code == 0
+    assert "No differences" in result.output

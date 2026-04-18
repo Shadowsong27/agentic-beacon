@@ -57,7 +57,8 @@ def _install_project_setup_skill(beacon_dir: Path) -> None:
     This generates a warehouse catalog file that AI agents can read
     to understand what artifacts are available and populate beacon.yaml.
     """
-    from ..core.manifest import WorkspaceConfig
+    from beacon.core.manifest.workspace import WorkspaceConfig
+
     from .catalog import _generate_warehouse_catalog
 
     try:

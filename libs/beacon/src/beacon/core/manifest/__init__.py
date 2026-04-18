@@ -1,24 +1,5 @@
-"""Manifest package for Agentic Beacon project-level configs.
+"""Manifest package — beacon.yaml and config.toml models.
 
-- beacon: beacon.yaml artifact manifest (committed to git)
-- workspace: config.toml workspace connection (gitignored)
+- beacon: BeaconManifest, ArtifactsConfig, IgnoreConfig, ValidationResult, BeaconManifestValidator
+- workspace: WorkspaceConfig, WarehouseConfig
 """
-
-from .beacon import (
-    ArtifactsConfig,
-    BeaconManifest,
-    BeaconManifestValidator,
-    IgnoreConfig,
-    ValidationResult,
-)
-from .workspace import WarehouseConfig, WorkspaceConfig
-
-__all__ = [
-    "ArtifactsConfig",
-    "BeaconManifest",
-    "BeaconManifestValidator",
-    "IgnoreConfig",
-    "ValidationResult",
-    "WarehouseConfig",
-    "WorkspaceConfig",
-]

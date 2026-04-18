@@ -9,7 +9,7 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel, Field
 
-from ..exceptions import (
+from beacon.core.exceptions import (
     ValidationError,
     YAMLParseError,
 )

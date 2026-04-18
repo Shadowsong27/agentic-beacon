@@ -7,7 +7,7 @@ from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 
-from ..core.manifest import ArtifactsConfig, BeaconManifest
+from beacon.core.manifest.beacon import ArtifactsConfig, BeaconManifest
 
 console = Console()
 
@@ -197,7 +197,7 @@ def _migrate_beacon_yaml_skill_entries(
     beacon_yaml: Path, legacy_entries: list[str]
 ) -> None:
     """Rewrite beacon.yaml replacing file-level skill entries with directory form."""
-    from ..core.manifest import BeaconManifest
+    from beacon.core.manifest.beacon import BeaconManifest
 
     settings = BeaconManifest.from_yaml(beacon_yaml)
     migrated = []
@@ -273,6 +273,11 @@ def _wire_single_skill(
     else:
         dest_root = project_root / ".claude" / "skills" / skill_name
 
+    # A broken symlink (or non-directory) at dest_root causes mkdir(exist_ok=True)
+    # to raise EEXIST because os.path.isdir() returns False for non-directories.
+    # Remove the obstacle so we always create a real directory.
+    if dest_root.is_symlink() or (dest_root.exists() and not dest_root.is_dir()):
+        dest_root.unlink()
     dest_root.mkdir(parents=True, exist_ok=True)
 
     any_written = False

@@ -22,6 +22,47 @@ Follow the global Python standards from the user's AGENTS.md context rather than
 - Dataclass for service classes only
 - Conventional commits for all changes
 
+### Import Style
+
+**Always use absolute imports** starting from the `beacon` package root. Never use relative imports (no `from ..utils import`, no `from .core import`).
+
+```python
+# correct
+from beacon.core.manifest.beacon import BeaconManifest
+from beacon.utils.git import find_project_root
+
+# wrong
+from ..core.manifest import BeaconManifest
+from .utils.git import find_project_root
+```
+
+### `__init__.py` Policy
+
+`__init__.py` files must **not** re-export names from sub-modules. They exist only to mark a directory as a package and may contain a docstring. Do not add `from .module import X` or `__all__` lists unless explicitly instructed.
+
+```python
+# correct — __init__.py
+"""Package description."""
+
+# wrong — __init__.py
+from .beacon import BeaconManifest, ArtifactsConfig
+from .workspace import WorkspaceConfig
+
+__all__ = ["BeaconManifest", "WorkspaceConfig"]
+```
+
+Callers must import directly from the module that defines the name:
+
+```python
+# correct — import from the defining module
+from beacon.core.manifest.beacon import BeaconManifest
+from beacon.warehouse.validator import WarehouseValidator
+
+# wrong — importing through a re-exporting __init__
+from beacon.core.manifest import BeaconManifest
+from beacon.warehouse import WarehouseValidator
+```
+
 ## Rationale
 
 **Why reference instead of duplicate:**

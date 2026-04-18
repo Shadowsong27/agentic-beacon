@@ -18,7 +18,8 @@ import os
 import pytest
 from beacon.core.exceptions import ValidationError as BeaconValidationError
 from beacon.core.exceptions import YAMLParseError
-from beacon.core.manifest import BeaconManifest, WorkspaceConfig
+from beacon.core.manifest.beacon import BeaconManifest
+from beacon.core.manifest.workspace import WorkspaceConfig
 from pydantic_core import ValidationError as PydanticValidationError
 
 

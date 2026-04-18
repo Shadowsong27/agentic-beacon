@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 from beacon.cli import main
 from beacon.core.delta import DeltaComparator
-from beacon.core.manifest import BeaconManifest
+from beacon.core.manifest.beacon import BeaconManifest
 from beacon.utils.agents import _find_project_level_agents
 from beacon.utils.delta import _find_untracked_local_files
 from beacon.utils.skills import _bundled_skill_names, _find_global_untracked_skills

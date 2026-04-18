@@ -890,8 +890,8 @@ def test_contribute_auto_git_creates_pr(project_with_delta, tmp_path):
 
     runner = CliRunner()
     with (
-        patch("beacon.cli._check_warehouse_git_clean", return_value=None),
-        patch("beacon.cli._check_sync_state", return_value=None),
+        patch("beacon.core.cli.main._check_warehouse_git_clean", return_value=None),
+        patch("beacon.core.cli.main._check_sync_state", return_value=None),
         patch("beacon.utils.contribute.subprocess.run") as mock_run,
     ):
         mock_run.side_effect = [
@@ -931,8 +931,8 @@ def test_contribute_auto_git_fallback_when_push_fails(project_with_delta):
 
     runner = CliRunner()
     with (
-        patch("beacon.cli._check_warehouse_git_clean", return_value=None),
-        patch("beacon.cli._check_sync_state", return_value=None),
+        patch("beacon.core.cli.main._check_warehouse_git_clean", return_value=None),
+        patch("beacon.core.cli.main._check_sync_state", return_value=None),
         patch("beacon.utils.contribute.subprocess.run") as mock_run,
     ):
         mock_run.side_effect = [
@@ -955,8 +955,8 @@ def test_contribute_auto_git_fallback_when_gh_not_installed(project_with_delta):
 
     runner = CliRunner()
     with (
-        patch("beacon.cli._check_warehouse_git_clean", return_value=None),
-        patch("beacon.cli._check_sync_state", return_value=None),
+        patch("beacon.core.cli.main._check_warehouse_git_clean", return_value=None),
+        patch("beacon.core.cli.main._check_sync_state", return_value=None),
         patch("beacon.utils.contribute.subprocess.run") as mock_run,
     ):
         mock_run.side_effect = [
@@ -1201,8 +1201,8 @@ def test_default_auto_git_includes_untracked_in_pr(project_with_untracked):
 
     runner = CliRunner()
     with (
-        patch("beacon.cli._check_warehouse_git_clean", return_value=None),
-        patch("beacon.cli._check_sync_state", return_value=None),
+        patch("beacon.core.cli.main._check_warehouse_git_clean", return_value=None),
+        patch("beacon.core.cli.main._check_sync_state", return_value=None),
         patch("beacon.utils.contribute.subprocess.run") as mock_run,
     ):
         mock_run.side_effect = [

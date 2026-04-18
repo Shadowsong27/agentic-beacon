@@ -237,7 +237,7 @@ def test_compare_added_local(valid_warehouse, temp_dir):
 
 def test_compare_from_config_only_listed(valid_warehouse, temp_dir):
     """compare_from_config only compares artifacts in beacon.yaml."""
-    from beacon.core.manifest import BeaconManifest
+    from beacon.core.manifest.beacon import BeaconManifest
 
     artifacts_dir = temp_dir / "artifacts"
     (artifacts_dir / "knowledge").mkdir(parents=True)
@@ -345,7 +345,7 @@ def test_summary_filter_properties(valid_warehouse, temp_dir):
 def test_compare_from_config_detects_added_file_via_glob(valid_warehouse, temp_dir):
     """compare_from_config finds locally-added files that match a glob pattern
     but don't exist in the warehouse (previously invisible to delta)."""
-    from beacon.core.manifest import BeaconManifest
+    from beacon.core.manifest.beacon import BeaconManifest
 
     artifacts_dir = temp_dir / "artifacts"
     (artifacts_dir / "knowledge").mkdir(parents=True)
@@ -372,7 +372,7 @@ def test_compare_from_config_detects_added_skill_via_glob(valid_warehouse, temp_
     When no skills_paths are configured, falls back to artifacts_path for skills
     (backward compatibility — no agents detected).
     """
-    from beacon.core.manifest import BeaconManifest
+    from beacon.core.manifest.beacon import BeaconManifest
 
     artifacts_dir = temp_dir / "artifacts"
     skill_dir = artifacts_dir / "skills" / "my-skill"
@@ -395,7 +395,7 @@ def test_compare_from_config_detects_added_skill_via_glob(valid_warehouse, temp_
 
 def test_compare_from_config_skills_uses_live_agent_path(valid_warehouse, temp_dir):
     """compare_from_config uses live agent install dir for skills when skills_paths configured."""
-    from beacon.core.manifest import BeaconManifest
+    from beacon.core.manifest.beacon import BeaconManifest
 
     artifacts_dir = temp_dir / "artifacts"
     artifacts_dir.mkdir()
@@ -432,7 +432,7 @@ def test_compare_from_config_skills_uses_live_agent_path(valid_warehouse, temp_d
 
 def test_compare_from_config_skills_identical_live_agent(valid_warehouse, temp_dir):
     """compare_from_config reports IDENTICAL when live skill matches warehouse."""
-    from beacon.core.manifest import BeaconManifest
+    from beacon.core.manifest.beacon import BeaconManifest
 
     artifacts_dir = temp_dir / "artifacts"
     artifacts_dir.mkdir()
@@ -466,7 +466,7 @@ def test_compare_from_config_skills_identical_live_agent(valid_warehouse, temp_d
 
 def test_compare_skill_multi_agent_worst_status_wins(valid_warehouse, temp_dir):
     """With multiple agents, aggregate status reflects the worst across all agents."""
-    from beacon.core.manifest import BeaconManifest
+    from beacon.core.manifest.beacon import BeaconManifest
 
     artifacts_dir = temp_dir / "artifacts"
     artifacts_dir.mkdir()
@@ -510,7 +510,7 @@ def test_compare_skill_multi_agent_worst_status_wins(valid_warehouse, temp_dir):
 
 def test_compare_from_config_detects_missing_skill_via_glob(valid_warehouse, temp_dir):
     """compare_from_config detects a warehouse skill not yet synced locally via glob."""
-    from beacon.core.manifest import BeaconManifest
+    from beacon.core.manifest.beacon import BeaconManifest
 
     # Skill exists in warehouse but not in local artifacts
     skill_dir = valid_warehouse / "skills" / "opsx-handoff"
@@ -535,7 +535,7 @@ def test_compare_from_config_detects_missing_skill_via_glob(valid_warehouse, tem
 
 def test_compare_from_config_no_duplicates_for_modified(valid_warehouse, temp_dir):
     """A MODIFIED file present in both warehouse and local is not double-counted."""
-    from beacon.core.manifest import BeaconManifest
+    from beacon.core.manifest.beacon import BeaconManifest
 
     artifacts_dir = temp_dir / "artifacts"
     (artifacts_dir / "knowledge").mkdir(parents=True)
@@ -811,7 +811,7 @@ def test_compare_from_config_glob_detects_added_skill_in_live_dir(
     valid_warehouse, temp_dir
 ):
     """Glob-based config detects a skill present in the live dir but not in the warehouse."""
-    from beacon.core.manifest import BeaconManifest
+    from beacon.core.manifest.beacon import BeaconManifest
 
     artifacts_dir = temp_dir / "artifacts"
     artifacts_dir.mkdir()
@@ -840,7 +840,7 @@ def test_compare_from_config_glob_detects_added_skill_in_live_dir(
 
 def test_compare_from_config_glob_no_duplicates_multi_agent(valid_warehouse, temp_dir):
     """With multiple agents having the same skill, it appears only once in results."""
-    from beacon.core.manifest import BeaconManifest
+    from beacon.core.manifest.beacon import BeaconManifest
 
     content = "# Warehouse\n"
     (valid_warehouse / "skills" / "my-skill").mkdir(parents=True)

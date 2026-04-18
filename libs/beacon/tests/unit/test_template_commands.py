@@ -13,7 +13,7 @@ import click
 from beacon.cli import main
 from beacon.data.historical_hashes import KNOWN_TEMPLATE_HASHES, normalise_path
 
-_TEMPLATES_DIR = Path(__file__).parent.parent / "src/beacon/data/templates"
+_TEMPLATES_DIR = Path(__file__).parent.parent.parent / "src/beacon/data/templates"
 
 # Pattern: backtick-quoted `abc <something>` — captures the part after "abc "
 _ABC_CMD_RE = re.compile(r"`abc ([\w][\w/ -]*)`")

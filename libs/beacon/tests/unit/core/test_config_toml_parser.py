@@ -17,7 +17,7 @@ import os
 from pathlib import Path
 
 import pytest
-from beacon.core.manifest import WorkspaceConfig
+from beacon.core.manifest.workspace import WorkspaceConfig
 from pydantic import ValidationError
 
 

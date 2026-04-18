@@ -34,7 +34,7 @@ STARTER_WAREHOUSE_PINNED_TEMPLATE_HASHES: dict[str, str] = {
     "skills/README.md": "abbf8a13d85ec87c77cc164673ab7924de6b44ead33482bedcf9765c88837179",
 }
 
-_TEMPLATES_DIR = Path(__file__).parent.parent / "src/beacon/data/templates"
+_TEMPLATES_DIR = Path(__file__).parent.parent.parent / "src/beacon/data/templates"
 
 
 def test_starter_warehouse_templates_are_current():

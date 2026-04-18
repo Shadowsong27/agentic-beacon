@@ -68,6 +68,17 @@ abc init test-warehouse
 
 **Read:** [CLI Development Workflow](knowledge/facts/cli-development-workflow.md)
 
+### CLI Layer Discipline
+
+**Rule:** `cli.py` must only contain Click command handlers and their immediate argument parsing. All business logic, file operations, and interactive prompts belong in the service/utility layer (`adopt.py`, `utils/*.py`, etc.).
+
+**Never create helper functions directly in `cli.py`.** If a function is needed by a command, implement it in the appropriate module and import it.
+
+- Logic that operates on files → `utils/` or the relevant service module
+- Adoption-related logic → `adopt.py`
+- Wiring/agent config logic → `utils/wiring.py`
+- Skill management logic → `utils/skills.py`
+
 ### Unit Testing Workflow
 
 **Brief:** Standard workflow: `uv sync --group dev` at repo root → `pytest` (no cd into libs/beacon required)
@@ -100,6 +111,10 @@ Follow the global Python standards from the user's AGENTS.md context:
 - Pydantic BaseModel for data carriers
 - Dataclass for service classes only
 - Conventional commits for all changes
+
+**Rule:** Always use **absolute imports** from `beacon` — never relative imports (`from ..utils import X` is wrong; `from beacon.utils.module import X` is correct).
+
+**Rule:** `__init__.py` files must **not** re-export names or define `__all__`. They are empty package markers (docstring only). Import directly from the module that defines the name: `from beacon.core.manifest.beacon import BeaconManifest`, not `from beacon.core.manifest import BeaconManifest`.
 
 **Read:** [Decision: Follow Global Python Standards](knowledge/decisions/follow-global-python-standards.md)
 

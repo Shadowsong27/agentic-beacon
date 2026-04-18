@@ -7,7 +7,8 @@ import click
 from rich.console import Console
 from rich.table import Table
 
-from ..core.delta import ComparisonResult, DeltaComparator
+from beacon.core.delta import ComparisonResult, DeltaComparator
+
 from .git import _hash_content
 from .sync_state import _relink_global_sync_state, _write_agent_sync_state
 
@@ -150,7 +151,7 @@ def _update_agent_gitignores(project_root: Path) -> None:
     Updates .claude/.gitignore and .opencode/.gitignore if those directories
     exist, creating the gitignore files if needed.
     """
-    from ..core.gitignore import GitignoreManager
+    from beacon.core.gitignore import GitignoreManager
 
     claude_dir = project_root / ".claude"
     if claude_dir.is_dir():
@@ -273,7 +274,8 @@ def _handle_install_agent(
     detection against global agent dirs, writes to each detected tool dir, and
     records sync-state for each successful write. Does NOT update beacon.yaml.
     """
-    from ..core.manifest import WorkspaceConfig
+    from beacon.core.manifest.workspace import WorkspaceConfig
+
     from .display import _handle_soft_block
 
     beacon_dir = Path.cwd() / ".agentic-beacon"
@@ -381,7 +383,8 @@ def _enrich_agent_stale(
         comparator: DeltaComparator used to hash live agent files (needed for
             MODIFIED → STALE detection).  If None, that branch is skipped.
     """
-    from ..core.delta import ComparisonResult, DeltaStatus
+    from beacon.core.delta import ComparisonResult, DeltaStatus
+
     from .sync_state import _read_global_sync_state
 
     if result.status not in (DeltaStatus.IDENTICAL, DeltaStatus.MODIFIED):

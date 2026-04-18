@@ -15,7 +15,7 @@ Test Coverage:
 
 import pytest
 from beacon.core.exceptions import ValidationError
-from beacon.core.manifest import BeaconManifest, BeaconManifestValidator
+from beacon.core.manifest.beacon import BeaconManifest, BeaconManifestValidator
 
 # Create validator instance for tests
 validator = BeaconManifestValidator()

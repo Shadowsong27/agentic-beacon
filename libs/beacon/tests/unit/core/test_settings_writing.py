@@ -17,7 +17,8 @@ import os
 from pathlib import Path
 
 import pytest
-from beacon.core.manifest import BeaconManifest, WorkspaceConfig
+from beacon.core.manifest.beacon import BeaconManifest
+from beacon.core.manifest.workspace import WorkspaceConfig
 
 
 class TestSettingsSelfWriting:

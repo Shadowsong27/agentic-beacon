@@ -124,7 +124,9 @@ def test_sync_proceeds_when_warehouse_clean(connected_project):
 
     with (
         patch("subprocess.run") as mock_run,
-        patch("beacon.cli._check_warehouse_on_main_branch", return_value=None),
+        patch(
+            "beacon.core.cli.main._check_warehouse_on_main_branch", return_value=None
+        ),
     ):
         mock_run.return_value = MagicMock(stdout="", returncode=0)
         result = runner.invoke(main, ["sync"])
@@ -154,7 +156,7 @@ def test_sync_dry_run_bypasses_git_check(connected_project):
     (warehouse / ".git").mkdir()
 
     # subprocess.run should NOT be called for the git check during dry-run
-    with patch("beacon.cli._check_warehouse_git_clean") as mock_check:
+    with patch("beacon.core.cli.main._check_warehouse_git_clean") as mock_check:
         result = runner.invoke(main, ["sync", "--dry-run"])
 
     mock_check.assert_not_called()
@@ -206,7 +208,7 @@ def test_contribute_proceeds_when_warehouse_clean(connected_project_with_artifac
 
     with (
         patch("subprocess.run") as mock_run,
-        patch("beacon.cli._check_sync_state", return_value=None),
+        patch("beacon.core.cli.main._check_sync_state", return_value=None),
     ):
         mock_run.return_value = MagicMock(stdout="", returncode=0)
         result = runner.invoke(main, ["contribute", "knowledge/lesson.md"], input="y\n")
@@ -239,7 +241,7 @@ def test_contribute_dry_run_bypasses_git_check(connected_project_with_artifact):
     warehouse = connected_project_with_artifact["warehouse"]
     (warehouse / ".git").mkdir()
 
-    with patch("beacon.cli._check_warehouse_git_clean") as mock_check:
+    with patch("beacon.core.cli.main._check_warehouse_git_clean") as mock_check:
         result = runner.invoke(main, ["contribute", "knowledge/lesson.md", "--dry-run"])
 
     mock_check.assert_not_called()
@@ -517,7 +519,7 @@ def test_contribute_skip_git_check_bypasses_sync_state(connected_project_with_ar
 
 def test_auto_git_uses_targeted_add(tmp_path):
     """_auto_git_contribute stages only contributed files, not all warehouse files."""
-    from beacon.cli import _auto_git_contribute
+    from beacon.utils.contribute import _auto_git_contribute
 
     (tmp_path / ".git").mkdir()
     contributed = [
@@ -635,7 +637,9 @@ def test_sync_proceeds_when_warehouse_on_main(connected_project):
 
     with (
         patch("subprocess.run") as mock_run,
-        patch("beacon.cli._check_warehouse_on_main_branch", return_value=None),
+        patch(
+            "beacon.core.cli.main._check_warehouse_on_main_branch", return_value=None
+        ),
     ):
         mock_run.return_value = MagicMock(stdout="", returncode=0)
         result = runner.invoke(main, ["sync"])
@@ -662,7 +666,7 @@ def test_sync_dry_run_bypasses_branch_guard(connected_project):
     warehouse = connected_project["warehouse"]
     (warehouse / ".git").mkdir()
 
-    with patch("beacon.cli._check_warehouse_on_main_branch") as mock_branch:
+    with patch("beacon.core.cli.main._check_warehouse_on_main_branch") as mock_branch:
         result = runner.invoke(main, ["sync", "--dry-run"])
 
     mock_branch.assert_not_called()

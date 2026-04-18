@@ -11,10 +11,10 @@ from pathlib import Path
 def _repo_root() -> Path:
     """Return the repository root (agentic-beacon/).
 
-    File is at: libs/beacon/tests/test_agents_template_parity.py
-    Parent chain: tests/ → beacon/ → libs/ → agentic-beacon/
+    File is at: libs/beacon/tests/unit/test_agents_template_parity.py
+    Parent chain: unit/ → tests/ → beacon/ → libs/ → agentic-beacon/
     """
-    return Path(__file__).parent.parent.parent.parent
+    return Path(__file__).parent.parent.parent.parent.parent
 
 
 def test_tc1_agents_readme_matches_template():
