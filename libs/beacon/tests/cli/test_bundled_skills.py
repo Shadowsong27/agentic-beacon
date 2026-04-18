@@ -60,8 +60,10 @@ def _capture_bundled_skills_status(global_dirs: dict[str, Path]) -> str:
     buf = io.StringIO()
     real_console = Console(file=buf, highlight=False, markup=False)
     with (
-        patch("beacon.cli.console", real_console),
-        patch("beacon.cli._bundled_global_skill_dirs", return_value=global_dirs),
+        patch("beacon.utils.skills.console", real_console),
+        patch(
+            "beacon.utils.skills._bundled_global_skill_dirs", return_value=global_dirs
+        ),
     ):
         _show_bundled_skills_status()
     return buf.getvalue()
@@ -76,7 +78,9 @@ def test_install_bundled_skills_globally_opencode(tmp_path):
     """Bundled skills are written to the global opencode skills dir."""
     fake_dirs = _fake_global_dirs(tmp_path)
 
-    with patch("beacon.cli._bundled_global_skill_dirs", return_value=fake_dirs):
+    with patch(
+        "beacon.utils.skills._bundled_global_skill_dirs", return_value=fake_dirs
+    ):
         installed, errors = _install_bundled_skills_globally()
 
     assert errors == []
@@ -92,7 +96,9 @@ def test_install_bundled_skills_globally_claudecode(tmp_path):
     """Bundled skills are written to the global claudecode skills dir."""
     fake_dirs = _fake_global_dirs(tmp_path)
 
-    with patch("beacon.cli._bundled_global_skill_dirs", return_value=fake_dirs):
+    with patch(
+        "beacon.utils.skills._bundled_global_skill_dirs", return_value=fake_dirs
+    ):
         installed, errors = _install_bundled_skills_globally()
 
     assert errors == []
@@ -108,7 +114,9 @@ def test_install_bundled_skills_globally_both_dirs(tmp_path):
     """Both global dirs are populated in a single call."""
     fake_dirs = _fake_global_dirs(tmp_path)
 
-    with patch("beacon.cli._bundled_global_skill_dirs", return_value=fake_dirs):
+    with patch(
+        "beacon.utils.skills._bundled_global_skill_dirs", return_value=fake_dirs
+    ):
         installed, errors = _install_bundled_skills_globally()
 
     assert errors == []
@@ -120,7 +128,9 @@ def test_install_bundled_skills_globally_idempotent(tmp_path):
     """Second call returns empty installed list when content is unchanged."""
     fake_dirs = _fake_global_dirs(tmp_path)
 
-    with patch("beacon.cli._bundled_global_skill_dirs", return_value=fake_dirs):
+    with patch(
+        "beacon.utils.skills._bundled_global_skill_dirs", return_value=fake_dirs
+    ):
         _install_bundled_skills_globally()
         installed_second, errors = _install_bundled_skills_globally()
 
@@ -138,7 +148,9 @@ def test_install_bundled_skills_globally_updates_on_content_change(tmp_path):
         dest.mkdir(parents=True)
         (dest / "SKILL.md").write_text(stale_content)
 
-    with patch("beacon.cli._bundled_global_skill_dirs", return_value=fake_dirs):
+    with patch(
+        "beacon.utils.skills._bundled_global_skill_dirs", return_value=fake_dirs
+    ):
         installed, errors = _install_bundled_skills_globally()
 
     assert errors == []
@@ -158,7 +170,9 @@ def test_install_bundled_skills_globally_no_agent_detection_required(tmp_path):
     project_dir.mkdir()
     # Deliberately no opencode.json, no .claude/
 
-    with patch("beacon.cli._bundled_global_skill_dirs", return_value=fake_dirs):
+    with patch(
+        "beacon.utils.skills._bundled_global_skill_dirs", return_value=fake_dirs
+    ):
         installed, errors = _install_bundled_skills_globally()
 
     assert errors == []
@@ -236,7 +250,9 @@ def test_sync_installs_bundled_skills_globally(valid_warehouse, temp_dir, monkey
         "artifacts:\n  knowledge: []\n  skills: []\n  contexts: []\n"
     )
 
-    with patch("beacon.cli._bundled_global_skill_dirs", return_value=fake_dirs):
+    with patch(
+        "beacon.utils.skills._bundled_global_skill_dirs", return_value=fake_dirs
+    ):
         result = runner.invoke(main, ["sync", "--skip-git-check"])
 
     assert result.exit_code == 0
@@ -260,7 +276,9 @@ def test_sync_does_not_install_to_project_dir(valid_warehouse, temp_dir, monkeyp
         "artifacts:\n  knowledge: []\n  skills: []\n  contexts: []\n"
     )
 
-    with patch("beacon.cli._bundled_global_skill_dirs", return_value=fake_dirs):
+    with patch(
+        "beacon.utils.skills._bundled_global_skill_dirs", return_value=fake_dirs
+    ):
         runner.invoke(main, ["sync", "--skip-git-check"])
 
     assert not (
@@ -285,7 +303,9 @@ def test_sync_reports_bundled_skill_installation(
         "artifacts:\n  knowledge: []\n  skills: []\n  contexts: []\n"
     )
 
-    with patch("beacon.cli._bundled_global_skill_dirs", return_value=fake_dirs):
+    with patch(
+        "beacon.utils.skills._bundled_global_skill_dirs", return_value=fake_dirs
+    ):
         result = runner.invoke(main, ["sync", "--skip-git-check"])
 
     assert result.exit_code == 0
@@ -310,7 +330,9 @@ def test_sync_bundled_skills_idempotent(valid_warehouse, temp_dir, monkeypatch):
         "artifacts:\n  knowledge: []\n  skills: []\n  contexts: []\n"
     )
 
-    with patch("beacon.cli._bundled_global_skill_dirs", return_value=fake_dirs):
+    with patch(
+        "beacon.utils.skills._bundled_global_skill_dirs", return_value=fake_dirs
+    ):
         runner.invoke(main, ["sync", "--skip-git-check"])
         result_second = runner.invoke(main, ["sync", "--skip-git-check"])
 
@@ -337,7 +359,9 @@ def test_sync_empty_beacon_yaml_still_installs_bundled_skills(
     runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
     runner.invoke(main, ["setup", "--manual"])
 
-    with patch("beacon.cli._bundled_global_skill_dirs", return_value=fake_dirs):
+    with patch(
+        "beacon.utils.skills._bundled_global_skill_dirs", return_value=fake_dirs
+    ):
         result = runner.invoke(main, ["sync", "--skip-git-check"])
 
     assert result.exit_code == 0
@@ -371,7 +395,9 @@ def test_sync_overwrites_stale_bundled_skill(valid_warehouse, temp_dir, monkeypa
         "artifacts:\n  knowledge: []\n  skills: []\n  contexts: []\n"
     )
 
-    with patch("beacon.cli._bundled_global_skill_dirs", return_value=fake_dirs):
+    with patch(
+        "beacon.utils.skills._bundled_global_skill_dirs", return_value=fake_dirs
+    ):
         result = runner.invoke(main, ["sync", "--skip-git-check"])
 
     assert result.exit_code == 0
@@ -404,7 +430,9 @@ def test_status_shows_bundled_skills_table(valid_warehouse, temp_dir, monkeypatc
         "artifacts:\n  knowledge: []\n  skills: []\n  contexts: []\n"
     )
 
-    with patch("beacon.cli._bundled_global_skill_dirs", return_value=fake_dirs):
+    with patch(
+        "beacon.utils.skills._bundled_global_skill_dirs", return_value=fake_dirs
+    ):
         runner.invoke(main, ["sync", "--skip-git-check"])
         result = runner.invoke(main, ["status"])
 
@@ -430,7 +458,9 @@ def test_status_shows_check_for_installed_bundled_skill(
         "artifacts:\n  knowledge: []\n  skills: []\n  contexts: []\n"
     )
 
-    with patch("beacon.cli._bundled_global_skill_dirs", return_value=fake_dirs):
+    with patch(
+        "beacon.utils.skills._bundled_global_skill_dirs", return_value=fake_dirs
+    ):
         runner.invoke(main, ["sync", "--skip-git-check"])
         result = runner.invoke(main, ["status"])
 
@@ -452,7 +482,9 @@ def test_status_shows_cross_for_uninstalled_bundled_skill(
     runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
     (project_dir / ".agentic-beacon" / "artifacts").mkdir(parents=True)
 
-    with patch("beacon.cli._bundled_global_skill_dirs", return_value=fake_dirs):
+    with patch(
+        "beacon.utils.skills._bundled_global_skill_dirs", return_value=fake_dirs
+    ):
         result = runner.invoke(main, ["status"])
 
     assert result.exit_code == 0
@@ -472,7 +504,9 @@ def test_status_bundled_skills_visible_before_sync(
 
     runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
 
-    with patch("beacon.cli._bundled_global_skill_dirs", return_value=fake_dirs):
+    with patch(
+        "beacon.utils.skills._bundled_global_skill_dirs", return_value=fake_dirs
+    ):
         result = runner.invoke(main, ["status"])
 
     assert result.exit_code == 0

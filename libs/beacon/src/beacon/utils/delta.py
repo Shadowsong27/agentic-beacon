@@ -1,0 +1,727 @@
+"""Delta utility functions for Beacon CLI."""
+
+import fnmatch
+from pathlib import Path
+
+from rich.console import Console
+from rich.table import Table
+
+from ..core.delta import ComparisonResult, DeltaComparator, DeltaStatus, DeltaSummary
+from ..core.settings import BeaconSettings
+from .git import _get_file_hash_at_sha, _get_warehouse_head_sha
+from .sync_state import _SYNC_STATE_FILENAME, _read_sync_sha
+
+console = Console()
+
+
+def _enrich_tracked_stale(
+    summary: DeltaSummary,
+    *,
+    warehouse_path: Path,
+    artifacts_path: Path,
+    comparator: DeltaComparator,
+) -> DeltaSummary:
+    """Re-classify MODIFIED tracked artifacts to STALE when the difference is purely upstream.
+
+    A tracked artifact (skill / knowledge / context) is STALE — not MODIFIED — when:
+    - The local file content matches the warehouse file at the last recorded sync SHA
+      (meaning the user has *not* touched the local copy since the last sync), AND
+    - The current warehouse file differs from that sync-SHA content
+      (meaning the warehouse moved forward after the user's last sync).
+
+    This is the tracked-artifact analogue of the per-agent MODIFIED→STALE enrichment.
+    It uses ``git show <sync_sha>:<path>`` on the warehouse repo instead of a stored
+    content_hash, so no format changes to .sync-state are required.
+
+    Falls back silently when:
+    - The warehouse has no git repo
+    - No sync SHA is recorded
+    - The snapshot is already current
+    - git is unavailable or returns an error for a given path
+
+    For skills (compared against live agent dirs):
+        Each per-agent MODIFIED status is checked independently.
+        If the live skill file matches the synced version, that agent→STALE.
+        The aggregate status is recomputed across the updated per-agent map.
+
+    For knowledge / contexts (compared against artifacts_path):
+        The local artifact hash is compared against the synced warehouse content.
+        If they match, the result is upgraded to STALE.
+    """
+    from ..core.delta import DeltaStatus
+
+    if not (warehouse_path / ".git").exists():
+        return summary
+
+    sync_sha = _read_sync_sha(artifacts_path)
+    if not sync_sha:
+        return summary
+
+    current_sha = _get_warehouse_head_sha(warehouse_path)
+    if not current_sha or current_sha == sync_sha:
+        return summary  # Snapshot is current — no enrichment needed
+
+    # Priority map for re-aggregating skill per-agent statuses
+    _priority = {
+        DeltaStatus.ADDED: 4,
+        DeltaStatus.MODIFIED: 3,
+        DeltaStatus.STALE: 2,
+        DeltaStatus.MISSING: 1,
+        DeltaStatus.IDENTICAL: 0,
+    }
+
+    new_results = []
+    for result in summary.results:
+        if result.status != DeltaStatus.MODIFIED:
+            new_results.append(result)
+            continue
+
+        # Fetch the warehouse file content at the last sync SHA once per result.
+        synced_hash = _get_file_hash_at_sha(warehouse_path, result.path, sync_sha)
+        if synced_hash is None:
+            new_results.append(result)
+            continue
+
+        is_skill = result.path.startswith("skills/") and bool(comparator.skills_paths)
+
+        if is_skill:
+            # Per-agent check: if live skill file == synced content → STALE for that agent
+            new_agent_statuses = dict(result.agent_statuses)
+            changed = False
+            for agent, status in result.agent_statuses.items():
+                if status != DeltaStatus.MODIFIED:
+                    continue
+                live_file = comparator._skill_live_path(agent, result.path)
+                if not live_file.exists():
+                    continue
+                live_hash = comparator.compute_hash(live_file)
+                if live_hash == synced_hash:
+                    new_agent_statuses[agent] = DeltaStatus.STALE
+                    changed = True
+
+            if not changed:
+                new_results.append(result)
+                continue
+
+            new_aggregate = max(
+                new_agent_statuses.values(), key=lambda s: _priority.get(s, 0)
+            )
+            new_results.append(
+                ComparisonResult(
+                    path=result.path,
+                    status=new_aggregate,
+                    local_hash=result.local_hash,
+                    warehouse_hash=result.warehouse_hash,
+                    agent_statuses=new_agent_statuses,
+                )
+            )
+        else:
+            # Knowledge / context: compare local artifact hash against synced content
+            local_file = artifacts_path / result.path
+            if not local_file.exists():
+                new_results.append(result)
+                continue
+            local_hash = result.local_hash or comparator.compute_hash(local_file)
+            if local_hash == synced_hash:
+                new_results.append(
+                    ComparisonResult(
+                        path=result.path,
+                        status=DeltaStatus.STALE,
+                        local_hash=result.local_hash,
+                        warehouse_hash=result.warehouse_hash,
+                        agent_statuses=result.agent_statuses,
+                    )
+                )
+            else:
+                new_results.append(result)
+
+    summary.results = new_results
+    return summary
+
+
+def _show_delta_summary(
+    comparator: DeltaComparator,
+    beacon_settings: BeaconSettings,
+    warehouse_path: Path | None = None,
+    project_root: Path | None = None,
+) -> None:
+    """Show summary of all artifact differences."""
+    from .agents import _enrich_agent_stale, _find_project_level_agents
+
+    summary = comparator.compare_from_config(beacon_settings)
+
+    # Re-classify MODIFIED tracked artifacts as STALE when the local copy has not been
+    # touched since the last sync and the warehouse has since moved forward.
+    # Falls back silently when git is unavailable or the snapshot is current.
+    if warehouse_path is not None:
+        summary = _enrich_tracked_stale(
+            summary,
+            warehouse_path=warehouse_path,
+            artifacts_path=comparator.artifacts_path,
+            comparator=comparator,
+        )
+
+    # After enrichment, detect if any artifacts are still MODIFIED while the snapshot
+    # is stale — these represent genuine local edits on top of an outdated snapshot.
+    snapshot_stale = False
+    if warehouse_path is not None:
+        recorded_sha = _read_sync_sha(comparator.artifacts_path)
+        current_sha = _get_warehouse_head_sha(warehouse_path)
+        if recorded_sha and current_sha and recorded_sha != current_sha:
+            snapshot_stale = True
+
+    # Gather agent comparison results — discover from global agent dirs + warehouse
+    # so agents that exist globally but not yet in the warehouse show as ADDED.
+    agent_results = []
+    if comparator.agents_paths and warehouse_path is not None:
+        current_head = _get_warehouse_head_sha(warehouse_path) or ""
+
+        # Collect all unique agent file names across all global tool dirs and warehouse
+        seen_rel_paths: set[str] = set()
+
+        # First: files in global dirs (source of truth for new agents)
+        for _tool, agents_dir in comparator.agents_paths.items():
+            if agents_dir.is_dir():
+                for agent_file in sorted(agents_dir.rglob("*")):
+                    if agent_file.is_file() and agent_file.name != "README.md":
+                        # Reconstruct warehouse-relative path: agents/<filename>
+                        rel_path = "agents/" + agent_file.name
+                        seen_rel_paths.add(rel_path)
+
+        # Second: files in warehouse/agents/ that may not be in any global dir (MISSING)
+        warehouse_agents_dir = warehouse_path / "agents"
+        if warehouse_agents_dir.is_dir():
+            for agent_file in sorted(warehouse_agents_dir.rglob("*")):
+                if agent_file.is_file() and agent_file.name != "README.md":
+                    rel_path = str(agent_file.relative_to(warehouse_path))
+                    seen_rel_paths.add(rel_path)
+
+        for rel_path in sorted(seen_rel_paths):
+            result = comparator._compare_agent_file(rel_path)
+            result = _enrich_agent_stale(
+                result,
+                warehouse_path=warehouse_path,
+                current_head=current_head,
+                comparator=comparator,
+            )
+            agent_results.append(result)
+
+    ignore_skill_patterns = beacon_settings.ignore.skills
+
+    untracked = _find_untracked_local_files(
+        comparator, beacon_settings, comparator.artifacts_path, ignore_skill_patterns
+    )
+
+    # Detect project-scoped agents (not part of the global/contribution flow)
+    project_level_agents: dict[str, list[str]] = (
+        _find_project_level_agents(project_root) if project_root is not None else {}
+    )
+
+    # Detect non-bundled skills accidentally placed in global skill dirs
+    from .skills import _find_global_untracked_skills
+
+    global_untracked_skills = _find_global_untracked_skills(ignore_skill_patterns)
+
+    has_agent_diffs = any(r.status != DeltaStatus.IDENTICAL for r in agent_results)
+
+    if (
+        not summary.has_differences
+        and not untracked
+        and not has_agent_diffs
+        and not project_level_agents
+        and not global_untracked_skills
+    ):
+        console.print(
+            "[green]No differences found. Local artifacts match local warehouse.[/green]"
+        )
+        return
+
+    tracked_diffs = [r for r in summary.results if r.status != DeltaStatus.IDENTICAL]
+
+    _STATUS_MARKUP: dict[DeltaStatus, str] = {
+        DeltaStatus.MODIFIED: "[yellow]modified[/yellow]",
+        DeltaStatus.ADDED: "[green]added[/green]",
+        DeltaStatus.MISSING: "[red]missing[/red]",
+        DeltaStatus.STALE: "[dim cyan]stale[/dim cyan]",
+    }
+    _AGENT_STATUS_MARKUP: dict[DeltaStatus, str] = {
+        DeltaStatus.MODIFIED: "[yellow]modified[/yellow]",
+        DeltaStatus.ADDED: "[green]added[/green]",
+        DeltaStatus.MISSING: "[red]missing[/red]",
+        DeltaStatus.IDENTICAL: "[dim]synced[/dim]",
+        DeltaStatus.STALE: "[dim cyan]stale[/dim cyan]",
+    }
+
+    # --- Tracked Artifacts section ---
+    if tracked_diffs:
+        # Collect all agent names present across skill rows to build columns
+        tracked_agents: list[str] = []
+        for result in tracked_diffs:
+            if result.is_skill and result.agent_statuses:
+                for a in result.agent_statuses:
+                    if a not in tracked_agents:
+                        tracked_agents.append(a)
+
+        rows: list[tuple[str, str, dict[str, str]]] = []
+        for result in tracked_diffs:
+            status_markup = _STATUS_MARKUP.get(result.status, result.status.value)
+            agent_cells: dict[str, str] = {}
+            if result.is_skill and result.agent_statuses:
+                for a, s in result.agent_statuses.items():
+                    agent_cells[a] = _AGENT_STATUS_MARKUP.get(s, s.value)
+            rows.append((status_markup, result.path, agent_cells))
+
+        console.print()
+        console.print(_render_delta_table(rows, "Tracked Artifacts", tracked_agents))
+
+    # Classify agents for summary counts (always, even if no section rendered)
+    stale_agents: list[str] = []
+    added_agents: list[str] = []
+    modified_agents: list[str] = []
+    for result in agent_results:
+        if result.status == DeltaStatus.STALE:
+            stale_agents.append(result.path)
+        elif result.status == DeltaStatus.ADDED:
+            added_agents.append(result.path)
+        elif result.status == DeltaStatus.MODIFIED:
+            modified_agents.append(result.path)
+
+    # --- Untracked Artifacts section ---
+    if untracked:
+        if tracked_diffs:
+            console.rule(style="dim")
+
+        # Collect all agent names present across untracked skill rows
+        untracked_agents: list[str] = []
+        for _rel_path, agents in untracked:
+            for a in agents:
+                if a not in untracked_agents:
+                    untracked_agents.append(a)
+
+        rows = []
+        for rel_path, agents in untracked:
+            agent_cells = {a: "[green]added[/green]" for a in agents}
+            rows.append(("[green]added[/green]", rel_path, agent_cells))
+
+        console.print()
+        console.print(
+            _render_delta_table(
+                rows,
+                "Untracked Artifacts [dim](not in beacon.yaml)[/dim]",
+                untracked_agents,
+            )
+        )
+
+    # --- Agents section — only show when there are diffs ---
+    if has_agent_diffs:
+        if tracked_diffs or untracked:
+            console.rule(style="dim")
+
+        # Collect all tool names present across agent rows
+        agent_tools: list[str] = []
+        for result in agent_results:
+            if result.agent_statuses:
+                for t in result.agent_statuses:
+                    if t not in agent_tools:
+                        agent_tools.append(t)
+
+        rows = []
+        for result in agent_results:
+            status_markup: str = (
+                _STATUS_MARKUP.get(result.status) or result.status.value
+            )
+            agent_cells: dict[str, str] = {}
+            if result.agent_statuses:
+                for t, s in result.agent_statuses.items():
+                    agent_cells[t] = _AGENT_STATUS_MARKUP.get(s) or s.value
+            rows.append((status_markup, result.path, agent_cells))
+
+        console.print()
+        console.print(
+            _render_delta_table(
+                rows,
+                "Agents [dim](global)[/dim]",
+                agent_tools,
+            )
+        )
+
+    # --- Project-scoped agents reminder ---
+    if project_level_agents:
+        if has_agent_diffs or tracked_diffs or untracked:
+            console.rule(style="dim")
+
+        # Collect all unique agent filenames and tools in a stable order
+        proj_tools: list[str] = sorted(project_level_agents.keys())
+        proj_files: list[str] = sorted(
+            {f for files in project_level_agents.values() for f in files}
+        )
+
+        table = Table(
+            title="Project-scoped Agents [dim](promote to global to include in contribution flow)[/dim]",
+            title_style="bold yellow",
+            title_justify="left",
+            show_header=True,
+            header_style="dim",
+            box=None,
+            padding=(0, 2, 0, 0),
+        )
+        table.add_column("Agent file")
+        for tool in proj_tools:
+            table.add_column(tool, no_wrap=True)
+
+        for fname in proj_files:
+            cells = [
+                "[yellow]project[/yellow]"
+                if fname in project_level_agents.get(tool, [])
+                else ""
+                for tool in proj_tools
+            ]
+            table.add_row(fname, *cells)
+
+        console.print()
+        console.print(table)
+
+    # --- Global untracked skills reminder ---
+    if global_untracked_skills:
+        if project_level_agents or agent_results or tracked_diffs or untracked:
+            console.rule(style="dim")
+
+        global_skill_tools: list[str] = sorted(global_untracked_skills.keys())
+        global_skill_names: list[str] = sorted(
+            {s for names in global_untracked_skills.values() for s in names}
+        )
+
+        table = Table(
+            show_header=True,
+            header_style="dim",
+            box=None,
+            padding=(0, 2, 0, 0),
+        )
+        table.add_column("Skill")
+        for tool in global_skill_tools:
+            table.add_column(tool, no_wrap=True)
+
+        for skill_name in global_skill_names:
+            cells = [
+                "[yellow]global[/yellow]"
+                if skill_name in global_untracked_skills.get(tool, [])
+                else ""
+                for tool in global_skill_tools
+            ]
+            table.add_row(skill_name, *cells)
+
+        console.print()
+        console.print(
+            "[bold yellow]Global Skills[/bold yellow] [dim](not tracked in warehouse)[/dim]"
+        )
+        console.print(table)
+
+    # Summary counts
+    console.print("\n[bold]Summary:[/bold]")
+    if summary.stale:
+        console.print(
+            f"  [dim cyan]Stale:[/dim cyan] {len(summary.stale)} artifact(s) — warehouse updated, run 'abc sync'"
+        )
+    if summary.modified:
+        console.print(f"  [yellow]Modified:[/yellow] {len(summary.modified)} files")
+    if summary.added:
+        console.print(f"  [green]Added:[/green] {len(summary.added)} files")
+    if untracked:
+        console.print(f"  [green]Untracked:[/green] {len(untracked)} files")
+    if summary.missing:
+        console.print(f"  [red]Missing:[/red] {len(summary.missing)} files")
+    if summary.identical:
+        console.print(f"  [dim]Identical:[/dim] {len(summary.identical)} files")
+    if added_agents:
+        console.print(
+            f"  [green]New agent(s):[/green] {len(added_agents)} (not yet in warehouse)"
+        )
+    if modified_agents:
+        console.print(f"  [yellow]Modified agent(s):[/yellow] {len(modified_agents)}")
+    if stale_agents:
+        console.print(f"  [dim cyan]Stale agent(s):[/dim cyan] {len(stale_agents)}")
+    if project_level_agents:
+        total = sum(len(v) for v in project_level_agents.values())
+        console.print(
+            f"  [yellow]Project-scoped agent(s):[/yellow] {total} (not in global dirs)"
+        )
+    if global_untracked_skills:
+        total = sum(len(v) for v in global_untracked_skills.values())
+        console.print(
+            f"  [yellow]Global skill(s):[/yellow] {total} (in global dir, not tracked)"
+        )
+
+    # Tips
+    if summary.stale or stale_agents:
+        console.print(
+            "\n[dim]Tip: Run 'abc sync' to pull upstream artifact changes.[/dim]"
+        )
+    if stale_agents:
+        console.print(
+            "[dim]Tip: Run 'abc install agents/<name>' to update stale agent definitions.[/dim]"
+        )
+    if summary.missing:
+        console.print(
+            "[dim]Tip: Run 'abc sync' to download missing artifacts from warehouse.[/dim]"
+        )
+    if summary.modified and snapshot_stale:
+        # Snapshot is stale AND some files are still genuinely MODIFIED (user edited them
+        # on top of an old snapshot). Warn that sync won't overwrite local edits.
+        console.print(
+            "\n[yellow]Note:[/yellow] Your snapshot is outdated and some artifacts have local edits.\n"
+            "  Run 'abc sync' first — locally modified files will be preserved by default.\n"
+            "    abc sync"
+        )
+    elif summary.modified:
+        console.print(
+            "[dim]Tip: Run 'abc delta <file>' to see detailed diff for a modified file.[/dim]"
+        )
+    if untracked and (added_agents or modified_agents):
+        console.print(
+            "[dim]Tip: Run 'abc contribute' to push untracked artifacts and agent changes to the warehouse.[/dim]"
+        )
+    elif untracked:
+        console.print(
+            "[dim]Tip: Run 'abc contribute' to push untracked local artifacts to the warehouse.[/dim]"
+        )
+    elif added_agents or modified_agents:
+        console.print(
+            "[dim]Tip: Run 'abc contribute' to push agent changes to the warehouse.[/dim]"
+        )
+    if project_level_agents:
+        console.print(
+            "[dim]Tip: To promote a project-scoped agent, move it to the global agents dir "
+            "and run 'abc contribute' — or ask your coding agent to do it for you.[/dim]"
+        )
+    if global_untracked_skills:
+        console.print(
+            "[dim]Tip: Global skills are not tracked in the warehouse. Move them to the "
+            "project skill dir (.claude/skills/ or .opencode/skills/) and run "
+            "'abc contribute' — or ask your coding agent to do it for you.[/dim]"
+        )
+
+
+def _show_detailed_diff(
+    comparator: DeltaComparator,
+    beacon_settings: BeaconSettings,
+    file_path: str,
+    no_color: bool,
+) -> None:
+    """Show detailed diff for a specific file."""
+    import sys
+
+    # Check if file is tracked in beacon.yaml
+    all_paths = _collect_artifact_paths(comparator, beacon_settings)
+    if file_path not in all_paths:
+        console.print(
+            f"[red]Error:[/red] File '{file_path}' is not tracked in beacon.yaml."
+        )
+        console.print("Only artifacts declared in beacon.yaml can be compared.")
+        sys.exit(1)
+
+    # Compare the specific file
+    result = comparator.compare_file(file_path)
+
+    if result.status == DeltaStatus.IDENTICAL:
+        console.print(
+            f"[green]No differences found.[/green] Local and warehouse versions of '{file_path}' are identical."
+        )
+        return
+
+    if result.status == DeltaStatus.MISSING:
+        console.print(
+            f"[red][Missing][/red] '{file_path}' has not been synced locally."
+        )
+        console.print("[dim]Run 'abc sync' to download it.[/dim]")
+        return
+
+    if result.status == DeltaStatus.ADDED:
+        console.print(
+            f"[green][Added][/green] '{file_path}' exists locally but not in warehouse."
+        )
+        return
+
+    # Show detailed diff
+    console.print(f"\n[bold]Diff: {file_path}[/bold]\n")
+    diff_output = comparator.detailed_diff(file_path, color=not no_color)
+    if diff_output:
+        console.print(diff_output)
+    else:
+        console.print("[dim]No differences to display.[/dim]")
+
+
+def _format_skill_agent_statuses(agent_statuses: dict) -> str:
+    """Format per-agent skill statuses for display.
+
+    e.g. "opencode: modified, claudecode: identical"
+    """
+
+    label = {
+        DeltaStatus.MODIFIED: "modified",
+        DeltaStatus.MISSING: "missing",
+        DeltaStatus.ADDED: "added",
+        DeltaStatus.IDENTICAL: "identical",
+    }
+    parts = [
+        f"{agent}: {label.get(status, status.value)}"
+        for agent, status in agent_statuses.items()
+    ]
+    return ", ".join(parts)
+
+
+def _render_delta_table(
+    rows: list[tuple[str, str, dict[str, str]]],
+    title: str,
+    agents: list[str],
+) -> Table:
+    """Render a delta section as a Rich table.
+
+    Each row is a (status_markup, artifact_path, agent_cells) tuple where
+    agent_cells maps agent name → markup string (empty string if not applicable).
+    Agent columns are only added when at least one skill row is present (agents != []).
+    """
+    table = Table(
+        title=title,
+        title_style="bold",
+        title_justify="left",
+        show_header=True,
+        header_style="dim",
+        box=None,
+        padding=(0, 2, 0, 0),
+    )
+    table.add_column("Status", no_wrap=True)
+    table.add_column("Artifact")
+    for agent in agents:
+        table.add_column(agent, no_wrap=True)
+
+    for status_markup, path, agent_cells in rows:
+        agent_values = [agent_cells.get(a, "") for a in agents]
+        table.add_row(status_markup, path, *agent_values)
+
+    return table
+
+
+def _collect_artifact_paths(
+    comparator: DeltaComparator, beacon_settings: BeaconSettings
+) -> set:
+    """Collect all artifact paths from beacon.yaml, expanding globs.
+
+    Globs both the warehouse and local artifacts directory so that locally-added
+    files (not yet in the warehouse) are included.
+    """
+    from ..core.sync import SyncEngine
+    from .skills import _normalize_skill_entry, _skill_name_from_entry
+
+    sync_engine = SyncEngine(
+        warehouse_path=comparator.warehouse_path,
+        artifacts_path=comparator.artifacts_path,
+    )
+    paths: set[str] = set()
+    for artifact_type in ["knowledge", "skills", "contexts"]:
+        patterns = getattr(beacon_settings.artifacts, artifact_type)
+        for pattern in patterns:
+            if "*" in pattern or "?" in pattern or "[" in pattern:
+                paths.update(sync_engine.expand_glob(pattern))
+                # Also glob local artifacts to catch ADDED files
+                if comparator.artifacts_path.exists():
+                    for match in comparator.artifacts_path.glob(pattern):
+                        if match.is_file():
+                            paths.add(str(match.relative_to(comparator.artifacts_path)))
+            elif artifact_type == "skills":
+                # Expand skill directory entry to individual file paths
+                skill_dir_entry = _normalize_skill_entry(pattern)
+                paths.update(sync_engine.expand_glob(f"{skill_dir_entry}/**/*"))
+                # Also scan live agent dirs to catch ADDED files
+                if comparator.skills_paths:
+                    skill_name = _skill_name_from_entry(pattern)
+                    for _agent, agent_root in comparator.skills_paths.items():
+                        agent_skill_dir = agent_root / skill_name
+                        if agent_skill_dir.exists():
+                            for f in agent_skill_dir.rglob("*"):
+                                if f.is_file():
+                                    rel = str(
+                                        Path("skills")
+                                        / skill_name
+                                        / f.relative_to(agent_skill_dir)
+                                    )
+                                    paths.add(rel)
+            else:
+                paths.add(pattern)
+    return paths
+
+
+def _infer_artifact_type(file_path: str) -> str | None:
+    """Infer artifact type from a relative path prefix.
+
+    Returns "knowledge", "skills", "contexts", or None if unrecognisable.
+    """
+    first_part = Path(file_path).parts[0] if Path(file_path).parts else ""
+    if first_part in ("knowledge", "skills", "contexts"):
+        return first_part
+    return None
+
+
+def _find_untracked_local_files(
+    comparator: DeltaComparator,
+    beacon_settings: BeaconSettings,
+    artifacts_dir: Path,
+    ignore_patterns: list[str] | None = None,
+) -> list[tuple[str, list[str]]]:
+    """Return local artifact files that are not covered by any beacon.yaml pattern.
+
+    Returns a list of (relative_path, agents) tuples. For skills found in live
+    agent directories, agents lists which agents have the skill (e.g. ["opencode",
+    "claudecode"]). For knowledge/context files from artifacts_dir, agents is [].
+
+    Skills whose names match any of ignore_patterns (fnmatch) are excluded.
+
+    NOTE: .agentic-beacon/artifacts/skills/ is intentionally excluded from the
+    artifacts_dir scan. That directory is a one-way intermediary used only during
+    'abc sync' to stage skill files before wiring them to live agent directories
+    (.opencode/skills/, .claude/skills/). It is never a source of truth for delta —
+    skills are always compared against their live agent installation, not the snapshot.
+    """
+    tracked = _collect_artifact_paths(comparator, beacon_settings)
+    patterns = ignore_patterns or []
+
+    # Scan artifacts_dir for untracked knowledge and context files.
+    # Explicitly skip the skills/ subdirectory — it is a one-way sync staging area
+    # and must not be treated as a canonical source for delta comparisons.
+    artifacts_untracked: list[str] = []
+    if artifacts_dir.exists():
+        for file_path in sorted(artifacts_dir.rglob("*")):
+            if file_path.is_file() and file_path.name != _SYNC_STATE_FILENAME:
+                rel = str(file_path.relative_to(artifacts_dir))
+                if rel.startswith("skills/"):
+                    continue  # skills live in agent dirs, not here
+                if rel not in tracked:
+                    artifacts_untracked.append(rel)
+
+    # Scan live agent skill directories — the canonical location for installed skills.
+    # Group by rel_path so a skill present in multiple agent dirs is reported once
+    # with all agents listed.
+    skill_agents: dict[str, list[str]] = {}
+    for agent, skills_root in comparator.skills_paths.items():
+        if skills_root.exists():
+            for file_path in sorted(skills_root.rglob("*")):
+                if file_path.is_file():
+                    rel = str(Path("skills") / file_path.relative_to(skills_root))
+                    if rel not in tracked:
+                        # Extract the skill directory name (parts[1]) for pattern matching.
+                        # e.g. "skills/openspec-apply-change/SKILL.md" → "openspec-apply-change"
+                        skill_name = (
+                            Path(rel).parts[1] if len(Path(rel).parts) > 1 else ""
+                        )
+                        if patterns and any(
+                            fnmatch.fnmatch(skill_name, p) for p in patterns
+                        ):
+                            continue
+                        skill_agents.setdefault(rel, []).append(agent)
+
+    result: list[tuple[str, list[str]]] = []
+    for rel in artifacts_untracked:
+        result.append((rel, []))
+    for rel in sorted(skill_agents):
+        result.append((rel, skill_agents[rel]))
+
+    return result
