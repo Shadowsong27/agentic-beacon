@@ -7,7 +7,7 @@ from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 
-from ..core.settings import BeaconSettings
+from ..core.manifest import ArtifactsConfig, BeaconManifest
 
 console = Console()
 
@@ -169,7 +169,7 @@ def _show_bundled_skills_status() -> None:
     console.print()
 
 
-def _validate_skill_entries(beacon_settings: BeaconSettings) -> None:
+def _validate_skill_entries(beacon_settings: BeaconManifest) -> None:
     """Error if any skill entry in beacon.yaml uses a file path instead of a directory.
 
     Skills must be declared at the directory level (e.g. 'skills/my-skill/').
@@ -197,9 +197,9 @@ def _migrate_beacon_yaml_skill_entries(
     beacon_yaml: Path, legacy_entries: list[str]
 ) -> None:
     """Rewrite beacon.yaml replacing file-level skill entries with directory form."""
-    from ..core.settings import BeaconSettings
+    from ..core.manifest import BeaconManifest
 
-    settings = BeaconSettings.from_yaml(beacon_yaml)
+    settings = BeaconManifest.from_yaml(beacon_yaml)
     migrated = []
     for entry in settings.artifacts.skills:
         if entry in legacy_entries:
@@ -382,17 +382,15 @@ def _wire_skills_post_sync(
 
 def _update_beacon_yaml(beacon_dir: Path, files: list[str]) -> None:
     """Add installed file paths to beacon.yaml, creating it if absent."""
-    from ..core.settings import ArtifactsConfig, BeaconSettings
-
     beacon_yaml = beacon_dir / "beacon.yaml"
 
     if beacon_yaml.exists():
         try:
-            settings = BeaconSettings.from_yaml(beacon_yaml)
+            settings = BeaconManifest.from_yaml(beacon_yaml)
         except Exception:
             return  # Don't corrupt a file we can't parse
     else:
-        settings = BeaconSettings(artifacts=ArtifactsConfig())
+        settings = BeaconManifest(artifacts=ArtifactsConfig())
 
     for path in files:
         parts = Path(path).parts

@@ -6,7 +6,7 @@ meet the required format before being connected to a project.
 
 from pathlib import Path
 
-from beacon.core.settings import ValidationResult
+from beacon.core.manifest import ValidationResult
 
 
 class WarehouseValidator:

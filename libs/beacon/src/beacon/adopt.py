@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .core.settings import BeaconSettings
+    from .core.manifest import BeaconManifest
 
 # ─────────────────────────────────────────────────────────────
 # Data model
@@ -142,7 +142,7 @@ def _is_agent_installed(agent_path: str) -> bool:
     return any((d / filename).exists() for d in _global_agent_dirs())
 
 
-def _is_adopted(path: str, beacon_settings: BeaconSettings) -> bool:
+def _is_adopted(path: str, beacon_settings: BeaconManifest) -> bool:
     """Return True if path is already declared in beacon.yaml.
 
     Handles exact matches and glob patterns (e.g. ``knowledge/**/*.md``).
@@ -293,7 +293,7 @@ def _annotate_with_commits_ago(
 def _build_candidates(
     warehouse_path: Path,
     paths: list[str],
-    beacon_settings: BeaconSettings,
+    beacon_settings: BeaconManifest,
     *,
     is_new: bool,
 ) -> list[AdoptCandidate]:
@@ -369,7 +369,7 @@ def _build_candidates(
 
 def _discover_all(
     warehouse_path: Path,
-    beacon_settings: BeaconSettings,
+    beacon_settings: BeaconManifest,
 ) -> list[AdoptCandidate]:
     """Full-scan mode: return every warehouse artifact not in beacon.yaml."""
     from .distributor import WarehouseDistributor
@@ -459,7 +459,7 @@ def _discover_all(
 
 def discover_adoptable(
     warehouse_path: Path,
-    beacon_settings: BeaconSettings,
+    beacon_settings: BeaconManifest,
     sync_sha: str | None = None,
     *,
     show_all: bool = False,
@@ -487,7 +487,7 @@ def discover_adoptable(
 
 def _count_unadopted_since(
     warehouse_path: Path,
-    beacon_settings: BeaconSettings,
+    beacon_settings: BeaconManifest,
     sync_sha: str,
 ) -> int:
     """Lightweight count of new warehouse artifacts since sync_sha not in beacon.yaml.
@@ -546,9 +546,9 @@ def apply_adoption(
     if not selections and not unadoptions:
         return
 
-    from .core.settings import BeaconSettings
+    from .core.manifest import BeaconManifest
 
-    beacon_settings = BeaconSettings.from_yaml(beacon_yaml_path)
+    beacon_settings = BeaconManifest.from_yaml(beacon_yaml_path)
 
     for candidate in selections:
         if candidate.artifact_type == "agents":

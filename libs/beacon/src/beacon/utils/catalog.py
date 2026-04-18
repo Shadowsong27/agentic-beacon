@@ -4,7 +4,7 @@ from pathlib import Path
 
 from rich.console import Console
 
-from ..core.settings import BeaconSettings
+from ..core.manifest import BeaconManifest
 
 console = Console()
 
@@ -112,7 +112,7 @@ def _extract_description(file_path: Path) -> str:
 
 
 def _register_in_beacon_yaml(
-    beacon_settings: BeaconSettings, beacon_yaml: Path, file_path: str
+    beacon_settings: BeaconManifest, beacon_yaml: Path, file_path: str
 ) -> bool:
     """Add an explicit path to beacon.yaml under the appropriate artifact type.
 

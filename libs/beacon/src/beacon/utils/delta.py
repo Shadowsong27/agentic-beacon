@@ -7,7 +7,7 @@ from rich.console import Console
 from rich.table import Table
 
 from ..core.delta import ComparisonResult, DeltaComparator, DeltaStatus, DeltaSummary
-from ..core.settings import BeaconSettings
+from ..core.manifest import BeaconManifest
 from .git import _get_file_hash_at_sha, _get_warehouse_head_sha
 from .sync_state import _SYNC_STATE_FILENAME, _read_sync_sha
 
@@ -141,7 +141,7 @@ def _enrich_tracked_stale(
 
 def _show_delta_summary(
     comparator: DeltaComparator,
-    beacon_settings: BeaconSettings,
+    beacon_settings: BeaconManifest,
     warehouse_path: Path | None = None,
     project_root: Path | None = None,
 ) -> None:
@@ -503,7 +503,7 @@ def _show_delta_summary(
 
 def _show_detailed_diff(
     comparator: DeltaComparator,
-    beacon_settings: BeaconSettings,
+    beacon_settings: BeaconManifest,
     file_path: str,
     no_color: bool,
 ) -> None:
@@ -602,7 +602,7 @@ def _render_delta_table(
 
 
 def _collect_artifact_paths(
-    comparator: DeltaComparator, beacon_settings: BeaconSettings
+    comparator: DeltaComparator, beacon_settings: BeaconManifest
 ) -> set:
     """Collect all artifact paths from beacon.yaml, expanding globs.
 
@@ -663,7 +663,7 @@ def _infer_artifact_type(file_path: str) -> str | None:
 
 def _find_untracked_local_files(
     comparator: DeltaComparator,
-    beacon_settings: BeaconSettings,
+    beacon_settings: BeaconManifest,
     artifacts_dir: Path,
     ignore_patterns: list[str] | None = None,
 ) -> list[tuple[str, list[str]]]:

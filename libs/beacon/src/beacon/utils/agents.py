@@ -273,7 +273,7 @@ def _handle_install_agent(
     detection against global agent dirs, writes to each detected tool dir, and
     records sync-state for each successful write. Does NOT update beacon.yaml.
     """
-    from ..core.settings import WarehouseSettings
+    from ..core.manifest import WorkspaceConfig
     from .display import _handle_soft_block
 
     beacon_dir = Path.cwd() / ".agentic-beacon"
@@ -283,7 +283,7 @@ def _handle_install_agent(
         sys.exit(1)
 
     try:
-        warehouse_settings = WarehouseSettings()
+        warehouse_settings = WorkspaceConfig()
         warehouse_path = Path(warehouse_settings.warehouse.local_path)
     except Exception as e:
         console.print(f"[red]Error:[/red] Could not load warehouse settings: {e}")

@@ -435,7 +435,7 @@ class DeltaComparator:
         skills_paths is configured. Falls back to artifacts_path otherwise.
 
         Args:
-            beacon_settings: Parsed BeaconSettings object
+            beacon_settings: Parsed BeaconManifest object
 
         Returns:
             DeltaSummary for beacon.yaml artifacts only

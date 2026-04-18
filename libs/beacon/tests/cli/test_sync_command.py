@@ -12,7 +12,7 @@ Following TDD workflow for tasks 7.1-7.7:
 
 import pytest
 from beacon.cli import main
-from beacon.core.settings import ArtifactsConfig, BeaconSettings
+from beacon.core.manifest import ArtifactsConfig, BeaconManifest
 from beacon.utils.skills import _validate_skill_entries
 from click.testing import CliRunner
 
@@ -291,8 +291,8 @@ def test_sync_dry_run_reports_would_remove(valid_warehouse, temp_dir, monkeypatc
 # ---------------------------------------------------------------------------
 
 
-def _make_beacon_settings(skills: list[str]) -> BeaconSettings:
-    return BeaconSettings(
+def _make_beacon_settings(skills: list[str]) -> BeaconManifest:
+    return BeaconManifest(
         artifacts=ArtifactsConfig(knowledge=[], skills=skills, contexts=[])
     )
 

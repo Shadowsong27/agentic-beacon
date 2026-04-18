@@ -26,7 +26,7 @@ from beacon.adopt import (
     apply_adoption,
     discover_adoptable,
 )
-from beacon.core.settings import ArtifactsConfig, BeaconSettings
+from beacon.core.manifest import ArtifactsConfig, BeaconManifest
 from click.testing import CliRunner
 
 # ---------------------------------------------------------------------------
@@ -38,8 +38,8 @@ def _make_beacon_settings(
     contexts: list[str] | None = None,
     skills: list[str] | None = None,
     knowledge: list[str] | None = None,
-) -> BeaconSettings:
-    return BeaconSettings(
+) -> BeaconManifest:
+    return BeaconManifest(
         artifacts=ArtifactsConfig(
             contexts=contexts or [],
             skills=skills or [],
@@ -481,7 +481,7 @@ class TestApplyAdoption:
         ]
         apply_adoption(beacon_yaml, selections)
 
-        updated = BeaconSettings.from_yaml(beacon_yaml)
+        updated = BeaconManifest.from_yaml(beacon_yaml)
         assert "contexts/platform.md" in updated.artifacts.contexts
         assert updated.artifacts.skills == []
         assert updated.artifacts.knowledge == []
@@ -496,7 +496,7 @@ class TestApplyAdoption:
         selections = [AdoptCandidate(artifact_type="skills", path="skills/gen-tests/")]
         apply_adoption(beacon_yaml, selections)
 
-        updated = BeaconSettings.from_yaml(beacon_yaml)
+        updated = BeaconManifest.from_yaml(beacon_yaml)
         assert "skills/gen-tests/" in updated.artifacts.skills
 
     def test_adopt_skill_normalizes_path(self, tmp_path):
@@ -509,7 +509,7 @@ class TestApplyAdoption:
         selections = [AdoptCandidate(artifact_type="skills", path="skills/my-skill")]
         apply_adoption(beacon_yaml, selections)
 
-        updated = BeaconSettings.from_yaml(beacon_yaml)
+        updated = BeaconManifest.from_yaml(beacon_yaml)
         assert "skills/my-skill/" in updated.artifacts.skills
 
     def test_adopt_knowledge_file(self, tmp_path):
@@ -524,7 +524,7 @@ class TestApplyAdoption:
         ]
         apply_adoption(beacon_yaml, selections)
 
-        updated = BeaconSettings.from_yaml(beacon_yaml)
+        updated = BeaconManifest.from_yaml(beacon_yaml)
         assert "knowledge/python/async.md" in updated.artifacts.knowledge
 
     def test_adopt_mixed_types(self, tmp_path):
@@ -542,7 +542,7 @@ class TestApplyAdoption:
         ]
         apply_adoption(beacon_yaml, selections)
 
-        updated = BeaconSettings.from_yaml(beacon_yaml)
+        updated = BeaconManifest.from_yaml(beacon_yaml)
         assert len(updated.artifacts.contexts) == 2
         assert "skills/tool/" in updated.artifacts.skills
         assert "knowledge/python/tips.md" in updated.artifacts.knowledge
@@ -559,7 +559,7 @@ class TestApplyAdoption:
         ]
         apply_adoption(beacon_yaml, selections)
 
-        updated = BeaconSettings.from_yaml(beacon_yaml)
+        updated = BeaconManifest.from_yaml(beacon_yaml)
         assert updated.artifacts.contexts.count("contexts/existing.md") == 1
 
     def test_empty_selection_no_change(self, tmp_path):
@@ -570,7 +570,7 @@ class TestApplyAdoption:
 
         apply_adoption(beacon_yaml, [])
 
-        updated = BeaconSettings.from_yaml(beacon_yaml)
+        updated = BeaconManifest.from_yaml(beacon_yaml)
         assert updated.artifacts.contexts == ["contexts/existing.md"]
 
     def test_existing_entries_preserved(self, tmp_path):
@@ -583,7 +583,7 @@ class TestApplyAdoption:
         selections = [AdoptCandidate(artifact_type="contexts", path="contexts/new.md")]
         apply_adoption(beacon_yaml, selections)
 
-        updated = BeaconSettings.from_yaml(beacon_yaml)
+        updated = BeaconManifest.from_yaml(beacon_yaml)
         assert "contexts/old.md" in updated.artifacts.contexts
         assert "contexts/new.md" in updated.artifacts.contexts
 
@@ -597,7 +597,7 @@ class TestApplyAdoption:
 
         apply_adoption(beacon_yaml, [], unadoptions=["contexts/a.md", "skills/tool/"])
 
-        updated = BeaconSettings.from_yaml(beacon_yaml)
+        updated = BeaconManifest.from_yaml(beacon_yaml)
         assert "contexts/a.md" not in updated.artifacts.contexts
         assert "contexts/b.md" in updated.artifacts.contexts
         assert "skills/tool/" not in updated.artifacts.skills
@@ -611,7 +611,7 @@ class TestApplyAdoption:
 
         apply_adoption(beacon_yaml, [], unadoptions=["skills/foo"])  # no trailing slash
 
-        updated = BeaconSettings.from_yaml(beacon_yaml)
+        updated = BeaconManifest.from_yaml(beacon_yaml)
         assert "skills/foo/" not in updated.artifacts.skills
 
 
@@ -1229,7 +1229,7 @@ class TestAdoptDryRunIntegration:
         assert result.exit_code == 0
         assert "new-context" in result.output or "contexts" in result.output.lower()
         # beacon.yaml must not be modified
-        updated = BeaconSettings.from_yaml(beacon_yaml)
+        updated = BeaconManifest.from_yaml(beacon_yaml)
         assert updated.artifacts.contexts == []
 
     def test_no_sync_state_shows_full_scan(self, tmp_path, monkeypatch):

@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from beacon.cli import main
-from beacon.core.settings import BeaconSettings
+from beacon.core.manifest import BeaconManifest
 from click.testing import CliRunner
 
 
@@ -124,7 +124,7 @@ class TestDoctorKnowledgeFilePaths:
         assert result.exit_code == 0
 
         beacon_yaml = project / ".agentic-beacon" / "beacon.yaml"
-        updated = BeaconSettings.from_yaml(beacon_yaml)
+        updated = BeaconManifest.from_yaml(beacon_yaml)
         assert updated.artifacts.knowledge == ["knowledge/python"]
 
     def test_fix_deduplicates_same_node(self, tmp_path, monkeypatch):
@@ -145,7 +145,7 @@ class TestDoctorKnowledgeFilePaths:
         assert result.exit_code == 0
 
         beacon_yaml = project / ".agentic-beacon" / "beacon.yaml"
-        updated = BeaconSettings.from_yaml(beacon_yaml)
+        updated = BeaconManifest.from_yaml(beacon_yaml)
         assert set(updated.artifacts.knowledge) == {
             "knowledge/python",
             "knowledge/data-platform",

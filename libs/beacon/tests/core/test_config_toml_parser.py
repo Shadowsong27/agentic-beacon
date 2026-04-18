@@ -17,7 +17,7 @@ import os
 from pathlib import Path
 
 import pytest
-from beacon.core.settings import WarehouseSettings
+from beacon.core.manifest import WorkspaceConfig
 from pydantic import ValidationError
 
 
@@ -36,9 +36,9 @@ class TestConfigTomlParser:
         original_cwd = os.getcwd()
         try:
             os.chdir(temp_dir)
-            settings = WarehouseSettings()
+            settings = WorkspaceConfig()
 
-            assert isinstance(settings, WarehouseSettings)
+            assert isinstance(settings, WorkspaceConfig)
             assert settings.warehouse.local_path == "/absolute/path/to/warehouse"
         finally:
             os.chdir(original_cwd)
@@ -55,7 +55,7 @@ local_path = "/usr/local/warehouse"
         original_cwd = os.getcwd()
         try:
             os.chdir(temp_dir)
-            settings = WarehouseSettings()
+            settings = WorkspaceConfig()
 
             assert settings.warehouse.local_path == "/usr/local/warehouse"
             assert Path(settings.warehouse.local_path).is_absolute()
@@ -75,7 +75,7 @@ local_path = "/usr/local/warehouse"
             os.chdir(temp_dir)
 
             with pytest.raises(ValidationError) as exc_info:
-                WarehouseSettings()
+                WorkspaceConfig()
 
             error_str = str(exc_info.value).lower()
             assert "absolute" in error_str or "path" in error_str
@@ -96,7 +96,7 @@ key = "value"
             os.chdir(temp_dir)
 
             with pytest.raises(ValidationError) as exc_info:
-                WarehouseSettings()
+                WorkspaceConfig()
 
             # Pydantic should complain about missing required field
             assert (
@@ -120,7 +120,7 @@ other_key = "value"
             os.chdir(temp_dir)
 
             with pytest.raises(ValidationError) as exc_info:
-                WarehouseSettings()
+                WorkspaceConfig()
 
             assert "local_path" in str(exc_info.value).lower()
         finally:
@@ -140,7 +140,7 @@ invalid syntax here
             os.chdir(temp_dir)
 
             with pytest.raises(Exception):  # noqa: B017  # Pydantic or TOML parsing error
-                WarehouseSettings()
+                WorkspaceConfig()
         finally:
             os.chdir(original_cwd)
 
@@ -158,7 +158,7 @@ local_path = ""
             os.chdir(temp_dir)
 
             with pytest.raises(ValidationError) as exc_info:
-                WarehouseSettings()
+                WorkspaceConfig()
 
             error_str = str(exc_info.value).lower()
             assert "empty" in error_str or "path" in error_str
@@ -174,7 +174,7 @@ local_path = ""
             os.chdir(temp_dir)
 
             with pytest.raises(ValidationError):
-                WarehouseSettings()
+                WorkspaceConfig()
         finally:
             os.chdir(original_cwd)
 
@@ -192,7 +192,7 @@ local_path = 12345
             os.chdir(temp_dir)
 
             with pytest.raises(ValidationError) as exc_info:
-                WarehouseSettings()
+                WorkspaceConfig()
 
             error_str = str(exc_info.value).lower()
             assert "string" in error_str or "str" in error_str or "type" in error_str
@@ -213,7 +213,7 @@ another_unknown = 123
         original_cwd = os.getcwd()
         try:
             os.chdir(temp_dir)
-            settings = WarehouseSettings()
+            settings = WorkspaceConfig()
 
             # Should succeed without errors
             assert settings.warehouse.local_path == "/absolute/path/warehouse"

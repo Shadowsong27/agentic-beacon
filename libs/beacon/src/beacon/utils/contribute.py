@@ -8,7 +8,7 @@ from pathlib import Path
 from rich.console import Console
 
 from ..core.delta import DeltaComparator, DeltaStatus
-from ..core.settings import BeaconSettings
+from ..core.manifest import BeaconManifest
 
 console = Console()
 
@@ -237,7 +237,7 @@ def _resolve_agent_contribute_source(
 
 def _contribute_single(
     comparator: DeltaComparator,
-    beacon_settings: BeaconSettings,
+    beacon_settings: BeaconManifest,
     warehouse_path: Path,
     artifacts_dir: Path,
     file_path: str,
@@ -310,7 +310,7 @@ def _contribute_single(
 
 def _contribute_all(
     comparator: DeltaComparator,
-    beacon_settings: BeaconSettings,
+    beacon_settings: BeaconManifest,
     warehouse_path: Path,
     artifacts_dir: Path,
     dry_run: bool,

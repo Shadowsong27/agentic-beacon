@@ -15,10 +15,10 @@ Test Coverage:
 
 import pytest
 from beacon.core.exceptions import ValidationError
-from beacon.core.settings import BeaconSettings, BeaconYamlValidator
+from beacon.core.manifest import BeaconManifest, BeaconManifestValidator
 
 # Create validator instance for tests
-validator = BeaconYamlValidator()
+validator = BeaconManifestValidator()
 
 
 class TestBeaconStructureValidation:
@@ -37,7 +37,7 @@ artifacts:
     - context1.md
 """)
 
-        settings = BeaconSettings.from_yaml(str(beacon_file))
+        settings = BeaconManifest.from_yaml(str(beacon_file))
         result = validator.validate_structure(settings)
 
         assert result.valid is True
@@ -52,7 +52,7 @@ artifacts:
     - file1.md
 """)
 
-        settings = BeaconSettings.from_yaml(str(beacon_file))
+        settings = BeaconManifest.from_yaml(str(beacon_file))
         result = validator.validate_structure(settings)
 
         assert result.valid is True
@@ -70,7 +70,7 @@ artifacts:
 
         # Should fail during parsing with ValidationError
         with pytest.raises(ValidationError) as exc_info:
-            BeaconSettings.from_yaml(str(beacon_file))
+            BeaconManifest.from_yaml(str(beacon_file))
 
         assert (
             "plugins" in str(exc_info.value).lower()
@@ -87,7 +87,7 @@ artifacts:
 """)
 
         with pytest.raises(ValidationError) as exc_info:
-            BeaconSettings.from_yaml(str(beacon_file))
+            BeaconManifest.from_yaml(str(beacon_file))
 
         assert (
             "str" in str(exc_info.value).lower()
@@ -105,7 +105,7 @@ artifacts:
 """)
 
         with pytest.raises(ValidationError):
-            BeaconSettings.from_yaml(str(beacon_file))
+            BeaconManifest.from_yaml(str(beacon_file))
 
     def test_tc6_dict_instead_of_list(self, temp_dir):
         """TC6: Artifact type with dict instead of list → ValidationResult(valid=False)"""
@@ -117,7 +117,7 @@ artifacts:
 """)
 
         with pytest.raises(ValidationError) as exc_info:
-            BeaconSettings.from_yaml(str(beacon_file))
+            BeaconManifest.from_yaml(str(beacon_file))
 
         assert (
             "list" in str(exc_info.value).lower()
@@ -129,7 +129,7 @@ artifacts:
         beacon_file = temp_dir / "beacon.yaml"
         beacon_file.write_text(sample_beacon_yaml_empty)
 
-        settings = BeaconSettings.from_yaml(str(beacon_file))
+        settings = BeaconManifest.from_yaml(str(beacon_file))
         result = validator.validate_structure(settings)
 
         assert result.valid is True
@@ -146,7 +146,7 @@ artifacts:
 """)
 
         with pytest.raises(ValidationError) as exc_info:
-            BeaconSettings.from_yaml(str(beacon_file))
+            BeaconManifest.from_yaml(str(beacon_file))
 
         # Should mention the unknown fields
         error_str = str(exc_info.value).lower()
@@ -167,7 +167,7 @@ artifacts:
 """)
 
         with pytest.raises(ValidationError) as exc_info:
-            BeaconSettings.from_yaml(str(beacon_file))
+            BeaconManifest.from_yaml(str(beacon_file))
 
         assert (
             "invalid_type" in str(exc_info.value).lower()
@@ -187,6 +187,6 @@ artifacts:
 """)
 
         # These should actually be valid paths
-        settings = BeaconSettings.from_yaml(str(beacon_file))
+        settings = BeaconManifest.from_yaml(str(beacon_file))
         result = validator.validate_structure(settings)
         assert result.valid is True

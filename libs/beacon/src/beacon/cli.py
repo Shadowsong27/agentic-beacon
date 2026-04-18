@@ -11,7 +11,7 @@ from rich.table import Table
 
 from .core.delta import DeltaComparator
 from .core.gitignore import GitignoreManager
-from .core.settings import BeaconSettings, WarehouseSettings
+from .core.manifest import BeaconManifest, WorkspaceConfig
 from .core.sync import SyncEngine
 from .distributor import WarehouseDistributor
 from .initializer import WarehouseInitializer
@@ -334,7 +334,7 @@ def connect(*, path: Path | None) -> None:
 
     # Save connection configuration
     try:
-        WarehouseSettings.from_path(warehouse_path)
+        WorkspaceConfig.from_path(warehouse_path)
         console.print("[green]✓[/green] Connection saved")
 
         # Update .gitignore
@@ -392,7 +392,7 @@ def warehouse_list(*, artifact_type: str | None) -> None:
         sys.exit(1)
 
     try:
-        warehouse_settings = WarehouseSettings()
+        warehouse_settings = WorkspaceConfig()
         warehouse_path = Path(warehouse_settings.warehouse.local_path)
     except Exception as e:
         console.print(f"[red]Error:[/red] Failed to read warehouse connection: {e}")
@@ -684,7 +684,7 @@ def sync(
 
     # Load warehouse settings
     try:
-        warehouse_settings = WarehouseSettings()
+        warehouse_settings = WorkspaceConfig()
         warehouse_path = Path(warehouse_settings.warehouse.local_path)
 
         # Validate warehouse still exists
@@ -713,7 +713,7 @@ def sync(
                 sys.exit(1)
 
         # Load beacon.yaml
-        beacon_settings = BeaconSettings.from_yaml(beacon_yaml)
+        beacon_settings = BeaconManifest.from_yaml(beacon_yaml)
 
         # Validate skill entries — file-level paths are a hard error
         _validate_skill_entries(beacon_settings)
@@ -1032,7 +1032,7 @@ def agents_sync(*, preserve: bool, force: bool, skip_git_check: bool) -> None:
         sys.exit(1)
 
     try:
-        warehouse_settings = WarehouseSettings()
+        warehouse_settings = WorkspaceConfig()
         warehouse_path = Path(warehouse_settings.warehouse.local_path)
     except Exception as e:
         console.print(f"[red]Error:[/red] Could not load warehouse settings: {e}")
@@ -1089,7 +1089,7 @@ def install_artifact(
         sys.exit(1)
 
     try:
-        warehouse_settings = WarehouseSettings()
+        warehouse_settings = WorkspaceConfig()
         warehouse_path = Path(warehouse_settings.warehouse.local_path)
     except Exception as e:
         console.print(f"[red]Error:[/red] Could not load warehouse settings: {e}")
@@ -1236,7 +1236,7 @@ def delta(*, file: str | None, no_color: bool) -> None:
         sys.exit(1)
 
     try:
-        warehouse_settings = WarehouseSettings()
+        warehouse_settings = WorkspaceConfig()
         warehouse_path = Path(warehouse_settings.warehouse.local_path)
 
         if not warehouse_path.exists():
@@ -1249,7 +1249,7 @@ def delta(*, file: str | None, no_color: bool) -> None:
             sys.exit(1)
 
         artifacts_dir = beacon_dir / "artifacts"
-        beacon_settings = BeaconSettings.from_yaml(beacon_yaml)
+        beacon_settings = BeaconManifest.from_yaml(beacon_yaml)
 
         # Relink sync-state if warehouse path has changed
         _relink_global_sync_state(warehouse_path)
@@ -1354,7 +1354,7 @@ def contribute(
         sys.exit(1)
 
     try:
-        warehouse_settings = WarehouseSettings()
+        warehouse_settings = WorkspaceConfig()
         warehouse_path = Path(warehouse_settings.warehouse.local_path)
 
         if not warehouse_path.exists():
@@ -1383,7 +1383,7 @@ def contribute(
                 console.print(f"[yellow]Warning:[/yellow] {sync_error}")
                 sys.exit(1)
 
-        beacon_settings = BeaconSettings.from_yaml(beacon_yaml)
+        beacon_settings = BeaconManifest.from_yaml(beacon_yaml)
         project_root = Path.cwd()
         comparator = DeltaComparator(
             warehouse_path=warehouse_path,
@@ -1487,11 +1487,11 @@ def _do_reset(project_root: Path) -> None:
     console.print("[blue]Resetting artifacts from warehouse...[/blue]")
 
     try:
-        from .core.settings import BeaconSettings, WarehouseSettings
+        from .core.manifest import BeaconManifest, WorkspaceConfig
 
-        warehouse_settings = WarehouseSettings()
+        warehouse_settings = WorkspaceConfig()
         warehouse_path = Path(warehouse_settings.warehouse.local_path)
-        beacon_settings = BeaconSettings.from_yaml(beacon_dir / "beacon.yaml")
+        beacon_settings = BeaconManifest.from_yaml(beacon_dir / "beacon.yaml")
 
         artifacts_dir = beacon_dir / "artifacts"
         artifacts_dir.mkdir(exist_ok=True)
@@ -1708,9 +1708,9 @@ def status(*, project: Path | None) -> None:
     config_file = beacon_dir / "config.toml"
     if config_file.exists():
         try:
-            from .core.settings import WarehouseSettings
+            from .core.manifest import WorkspaceConfig
 
-            warehouse_settings = WarehouseSettings()
+            warehouse_settings = WorkspaceConfig()
             console.print(
                 f"[blue]Warehouse:[/blue] {warehouse_settings.warehouse.local_path}"
             )
@@ -1725,9 +1725,9 @@ def status(*, project: Path | None) -> None:
 
     # Show beacon.yaml configuration
     if beacon_yaml.exists():
-        from .core.settings import BeaconSettings
+        from .core.manifest import BeaconManifest
 
-        beacon_settings = BeaconSettings.from_yaml(beacon_yaml)
+        beacon_settings = BeaconManifest.from_yaml(beacon_yaml)
 
         if beacon_settings.artifacts.contexts:
             table = Table(title="Configured Contexts")
@@ -1808,7 +1808,7 @@ def adopt(*, dry_run: bool) -> None:
 
     # Load warehouse settings
     try:
-        warehouse_settings = WarehouseSettings()
+        warehouse_settings = WorkspaceConfig()
         warehouse_path = Path(warehouse_settings.warehouse.local_path)
     except Exception:
         console.print("[red]Error:[/red] Could not read warehouse connection settings.")
@@ -1816,7 +1816,7 @@ def adopt(*, dry_run: bool) -> None:
         sys.exit(1)
 
     # Load beacon.yaml
-    beacon_settings = BeaconSettings.from_yaml(beacon_yaml)
+    beacon_settings = BeaconManifest.from_yaml(beacon_yaml)
 
     # Discover all unadopted artifacts (full scan, annotated with commits_ago)
     candidates, _ = discover_adoptable(warehouse_path, beacon_settings)
@@ -2096,7 +2096,7 @@ def doctor(*, fix: bool) -> None:
         )
     else:
         try:
-            ws = WarehouseSettings()
+            ws = WorkspaceConfig()
             warehouse_path = Path(ws.warehouse.local_path)
             if warehouse_path.is_dir():
                 _ok(f"Warehouse connected: {warehouse_path}")
@@ -2116,7 +2116,7 @@ def doctor(*, fix: bool) -> None:
         _err("beacon.yaml not found", "Run: abc setup")
     else:
         try:
-            beacon_settings = BeaconSettings.from_yaml(beacon_yaml)
+            beacon_settings = BeaconManifest.from_yaml(beacon_yaml)
             _ok("beacon.yaml is valid YAML")
         except Exception as exc:
             _err(f"beacon.yaml parse error: {exc}")
@@ -2183,7 +2183,7 @@ def doctor(*, fix: bool) -> None:
             beacon_settings.artifacts.knowledge = new_entries
             beacon_settings.to_yaml(beacon_yaml)
             # Reload
-            beacon_settings = BeaconSettings.from_yaml(beacon_yaml)
+            beacon_settings = BeaconManifest.from_yaml(beacon_yaml)
             knowledge_entries = list(beacon_settings.artifacts.knowledge)
             console.print(
                 f"       [green]Fixed:[/green] migrated {len(fixes_applied)} knowledge path(s) to node level"

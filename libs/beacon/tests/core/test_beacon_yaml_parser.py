@@ -17,11 +17,11 @@ from pathlib import Path
 
 import pytest
 from beacon.core.exceptions import ValidationError, YAMLParseError
-from beacon.core.settings import BeaconSettings
+from beacon.core.manifest import BeaconManifest
 
 
 class TestBeaconYAMLParser:
-    """Test suite for BeaconSettings.from_yaml() - Task 1.1"""
+    """Test suite for BeaconManifest.from_yaml() - Task 1.1"""
 
     def test_tc1_valid_complete_beacon_yaml(
         self, temp_dir, sample_beacon_yaml_complete
@@ -30,9 +30,9 @@ class TestBeaconYAMLParser:
         beacon_file = temp_dir / "beacon.yaml"
         beacon_file.write_text(sample_beacon_yaml_complete)
 
-        settings = BeaconSettings.from_yaml(str(beacon_file))
+        settings = BeaconManifest.from_yaml(str(beacon_file))
 
-        assert isinstance(settings, BeaconSettings)
+        assert isinstance(settings, BeaconManifest)
         assert len(settings.artifacts.knowledge) == 2
         assert "languages/python/type-hints.md" in settings.artifacts.knowledge
         assert "languages/python/async-patterns.md" in settings.artifacts.knowledge
@@ -46,9 +46,9 @@ class TestBeaconYAMLParser:
         beacon_file = temp_dir / "beacon.yaml"
         beacon_file.write_text(sample_beacon_yaml_partial)
 
-        settings = BeaconSettings.from_yaml(str(beacon_file))
+        settings = BeaconManifest.from_yaml(str(beacon_file))
 
-        assert isinstance(settings, BeaconSettings)
+        assert isinstance(settings, BeaconManifest)
         assert len(settings.artifacts.knowledge) == 1
         assert settings.artifacts.knowledge[0] == "languages/python/basics.md"
         assert len(settings.artifacts.skills) == 0
@@ -59,9 +59,9 @@ class TestBeaconYAMLParser:
         beacon_file = temp_dir / "beacon.yaml"
         beacon_file.write_text(sample_beacon_yaml_empty)
 
-        settings = BeaconSettings.from_yaml(str(beacon_file))
+        settings = BeaconManifest.from_yaml(str(beacon_file))
 
-        assert isinstance(settings, BeaconSettings)
+        assert isinstance(settings, BeaconManifest)
         assert len(settings.artifacts.knowledge) == 0
         assert len(settings.artifacts.skills) == 0
         assert len(settings.artifacts.contexts) == 0
@@ -77,7 +77,7 @@ artifacts:
 """)
 
         with pytest.raises(YAMLParseError) as exc_info:
-            BeaconSettings.from_yaml(str(beacon_file))
+            BeaconManifest.from_yaml(str(beacon_file))
 
         assert (
             "syntax" in str(exc_info.value).lower()
@@ -93,7 +93,7 @@ knowledge:
 """)
 
         with pytest.raises(ValidationError) as exc_info:
-            BeaconSettings.from_yaml(str(beacon_file))
+            BeaconManifest.from_yaml(str(beacon_file))
 
         assert "artifacts" in str(exc_info.value).lower()
 
@@ -106,7 +106,7 @@ artifacts:
 """)
 
         with pytest.raises(ValidationError) as exc_info:
-            BeaconSettings.from_yaml(str(beacon_file))
+            BeaconManifest.from_yaml(str(beacon_file))
 
         # Pydantic should complain about type mismatch
         assert (
@@ -126,7 +126,7 @@ artifacts:
 """)
 
         with pytest.raises(ValidationError) as exc_info:
-            BeaconSettings.from_yaml(str(beacon_file))
+            BeaconManifest.from_yaml(str(beacon_file))
 
         error_str = str(exc_info.value).lower()
         # Should mention the unknown field
@@ -139,7 +139,7 @@ artifacts:
         non_existent_file = temp_dir / "non_existent.yaml"
 
         with pytest.raises(FileNotFoundError) as exc_info:
-            BeaconSettings.from_yaml(str(non_existent_file))
+            BeaconManifest.from_yaml(str(non_existent_file))
 
         assert "non_existent.yaml" in str(exc_info.value) or str(
             non_existent_file
@@ -151,7 +151,7 @@ artifacts:
         dir_path.mkdir()
 
         with pytest.raises(IsADirectoryError):
-            BeaconSettings.from_yaml(str(dir_path))
+            BeaconManifest.from_yaml(str(dir_path))
 
     @pytest.mark.skipif(
         not hasattr(Path, "chmod"), reason="chmod not available on this platform"
@@ -166,7 +166,7 @@ artifacts:
 
         try:
             with pytest.raises(PermissionError) as exc_info:
-                BeaconSettings.from_yaml(str(beacon_file))
+                BeaconManifest.from_yaml(str(beacon_file))
 
             assert (
                 "permission" in str(exc_info.value).lower()

@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 from beacon.cli import main
 from beacon.core.delta import DeltaComparator
-from beacon.core.settings import BeaconSettings
+from beacon.core.manifest import BeaconManifest
 from beacon.utils.agents import _find_project_level_agents
 from beacon.utils.delta import _find_untracked_local_files
 from beacon.utils.skills import _bundled_skill_names, _find_global_untracked_skills
@@ -523,7 +523,7 @@ def test_find_untracked_local_files_skill_ignore_exact(tmp_path):
         artifacts_path=artifacts,
         skills_paths={"claudecode": skills_root},
     )
-    beacon_settings = BeaconSettings(
+    beacon_settings = BeaconManifest(
         artifacts={"knowledge": [], "skills": [], "contexts": []}
     )
 
@@ -554,7 +554,7 @@ def test_find_untracked_local_files_skill_ignore_glob(tmp_path):
         artifacts_path=artifacts,
         skills_paths={"claudecode": skills_root},
     )
-    beacon_settings = BeaconSettings(
+    beacon_settings = BeaconManifest(
         artifacts={"knowledge": [], "skills": [], "contexts": []}
     )
 
@@ -584,7 +584,7 @@ def test_find_untracked_local_files_no_ignore_returns_all(tmp_path):
         artifacts_path=artifacts,
         skills_paths={"claudecode": skills_root},
     )
-    beacon_settings = BeaconSettings(
+    beacon_settings = BeaconManifest(
         artifacts={"knowledge": [], "skills": [], "contexts": []}
     )
 
@@ -605,7 +605,7 @@ def test_beacon_settings_ignore_defaults_empty(tmp_path):
     yaml_path = tmp_path / "beacon.yaml"
     yaml_path.write_text("artifacts:\n  knowledge: []\n  skills: []\n  contexts: []\n")
 
-    settings = BeaconSettings.from_yaml(yaml_path)
+    settings = BeaconManifest.from_yaml(yaml_path)
 
     assert settings.ignore.skills == []
 
@@ -618,7 +618,7 @@ def test_beacon_settings_ignore_skills_parsed(tmp_path):
         'ignore:\n  skills:\n    - "openspec-*"\n    - "opsx-*"\n'
     )
 
-    settings = BeaconSettings.from_yaml(yaml_path)
+    settings = BeaconManifest.from_yaml(yaml_path)
 
     assert settings.ignore.skills == ["openspec-*", "opsx-*"]
 
@@ -630,7 +630,7 @@ def test_beacon_settings_ignore_empty_section(tmp_path):
         "artifacts:\n  knowledge: []\n  skills: []\n  contexts: []\nignore: {}\n"
     )
 
-    settings = BeaconSettings.from_yaml(yaml_path)
+    settings = BeaconManifest.from_yaml(yaml_path)
 
     assert settings.ignore.skills == []
 
