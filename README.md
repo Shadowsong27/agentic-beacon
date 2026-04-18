@@ -17,6 +17,8 @@ Agentic Beacon provides:
 1. 🗂️ **A methodology** for managing contexts, knowledge, and skills — the core agentic engineering artifacts worthy of standardization and team-wide distribution
 2. 🛠️ **CLI tooling (`abc`)** for initializing warehouses, managing connections, and distributing artifacts across projects
 
+> **Built for multiplayer.** Agentic Beacon is designed as a team tool first. The warehouse model is built around shared ownership, bidirectional contribution, and the compounding benefits of a growing knowledge base — value that scales with the number of people and projects contributing to it. Solo use is fully supported (many start that way), but the tool was built with multiplayer in mind.
+
 ## The Problem
 
 When a team adopts AI coding agents, each project accumulates its own `AGENTS.md` or `.cursorrules`. Standards diverge. A pattern discovered in one repo never reaches the others. When guidelines change, someone copy-pastes updates into 15 repos and misses three.
@@ -146,11 +148,18 @@ abc sync
 | **Repomix** | Bundles your codebase into a single LLM-readable file |
 | **faf-mcp** | Syncs context files locally via MCP |
 | **cursorrules.com** | Static directory of community `.cursorrules` files |
+| **Shared wiki / prompt library** | A team-maintained document store agents are told to read |
 | **Langfuse / LLM Ops tools** | Production observability and prompt management for LLM apps |
 
 **Use Agentic Beacon when** you want a version-controlled, team-wide source of truth for agent instructions across multiple projects or repos.
 
 **Not the right fit when** you need a one-off codebase bundle (use Repomix), a single solo project, or production LLM observability (use Langfuse).
+
+### Why not a shared wiki or prompt library?
+
+A shared wiki is **read-only by design** — someone curates it, everyone else consumes it. There is no path from a coding session back to the wiki. Improvements stay on the developer's machine.
+
+Agentic Beacon is **bidirectional**. When an agent session produces a better approach, `abc contribute` copies it back to the warehouse and opens a PR. Once merged, every project gets the improvement on the next `abc sync`. The warehouse gets smarter over time because the whole team is contributing to it, not just reading from it. That compounding loop is what the tool was built around.
 
 ## Documentation
 
