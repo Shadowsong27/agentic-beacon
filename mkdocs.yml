@@ -1,0 +1,96 @@
+site_name: Agentic Beacon
+site_description: The package manager for AI coding agents — distribute contexts, knowledge, and skills across your team.
+site_url: https://shadowsong27.github.io/agentic-beacon/
+repo_name: Shadowsong27/agentic-beacon
+repo_url: https://github.com/Shadowsong27/agentic-beacon
+edit_uri: edit/main/site-docs/
+
+docs_dir: site-docs
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: black
+      accent: teal
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: black
+      accent: teal
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+  font:
+    text: Inter
+    code: JetBrains Mono
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - navigation.path
+    - toc.follow
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+  icon:
+    repo: fontawesome/brands/github
+    logo: material/lighthouse-on
+  favicon: assets/favicon.png
+
+plugins:
+  - search:
+      separator: '[\s\-,:!=\[\]()"`/]+|\.(?!\d)|&[lg]t;|(?!\b)(?=[A-Z][a-z])'
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.details
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - def_list
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/Shadowsong27/agentic-beacon
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/agentic-beacon/
+
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Quick Start: quickstart.md
+  - Concepts:
+    - How It Works: concepts/how-it-works.md
+    - Artifact Types: concepts/artifact-types.md
+  - Guides:
+    - Creating a Warehouse: guides/warehouse-creation.md
+    - Connecting a Project: guides/connecting-projects.md
+    - Interactive Adoption: guides/interactive-adoption.md
+    - Syncing Artifacts: guides/syncing.md
+    - Day-to-Day Workflow: guides/day-to-day-workflow.md
+    - Contributing Back: guides/contributing-back.md
+    - Creating Skills: guides/creating-skills.md
+    - Team Collaboration: guides/team-collaboration.md
+    - Advanced Patterns: guides/advanced-patterns.md
+  - Reference:
+    - beacon.yaml: reference/beacon-yaml.md
+    - CLI Reference: reference/cli.md
+  - Troubleshooting: troubleshooting.md
