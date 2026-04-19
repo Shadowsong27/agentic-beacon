@@ -76,6 +76,9 @@ class WarehouseUpgrader:
         if rel_path in template_overrides:
             return template_overrides[rel_path]
 
+        tmpl_path = TEMPLATES_DIR / rel_path
+        if tmpl_path.exists():
+            return tmpl_path.read_text(encoding="utf-8")
         data_path = TEMPLATES_DIR.parent / rel_path
         if data_path.exists():
             return data_path.read_text(encoding="utf-8")
