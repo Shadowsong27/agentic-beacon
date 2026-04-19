@@ -13,7 +13,7 @@ Following TDD workflow for tasks 7.1-7.7:
 import pytest
 from beacon.cli import main
 from beacon.core.manifest.beacon import ArtifactsConfig, BeaconManifest
-from beacon.utils.skills import _validate_skill_entries
+from beacon.domains.artifact.skill import validate_skill_entries
 from click.testing import CliRunner
 
 # ========== Task 7.1: ABC Sync Command Implementation ==========
@@ -298,13 +298,13 @@ def _make_beacon_settings(skills: list[str]) -> BeaconManifest:
 
 
 class TestValidateSkillEntriesUnit:
-    """Unit tests for _validate_skill_entries — tests the function directly."""
+    """Unit tests for validate_skill_entries — tests the function directly."""
 
     def test_file_entry_exits(self):
         """A file-level entry causes SystemExit."""
         s = _make_beacon_settings(["skills/my-skill/SKILL.md"])
         with pytest.raises(SystemExit) as exc:
-            _validate_skill_entries(s)
+            validate_skill_entries(s)
         assert exc.value.code != 0
 
     def test_non_skill_md_file_entry_exits(self):
@@ -316,7 +316,7 @@ class TestValidateSkillEntriesUnit:
         ]:
             s = _make_beacon_settings([entry])
             with pytest.raises(SystemExit):
-                _validate_skill_entries(s)
+                validate_skill_entries(s)
 
     def test_multiple_file_entries_all_exit(self):
         """Multiple file-level entries still cause a single SystemExit."""
@@ -327,34 +327,34 @@ class TestValidateSkillEntriesUnit:
             ]
         )
         with pytest.raises(SystemExit) as exc:
-            _validate_skill_entries(s)
+            validate_skill_entries(s)
         assert exc.value.code != 0
 
     def test_mixed_entries_exits_on_any_file_entry(self):
         """A mix of valid directories and one file entry still errors."""
         s = _make_beacon_settings(["skills/good/", "skills/bad/SKILL.md"])
         with pytest.raises(SystemExit):
-            _validate_skill_entries(s)
+            validate_skill_entries(s)
 
     def test_directory_with_trailing_slash_passes(self):
         """Canonical directory form with trailing slash is accepted."""
         s = _make_beacon_settings(["skills/my-skill/"])
-        _validate_skill_entries(s)  # must not raise
+        validate_skill_entries(s)  # must not raise
 
     def test_directory_without_trailing_slash_passes(self):
         """Directory form without trailing slash is also accepted."""
         s = _make_beacon_settings(["skills/my-skill"])
-        _validate_skill_entries(s)  # must not raise
+        validate_skill_entries(s)  # must not raise
 
     def test_empty_skills_list_passes(self):
         """An empty skills list is valid."""
         s = _make_beacon_settings([])
-        _validate_skill_entries(s)  # must not raise
+        validate_skill_entries(s)  # must not raise
 
     def test_multiple_valid_directory_entries_pass(self):
         """Multiple directory entries are all accepted."""
         s = _make_beacon_settings(["skills/alpha/", "skills/beta/", "skills/gamma"])
-        _validate_skill_entries(s)  # must not raise
+        validate_skill_entries(s)  # must not raise
 
 
 class TestSyncSkillEntryValidation:

@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 from beacon.core.manifest.beacon import ValidationResult
-from beacon.warehouse.validator import WarehouseValidator
+from beacon.domains.warehouse.validator import WarehouseValidator
 
 
 class TestWarehouseValidator:

@@ -152,7 +152,10 @@ def _show_delta_summary(
     project_root: Path | None = None,
 ) -> None:
     """Show summary of all artifact differences."""
-    from .agents import _enrich_agent_stale, _find_project_level_agents
+    from beacon.domains.artifact.agent import (
+        enrich_agent_stale,
+        find_project_level_agents,
+    )
 
     summary = comparator.compare_from_config(beacon_settings)
 
@@ -204,7 +207,7 @@ def _show_delta_summary(
 
         for rel_path in sorted(seen_rel_paths):
             result = comparator._compare_agent_file(rel_path)
-            result = _enrich_agent_stale(
+            result = enrich_agent_stale(
                 result,
                 warehouse_path=warehouse_path,
                 current_head=current_head,
@@ -220,13 +223,13 @@ def _show_delta_summary(
 
     # Detect project-scoped agents (not part of the global/contribution flow)
     project_level_agents: dict[str, list[str]] = (
-        _find_project_level_agents(project_root) if project_root is not None else {}
+        find_project_level_agents(project_root) if project_root is not None else {}
     )
 
     # Detect non-bundled skills accidentally placed in global skill dirs
-    from .skills import _find_global_untracked_skills
+    from beacon.domains.artifact.skill import find_global_untracked_skills
 
-    global_untracked_skills = _find_global_untracked_skills(ignore_skill_patterns)
+    global_untracked_skills = find_global_untracked_skills(ignore_skill_patterns)
 
     has_agent_diffs = any(r.status != DeltaStatus.IDENTICAL for r in agent_results)
 
@@ -744,8 +747,10 @@ def _collect_artifact_paths(
     files (not yet in the warehouse) are included.
     """
     from beacon.core.sync import SyncEngine
-
-    from .skills import _normalize_skill_entry, _skill_name_from_entry
+    from beacon.domains.artifact.skill import (
+        normalize_skill_entry,
+        skill_name_from_entry,
+    )
 
     sync_engine = SyncEngine(
         warehouse_path=comparator.warehouse_path,
@@ -764,11 +769,11 @@ def _collect_artifact_paths(
                             paths.add(str(match.relative_to(comparator.artifacts_path)))
             elif artifact_type == "skills":
                 # Expand skill directory entry to individual file paths
-                skill_dir_entry = _normalize_skill_entry(pattern)
+                skill_dir_entry = normalize_skill_entry(pattern)
                 paths.update(sync_engine.expand_glob(f"{skill_dir_entry}/**/*"))
                 # Also scan live agent dirs to catch ADDED files
                 if comparator.skills_paths:
-                    skill_name = _skill_name_from_entry(pattern)
+                    skill_name = skill_name_from_entry(pattern)
                     for _agent, agent_root in comparator.skills_paths.items():
                         agent_skill_dir = agent_root / skill_name
                         if agent_skill_dir.exists():

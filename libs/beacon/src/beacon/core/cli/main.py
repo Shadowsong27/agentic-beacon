@@ -13,16 +13,29 @@ from beacon.core.delta import DeltaComparator
 from beacon.core.manifest.beacon import BeaconManifest
 from beacon.core.manifest.workspace import WorkspaceConfig
 from beacon.core.sync import SyncEngine
-from beacon.utils.agents import (
-    _build_agents_paths,
-    _detect_agents,
-    _detect_agents_global,
-    _global_agent_dirs,
-    _handle_install_agent,
-    _install_agent_global,
-    _list_global_agents,
-    _sync_agents_from_warehouse,
-    _update_agent_gitignores,
+from beacon.domains.artifact.agent import (
+    build_agents_paths,
+    detect_agents,
+    detect_agents_global,
+    global_agent_dirs,
+    handle_install_agent,
+    install_agent_global,
+    list_global_agents,
+    sync_agents_from_warehouse,
+    update_agent_gitignores,
+)
+from beacon.domains.artifact.skill import (
+    build_skills_paths,
+    install_bundled_skills_globally,
+    normalize_skill_entry,
+    print_bundled_install_result,
+    print_skill_next_steps,
+    show_bundled_skills_status,
+    skill_name_from_entry,
+    update_beacon_yaml,
+    validate_skill_entries,
+    wire_single_skill,
+    wire_skills_post_sync,
 )
 from beacon.utils.contribute import (
     _auto_git_contribute,
@@ -42,19 +55,6 @@ from beacon.utils.git import (
     _check_warehouse_git_clean,
     _check_warehouse_on_main_branch,
     find_project_root,
-)
-from beacon.utils.skills import (
-    _build_skills_paths,
-    _install_bundled_skills_globally,
-    _normalize_skill_entry,
-    _print_bundled_install_result,
-    _print_skill_next_steps,
-    _show_bundled_skills_status,
-    _skill_name_from_entry,
-    _update_beacon_yaml,
-    _validate_skill_entries,
-    _wire_single_skill,
-    _wire_skills_post_sync,
 )
 from beacon.utils.sync_state import (
     _check_sync_state,
@@ -297,7 +297,7 @@ def sync(
 
         beacon_settings = BeaconManifest.from_yaml(beacon_yaml)
 
-        _validate_skill_entries(beacon_settings)
+        validate_skill_entries(beacon_settings)
 
         total_artifacts = (
             len(beacon_settings.artifacts.knowledge)
@@ -309,8 +309,8 @@ def sync(
             console.print(
                 "[yellow]No artifacts configured in beacon.yaml. Nothing to sync.[/yellow]"
             )
-            _print_bundled_install_result(*_install_bundled_skills_globally())
-            _sync_agents_from_warehouse(warehouse_path, force=force, preserve=preserve)
+            print_bundled_install_result(*install_bundled_skills_globally())
+            sync_agents_from_warehouse(warehouse_path, force=force, preserve=preserve)
             sys.exit(0)
 
         artifacts_dir = beacon_dir / "artifacts"
@@ -347,14 +347,14 @@ def sync(
                         )
                         sys.exit(1)
                 elif artifact_type == "skills":
-                    skill_dir_entry = _normalize_skill_entry(pattern)
+                    skill_dir_entry = normalize_skill_entry(pattern)
                     matches = sync_engine.expand_glob(f"{skill_dir_entry}/**/*")
                     if matches:
                         artifact_paths.extend(matches)
                     else:
                         console.print(
                             f"  [yellow]Warning:[/yellow] No files found for skill: "
-                            f"{_skill_name_from_entry(pattern)}"
+                            f"{skill_name_from_entry(pattern)}"
                         )
                 elif (
                     artifact_type == "knowledge" and (warehouse_path / pattern).is_dir()
@@ -501,7 +501,7 @@ def sync(
                         )
 
         if beacon_settings.artifacts.skills:
-            wired_skills, wire_errors = _wire_skills_post_sync(
+            wired_skills, wire_errors = wire_skills_post_sync(
                 project_root, artifacts_dir, force=force, preserve=preserve
             )
             if wired_skills:
@@ -513,16 +513,16 @@ def sync(
                 for err in wire_errors:
                     console.print(f"  [yellow]⚠[/yellow] Skill wiring: {err}")
 
-            _update_agent_gitignores(project_root)
+            update_agent_gitignores(project_root)
 
         if wiring_notes:
             console.print("\n[bold]Manual wiring required:[/bold]")
             for note in wiring_notes:
                 console.print(note)
 
-        _print_bundled_install_result(*_install_bundled_skills_globally())
+        print_bundled_install_result(*install_bundled_skills_globally())
 
-        _sync_agents_from_warehouse(warehouse_path, force=force, preserve=preserve)
+        sync_agents_from_warehouse(warehouse_path, force=force, preserve=preserve)
 
         if old_sync_sha is not None:
             try:
@@ -600,7 +600,7 @@ def agents_sync(*, preserve: bool, force: bool, skip_git_check: bool) -> None:
         _check_warehouse_git_clean(warehouse_path)
         _check_warehouse_on_main_branch(warehouse_path)
 
-    _sync_agents_from_warehouse(warehouse_path, force=force, preserve=preserve)
+    sync_agents_from_warehouse(warehouse_path, force=force, preserve=preserve)
 
 
 @main.command(name="install")
@@ -636,7 +636,7 @@ def install_artifact(
 
     artifact_path = Path(artifact.rstrip("/"))
     if artifact_path.parts and artifact_path.parts[0] == "agents":
-        _handle_install_agent(artifact.rstrip("/"), force=force, preserve=preserve)
+        handle_install_agent(artifact.rstrip("/"), force=force, preserve=preserve)
         return
 
     beacon_dir = Path.cwd() / ".agentic-beacon"
@@ -697,27 +697,25 @@ def install_artifact(
         sys.exit(1)
 
     if copied > 0:
-        _update_beacon_yaml(beacon_dir, files_to_copy)
+        update_beacon_yaml(beacon_dir, files_to_copy)
 
     artifact_type = Path(artifact).parts[0] if Path(artifact).parts else ""
     project_root = Path.cwd()
     detected_agents = (
-        _detect_agents(project_root, fallback_to_all=True)
+        detect_agents(project_root, fallback_to_all=True)
         if not agent
         else [agent.lower()]
     )
 
     if artifact_type == "skills":
-        skill_name = _skill_name_from_entry(artifact)
+        skill_name = skill_name_from_entry(artifact)
         skill_src_dir = artifacts_dir / "skills" / skill_name
         if skill_src_dir.exists() and detected_agents:
             for target_agent in detected_agents:
-                _wire_single_skill(
-                    project_root, skill_name, skill_src_dir, target_agent
-                )
+                wire_single_skill(project_root, skill_name, skill_src_dir, target_agent)
             console.print(f"[green]✓[/green] Installed skill: {skill_name}")
-            _update_agent_gitignores(project_root)
-            _print_skill_next_steps(detected_agents)
+            update_agent_gitignores(project_root)
+            print_skill_next_steps(detected_agents)
         elif skill_src_dir.exists():
             console.print(
                 "[green]✓[/green] Skill copied (no agent detected for wiring)"
@@ -807,8 +805,8 @@ def delta(*, file: str | None, no_color: bool) -> None:
         comparator = DeltaComparator(
             warehouse_path=warehouse_path,
             artifacts_path=artifacts_dir,
-            skills_paths=_build_skills_paths(project_root),
-            agents_paths=_build_agents_paths(),
+            skills_paths=build_skills_paths(project_root),
+            agents_paths=build_agents_paths(),
         )
 
         if file:
@@ -927,8 +925,8 @@ def contribute(
         comparator = DeltaComparator(
             warehouse_path=warehouse_path,
             artifacts_path=artifacts_dir,
-            skills_paths=_build_skills_paths(project_root),
-            agents_paths=_build_agents_paths(),
+            skills_paths=build_skills_paths(project_root),
+            agents_paths=build_agents_paths(),
         )
         ignore_skill_patterns = beacon_settings.ignore.skills
 
@@ -1044,7 +1042,7 @@ def _do_reset(project_root: Path) -> None:
                 artifact_paths.append(pattern)
 
         for skill_entry in beacon_settings.artifacts.skills:
-            normalized = _normalize_skill_entry(skill_entry)
+            normalized = normalize_skill_entry(skill_entry)
             skill_dir = warehouse_path / normalized
             if skill_dir.exists() and skill_dir.is_dir():
                 artifact_paths.extend(sync_engine.expand_glob(f"{normalized}/**/*"))
@@ -1144,7 +1142,7 @@ def list_cmd(*, artifact_type: str | None) -> None:
         abc list agents
     """
     if artifact_type == "agents":
-        _list_global_agents()
+        list_global_agents()
         return
 
     beacon_dir = Path.cwd() / ".agentic-beacon"
@@ -1247,7 +1245,7 @@ def status(*, project: Path | None) -> None:
     if not artifacts_dir.exists():
         console.print("\n[yellow]No artifacts synced yet.[/yellow]")
         console.print("Run 'abc sync' to download artifacts from warehouse.")
-        _show_bundled_skills_status()
+        show_bundled_skills_status()
         sys.exit(0)
 
     if beacon_yaml.exists():
@@ -1281,7 +1279,7 @@ def status(*, project: Path | None) -> None:
             console.print(table)
             console.print()
 
-    _show_bundled_skills_status()
+    show_bundled_skills_status()
 
     import os as _os
 
@@ -1429,7 +1427,7 @@ def adopt(*, dry_run: bool) -> None:
         )
 
     if agent_adoptions:
-        tools = _detect_agents_global()
+        tools = detect_agents_global()
         installed_count = 0
         for agent_path in agent_adoptions:
             agent_file = warehouse_path / agent_path
@@ -1438,7 +1436,7 @@ def adopt(*, dry_run: bool) -> None:
             content = agent_file.read_text(encoding="utf-8")
             agent_name = agent_file.name
             for tool in tools:
-                _install_agent_global(tool, agent_name, content)
+                install_agent_global(tool, agent_name, content)
             installed_count += 1
         if installed_count:
             console.print(
@@ -1450,7 +1448,7 @@ def adopt(*, dry_run: bool) -> None:
         removed_count = 0
         for agent_path in agent_unadoptions:
             agent_name = Path(agent_path).name
-            for agent_dir in _global_agent_dirs().values():
+            for agent_dir in global_agent_dirs().values():
                 target = agent_dir / agent_name
                 if target.exists():
                     target.unlink()
@@ -1521,7 +1519,7 @@ def adopt(*, dry_run: bool) -> None:
                     c.artifact_type == "skills" for c in non_agent_selections
                 )
                 if has_skills:
-                    _wire_skills_post_sync(project_root, artifacts_dir)
+                    wire_skills_post_sync(project_root, artifacts_dir)
 
         except Exception as e:
             console.print(

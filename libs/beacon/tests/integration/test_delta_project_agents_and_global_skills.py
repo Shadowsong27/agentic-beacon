@@ -1,9 +1,9 @@
 """Tests for abc delta project-scoped agent and global skill reminder sections.
 
 Covers:
-- _find_project_level_agents: detection of .claude/agents/ and .opencode/agents/
-- _find_global_untracked_skills: detection of non-bundled skills in global dirs
-- _bundled_skill_names: reads bundled skill names from data/skills/
+- find_project_level_agents: detection of .claude/agents/ and .opencode/agents/
+- find_global_untracked_skills: detection of non-bundled skills in global dirs
+- bundled_skill_names: reads bundled skill names from data/skills/
 - Integration: delta output shows/hides each reminder section correctly
 - GlobalSettings ignore patterns: skills filtered by fnmatch patterns
 """
@@ -14,19 +14,22 @@ import pytest
 from beacon.cli import main
 from beacon.core.delta import DeltaComparator
 from beacon.core.manifest.beacon import BeaconManifest
-from beacon.utils.agents import _find_project_level_agents
+from beacon.domains.artifact.agent import find_project_level_agents
+from beacon.domains.artifact.skill import (
+    bundled_skill_names,
+    find_global_untracked_skills,
+)
 from beacon.utils.delta import _find_untracked_local_files
-from beacon.utils.skills import _bundled_skill_names, _find_global_untracked_skills
 from click.testing import CliRunner
 
 # ---------------------------------------------------------------------------
-# _find_project_level_agents
+# find_project_level_agents
 # ---------------------------------------------------------------------------
 
 
 def test_find_project_level_agents_empty_when_no_dirs(tmp_path):
     """No project agent dirs → empty result."""
-    assert _find_project_level_agents(tmp_path) == {}
+    assert find_project_level_agents(tmp_path) == {}
 
 
 def test_find_project_level_agents_claudecode_only(tmp_path):
@@ -35,7 +38,7 @@ def test_find_project_level_agents_claudecode_only(tmp_path):
     (agents_dir / "code-reviewer.md").write_text("# Agent\n")
     (agents_dir / "sql-expert.md").write_text("# Agent\n")
 
-    result = _find_project_level_agents(tmp_path)
+    result = find_project_level_agents(tmp_path)
 
     assert set(result.keys()) == {"claudecode"}
     assert result["claudecode"] == ["code-reviewer.md", "sql-expert.md"]
@@ -46,7 +49,7 @@ def test_find_project_level_agents_opencode_only(tmp_path):
     agents_dir.mkdir(parents=True)
     (agents_dir / "pipeline-dev.md").write_text("# Agent\n")
 
-    result = _find_project_level_agents(tmp_path)
+    result = find_project_level_agents(tmp_path)
 
     assert set(result.keys()) == {"opencode"}
     assert result["opencode"] == ["pipeline-dev.md"]
@@ -58,7 +61,7 @@ def test_find_project_level_agents_both_tools(tmp_path):
         agents_dir.mkdir(parents=True)
         (agents_dir / "reviewer.md").write_text("# Agent\n")
 
-    result = _find_project_level_agents(tmp_path)
+    result = find_project_level_agents(tmp_path)
 
     assert set(result.keys()) == {"claudecode", "opencode"}
     assert result["claudecode"] == ["reviewer.md"]
@@ -71,7 +74,7 @@ def test_find_project_level_agents_excludes_readme(tmp_path):
     (agents_dir / "README.md").write_text("# Agents\n")
     (agents_dir / "my-agent.md").write_text("# Agent\n")
 
-    result = _find_project_level_agents(tmp_path)
+    result = find_project_level_agents(tmp_path)
 
     assert result["claudecode"] == ["my-agent.md"]
 
@@ -81,7 +84,7 @@ def test_find_project_level_agents_empty_dir_omitted(tmp_path):
     agents_dir = tmp_path / ".claude" / "agents"
     agents_dir.mkdir(parents=True)
 
-    result = _find_project_level_agents(tmp_path)
+    result = find_project_level_agents(tmp_path)
 
     assert result == {}
 
@@ -92,18 +95,18 @@ def test_find_project_level_agents_returns_sorted(tmp_path):
     for name in ["zebra.md", "alpha.md", "mango.md"]:
         (agents_dir / name).write_text("# Agent\n")
 
-    result = _find_project_level_agents(tmp_path)
+    result = find_project_level_agents(tmp_path)
 
     assert result["claudecode"] == ["alpha.md", "mango.md", "zebra.md"]
 
 
 # ---------------------------------------------------------------------------
-# _bundled_skill_names
+# bundled_skill_names
 # ---------------------------------------------------------------------------
 
 
 def test_bundled_skill_names_returns_set_of_strings():
-    names = _bundled_skill_names()
+    names = bundled_skill_names()
     assert isinstance(names, set)
     # Every entry should be a non-empty string
     for name in names:
@@ -122,11 +125,11 @@ def test_bundled_skill_names_matches_data_skills_dir():
         for d in bundled_dir.iterdir()
         if d.is_dir() and (d / "SKILL.md").exists()
     }
-    assert _bundled_skill_names() == expected
+    assert bundled_skill_names() == expected
 
 
 # ---------------------------------------------------------------------------
-# _find_global_untracked_skills
+# find_global_untracked_skills
 # ---------------------------------------------------------------------------
 
 
@@ -139,7 +142,7 @@ def isolated_home_for_skills(tmp_path, monkeypatch):
 
 
 def test_find_global_untracked_skills_empty_when_no_dirs(isolated_home_for_skills):
-    assert _find_global_untracked_skills() == {}
+    assert find_global_untracked_skills() == {}
 
 
 def test_find_global_untracked_skills_claudecode(isolated_home_for_skills):
@@ -148,7 +151,7 @@ def test_find_global_untracked_skills_claudecode(isolated_home_for_skills):
     skill.mkdir(parents=True)
     (skill / "SKILL.md").write_text("# Custom\n")
 
-    result = _find_global_untracked_skills()
+    result = find_global_untracked_skills()
 
     assert set(result.keys()) == {"claudecode"}
     assert result["claudecode"] == ["my-custom-skill"]
@@ -160,7 +163,7 @@ def test_find_global_untracked_skills_opencode(isolated_home_for_skills):
     skill.mkdir(parents=True)
     (skill / "SKILL.md").write_text("# Helper\n")
 
-    result = _find_global_untracked_skills()
+    result = find_global_untracked_skills()
 
     assert set(result.keys()) == {"opencode"}
     assert result["opencode"] == ["pipeline-helper"]
@@ -175,7 +178,7 @@ def test_find_global_untracked_skills_both_tools(isolated_home_for_skills):
         skill.mkdir(parents=True)
         (skill / "SKILL.md").write_text("# Tool\n")
 
-    result = _find_global_untracked_skills()
+    result = find_global_untracked_skills()
 
     assert set(result.keys()) == {"claudecode", "opencode"}
     assert result["claudecode"] == ["sql-tools"]
@@ -184,7 +187,7 @@ def test_find_global_untracked_skills_both_tools(isolated_home_for_skills):
 
 def test_find_global_untracked_skills_excludes_bundled(isolated_home_for_skills):
     """Skills whose names match bundled skills must be excluded."""
-    bundled = _bundled_skill_names()
+    bundled = bundled_skill_names()
     if not bundled:
         pytest.skip("No bundled skills present to test exclusion")
 
@@ -193,7 +196,7 @@ def test_find_global_untracked_skills_excludes_bundled(isolated_home_for_skills)
     skills_dir.mkdir(parents=True)
     (skills_dir / "SKILL.md").write_text("# Bundled\n")
 
-    result = _find_global_untracked_skills()
+    result = find_global_untracked_skills()
 
     # Bundled skill must not appear
     claudecode_names = result.get("claudecode", [])
@@ -208,7 +211,7 @@ def test_find_global_untracked_skills_ignores_dirs_without_skill_md(
     skills_dir.mkdir(parents=True)
     (skills_dir / "README.md").write_text("# Not a skill\n")
 
-    result = _find_global_untracked_skills()
+    result = find_global_untracked_skills()
 
     assert result == {}
 
@@ -217,7 +220,7 @@ def test_find_global_untracked_skills_empty_dir_omitted(isolated_home_for_skills
     skills_dir = isolated_home_for_skills / ".claude" / "skills"
     skills_dir.mkdir(parents=True)
 
-    result = _find_global_untracked_skills()
+    result = find_global_untracked_skills()
 
     assert result == {}
 
@@ -229,7 +232,7 @@ def test_find_global_untracked_skills_returns_sorted(isolated_home_for_skills):
         d.mkdir(parents=True)
         (d / "SKILL.md").write_text("# Skill\n")
 
-    result = _find_global_untracked_skills()
+    result = find_global_untracked_skills()
 
     assert result["claudecode"] == ["alpha-skill", "mango-skill", "zebra-skill"]
 
@@ -374,7 +377,7 @@ def test_delta_no_global_skills_section_when_none_exist(
 
 def test_delta_global_skills_excludes_bundled(project_base, monkeypatch, isolated_home):
     """Bundled skills in the global dir must not appear in the Global Skills section."""
-    bundled = _bundled_skill_names()
+    bundled = bundled_skill_names()
     if not bundled:
         pytest.skip("No bundled skills to test exclusion")
 
@@ -448,7 +451,7 @@ def test_delta_no_differences_still_shows_reminder_sections(
 
 
 # ---------------------------------------------------------------------------
-# GlobalSettings ignore patterns — _find_global_untracked_skills
+# GlobalSettings ignore patterns — find_global_untracked_skills
 # ---------------------------------------------------------------------------
 
 
@@ -460,7 +463,7 @@ def test_find_global_untracked_skills_respects_exact_ignore(isolated_home_for_sk
     skill_dir.mkdir(parents=True)
     (skill_dir / "SKILL.md").write_text("# Skill\n")
 
-    result = _find_global_untracked_skills(ignore_patterns=["openspec-apply-change"])
+    result = find_global_untracked_skills(ignore_patterns=["openspec-apply-change"])
 
     assert result == {}
 
@@ -472,7 +475,7 @@ def test_find_global_untracked_skills_respects_glob_ignore(isolated_home_for_ski
         d.mkdir(parents=True)
         (d / "SKILL.md").write_text("# Skill\n")
 
-    result = _find_global_untracked_skills(ignore_patterns=["openspec-*"])
+    result = find_global_untracked_skills(ignore_patterns=["openspec-*"])
 
     assert "claudecode" in result
     assert result["claudecode"] == ["my-custom-skill"]
@@ -485,7 +488,7 @@ def test_find_global_untracked_skills_no_ignore_patterns(isolated_home_for_skill
         d.mkdir(parents=True)
         (d / "SKILL.md").write_text("# Skill\n")
 
-    result = _find_global_untracked_skills()
+    result = find_global_untracked_skills()
 
     assert result["claudecode"] == ["my-skill", "openspec-apply-change"]
 
@@ -497,7 +500,7 @@ def test_find_global_untracked_skills_multiple_patterns(isolated_home_for_skills
         d.mkdir(parents=True)
         (d / "SKILL.md").write_text("# Skill\n")
 
-    result = _find_global_untracked_skills(ignore_patterns=["openspec-*", "opsx-*"])
+    result = find_global_untracked_skills(ignore_patterns=["openspec-*", "opsx-*"])
 
     assert result["claudecode"] == ["keep-this"]
 

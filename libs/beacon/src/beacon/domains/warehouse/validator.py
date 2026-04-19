@@ -1,8 +1,4 @@
-"""Warehouse structure validation for Agentic Beacon.
-
-This module provides validation for warehouse directory structures to ensure they
-meet the required format before being connected to a project.
-"""
+"""Warehouse structure validation for the warehouse domain."""
 
 from pathlib import Path
 

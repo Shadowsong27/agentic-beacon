@@ -23,7 +23,7 @@ No other top-level code packages SHALL exist under `beacon/` (test packages, `da
 
 #### Scenario: Layered test catches stray top-level modules
 
-- **WHEN** `pytest tests/test_architecture.py` runs
+- **WHEN** `pytest libs/beacon/tests/unit/test_architecture.py` runs
 - **THEN** it SHALL fail if any `.py` file exists directly under `beacon/` other than `__init__.py` and `cli.py`
 
 ### Requirement: Dependency direction
@@ -37,12 +37,12 @@ Imports between layers SHALL follow one direction only: `cli → domains → cor
 
 #### Scenario: `core/` does not depend on `domains/`
 
-- **WHEN** `pytest tests/test_architecture.py` runs
+- **WHEN** `pytest libs/beacon/tests/unit/test_architecture.py` runs
 - **THEN** it SHALL fail if any module under `beacon/core/` contains a `from beacon.domains` or `from beacon.cli` import (or the `import beacon.domains` / `import beacon.cli` equivalents)
 
 #### Scenario: `utils/` does not depend on `core/` or above
 
-- **WHEN** `pytest tests/test_architecture.py` runs
+- **WHEN** `pytest libs/beacon/tests/unit/test_architecture.py` runs
 - **THEN** it SHALL fail if any module under `beacon/utils/` contains a `from beacon.cli`, `from beacon.domains`, or `from beacon.core` import
 
 #### Scenario: Cross-domain imports go through top-level modules
@@ -121,7 +121,7 @@ Any function, class, or constant defined in module A and imported by module B SH
 
 #### Scenario: Architecture test catches `_`-prefixed imports
 
-- **WHEN** `pytest tests/test_architecture.py` runs
+- **WHEN** `pytest libs/beacon/tests/unit/test_architecture.py` runs
 - **THEN** it SHALL fail if any `from beacon.*` import statement references a name beginning with `_`
 
 ### Requirement: Empty `__init__.py` files
@@ -130,12 +130,12 @@ Every `__init__.py` under `beacon/` SHALL contain only a module docstring (or be
 
 #### Scenario: `__init__.py` has no executable imports
 
-- **WHEN** `pytest tests/test_architecture.py` runs
+- **WHEN** `pytest libs/beacon/tests/unit/test_architecture.py` runs
 - **THEN** it SHALL fail if any `__init__.py` under `beacon/` contains an `import` or `from` statement, an `__all__` assignment, or any non-docstring statement
 
 ### Requirement: Architecture verification test
 
-The repository SHALL include `libs/beacon/tests/test_architecture.py` which validates every scenario marked "architecture test" above. This test SHALL run as part of the default `pytest` invocation.
+The repository SHALL include `libs/beacon/tests/unit/test_architecture.py` which validates every scenario marked "architecture test" above. This test SHALL run as part of the default `pytest` invocation.
 
 #### Scenario: Architecture test runs by default
 

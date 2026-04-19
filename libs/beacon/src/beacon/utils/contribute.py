@@ -125,8 +125,8 @@ def _propagate_skill_to_agents(
     ``relative_path`` is the warehouse-relative path, e.g. ``skills/foo/SKILL.md``.
     ``source_path`` is the absolute path of the file written to the warehouse.
     """
-    from .agents import _detect_agents
-    from .skills import _wire_single_skill
+    from beacon.domains.artifact.agent import detect_agents
+    from beacon.domains.artifact.skill import wire_single_skill
 
     parts = Path(relative_path).parts
     if len(parts) < 2:
@@ -142,10 +142,10 @@ def _propagate_skill_to_agents(
             return  # Safety: avoid infinite loop
         warehouse_skill_dir = parent
 
-    agents = _detect_agents(project_root)
+    agents = detect_agents(project_root)
     for agent in agents:
         try:
-            _wire_single_skill(project_root, skill_name, warehouse_skill_dir, agent)
+            wire_single_skill(project_root, skill_name, warehouse_skill_dir, agent)
         except Exception as e:
             console.print(
                 f"  [yellow]Warning:[/yellow] could not propagate '{skill_name}' to {agent}: {e}"

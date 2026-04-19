@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 from beacon.core.delta import ComparisonResult, DeltaComparator, DeltaStatus
-from beacon.utils.agents import _enrich_agent_stale
+from beacon.domains.artifact.agent import enrich_agent_stale
 
 
 def _sha256(text: str) -> str:
@@ -70,7 +70,7 @@ def test_tc1_identical_with_matching_head_stays_in_sync(tmp_path, fake_home):
 
     _write_sync_state(fake_home, warehouse, "agents/code-reviewer.md", "abc123sha")
 
-    enriched = _enrich_agent_stale(
+    enriched = enrich_agent_stale(
         result, warehouse_path=warehouse, current_head="abc123sha"
     )
 
@@ -91,7 +91,7 @@ def test_tc2_identical_with_different_head_becomes_stale(tmp_path, fake_home):
 
     _write_sync_state(fake_home, warehouse, "agents/code-reviewer.md", "old_head_sha")
 
-    enriched = _enrich_agent_stale(
+    enriched = enrich_agent_stale(
         result, warehouse_path=warehouse, current_head="new_head_sha"
     )
 
@@ -111,7 +111,7 @@ def test_tc3_no_sync_state_entry_stays_in_sync(tmp_path, fake_home):
     )
     # No sync-state file exists
 
-    enriched = _enrich_agent_stale(
+    enriched = enrich_agent_stale(
         result, warehouse_path=warehouse, current_head="some_sha"
     )
 
@@ -131,7 +131,7 @@ def test_tc4_modified_without_comparator_stays_modified(tmp_path, fake_home):
 
     _write_sync_state(fake_home, warehouse, "agents/code-reviewer.md", "old_sha")
 
-    enriched = _enrich_agent_stale(
+    enriched = enrich_agent_stale(
         result, warehouse_path=warehouse, current_head="new_sha"
     )
 
@@ -194,7 +194,7 @@ def test_tc7_modified_user_unchanged_becomes_stale(tmp_path, fake_home):
         agent_statuses={"claudecode": DeltaStatus.MODIFIED},
     )
 
-    enriched = _enrich_agent_stale(
+    enriched = enrich_agent_stale(
         result,
         warehouse_path=warehouse,
         current_head="new_head_sha",
@@ -259,7 +259,7 @@ def test_tc8_modified_user_edited_stays_modified(tmp_path, fake_home):
         agent_statuses={"claudecode": DeltaStatus.MODIFIED},
     )
 
-    enriched = _enrich_agent_stale(
+    enriched = enrich_agent_stale(
         result,
         warehouse_path=warehouse,
         current_head="new_head_sha",
@@ -336,7 +336,7 @@ def test_tc9_mixed_per_agent_opencode_identical_claudecode_stale(tmp_path, fake_
         },
     )
 
-    enriched = _enrich_agent_stale(
+    enriched = enrich_agent_stale(
         result,
         warehouse_path=warehouse,
         current_head="new_head_sha",
@@ -389,7 +389,7 @@ def test_tc6_identical_head_differs_but_content_unchanged_stays_identical(
     }
     state_file.write_text(json.dumps(state))
 
-    enriched = _enrich_agent_stale(
+    enriched = enrich_agent_stale(
         result, warehouse_path=warehouse, current_head="new_head_sha_after_pull"
     )
 
@@ -411,7 +411,7 @@ def test_tc5_missing_not_enriched(tmp_path, fake_home):
 
     _write_sync_state(fake_home, warehouse, "agents/code-reviewer.md", "old_sha")
 
-    enriched = _enrich_agent_stale(
+    enriched = enrich_agent_stale(
         result, warehouse_path=warehouse, current_head="new_sha"
     )
 

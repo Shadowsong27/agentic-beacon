@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 import pytest
-from beacon.checksums import compute_sha256
+from beacon.domains.artifact.checksums import compute_sha256
 from beacon.initializer import WarehouseInitializer
 from beacon.upgrader import FileState, WarehouseUpgrader
 

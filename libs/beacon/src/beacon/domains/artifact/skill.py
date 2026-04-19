@@ -1,4 +1,4 @@
-"""Skill utility functions for Beacon CLI."""
+"""Skill operations for the artifact domain."""
 
 import fnmatch
 import sys
@@ -8,11 +8,12 @@ from rich.console import Console
 from rich.table import Table
 
 from beacon.core.manifest.beacon import ArtifactsConfig, BeaconManifest
+from beacon.core.paths import BUNDLED_SKILLS_DIR
 
 console = Console()
 
 
-def _bundled_global_skill_dirs() -> dict[str, Path]:
+def bundled_global_skill_dirs() -> dict[str, Path]:
     """Return global agent skill directories for bundled skill installation.
 
     These are the user-level skill dirs read by opencode and Claude Code
@@ -24,9 +25,9 @@ def _bundled_global_skill_dirs() -> dict[str, Path]:
     }
 
 
-def _bundled_skill_names() -> set[str]:
+def bundled_skill_names() -> set[str]:
     """Return the set of skill names that are managed by abc (bundled)."""
-    bundled_dir = Path(__file__).parent.parent / "data" / "skills"
+    bundled_dir = BUNDLED_SKILLS_DIR
     if not bundled_dir.exists():
         return set()
     return {
@@ -36,17 +37,17 @@ def _bundled_skill_names() -> set[str]:
     }
 
 
-def _build_skills_paths(project_root: Path) -> dict[str, Path]:
+def build_skills_paths(project_root: Path) -> dict[str, Path]:
     """Return a mapping of agent name → live skills directory for detected agents.
 
     This is the shared detection logic used by both `abc delta` and
     `abc contribute` so both commands always compare/read from the same
     live agent locations.
     """
-    from .agents import _detect_agents
+    from beacon.domains.artifact.agent import detect_agents
 
     skills_paths: dict[str, Path] = {}
-    for agent in _detect_agents(project_root):
+    for agent in detect_agents(project_root):
         if agent == "opencode":
             skills_paths["opencode"] = project_root / ".opencode" / "skills"
         elif agent == "claudecode":
@@ -54,7 +55,7 @@ def _build_skills_paths(project_root: Path) -> dict[str, Path]:
     return skills_paths
 
 
-def _find_global_untracked_skills(
+def find_global_untracked_skills(
     ignore_patterns: list[str] | None = None,
 ) -> dict[str, list[str]]:
     """Return non-bundled skill directories found in the global skill dirs.
@@ -63,8 +64,8 @@ def _find_global_untracked_skills(
     Excludes abc-bundled skills and any skill names matching ignore_patterns (fnmatch).
     Returns a mapping of tool name → sorted list of skill names.
     """
-    global_skill_dirs = _bundled_global_skill_dirs()
-    bundled = _bundled_skill_names()
+    global_skill_dirs = bundled_global_skill_dirs()
+    bundled = bundled_skill_names()
     patterns = ignore_patterns or []
     result: dict[str, list[str]] = {}
     for tool, skills_dir in global_skill_dirs.items():
@@ -82,7 +83,7 @@ def _find_global_untracked_skills(
     return result
 
 
-def _install_bundled_skills_globally() -> tuple[list[str], list[str]]:
+def install_bundled_skills_globally() -> tuple[list[str], list[str]]:
     """Install abc-bundled skills into global agent skill directories.
 
     Writes directly to ~/.config/opencode/skills/ and ~/.claude/skills/,
@@ -93,11 +94,11 @@ def _install_bundled_skills_globally() -> tuple[list[str], list[str]]:
 
     Returns (installed, errors) where each entry is '<skill> (<agent>)'.
     """
-    bundled_skills_dir = Path(__file__).parent.parent / "data" / "skills"
+    bundled_skills_dir = BUNDLED_SKILLS_DIR
     if not bundled_skills_dir.exists():
         return [], []
 
-    global_dirs = _bundled_global_skill_dirs()
+    global_dirs = bundled_global_skill_dirs()
     installed: list[str] = []
     errors: list[str] = []
 
@@ -124,7 +125,7 @@ def _install_bundled_skills_globally() -> tuple[list[str], list[str]]:
     return installed, errors
 
 
-def _print_bundled_install_result(installed: list[str], errors: list[str]) -> None:
+def print_bundled_install_result(installed: list[str], errors: list[str]) -> None:
     """Print the result of a bundled skill install to the console."""
     if installed:
         names = ", ".join(s.split(" (")[0] for s in dict.fromkeys(installed))
@@ -136,13 +137,13 @@ def _print_bundled_install_result(installed: list[str], errors: list[str]) -> No
         console.print(f"  [yellow]⚠[/yellow] Bundled skill wiring: {err}")
 
 
-def _show_bundled_skills_status() -> None:
+def show_bundled_skills_status() -> None:
     """Print bundled skill installation status for the status command.
 
     Checks global agent skill dirs — bundled skills are user-level,
     not per-project.
     """
-    bundled_skills_dir = Path(__file__).parent.parent / "data" / "skills"
+    bundled_skills_dir = BUNDLED_SKILLS_DIR
     if not bundled_skills_dir.exists():
         return
 
@@ -154,7 +155,7 @@ def _show_bundled_skills_status() -> None:
     if not skill_names:
         return
 
-    global_dirs = _bundled_global_skill_dirs()
+    global_dirs = bundled_global_skill_dirs()
 
     table = Table(title="Bundled Skills (abc-managed, global)")
     table.add_column("Skill", style="yellow")
@@ -169,7 +170,7 @@ def _show_bundled_skills_status() -> None:
     console.print()
 
 
-def _validate_skill_entries(beacon_settings: BeaconManifest) -> None:
+def validate_skill_entries(beacon_settings: BeaconManifest) -> None:
     """Error if any skill entry in beacon.yaml uses a file path instead of a directory.
 
     Skills must be declared at the directory level (e.g. 'skills/my-skill/').
@@ -203,7 +204,7 @@ def _migrate_beacon_yaml_skill_entries(
     migrated = []
     for entry in settings.artifacts.skills:
         if entry in legacy_entries:
-            migrated.append(_normalize_skill_entry(entry))
+            migrated.append(normalize_skill_entry(entry))
         else:
             migrated.append(entry)
     # Deduplicate while preserving order
@@ -217,7 +218,7 @@ def _migrate_beacon_yaml_skill_entries(
     settings.to_yaml(beacon_yaml)
 
 
-def _normalize_skill_entry(entry: str) -> str:
+def normalize_skill_entry(entry: str) -> str:
     """Normalize any skill beacon.yaml entry to canonical 'skills/<name>' form.
 
     Accepts old file-level entries ('skills/my-skill/SKILL.md'),
@@ -235,9 +236,9 @@ def _normalize_skill_entry(entry: str) -> str:
     return str(p)
 
 
-def _skill_name_from_entry(entry: str) -> str:
+def skill_name_from_entry(entry: str) -> str:
     """Extract the skill directory name from any beacon.yaml skill entry."""
-    return Path(_normalize_skill_entry(entry)).name
+    return Path(normalize_skill_entry(entry)).name
 
 
 def _extract_skill_description(content: str) -> str:
@@ -254,7 +255,7 @@ def _extract_skill_description(content: str) -> str:
     return ""
 
 
-def _wire_single_skill(
+def wire_single_skill(
     project_root: Path,
     skill_name: str,
     skill_src_dir: Path,
@@ -313,7 +314,7 @@ def _wire_single_skill(
     return any_written
 
 
-def _wire_skills_post_sync(
+def wire_skills_post_sync(
     project_root: Path,
     artifacts_dir: Path,
     force: bool = False,
@@ -328,10 +329,10 @@ def _wire_skills_post_sync(
     Uses fallback_to_all so skills are always wired regardless of whether agent
     config files exist yet.
     """
-    from .agents import _detect_agents
-    from .display import _handle_soft_block
+    from beacon.domains.artifact.agent import detect_agents
+    from beacon.utils.display import _handle_soft_block
 
-    agents = _detect_agents(project_root, fallback_to_all=True)
+    agents = detect_agents(project_root, fallback_to_all=True)
 
     skills_dir = artifacts_dir / "skills"
     if not skills_dir.exists():
@@ -376,7 +377,7 @@ def _wire_skills_post_sync(
             if preserve and (agent, name) in conflicting_agents_skills:
                 continue  # Skip this wiring target
             try:
-                changed = _wire_single_skill(project_root, name, skill_dir, agent)
+                changed = wire_single_skill(project_root, name, skill_dir, agent)
                 if changed:
                     installed.append(f"{name} ({agent})")
             except Exception as e:
@@ -385,7 +386,7 @@ def _wire_skills_post_sync(
     return installed, errors
 
 
-def _update_beacon_yaml(beacon_dir: Path, files: list[str]) -> None:
+def update_beacon_yaml(beacon_dir: Path, files: list[str]) -> None:
     """Add installed file paths to beacon.yaml, creating it if absent."""
     beacon_yaml = beacon_dir / "beacon.yaml"
 
@@ -402,10 +403,9 @@ def _update_beacon_yaml(beacon_dir: Path, files: list[str]) -> None:
         artifact_type = parts[0] if parts else ""
         if artifact_type == "skills":
             # Normalize to directory form and deduplicate across old/new formats
-            dir_entry = _normalize_skill_entry(path)
+            dir_entry = normalize_skill_entry(path)
             already_tracked = any(
-                _normalize_skill_entry(e) == dir_entry
-                for e in settings.artifacts.skills
+                normalize_skill_entry(e) == dir_entry for e in settings.artifacts.skills
             )
             if not already_tracked:
                 settings.artifacts.skills.append(dir_entry)
@@ -476,7 +476,7 @@ def _install_skill_claudecode(
     return True
 
 
-def _print_skill_next_steps(agents: list[str]) -> None:
+def print_skill_next_steps(agents: list[str]) -> None:
     """Print agent-specific guidance after install."""
     console.print("\n[bold]Next Steps:[/bold]")
     if "opencode" in agents:

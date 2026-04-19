@@ -58,8 +58,7 @@ def _install_project_setup_skill(beacon_dir: Path) -> None:
     to understand what artifacts are available and populate beacon.yaml.
     """
     from beacon.core.manifest.workspace import WorkspaceConfig
-
-    from .catalog import _generate_warehouse_catalog
+    from beacon.domains.warehouse.catalog import generate_warehouse_catalog
 
     try:
         config_file = beacon_dir / "config.toml"
@@ -76,7 +75,7 @@ def _install_project_setup_skill(beacon_dir: Path) -> None:
             return
 
         # Generate warehouse catalog
-        catalog = _generate_warehouse_catalog(warehouse_path)
+        catalog = generate_warehouse_catalog(warehouse_path)
         catalog_path = beacon_dir / "warehouse-catalog.md"
         catalog_path.write_text(catalog, encoding="utf-8")
 

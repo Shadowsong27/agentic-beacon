@@ -6,8 +6,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 from beacon.cli import main
 from beacon.core.delta import DeltaComparator, DeltaStatus
+from beacon.domains.artifact.skill import build_skills_paths
 from beacon.utils.contribute import _build_pr_body, _resolve_skill_contribute_source
-from beacon.utils.skills import _build_skills_paths
 from click.testing import CliRunner
 
 KNOWLEDGE_CONTENT_ORIGINAL = "# Type Hints\n\nUse type hints.\n"
@@ -395,48 +395,48 @@ def test_contribute_single_already_tracked_does_not_duplicate(project_with_delta
 
 
 # ---------------------------------------------------------------------------
-# Unit tests: _build_skills_paths()
+# Unit tests: build_skills_paths()
 # ---------------------------------------------------------------------------
 
 
 def test_build_skills_paths_opencode_detected(tmp_path):
-    """_build_skills_paths returns opencode entry when opencode.json exists."""
+    """build_skills_paths returns opencode entry when opencode.json exists."""
     (tmp_path / "opencode.json").write_text("{}")
-    result = _build_skills_paths(tmp_path)
+    result = build_skills_paths(tmp_path)
     assert "opencode" in result
     assert result["opencode"] == tmp_path / ".opencode" / "skills"
     assert "claudecode" not in result
 
 
 def test_build_skills_paths_claudecode_detected(tmp_path):
-    """_build_skills_paths returns claudecode entry when .claude dir exists."""
+    """build_skills_paths returns claudecode entry when .claude dir exists."""
     (tmp_path / ".claude").mkdir()
-    result = _build_skills_paths(tmp_path)
+    result = build_skills_paths(tmp_path)
     assert "claudecode" in result
     assert result["claudecode"] == tmp_path / ".claude" / "skills"
     assert "opencode" not in result
 
 
 def test_build_skills_paths_both_agents_detected(tmp_path):
-    """_build_skills_paths returns both entries when both agents are configured."""
+    """build_skills_paths returns both entries when both agents are configured."""
     (tmp_path / "opencode.json").write_text("{}")
     (tmp_path / ".claude").mkdir()
-    result = _build_skills_paths(tmp_path)
+    result = build_skills_paths(tmp_path)
     assert "opencode" in result
     assert "claudecode" in result
 
 
 def test_build_skills_paths_no_agents_returns_empty(tmp_path):
-    """_build_skills_paths returns empty dict when no agents are detected."""
-    result = _build_skills_paths(tmp_path)
+    """build_skills_paths returns empty dict when no agents are detected."""
+    result = build_skills_paths(tmp_path)
     assert result == {}
 
 
 def test_build_skills_paths_matches_delta_detection(tmp_path):
-    """_build_skills_paths produces the same paths that delta uses — shared logic."""
+    """build_skills_paths produces the same paths that delta uses — shared logic."""
     (tmp_path / "opencode.json").write_text("{}")
     (tmp_path / ".claude").mkdir()
-    result = _build_skills_paths(tmp_path)
+    result = build_skills_paths(tmp_path)
     # These are the exact paths delta builds
     assert result["opencode"] == tmp_path / ".opencode" / "skills"
     assert result["claudecode"] == tmp_path / ".claude" / "skills"

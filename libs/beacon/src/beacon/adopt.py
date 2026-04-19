@@ -128,7 +128,7 @@ def _list_knowledge_nodes(warehouse_path: Path) -> list[str]:
     return nodes
 
 
-def _global_agent_dirs() -> list[Path]:
+def adoption_target_dirs() -> list[Path]:
     """Return candidate global agent directories for all supported tools."""
     return [
         Path.home() / ".config" / "opencode" / "agents",
@@ -139,7 +139,7 @@ def _global_agent_dirs() -> list[Path]:
 def _is_agent_installed(agent_path: str) -> bool:
     """Return True if the warehouse agent is installed in any global agent directory."""
     filename = Path(agent_path).name
-    return any((d / filename).exists() for d in _global_agent_dirs())
+    return any((d / filename).exists() for d in adoption_target_dirs())
 
 
 def _is_adopted(path: str, beacon_settings: BeaconManifest) -> bool:

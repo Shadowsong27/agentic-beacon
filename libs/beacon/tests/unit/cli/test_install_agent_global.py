@@ -1,4 +1,4 @@
-"""Tests for _install_agent_global() helper (Phase 6, task 6.3).
+"""Tests for install_agent_global() helper (Phase 6, task 6.3).
 
 TDD Test Cases (6.1):
 - TC1: Target file does not exist → writes file, returns True
@@ -12,7 +12,7 @@ TDD Test Cases (6.1):
 from pathlib import Path
 
 import pytest
-from beacon.utils.agents import _install_agent_global
+from beacon.domains.artifact.agent import install_agent_global
 
 AGENT_CONTENT = """\
 ---
@@ -41,7 +41,7 @@ def fake_home(tmp_path, monkeypatch):
 
 def test_tc1_target_not_exist_writes_and_returns_true(fake_home):
     """TC1: Target file does not exist → writes file, returns True."""
-    result = _install_agent_global("opencode", "code-reviewer.md", AGENT_CONTENT)
+    result = install_agent_global("opencode", "code-reviewer.md", AGENT_CONTENT)
 
     assert result is True
     dest = _opencode_agents(fake_home) / "code-reviewer.md"
@@ -55,7 +55,7 @@ def test_tc2_identical_content_skips_returns_false(fake_home):
     dest.parent.mkdir(parents=True)
     dest.write_text(AGENT_CONTENT)
 
-    result = _install_agent_global("opencode", "code-reviewer.md", AGENT_CONTENT)
+    result = install_agent_global("opencode", "code-reviewer.md", AGENT_CONTENT)
 
     assert result is False
     # Content unchanged
@@ -68,7 +68,7 @@ def test_tc3_different_content_overwrites_returns_true(fake_home):
     dest.parent.mkdir(parents=True)
     dest.write_text("# Old content\n")
 
-    result = _install_agent_global("opencode", "code-reviewer.md", AGENT_CONTENT)
+    result = install_agent_global("opencode", "code-reviewer.md", AGENT_CONTENT)
 
     assert result is True
     assert dest.read_text() == AGENT_CONTENT
@@ -77,7 +77,7 @@ def test_tc3_different_content_overwrites_returns_true(fake_home):
 def test_tc4_parent_dir_not_exist_auto_creates(fake_home):
     """TC4: Parent dir does not exist → auto-creates, writes file, returns True."""
     # opencode dir doesn't exist at all
-    result = _install_agent_global("claudecode", "my-agent.md", AGENT_CONTENT)
+    result = install_agent_global("claudecode", "my-agent.md", AGENT_CONTENT)
 
     assert result is True
     dest = _claudecode_agents(fake_home) / "my-agent.md"
@@ -86,7 +86,7 @@ def test_tc4_parent_dir_not_exist_auto_creates(fake_home):
 
 def test_tc5_opencode_resolves_to_config_opencode(fake_home):
     """TC5: agent="opencode" → resolves to ~/.config/opencode/agents/<name>.md"""
-    _install_agent_global("opencode", "code-reviewer.md", AGENT_CONTENT)
+    install_agent_global("opencode", "code-reviewer.md", AGENT_CONTENT)
 
     expected = fake_home / ".config" / "opencode" / "agents" / "code-reviewer.md"
     assert expected.exists()
@@ -97,7 +97,7 @@ def test_tc5_opencode_resolves_to_config_opencode(fake_home):
 
 def test_tc6_claudecode_resolves_to_claude_agents(fake_home):
     """TC6: agent="claudecode" → resolves to ~/.claude/agents/<name>.md"""
-    _install_agent_global("claudecode", "code-reviewer.md", AGENT_CONTENT)
+    install_agent_global("claudecode", "code-reviewer.md", AGENT_CONTENT)
 
     expected = fake_home / ".claude" / "agents" / "code-reviewer.md"
     assert expected.exists()

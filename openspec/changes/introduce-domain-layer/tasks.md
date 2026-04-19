@@ -19,9 +19,9 @@ The code-move tasks themselves are **behavior-preserving refactors**, not new fe
 ### RED-GREEN-REFACTOR Cycle (for the architecture test)
 
 1. **🔴 RED Phase — Write Failing Tests FIRST (PR 0, task 1.2)**
-   - Implement every scenario from `specs/layered-architecture/spec.md` as a pytest test in `libs/beacon/tests/test_architecture.py`.
+   - Implement every scenario from `specs/layered-architecture/spec.md` as a pytest test in `libs/beacon/tests/unit/test_architecture.py`.
    - Scenarios that would fail against today's tree (e.g. "no `.py` files directly under `beacon/`", "no `_`-prefixed cross-module imports") are marked `@pytest.mark.xfail(strict=True, reason="will pass after PR N")`.
-   - Run `pytest tests/test_architecture.py -v` — the currently-passing scenarios pass, `xfail`s report as expected failures, suite exits 0.
+   - Run `pytest libs/beacon/tests/unit/test_architecture.py -v` — the currently-passing scenarios pass, `xfail`s report as expected failures, suite exits 0.
 
 2. **🟢 GREEN Phase — Refactor to Make Tests Pass (PRs 1–8)**
    - Each subsequent PR moves one domain, then flips the corresponding `xfail` markers in `test_architecture.py`.
@@ -54,24 +54,12 @@ See `AGENTS.md` → "Unit Testing Workflow" and `knowledge/lessons/complete-test
 
 **Goal**: Land the empty domain skeleton and the TDD harness (`test_architecture.py`) that will enforce the new layering as subsequent PRs land.
 **Input**: Current `main` at commit `4c1f3c7`; no `domains/` package exists.
-**Output**: `beacon/domains/` package with six empty subpackages; `libs/beacon/tests/test_architecture.py` committed with correct `xfail` markers; `spec.md` merged into `openspec/specs/layered-architecture/`.
+**Output**: `beacon/domains/` package with six empty subpackages; `libs/beacon/tests/unit/test_architecture.py` committed with correct `xfail` markers; `spec.md` merged into `openspec/specs/layered-architecture/`.
 **Validation**: `pytest libs/beacon/tests/` exits 0; `.venv/bin/abc --version` prints the version; `tree libs/beacon/src/beacon/domains/` shows six empty subpackages.
 
-- [ ] 1.1 Create empty `beacon/domains/` package with six empty subpackages: `warehouse/`, `setup/`, `adoption/`, `distribution/`, `contribution/`, `artifact/` (each with docstring-only `__init__.py`)
-- [ ] 1.2 Add `libs/beacon/tests/test_architecture.py` implementing the architecture scenarios from `specs/layered-architecture/spec.md`
-  - **Input**: `.venv/bin/pytest libs/beacon/tests/test_architecture.py -v`
-  - **Expected Output**: Collected 8+ tests; currently-satisfied scenarios pass; scenarios that can't pass until later PRs report as `xfail (expected)`; suite exits 0.
-  - **Validation**: No test is `xpassed` (would indicate a stale marker); every `xfail` has a `reason="will pass after PR N"` pointing to the concrete PR that fixes it.
-  - **TDD Test Cases (write these first):**
-    - TC1: `test_six_domains_exist` → Asserts `beacon/domains/` contains exactly six subpackages matching the spec's bounded-context table; no extras, no missing.
-    - TC2: `test_no_stray_top_level_modules` → Walks `beacon/` and asserts the only `.py` files directly under it are `__init__.py` and `cli.py`. **`xfail` until PR 5 (adopt), PR 4 (setup), PR 3 (distribution) all land.**
-    - TC3: `test_core_has_no_domain_imports` → Parses every `beacon/core/**/*.py` with `ast`, asserts no `from beacon.domains` or `from beacon.cli` imports.
-    - TC4: `test_utils_has_no_higher_layer_imports` → Parses every `beacon/utils/**/*.py`, asserts no `from beacon.cli`, `from beacon.domains`, or `from beacon.core` imports. **`xfail` until PR 1 (artifact) moves agents/skills out, since those currently import from `beacon.utils.git`.**
-    - TC5: `test_cross_domain_imports_use_top_level` → For each `from beacon.domains.<A>.<...>` import in `beacon/domains/<B>/**`, asserts `<...>` has depth exactly 1 (a module directly under `domains/<A>/`, not a deeper internal). **`xfail` until PR 1.**
-    - TC6: `test_no_underscore_cross_module_imports` → For every `from beacon.` import across the package, asserts the imported name does not begin with `_`. **`xfail` until each PR renames its `_`-prefixed functions.**
-    - TC7: `test_init_files_are_empty` → Parses every `__init__.py` under `beacon/`, asserts its AST body contains only a module docstring (Expr node with Str/Constant) or is empty.
-    - TC8: `test_cli_handlers_have_no_io` → Parses every function in `beacon/cli/**/*.py` decorated with `@click.command()`/`@<group>.command()`; asserts the function body contains no calls to `open()`, `Path.write_text`, `Path.read_text`, `yaml.load`, `tomllib.load`, `subprocess.run`. **`xfail` until PR 7 (CLI thinning).**
-- [ ] 1.3 Verify `pytest` collects and passes the new architecture test against the current (pre-refactor) tree, then mark expected-failure scenarios as `xfail` with a reference to the follow-up PR that will fix them
+- [x] 1.1 Create empty `beacon/domains/` package with six empty subpackages: `warehouse/`, `setup/`, `adoption/`, `distribution/`, `contribution/`, `artifact/` (each with docstring-only `__init__.py`)
+- [x] 1.2 Add `libs/beacon/tests/unit/test_architecture.py` implementing the architecture scenarios from `specs/layered-architecture/spec.md`
+- [x] 1.3 Verify `pytest` collects and passes the new architecture test against the current (pre-refactor) tree, then mark expected-failure scenarios as `xfail` with a reference to the follow-up PR that will fix them
 - [ ] 1.4 Land PR 0
   - **Input**: `gh pr create --base main --title "refactor(PR 0): add domain skeleton + architecture test" --body ...`
   - **Expected Output**: CI green; PR URL returned; `.venv/bin/abc --version` still prints expected version.
@@ -84,16 +72,13 @@ See `AGENTS.md` → "Unit Testing Workflow" and `knowledge/lessons/complete-test
 **Output**: `beacon/domains/artifact/{agent,skill,checksums}.py` with public (non-underscored) names; no `beacon.utils.agents`/`beacon.utils.skills`/`beacon.checksums` call-sites remain.
 **Validation**: `grep -r "from beacon.utils.agents\|from beacon.utils.skills\|from beacon.checksums" libs/beacon/` returns no hits; `pytest` + `abc sync` smoke are green; architecture-test scenarios TC4, TC5, TC6 flip to passing for the artifact slice.
 
-- [ ] 2.1 Move `beacon/utils/agents.py` → `beacon/domains/artifact/agent.py`
-- [ ] 2.2 Move `beacon/utils/skills.py` → `beacon/domains/artifact/skill.py`
-- [ ] 2.3 Move `beacon/checksums.py` → `beacon/domains/artifact/checksums.py`
-- [ ] 2.4 Rename all `_`-prefixed functions referenced outside their defining module (drop the leading `_`)
-- [ ] 2.5 Update every `from beacon.utils.agents import …`, `from beacon.utils.skills import …`, `from beacon.checksums import …` call-site (CLI, adopt.py, distributor.py, tests)
-- [ ] 2.6 Run regression + smoke tests
-  - **Input**: `.venv/bin/pytest libs/beacon/tests/ -v` then `cd /tmp && rm -rf abc-smoke && .venv/bin/abc init abc-smoke && cd abc-smoke && .venv/bin/abc sync` (against `examples/sample-warehouse/`)
-  - **Expected Output**: Pytest exits 0 with zero failures; `abc sync` completes with the standard "Synced N artifacts" summary line.
-  - **Validation**: No test regressed; `abc sync` returns exit code 0; `.agentic-beacon/` in the smoke project contains the expected agents and skills.
-- [ ] 2.7 Flip the corresponding `xfail` markers in `test_architecture.py` to regular assertions
+- [x] 2.1 Move `beacon/utils/agents.py` → `beacon/domains/artifact/agent.py`
+- [x] 2.2 Move `beacon/utils/skills.py` → `beacon/domains/artifact/skill.py`
+- [x] 2.3 Move `beacon/checksums.py` → `beacon/domains/artifact/checksums.py`
+- [x] 2.4 Rename all `_`-prefixed functions referenced outside their defining module (drop the leading `_`)
+- [x] 2.5 Update every `from beacon.utils.agents import …`, `from beacon.utils.skills import …`, `from beacon.checksums import …` call-site (CLI, adopt.py, distributor.py, tests)
+- [x] 2.6 Run regression + smoke tests
+- [x] 2.7 Flip the corresponding `xfail` markers in `test_architecture.py` to regular assertions
 - [ ] 2.8 Land PR 1
 
 ## 3. Move `warehouse` domain (PR 2)
@@ -103,15 +88,12 @@ See `AGENTS.md` → "Unit Testing Workflow" and `knowledge/lessons/complete-test
 **Output**: `beacon/domains/warehouse/{validator,catalog}.py`; `beacon/warehouse/` deleted.
 **Validation**: `ls libs/beacon/src/beacon/warehouse/` fails (directory removed); `pytest` + `abc warehouse connect` + `abc warehouse validate` smoke all green.
 
-- [ ] 3.1 Move `beacon/warehouse/validator.py` → `beacon/domains/warehouse/validator.py`
-- [ ] 3.2 Move `beacon/utils/catalog.py` → `beacon/domains/warehouse/catalog.py`
-- [ ] 3.3 Remove the now-empty `beacon/warehouse/` package
-- [ ] 3.4 Rename `_`-prefixed cross-module names
-- [ ] 3.5 Update all call-sites (`beacon/core/cli/warehouse.py`, adopt, tests)
-- [ ] 3.6 Run regression + smoke
-  - **Input**: `.venv/bin/pytest libs/beacon/tests/` then `.venv/bin/abc warehouse connect --path examples/sample-warehouse` and `.venv/bin/abc warehouse validate`
-  - **Expected Output**: Pytest exits 0; connect writes `.agentic-beacon/config.toml`; validate prints "Warehouse is valid" and exits 0.
-  - **Validation**: Both subcommands exit 0; no stack traces; `.agentic-beacon/config.toml` contents match previous-PR baseline.
+- [x] 3.1 Move `beacon/warehouse/validator.py` → `beacon/domains/warehouse/validator.py`
+- [x] 3.2 Move `beacon/utils/catalog.py` → `beacon/domains/warehouse/catalog.py`
+- [x] 3.3 Remove the now-empty `beacon/warehouse/` package
+- [x] 3.4 Rename `_`-prefixed cross-module names
+- [x] 3.5 Update all call-sites (`beacon/core/cli/warehouse.py`, adopt, tests)
+- [x] 3.6 Run regression + smoke
 - [ ] 3.7 Land PR 2
 
 ## 4. Move `distribution` domain (PR 3)
@@ -196,10 +178,10 @@ See `AGENTS.md` → "Unit Testing Workflow" and `knowledge/lessons/complete-test
 - [ ] 8.1 Rename `beacon/core/cli/` → `beacon/cli/`; update `beacon/cli.py` shim import
 - [ ] 8.2 Replace all `from beacon.utils.*` imports in `cli/main.py` and `cli/warehouse.py` with `from beacon.domains.*` imports
 - [ ] 8.3 Verify each handler contains only: argument parsing + one domain call + output formatting (per the "Thin CLI layer" spec requirement). Inline any leftover helpers into their owning domain.
-  - **Input**: `.venv/bin/pytest libs/beacon/tests/test_architecture.py::test_cli_handlers_have_no_io -v`
+  - **Input**: `.venv/bin/pytest libs/beacon/tests/unit/test_architecture.py::test_cli_handlers_have_no_io -v`
   - **Expected Output**: Test passes (no longer `xfail`).
   - **Validation**: No CLI handler body contains `open()`, `Path.write_text`, `Path.read_text`, `yaml.load`, `tomllib.load`, or `subprocess.run`; AST scan confirms.
-- [ ] 8.4 (Optional, if file remains > ~800 lines) Split `cli/main.py` by subcommand group: `cli/setup.py`, `cli/sync.py`, `cli/contribute.py`, `cli/agent.py`. Keep `cli/main.py` as the Click group + registration only.
+- [ ] 8.4 Split `cli/main.py` by subcommand group: `cli/setup.py`, `cli/sync.py`, `cli/contribute.py`, `cli/agent.py`. Keep `cli/main.py` as the Click group + registration only.
 - [ ] 8.5 Run regression + full subcommand smoke
   - **Input**: `.venv/bin/pytest libs/beacon/tests/` then run every `abc` subcommand once on a scratch project (at minimum: `--version`, `init`, `warehouse connect`, `setup --manual`, `sync`, `doctor`, `contribute --all --dry-run`, `upgrade`, `agent list`, `agent install <name>`).
   - **Expected Output**: Every subcommand exits 0 with the same user-visible output as pre-PR.

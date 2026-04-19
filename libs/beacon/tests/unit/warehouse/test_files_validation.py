@@ -16,7 +16,7 @@ Test Coverage:
 from pathlib import Path
 
 import pytest
-from beacon.warehouse.validator import WarehouseValidator
+from beacon.domains.warehouse.validator import WarehouseValidator
 
 
 def _make_valid_dirs(warehouse: Path) -> None:

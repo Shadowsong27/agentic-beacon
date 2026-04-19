@@ -3,7 +3,7 @@
 Covers the three helper functions introduced in the auto-wiring feature:
   - _wire_contexts_opencode
   - _wire_contexts_claudecode
-  - _wire_skills_post_sync
+  - wire_skills_post_sync
 
 And integration tests through the full `abc sync` CLI command.
 """
@@ -13,14 +13,14 @@ from unittest.mock import patch
 
 import pytest
 from beacon.cli import main
-from beacon.utils.agents import _update_agent_gitignores
-from beacon.utils.skills import (
+from beacon.domains.artifact.agent import update_agent_gitignores
+from beacon.domains.artifact.skill import (
     _install_skill_claudecode,
     _install_skill_opencode,
-    _normalize_skill_entry,
-    _skill_name_from_entry,
-    _wire_single_skill,
-    _wire_skills_post_sync,
+    normalize_skill_entry,
+    skill_name_from_entry,
+    wire_single_skill,
+    wire_skills_post_sync,
 )
 from beacon.utils.wiring import _wire_contexts_claudecode, _wire_contexts_opencode
 from click.testing import CliRunner
@@ -202,7 +202,7 @@ def test_wire_contexts_claudecode_finds_dotclaude_claude_md(project_with_context
 
 
 # ---------------------------------------------------------------------------
-# Unit tests: _wire_skills_post_sync
+# Unit tests: wire_skills_post_sync
 # ---------------------------------------------------------------------------
 
 
@@ -211,7 +211,7 @@ def test_wire_skills_post_sync_installs_for_opencode(project_with_skill):
     (project / "opencode.json").write_text(json.dumps({}))
 
     artifacts_dir = project / ".agentic-beacon" / "artifacts"
-    installed, errors = _wire_skills_post_sync(project, artifacts_dir)
+    installed, errors = wire_skills_post_sync(project, artifacts_dir)
 
     assert errors == []
     assert any("test-skill" in entry and "opencode" in entry for entry in installed)
@@ -224,7 +224,7 @@ def test_wire_skills_post_sync_installs_for_claudecode(project_with_skill):
     (project / ".claude").mkdir()
 
     artifacts_dir = project / ".agentic-beacon" / "artifacts"
-    installed, errors = _wire_skills_post_sync(project, artifacts_dir)
+    installed, errors = wire_skills_post_sync(project, artifacts_dir)
 
     assert errors == []
     assert any("test-skill" in entry and "claudecode" in entry for entry in installed)
@@ -238,7 +238,7 @@ def test_wire_skills_post_sync_wires_for_all_agents_when_none_detected(
     project = project_with_skill
     artifacts_dir = project / ".agentic-beacon" / "artifacts"
 
-    installed, errors = _wire_skills_post_sync(project, artifacts_dir)
+    installed, errors = wire_skills_post_sync(project, artifacts_dir)
 
     assert errors == []
     assert any("test-skill" in e and "opencode" in e for e in installed)
@@ -252,7 +252,7 @@ def test_wire_skills_post_sync_skips_if_no_skills(tmp_path):
     artifacts_dir = tmp_path / ".agentic-beacon" / "artifacts"
     artifacts_dir.mkdir(parents=True)
 
-    installed, errors = _wire_skills_post_sync(tmp_path, artifacts_dir)
+    installed, errors = wire_skills_post_sync(tmp_path, artifacts_dir)
 
     assert installed == []
     assert errors == []
@@ -264,8 +264,8 @@ def test_wire_skills_post_sync_idempotent_opencode(project_with_skill):
     (project / "opencode.json").write_text(json.dumps({}))
     artifacts_dir = project / ".agentic-beacon" / "artifacts"
 
-    installed_first, _ = _wire_skills_post_sync(project, artifacts_dir)
-    installed_second, errors = _wire_skills_post_sync(project, artifacts_dir)
+    installed_first, _ = wire_skills_post_sync(project, artifacts_dir)
+    installed_second, errors = wire_skills_post_sync(project, artifacts_dir)
 
     assert any("test-skill" in e for e in installed_first)
     assert installed_second == []
@@ -278,8 +278,8 @@ def test_wire_skills_post_sync_idempotent_claudecode(project_with_skill):
     (project / ".claude").mkdir()
     artifacts_dir = project / ".agentic-beacon" / "artifacts"
 
-    installed_first, _ = _wire_skills_post_sync(project, artifacts_dir)
-    installed_second, errors = _wire_skills_post_sync(project, artifacts_dir)
+    installed_first, _ = wire_skills_post_sync(project, artifacts_dir)
+    installed_second, errors = wire_skills_post_sync(project, artifacts_dir)
 
     assert any("test-skill" in e for e in installed_first)
     assert installed_second == []
@@ -292,43 +292,41 @@ def test_wire_skills_post_sync_reinstalls_when_content_changes(project_with_skil
     (project / "opencode.json").write_text(json.dumps({}))
     artifacts_dir = project / ".agentic-beacon" / "artifacts"
 
-    _wire_skills_post_sync(project, artifacts_dir)
+    wire_skills_post_sync(project, artifacts_dir)
 
     # Update the artifact SKILL.md
     skill_md = artifacts_dir / "skills" / "test-skill" / "SKILL.md"
     skill_md.write_text(SAMPLE_SKILL_MD + "\n## New Section\nExtra content.\n")
 
     # force=True bypasses the soft-block (non-interactive mode would otherwise block)
-    installed_second, errors = _wire_skills_post_sync(
-        project, artifacts_dir, force=True
-    )
+    installed_second, errors = wire_skills_post_sync(project, artifacts_dir, force=True)
 
     assert any("test-skill" in e for e in installed_second)
     assert errors == []
 
 
 # ---------------------------------------------------------------------------
-# Unit tests: _update_agent_gitignores
+# Unit tests: update_agent_gitignores
 # ---------------------------------------------------------------------------
 
 
 def test_update_agent_gitignores_creates_claude_gitignore(tmp_path):
     (tmp_path / ".claude").mkdir()
-    _update_agent_gitignores(tmp_path)
+    update_agent_gitignores(tmp_path)
     content = (tmp_path / ".claude" / ".gitignore").read_text()
     assert "skills/" in content
 
 
 def test_update_agent_gitignores_creates_opencode_gitignore(tmp_path):
     (tmp_path / ".opencode").mkdir()
-    _update_agent_gitignores(tmp_path)
+    update_agent_gitignores(tmp_path)
     content = (tmp_path / ".opencode" / ".gitignore").read_text()
     assert "skills/" in content
     assert "command/" in content
 
 
 def test_update_agent_gitignores_skips_when_no_agent_dirs(tmp_path):
-    _update_agent_gitignores(tmp_path)
+    update_agent_gitignores(tmp_path)
     assert not (tmp_path / ".claude" / ".gitignore").exists()
     assert not (tmp_path / ".opencode" / ".gitignore").exists()
 
@@ -336,8 +334,8 @@ def test_update_agent_gitignores_skips_when_no_agent_dirs(tmp_path):
 def test_update_agent_gitignores_idempotent(tmp_path):
     (tmp_path / ".claude").mkdir()
     (tmp_path / ".opencode").mkdir()
-    _update_agent_gitignores(tmp_path)
-    _update_agent_gitignores(tmp_path)
+    update_agent_gitignores(tmp_path)
+    update_agent_gitignores(tmp_path)
     claude_content = (tmp_path / ".claude" / ".gitignore").read_text()
     opencode_content = (tmp_path / ".opencode" / ".gitignore").read_text()
     assert claude_content.count("skills/") == 1
@@ -349,7 +347,7 @@ def test_update_agent_gitignores_appends_to_existing_gitignore(tmp_path):
     claude_dir = tmp_path / ".claude"
     claude_dir.mkdir()
     (claude_dir / ".gitignore").write_text("settings.local.json\n")
-    _update_agent_gitignores(tmp_path)
+    update_agent_gitignores(tmp_path)
     content = (claude_dir / ".gitignore").read_text()
     assert "settings.local.json" in content
     assert "skills/" in content
@@ -754,8 +752,8 @@ def test_wire_skills_fallback_idempotent(project_with_skill):
     project = project_with_skill
     artifacts_dir = project / ".agentic-beacon" / "artifacts"
 
-    installed_first, _ = _wire_skills_post_sync(project, artifacts_dir)
-    installed_second, errors = _wire_skills_post_sync(project, artifacts_dir)
+    installed_first, _ = wire_skills_post_sync(project, artifacts_dir)
+    installed_second, errors = wire_skills_post_sync(project, artifacts_dir)
 
     assert any("test-skill" in e for e in installed_first)
     assert installed_second == []
@@ -775,7 +773,7 @@ def test_wire_skills_fallback_force_overwrites_conflict(project_with_skill):
     opencode_skill.parent.mkdir(parents=True)
     opencode_skill.write_text("# local modification")
 
-    installed, errors = _wire_skills_post_sync(project, artifacts_dir, force=True)
+    installed, errors = wire_skills_post_sync(project, artifacts_dir, force=True)
 
     assert errors == []
     assert any("test-skill" in e and "opencode" in e for e in installed)
@@ -791,7 +789,7 @@ def test_wire_skills_fallback_preserve_skips_conflict(project_with_skill):
     opencode_skill.parent.mkdir(parents=True)
     opencode_skill.write_text("# local modification")
 
-    installed, errors = _wire_skills_post_sync(project, artifacts_dir, preserve=True)
+    installed, errors = wire_skills_post_sync(project, artifacts_dir, preserve=True)
 
     assert errors == []
     # opencode skipped due to conflict; claudecode installed
@@ -808,7 +806,7 @@ def test_wire_skills_fallback_multiple_skills(tmp_path):
         (skill_dir / "SKILL.md").write_text(SAMPLE_SKILL_MD.replace("test-skill", name))
 
     artifacts_dir = tmp_path / ".agentic-beacon" / "artifacts"
-    installed, errors = _wire_skills_post_sync(tmp_path, artifacts_dir)
+    installed, errors = wire_skills_post_sync(tmp_path, artifacts_dir)
 
     assert errors == []
     assert len(installed) == 6  # 3 skills × 2 agents
@@ -822,7 +820,7 @@ def test_wire_skills_fallback_content_matches_artifact(project_with_skill):
     project = project_with_skill
     artifacts_dir = project / ".agentic-beacon" / "artifacts"
 
-    _wire_skills_post_sync(project, artifacts_dir)
+    wire_skills_post_sync(project, artifacts_dir)
 
     opencode_content = (
         project / ".opencode" / "skills" / "test-skill" / "SKILL.md"
@@ -914,7 +912,7 @@ def test_sync_fallback_wires_for_both_even_when_one_config_exists(
 
 
 # ---------------------------------------------------------------------------
-# Agent sync: _sync_agents_from_warehouse via abc sync
+# Agent sync: sync_agents_from_warehouse via abc sync
 # ---------------------------------------------------------------------------
 
 SAMPLE_AGENT_MD = "You are a helpful assistant specialized in Python.\n"
@@ -1080,8 +1078,8 @@ class TestSyncAgentsFromWarehouse:
 
 
 # ---------------------------------------------------------------------------
-# Multi-file skill: _normalize_skill_entry, _skill_name_from_entry,
-# _wire_single_skill, _wire_skills_post_sync, abc sync
+# Multi-file skill: normalize_skill_entry, skill_name_from_entry,
+# wire_single_skill, wire_skills_post_sync, abc sync
 # ---------------------------------------------------------------------------
 
 SAMPLE_SKILL_MD_MULTI = """\
@@ -1095,25 +1093,25 @@ description: Pipeline helper skill
 
 class TestNormalizeSkillEntry:
     def test_file_level_entry(self):
-        assert _normalize_skill_entry("skills/my-skill/SKILL.md") == "skills/my-skill"
+        assert normalize_skill_entry("skills/my-skill/SKILL.md") == "skills/my-skill"
 
     def test_directory_entry_with_slash(self):
-        assert _normalize_skill_entry("skills/my-skill/") == "skills/my-skill"
+        assert normalize_skill_entry("skills/my-skill/") == "skills/my-skill"
 
     def test_directory_entry_no_slash(self):
-        assert _normalize_skill_entry("skills/my-skill") == "skills/my-skill"
+        assert normalize_skill_entry("skills/my-skill") == "skills/my-skill"
 
     def test_bare_name_gets_prefix(self):
-        assert _normalize_skill_entry("my-skill") == "skills/my-skill"
+        assert normalize_skill_entry("my-skill") == "skills/my-skill"
 
     def test_skill_name_from_entry_file(self):
         assert (
-            _skill_name_from_entry("skills/pipeline-helper/SKILL.md")
+            skill_name_from_entry("skills/pipeline-helper/SKILL.md")
             == "pipeline-helper"
         )
 
     def test_skill_name_from_entry_dir(self):
-        assert _skill_name_from_entry("skills/pipeline-helper/") == "pipeline-helper"
+        assert skill_name_from_entry("skills/pipeline-helper/") == "pipeline-helper"
 
 
 class TestWireSingleSkill:
@@ -1123,7 +1121,7 @@ class TestWireSingleSkill:
         (skill_src / "SKILL.md").write_text(SAMPLE_SKILL_MD_MULTI)
         (skill_src / "helper.py").write_text("def run(): pass\n")
 
-        _wire_single_skill(tmp_path, "my-skill", skill_src, "claudecode")
+        wire_single_skill(tmp_path, "my-skill", skill_src, "claudecode")
 
         dest = tmp_path / ".claude" / "skills" / "my-skill"
         assert (dest / "SKILL.md").read_text() == SAMPLE_SKILL_MD_MULTI
@@ -1135,7 +1133,7 @@ class TestWireSingleSkill:
         (skill_src / "SKILL.md").write_text(SAMPLE_SKILL_MD_MULTI)
         (skill_src / "config.yaml").write_text("key: value\n")
 
-        _wire_single_skill(tmp_path, "my-skill", skill_src, "opencode")
+        wire_single_skill(tmp_path, "my-skill", skill_src, "opencode")
 
         dest = tmp_path / ".opencode" / "skills" / "my-skill"
         assert (dest / "SKILL.md").exists()
@@ -1146,7 +1144,7 @@ class TestWireSingleSkill:
         skill_src.mkdir(parents=True)
         (skill_src / "SKILL.md").write_text(SAMPLE_SKILL_MD_MULTI)
 
-        _wire_single_skill(tmp_path, "my-skill", skill_src, "opencode")
+        wire_single_skill(tmp_path, "my-skill", skill_src, "opencode")
 
         stub = tmp_path / ".opencode" / "command" / "my-skill.md"
         assert stub.exists()
@@ -1157,15 +1155,15 @@ class TestWireSingleSkill:
         skill_src.mkdir(parents=True)
         (skill_src / "SKILL.md").write_text("# S\n")
 
-        assert _wire_single_skill(tmp_path, "s", skill_src, "claudecode") is True
+        assert wire_single_skill(tmp_path, "s", skill_src, "claudecode") is True
 
     def test_returns_false_when_already_up_to_date(self, tmp_path):
         skill_src = tmp_path / "artifacts" / "skills" / "s"
         skill_src.mkdir(parents=True)
         (skill_src / "SKILL.md").write_text("# S\n")
 
-        _wire_single_skill(tmp_path, "s", skill_src, "claudecode")
-        assert _wire_single_skill(tmp_path, "s", skill_src, "claudecode") is False
+        wire_single_skill(tmp_path, "s", skill_src, "claudecode")
+        assert wire_single_skill(tmp_path, "s", skill_src, "claudecode") is False
 
     def test_subdirectory_files_preserved(self, tmp_path):
         skill_src = tmp_path / "artifacts" / "skills" / "s"
@@ -1173,21 +1171,21 @@ class TestWireSingleSkill:
         (skill_src / "SKILL.md").write_text("# S\n")
         (skill_src / "sub" / "util.py").write_text("x = 1\n")
 
-        _wire_single_skill(tmp_path, "s", skill_src, "claudecode")
+        wire_single_skill(tmp_path, "s", skill_src, "claudecode")
 
         assert (tmp_path / ".claude" / "skills" / "s" / "sub" / "util.py").exists()
 
 
 class TestWireSkillsPostSyncMultiFile:
     def test_all_files_wired_to_claude(self, tmp_path):
-        """_wire_skills_post_sync copies every file in the skill dir, not just SKILL.md."""
+        """wire_skills_post_sync copies every file in the skill dir, not just SKILL.md."""
         skill_dir = tmp_path / ".agentic-beacon" / "artifacts" / "skills" / "my-skill"
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text(SAMPLE_SKILL_MD_MULTI)
         (skill_dir / "helper.py").write_text("def run(): pass\n")
         (tmp_path / ".claude").mkdir()
 
-        _wire_skills_post_sync(tmp_path, tmp_path / ".agentic-beacon" / "artifacts")
+        wire_skills_post_sync(tmp_path, tmp_path / ".agentic-beacon" / "artifacts")
 
         dest = tmp_path / ".claude" / "skills" / "my-skill"
         assert (dest / "SKILL.md").exists()
@@ -1206,7 +1204,7 @@ class TestWireSkillsPostSyncMultiFile:
         (live_dir / "SKILL.md").write_text(SAMPLE_SKILL_MD_MULTI)
         (live_dir / "helper.py").write_text("def run(): return 42\n")
 
-        installed, errors = _wire_skills_post_sync(
+        installed, errors = wire_skills_post_sync(
             tmp_path,
             tmp_path / ".agentic-beacon" / "artifacts",
             preserve=True,

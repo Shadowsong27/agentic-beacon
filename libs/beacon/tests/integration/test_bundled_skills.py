@@ -2,11 +2,11 @@
 
 Bundled skills are installed into global agent skill directories
 (~/.config/opencode/skills/, ~/.claude/skills/) rather than per-project dirs.
-All tests redirect the global dirs to tmp_path via _bundled_global_skill_dirs patch.
+All tests redirect the global dirs to tmp_path via bundled_global_skill_dirs patch.
 
 Covers:
-  - Unit tests for _install_bundled_skills_globally
-  - Unit tests for _show_bundled_skills_status
+  - Unit tests for install_bundled_skills_globally
+  - Unit tests for show_bundled_skills_status
   - Integration tests: abc sync auto-installs bundled skills globally
   - Integration tests: early-exit path (empty beacon.yaml) still installs
   - Integration tests: updates propagate when abc is upgraded
@@ -19,9 +19,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 from beacon.cli import main
-from beacon.utils.skills import (
-    _install_bundled_skills_globally,
-    _show_bundled_skills_status,
+from beacon.domains.artifact.skill import (
+    install_bundled_skills_globally,
+    show_bundled_skills_status,
 )
 from click.testing import CliRunner
 from rich.console import Console
@@ -56,21 +56,22 @@ def _fake_global_dirs(tmp_path: Path) -> dict[str, Path]:
 
 
 def _capture_bundled_skills_status(global_dirs: dict[str, Path]) -> str:
-    """Run _show_bundled_skills_status with patched global dirs and return rendered output."""
+    """Run show_bundled_skills_status with patched global dirs and return rendered output."""
     buf = io.StringIO()
     real_console = Console(file=buf, highlight=False, markup=False)
     with (
-        patch("beacon.utils.skills.console", real_console),
+        patch("beacon.domains.artifact.skill.console", real_console),
         patch(
-            "beacon.utils.skills._bundled_global_skill_dirs", return_value=global_dirs
+            "beacon.domains.artifact.skill.bundled_global_skill_dirs",
+            return_value=global_dirs,
         ),
     ):
-        _show_bundled_skills_status()
+        show_bundled_skills_status()
     return buf.getvalue()
 
 
 # ---------------------------------------------------------------------------
-# Unit tests: _install_bundled_skills_globally
+# Unit tests: install_bundled_skills_globally
 # ---------------------------------------------------------------------------
 
 
@@ -79,9 +80,10 @@ def test_install_bundled_skills_globally_opencode(tmp_path):
     fake_dirs = _fake_global_dirs(tmp_path)
 
     with patch(
-        "beacon.utils.skills._bundled_global_skill_dirs", return_value=fake_dirs
+        "beacon.domains.artifact.skill.bundled_global_skill_dirs",
+        return_value=fake_dirs,
     ):
-        installed, errors = _install_bundled_skills_globally()
+        installed, errors = install_bundled_skills_globally()
 
     assert errors == []
     assert any(
@@ -97,9 +99,10 @@ def test_install_bundled_skills_globally_claudecode(tmp_path):
     fake_dirs = _fake_global_dirs(tmp_path)
 
     with patch(
-        "beacon.utils.skills._bundled_global_skill_dirs", return_value=fake_dirs
+        "beacon.domains.artifact.skill.bundled_global_skill_dirs",
+        return_value=fake_dirs,
     ):
-        installed, errors = _install_bundled_skills_globally()
+        installed, errors = install_bundled_skills_globally()
 
     assert errors == []
     assert any(
@@ -115,9 +118,10 @@ def test_install_bundled_skills_globally_both_dirs(tmp_path):
     fake_dirs = _fake_global_dirs(tmp_path)
 
     with patch(
-        "beacon.utils.skills._bundled_global_skill_dirs", return_value=fake_dirs
+        "beacon.domains.artifact.skill.bundled_global_skill_dirs",
+        return_value=fake_dirs,
     ):
-        installed, errors = _install_bundled_skills_globally()
+        installed, errors = install_bundled_skills_globally()
 
     assert errors == []
     assert (fake_dirs["opencode"] / BUNDLED_SKILL_NAME / "SKILL.md").exists()
@@ -129,10 +133,11 @@ def test_install_bundled_skills_globally_idempotent(tmp_path):
     fake_dirs = _fake_global_dirs(tmp_path)
 
     with patch(
-        "beacon.utils.skills._bundled_global_skill_dirs", return_value=fake_dirs
+        "beacon.domains.artifact.skill.bundled_global_skill_dirs",
+        return_value=fake_dirs,
     ):
-        _install_bundled_skills_globally()
-        installed_second, errors = _install_bundled_skills_globally()
+        install_bundled_skills_globally()
+        installed_second, errors = install_bundled_skills_globally()
 
     assert errors == []
     assert installed_second == []
@@ -149,9 +154,10 @@ def test_install_bundled_skills_globally_updates_on_content_change(tmp_path):
         (dest / "SKILL.md").write_text(stale_content)
 
     with patch(
-        "beacon.utils.skills._bundled_global_skill_dirs", return_value=fake_dirs
+        "beacon.domains.artifact.skill.bundled_global_skill_dirs",
+        return_value=fake_dirs,
     ):
-        installed, errors = _install_bundled_skills_globally()
+        installed, errors = install_bundled_skills_globally()
 
     assert errors == []
     assert any(BUNDLED_SKILL_NAME in entry for entry in installed)
@@ -171,16 +177,17 @@ def test_install_bundled_skills_globally_no_agent_detection_required(tmp_path):
     # Deliberately no opencode.json, no .claude/
 
     with patch(
-        "beacon.utils.skills._bundled_global_skill_dirs", return_value=fake_dirs
+        "beacon.domains.artifact.skill.bundled_global_skill_dirs",
+        return_value=fake_dirs,
     ):
-        installed, errors = _install_bundled_skills_globally()
+        installed, errors = install_bundled_skills_globally()
 
     assert errors == []
     assert any(BUNDLED_SKILL_NAME in entry for entry in installed)
 
 
 # ---------------------------------------------------------------------------
-# Unit tests: _show_bundled_skills_status
+# Unit tests: show_bundled_skills_status
 # ---------------------------------------------------------------------------
 
 
@@ -251,7 +258,8 @@ def test_sync_installs_bundled_skills_globally(valid_warehouse, temp_dir, monkey
     )
 
     with patch(
-        "beacon.utils.skills._bundled_global_skill_dirs", return_value=fake_dirs
+        "beacon.domains.artifact.skill.bundled_global_skill_dirs",
+        return_value=fake_dirs,
     ):
         result = runner.invoke(main, ["sync", "--skip-git-check"])
 
@@ -277,7 +285,8 @@ def test_sync_does_not_install_to_project_dir(valid_warehouse, temp_dir, monkeyp
     )
 
     with patch(
-        "beacon.utils.skills._bundled_global_skill_dirs", return_value=fake_dirs
+        "beacon.domains.artifact.skill.bundled_global_skill_dirs",
+        return_value=fake_dirs,
     ):
         runner.invoke(main, ["sync", "--skip-git-check"])
 
@@ -304,7 +313,8 @@ def test_sync_reports_bundled_skill_installation(
     )
 
     with patch(
-        "beacon.utils.skills._bundled_global_skill_dirs", return_value=fake_dirs
+        "beacon.domains.artifact.skill.bundled_global_skill_dirs",
+        return_value=fake_dirs,
     ):
         result = runner.invoke(main, ["sync", "--skip-git-check"])
 
@@ -331,7 +341,8 @@ def test_sync_bundled_skills_idempotent(valid_warehouse, temp_dir, monkeypatch):
     )
 
     with patch(
-        "beacon.utils.skills._bundled_global_skill_dirs", return_value=fake_dirs
+        "beacon.domains.artifact.skill.bundled_global_skill_dirs",
+        return_value=fake_dirs,
     ):
         runner.invoke(main, ["sync", "--skip-git-check"])
         result_second = runner.invoke(main, ["sync", "--skip-git-check"])
@@ -360,7 +371,8 @@ def test_sync_empty_beacon_yaml_still_installs_bundled_skills(
     runner.invoke(main, ["setup", "--manual"])
 
     with patch(
-        "beacon.utils.skills._bundled_global_skill_dirs", return_value=fake_dirs
+        "beacon.domains.artifact.skill.bundled_global_skill_dirs",
+        return_value=fake_dirs,
     ):
         result = runner.invoke(main, ["sync", "--skip-git-check"])
 
@@ -396,7 +408,8 @@ def test_sync_overwrites_stale_bundled_skill(valid_warehouse, temp_dir, monkeypa
     )
 
     with patch(
-        "beacon.utils.skills._bundled_global_skill_dirs", return_value=fake_dirs
+        "beacon.domains.artifact.skill.bundled_global_skill_dirs",
+        return_value=fake_dirs,
     ):
         result = runner.invoke(main, ["sync", "--skip-git-check"])
 
@@ -431,7 +444,8 @@ def test_status_shows_bundled_skills_table(valid_warehouse, temp_dir, monkeypatc
     )
 
     with patch(
-        "beacon.utils.skills._bundled_global_skill_dirs", return_value=fake_dirs
+        "beacon.domains.artifact.skill.bundled_global_skill_dirs",
+        return_value=fake_dirs,
     ):
         runner.invoke(main, ["sync", "--skip-git-check"])
         result = runner.invoke(main, ["status"])
@@ -459,7 +473,8 @@ def test_status_shows_check_for_installed_bundled_skill(
     )
 
     with patch(
-        "beacon.utils.skills._bundled_global_skill_dirs", return_value=fake_dirs
+        "beacon.domains.artifact.skill.bundled_global_skill_dirs",
+        return_value=fake_dirs,
     ):
         runner.invoke(main, ["sync", "--skip-git-check"])
         result = runner.invoke(main, ["status"])
@@ -483,7 +498,8 @@ def test_status_shows_cross_for_uninstalled_bundled_skill(
     (project_dir / ".agentic-beacon" / "artifacts").mkdir(parents=True)
 
     with patch(
-        "beacon.utils.skills._bundled_global_skill_dirs", return_value=fake_dirs
+        "beacon.domains.artifact.skill.bundled_global_skill_dirs",
+        return_value=fake_dirs,
     ):
         result = runner.invoke(main, ["status"])
 
@@ -505,7 +521,8 @@ def test_status_bundled_skills_visible_before_sync(
     runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
 
     with patch(
-        "beacon.utils.skills._bundled_global_skill_dirs", return_value=fake_dirs
+        "beacon.domains.artifact.skill.bundled_global_skill_dirs",
+        return_value=fake_dirs,
     ):
         result = runner.invoke(main, ["status"])
 
