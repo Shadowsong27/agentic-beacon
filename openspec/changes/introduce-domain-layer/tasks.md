@@ -19,9 +19,9 @@ The code-move tasks themselves are **behavior-preserving refactors**, not new fe
 ### RED-GREEN-REFACTOR Cycle (for the architecture test)
 
 1. **🔴 RED Phase — Write Failing Tests FIRST (PR 0, task 1.2)**
-   - Implement every scenario from `specs/layered-architecture/spec.md` as a pytest test in `libs/beacon/tests/test_architecture.py`.
+   - Implement every scenario from `specs/layered-architecture/spec.md` as a pytest test in `libs/beacon/tests/unit/test_architecture.py`.
    - Scenarios that would fail against today's tree (e.g. "no `.py` files directly under `beacon/`", "no `_`-prefixed cross-module imports") are marked `@pytest.mark.xfail(strict=True, reason="will pass after PR N")`.
-   - Run `pytest tests/test_architecture.py -v` — the currently-passing scenarios pass, `xfail`s report as expected failures, suite exits 0.
+   - Run `pytest libs/beacon/tests/unit/test_architecture.py -v` — the currently-passing scenarios pass, `xfail`s report as expected failures, suite exits 0.
 
 2. **🟢 GREEN Phase — Refactor to Make Tests Pass (PRs 1–8)**
    - Each subsequent PR moves one domain, then flips the corresponding `xfail` markers in `test_architecture.py`.
@@ -54,12 +54,12 @@ See `AGENTS.md` → "Unit Testing Workflow" and `knowledge/lessons/complete-test
 
 **Goal**: Land the empty domain skeleton and the TDD harness (`test_architecture.py`) that will enforce the new layering as subsequent PRs land.
 **Input**: Current `main` at commit `4c1f3c7`; no `domains/` package exists.
-**Output**: `beacon/domains/` package with six empty subpackages; `libs/beacon/tests/test_architecture.py` committed with correct `xfail` markers; `spec.md` merged into `openspec/specs/layered-architecture/`.
+**Output**: `beacon/domains/` package with six empty subpackages; `libs/beacon/tests/unit/test_architecture.py` committed with correct `xfail` markers; `spec.md` merged into `openspec/specs/layered-architecture/`.
 **Validation**: `pytest libs/beacon/tests/` exits 0; `.venv/bin/abc --version` prints the version; `tree libs/beacon/src/beacon/domains/` shows six empty subpackages.
 
 - [ ] 1.1 Create empty `beacon/domains/` package with six empty subpackages: `warehouse/`, `setup/`, `adoption/`, `distribution/`, `contribution/`, `artifact/` (each with docstring-only `__init__.py`)
-- [ ] 1.2 Add `libs/beacon/tests/test_architecture.py` implementing the architecture scenarios from `specs/layered-architecture/spec.md`
-  - **Input**: `.venv/bin/pytest libs/beacon/tests/test_architecture.py -v`
+- [ ] 1.2 Add `libs/beacon/tests/unit/test_architecture.py` implementing the architecture scenarios from `specs/layered-architecture/spec.md`
+  - **Input**: `.venv/bin/pytest libs/beacon/tests/unit/test_architecture.py -v`
   - **Expected Output**: Collected 8+ tests; currently-satisfied scenarios pass; scenarios that can't pass until later PRs report as `xfail (expected)`; suite exits 0.
   - **Validation**: No test is `xpassed` (would indicate a stale marker); every `xfail` has a `reason="will pass after PR N"` pointing to the concrete PR that fixes it.
   - **TDD Test Cases (write these first):**
@@ -196,10 +196,10 @@ See `AGENTS.md` → "Unit Testing Workflow" and `knowledge/lessons/complete-test
 - [ ] 8.1 Rename `beacon/core/cli/` → `beacon/cli/`; update `beacon/cli.py` shim import
 - [ ] 8.2 Replace all `from beacon.utils.*` imports in `cli/main.py` and `cli/warehouse.py` with `from beacon.domains.*` imports
 - [ ] 8.3 Verify each handler contains only: argument parsing + one domain call + output formatting (per the "Thin CLI layer" spec requirement). Inline any leftover helpers into their owning domain.
-  - **Input**: `.venv/bin/pytest libs/beacon/tests/test_architecture.py::test_cli_handlers_have_no_io -v`
+  - **Input**: `.venv/bin/pytest libs/beacon/tests/unit/test_architecture.py::test_cli_handlers_have_no_io -v`
   - **Expected Output**: Test passes (no longer `xfail`).
   - **Validation**: No CLI handler body contains `open()`, `Path.write_text`, `Path.read_text`, `yaml.load`, `tomllib.load`, or `subprocess.run`; AST scan confirms.
-- [ ] 8.4 (Optional, if file remains > ~800 lines) Split `cli/main.py` by subcommand group: `cli/setup.py`, `cli/sync.py`, `cli/contribute.py`, `cli/agent.py`. Keep `cli/main.py` as the Click group + registration only.
+- [ ] 8.4 Split `cli/main.py` by subcommand group: `cli/setup.py`, `cli/sync.py`, `cli/contribute.py`, `cli/agent.py`. Keep `cli/main.py` as the Click group + registration only.
 - [ ] 8.5 Run regression + full subcommand smoke
   - **Input**: `.venv/bin/pytest libs/beacon/tests/` then run every `abc` subcommand once on a scratch project (at minimum: `--version`, `init`, `warehouse connect`, `setup --manual`, `sync`, `doctor`, `contribute --all --dry-run`, `upgrade`, `agent list`, `agent install <name>`).
   - **Expected Output**: Every subcommand exits 0 with the same user-visible output as pre-PR.

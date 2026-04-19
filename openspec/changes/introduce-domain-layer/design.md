@@ -145,7 +145,7 @@ Each PR is self-contained and leaves tests green. Rollback of any PR is just a r
 Three mechanisms, ordered by cost:
 
 1. **Convention documented in the `layered-architecture` spec** — required; zero-cost; the baseline.
-2. **A short `tests/test_architecture.py`** that walks `beacon/` and asserts dependency direction (e.g., `core/` modules have no `from beacon.domains` or `from beacon.cli` imports). Low-cost; runs in CI. **Include in this change.**
+2. **A short `libs/beacon/tests/unit/test_architecture.py`** that walks `beacon/` and asserts dependency direction (e.g., `core/` modules have no `from beacon.domains` or `from beacon.cli` imports). Low-cost; runs in CI. **Include in this change.**
 3. **An `import-linter` or `ruff` custom rule** — deferred to a follow-up if the test proves flaky or hard to read.
 
 ## Impacted Modules & Systems
@@ -176,7 +176,7 @@ Three mechanisms, ordered by cost:
 
 **Code Changes (tests):**
 - `libs/beacon/tests/**/*.py` — every test that imports from `beacon.utils.*`, `beacon.adopt`, `beacon.distributor`, `beacon.initializer`, `beacon.upgrader`, `beacon.checksums`, `beacon.core.sync`, `beacon.core.delta`, or `beacon.warehouse` must update its import paths. Test logic unchanged.
-- `libs/beacon/tests/test_architecture.py` — **new** file added in PR 0, validates every architectural rule in `specs/layered-architecture/spec.md`.
+- `libs/beacon/tests/unit/test_architecture.py` — **new** file added in PR 0, validates every architectural rule in `specs/layered-architecture/spec.md`.
 
 **Data/Schema Changes:**
 - None. No database, no Pydantic model, no file format changes.
@@ -221,6 +221,6 @@ Three mechanisms, ordered by cost:
 
 ## Open Questions
 
-- Should `cli/main.py` be split per-subcommand-group (`cli/setup.py`, `cli/sync.py`, etc.) in PR 8, or left as one large file? Leaning toward splitting, because 1757 lines will still be too large even after logic is removed — but this is a presentation concern that can slip to a follow-up.
-- Should `core/` be renamed to `shared/` once the sync/delta engines leave? Argument for: "core" is overloaded and the remaining contents (models, settings) read as "shared primitives". Argument against: churn. Default: keep `core/`.
-- Does `contribution` need its own delta-view module, or should it import from `distribution/delta.py`? Current `utils/delta.py` is 878 lines and mixes both engine output and contribution user-facing views. Resolve during PR 7 with a second read.
+- ~~Should `cli/main.py` be split per-subcommand-group (`cli/setup.py`, `cli/sync.py`, etc.) in PR 8, or left as one large file?~~ **Resolved: Yes — split in PR 8.** `cli/main.py` becomes the Click group + registration only; handlers move to `cli/setup.py`, `cli/sync.py`, `cli/contribute.py`, `cli/agent.py`, `cli/warehouse.py`.
+- ~~Should `core/` be renamed to `shared/` once the sync/delta engines leave?~~ **Resolved: Keep `core/`.** The churn outweighs the clarity gain; "core" is already understood in the codebase.
+- Does `contribution` need its own delta-view module, or should it import from `distribution/delta.py`? **Deferred to PR 7.** Current `utils/delta.py` is 878 lines and mixes both engine output and contribution user-facing views. Re-evaluate during PR 7 implementation with a second read of the actual code.
