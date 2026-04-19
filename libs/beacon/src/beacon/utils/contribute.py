@@ -7,8 +7,8 @@ from pathlib import Path
 
 from rich.console import Console
 
-from beacon.core.delta import DeltaComparator, DeltaStatus
 from beacon.core.manifest.beacon import BeaconManifest
+from beacon.domains.distribution.delta import DeltaComparator, DeltaStatus
 
 console = Console()
 

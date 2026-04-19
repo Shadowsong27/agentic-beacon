@@ -372,7 +372,7 @@ def _discover_all(
     beacon_settings: BeaconManifest,
 ) -> list[AdoptCandidate]:
     """Full-scan mode: return every warehouse artifact not in beacon.yaml."""
-    from beacon.distributor import WarehouseDistributor
+    from beacon.domains.distribution.distributor import WarehouseDistributor
 
     distributor = WarehouseDistributor(
         warehouse_root=warehouse_path,

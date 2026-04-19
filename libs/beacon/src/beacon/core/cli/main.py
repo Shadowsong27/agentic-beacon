@@ -9,10 +9,8 @@ from rich.console import Console
 from rich.table import Table
 
 from beacon.core.cli.warehouse import warehouse
-from beacon.core.delta import DeltaComparator
 from beacon.core.manifest.beacon import BeaconManifest
 from beacon.core.manifest.workspace import WorkspaceConfig
-from beacon.core.sync import SyncEngine
 from beacon.domains.artifact.agent import (
     build_agents_paths,
     detect_agents,
@@ -37,6 +35,14 @@ from beacon.domains.artifact.skill import (
     wire_single_skill,
     wire_skills_post_sync,
 )
+from beacon.domains.distribution.delta import DeltaComparator
+from beacon.domains.distribution.state import (
+    check_sync_state,
+    read_sync_sha,
+    relink_global_sync_state,
+    write_sync_state,
+)
+from beacon.domains.distribution.sync_engine import SyncEngine
 from beacon.utils.contribute import (
     _auto_git_contribute,
     _contribute_all,
@@ -55,12 +61,6 @@ from beacon.utils.git import (
     _check_warehouse_git_clean,
     _check_warehouse_on_main_branch,
     find_project_root,
-)
-from beacon.utils.sync_state import (
-    _check_sync_state,
-    _read_sync_sha,
-    _relink_global_sync_state,
-    _write_sync_state,
 )
 from beacon.utils.wiring import (
     _confirm_prune,
@@ -369,10 +369,10 @@ def sync(
                 else:
                     artifact_paths.append(pattern)
 
-        old_sync_sha = _read_sync_sha(artifacts_dir)
+        old_sync_sha = read_sync_sha(artifacts_dir)
 
         if not dry_run:
-            _write_sync_state(artifacts_dir, warehouse_path)
+            write_sync_state(artifacts_dir, warehouse_path)
 
         if not dry_run:
             conflicts = sync_engine.classify_conflicts(artifact_paths)
@@ -798,7 +798,7 @@ def delta(*, file: str | None, no_color: bool) -> None:
         artifacts_dir = beacon_dir / "artifacts"
         beacon_settings = BeaconManifest.from_yaml(beacon_yaml)
 
-        _relink_global_sync_state(warehouse_path)
+        relink_global_sync_state(warehouse_path)
 
         project_root = Path.cwd()
 
@@ -915,7 +915,7 @@ def contribute(
         artifacts_dir = beacon_dir / "artifacts"
 
         if not dry_run and not skip_git_check:
-            sync_error = _check_sync_state(artifacts_dir, warehouse_path)
+            sync_error = check_sync_state(artifacts_dir, warehouse_path)
             if sync_error:
                 console.print(f"[yellow]Warning:[/yellow] {sync_error}")
                 sys.exit(1)
@@ -1382,7 +1382,7 @@ def adopt(*, dry_run: bool) -> None:
         + beacon_settings.artifacts.knowledge
     )
     try:
-        from beacon.distributor import WarehouseDistributor
+        from beacon.domains.distribution.distributor import WarehouseDistributor
 
         distributor = WarehouseDistributor(
             warehouse_root=warehouse_path, target_root=warehouse_path

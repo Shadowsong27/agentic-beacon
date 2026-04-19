@@ -19,7 +19,7 @@ from pathlib import Path
 # _render_knowledge_node_group uses the module-level `console` from utils/delta,
 # so we monkey-patch it.
 import beacon.utils.delta as delta_module
-from beacon.core.delta import DeltaStatus
+from beacon.domains.distribution.delta import DeltaStatus
 from beacon.utils.delta import _render_knowledge_node_group
 from rich.console import Console
 
@@ -44,7 +44,7 @@ def _capture(node_path: str, results, warehouse_path: Path) -> str:
 
 
 def _make_result(path: str, status: DeltaStatus):
-    from beacon.core.delta import ComparisonResult
+    from beacon.domains.distribution.delta import ComparisonResult
 
     return ComparisonResult(path=path, status=status)
 

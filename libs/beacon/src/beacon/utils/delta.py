@@ -6,16 +6,16 @@ from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 
-from beacon.core.delta import (
+from beacon.core.manifest.beacon import BeaconManifest
+from beacon.domains.distribution.delta import (
     ComparisonResult,
     DeltaComparator,
     DeltaStatus,
     DeltaSummary,
 )
-from beacon.core.manifest.beacon import BeaconManifest
+from beacon.domains.distribution.state import SYNC_STATE_FILENAME, read_sync_sha
 
 from .git import _get_file_hash_at_sha, _get_warehouse_head_sha
-from .sync_state import _SYNC_STATE_FILENAME, _read_sync_sha
 
 console = Console()
 
@@ -54,12 +54,12 @@ def _enrich_tracked_stale(
         The local artifact hash is compared against the synced warehouse content.
         If they match, the result is upgraded to STALE.
     """
-    from beacon.core.delta import DeltaStatus
+    from beacon.domains.distribution.delta import DeltaStatus
 
     if not (warehouse_path / ".git").exists():
         return summary
 
-    sync_sha = _read_sync_sha(artifacts_path)
+    sync_sha = read_sync_sha(artifacts_path)
     if not sync_sha:
         return summary
 
@@ -174,7 +174,7 @@ def _show_delta_summary(
     # is stale — these represent genuine local edits on top of an outdated snapshot.
     snapshot_stale = False
     if warehouse_path is not None:
-        recorded_sha = _read_sync_sha(comparator.artifacts_path)
+        recorded_sha = read_sync_sha(comparator.artifacts_path)
         current_sha = _get_warehouse_head_sha(warehouse_path)
         if recorded_sha and current_sha and recorded_sha != current_sha:
             snapshot_stale = True
@@ -746,11 +746,11 @@ def _collect_artifact_paths(
     Globs both the warehouse and local artifacts directory so that locally-added
     files (not yet in the warehouse) are included.
     """
-    from beacon.core.sync import SyncEngine
     from beacon.domains.artifact.skill import (
         normalize_skill_entry,
         skill_name_from_entry,
     )
+    from beacon.domains.distribution.sync_engine import SyncEngine
 
     sync_engine = SyncEngine(
         warehouse_path=comparator.warehouse_path,
@@ -846,7 +846,7 @@ def _find_untracked_local_files(
     artifacts_untracked: list[str] = []
     if artifacts_dir.exists():
         for file_path in sorted(artifacts_dir.rglob("*")):
-            if file_path.is_file() and file_path.name != _SYNC_STATE_FILENAME:
+            if file_path.is_file() and file_path.name != SYNC_STATE_FILENAME:
                 rel = str(file_path.relative_to(artifacts_dir))
                 if rel.startswith("skills/"):
                     continue  # skills live in agent dirs, not here

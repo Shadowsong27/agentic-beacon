@@ -21,7 +21,7 @@ import inspect
 from pathlib import Path
 
 import pytest
-from beacon.core.delta import DeltaComparator, DeltaStatus
+from beacon.domains.distribution.delta import DeltaComparator, DeltaStatus
 
 
 @pytest.fixture

@@ -15,7 +15,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from beacon.core.delta import (
+from beacon.domains.distribution.delta import (
     ComparisonResult,
     DeltaComparator,
     DeltaStatus,

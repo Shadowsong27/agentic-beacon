@@ -7,7 +7,7 @@ Regression tests for:
 """
 
 import pytest
-from beacon.distributor import WarehouseDistributor
+from beacon.domains.distribution.distributor import WarehouseDistributor
 from beacon.domains.warehouse.catalog import generate_warehouse_catalog
 
 

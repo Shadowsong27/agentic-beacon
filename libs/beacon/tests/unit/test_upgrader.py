@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 from beacon.domains.artifact.checksums import compute_sha256
+from beacon.domains.distribution.upgrader import FileState, WarehouseUpgrader
 from beacon.initializer import WarehouseInitializer
-from beacon.upgrader import FileState, WarehouseUpgrader
 
 # ---------------------------------------------------------------------------
 # Helpers

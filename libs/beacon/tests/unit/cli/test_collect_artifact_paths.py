@@ -17,8 +17,8 @@ TDD Test Cases:
 
 from pathlib import Path
 
-from beacon.core.delta import DeltaComparator
 from beacon.core.manifest.beacon import BeaconManifest
+from beacon.domains.distribution.delta import DeltaComparator
 from beacon.utils.delta import _collect_artifact_paths
 
 

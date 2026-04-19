@@ -11,12 +11,12 @@ from rich.table import Table
 
 from beacon.core.gitignore import GitignoreManager
 from beacon.core.manifest.workspace import WorkspaceConfig
-from beacon.distributor import WarehouseDistributor
 from beacon.domains.artifact.agent import update_agent_gitignores
+from beacon.domains.distribution.distributor import WarehouseDistributor
+from beacon.domains.distribution.state import relink_global_sync_state
+from beacon.domains.distribution.upgrader import WarehouseUpgrader
 from beacon.domains.warehouse.validator import WarehouseValidator
 from beacon.initializer import WarehouseInitializer
-from beacon.upgrader import WarehouseUpgrader
-from beacon.utils.sync_state import _relink_global_sync_state
 
 console = Console()
 
@@ -251,7 +251,7 @@ def connect(*, path: Path | None) -> None:
             console.print("[green]✓[/green] Updated .gitignore")
         update_agent_gitignores(Path.cwd())
 
-        _relink_global_sync_state(warehouse_path)
+        relink_global_sync_state(warehouse_path)
 
         console.print("\n[bold green]✓ Connected to warehouse[/bold green]")
         console.print(f"  [blue]Location:[/blue] {warehouse_path}")

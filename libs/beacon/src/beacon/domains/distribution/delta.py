@@ -440,7 +440,7 @@ class DeltaComparator:
         Returns:
             DeltaSummary for beacon.yaml artifacts only
         """
-        from .sync import SyncEngine
+        from .sync_engine import SyncEngine
 
         # Collect all artifact paths, expanding globs
         seen: set[str] = set()
