@@ -4,9 +4,11 @@
 
 | Repo | Path | Branch | Role |
 |------|------|--------|------|
-| `agentic-beacon` | `~/Code/oss/agentic-beacon` | `refactor/domain-*` (one branch per PR — see design.md "Repository Branch Strategy") | Code changes — all moves, renames, import updates, and the new `test_architecture.py` |
+| `agentic-beacon` | `~/Code/oss/agentic-beacon` | `refactor/introduce-domain-layer` | Single long-running draft PR — all phases land on this branch |
 
 Single-repo change. No registra, no orchestrator — this is the framework itself.
+
+**Workflow**: agent pushes incremental commits to the draft branch; reviewer comments continuously; agent addresses feedback in follow-up commits. The PR is marked ready-for-merge only when all phases are complete.
 
 ---
 
@@ -18,25 +20,25 @@ The code-move tasks themselves are **behavior-preserving refactors**, not new fe
 
 ### RED-GREEN-REFACTOR Cycle (for the architecture test)
 
-1. **🔴 RED Phase — Write Failing Tests FIRST (PR 0, task 1.2)**
+1. **🔴 RED Phase — Write Failing Tests FIRST (Phase 1, task 1.2)**
    - Implement every scenario from `specs/layered-architecture/spec.md` as a pytest test in `libs/beacon/tests/unit/test_architecture.py`.
-   - Scenarios that would fail against today's tree (e.g. "no `.py` files directly under `beacon/`", "no `_`-prefixed cross-module imports") are marked `@pytest.mark.xfail(strict=True, reason="will pass after PR N")`.
+   - Scenarios that would fail against today's tree (e.g. "no `.py` files directly under `beacon/`", "no `_`-prefixed cross-module imports") are marked `@pytest.mark.xfail(strict=True, reason="will pass after phase N")`.
    - Run `pytest libs/beacon/tests/unit/test_architecture.py -v` — the currently-passing scenarios pass, `xfail`s report as expected failures, suite exits 0.
 
-2. **🟢 GREEN Phase — Refactor to Make Tests Pass (PRs 1–8)**
-   - Each subsequent PR moves one domain, then flips the corresponding `xfail` markers in `test_architecture.py`.
-   - If a scenario flips to passing too early (e.g. PR 1 accidentally satisfies PR 4's scenario), remove the `xfail` immediately — don't leave stale markers.
+2. **🟢 GREEN Phase — Refactor to Make Tests Pass (Phases 2–9)**
+   - Each subsequent phase moves one domain, then flips the corresponding `xfail` markers in `test_architecture.py`.
+   - If a scenario flips to passing too early (e.g. phase 2 accidentally satisfies phase 4's scenario), remove the `xfail` immediately — don't leave stale markers.
 
-3. **🔵 REFACTOR Phase — Improve Code Quality (PR 7 and PR 8)**
-   - PR 7 thins each CLI handler; PR 8 deletes dead code. Tests must stay green throughout.
+3. **🔵 REFACTOR Phase — Improve Code Quality (Phases 8 and 9)**
+   - Phase 8 thins each CLI handler; phase 9 deletes dead code. Tests must stay green throughout.
 
 ### Task Completion Criteria
 
 A task is **not** complete until:
-- ✅ All architecture-test scenarios relevant to the PR are flipped from `xfail` to regular asserts and passing
-- ✅ Full `pytest` suite passes on the feature branch
-- ✅ The per-PR smoke test listed in the task runs cleanly (exit 0, expected output)
-- ✅ PR opened on GitHub with CI green
+- ✅ All architecture-test scenarios relevant to the phase are flipped from `xfail` to regular asserts and passing
+- ✅ Full `pytest` suite passes on the draft branch
+- ✅ The per-phase smoke test listed in the task runs cleanly (exit 0, expected output)
+- ✅ Changes are pushed to the draft PR on GitHub with CI green
 
 ### Running Tests
 
@@ -50,25 +52,25 @@ See `AGENTS.md` → "Unit Testing Workflow" and `knowledge/lessons/complete-test
 
 ---
 
-## 1. Skeleton and architecture test (PR 0)
+## 1. Skeleton and architecture test
 
-**Goal**: Land the empty domain skeleton and the TDD harness (`test_architecture.py`) that will enforce the new layering as subsequent PRs land.
-**Input**: Current `main` at commit `4c1f3c7`; no `domains/` package exists.
-**Output**: `beacon/domains/` package with six empty subpackages; `libs/beacon/tests/unit/test_architecture.py` committed with correct `xfail` markers; `spec.md` merged into `openspec/specs/layered-architecture/`.
+**Goal**: Land the empty domain skeleton and the TDD harness (`test_architecture.py`) that will enforce the new layering as subsequent phases land.
+**Input**: Current `main`; no `domains/` package exists.
+**Output**: `beacon/domains/` package with six empty subpackages; `libs/beacon/tests/unit/test_architecture.py` committed with correct `xfail` markers.
 **Validation**: `pytest libs/beacon/tests/` exits 0; `.venv/bin/abc --version` prints the version; `tree libs/beacon/src/beacon/domains/` shows six empty subpackages.
 
 - [x] 1.1 Create empty `beacon/domains/` package with six empty subpackages: `warehouse/`, `setup/`, `adoption/`, `distribution/`, `contribution/`, `artifact/` (each with docstring-only `__init__.py`)
 - [x] 1.2 Add `libs/beacon/tests/unit/test_architecture.py` implementing the architecture scenarios from `specs/layered-architecture/spec.md`
 - [x] 1.3 Verify `pytest` collects and passes the new architecture test against the current (pre-refactor) tree, then mark expected-failure scenarios as `xfail` with a reference to the follow-up PR that will fix them
-- [ ] 1.4 Land PR 0
-  - **Input**: `gh pr create --base main --title "refactor(PR 0): add domain skeleton + architecture test" --body ...`
-  - **Expected Output**: CI green; PR URL returned; `.venv/bin/abc --version` still prints expected version.
+- [x] 1.4 Push skeleton to draft branch
+  - **Input**: `git push origin refactor/introduce-domain-layer`
+  - **Expected Output**: CI green on draft PR; `.venv/bin/abc --version` still prints expected version.
   - **Validation**: Full `pytest libs/beacon/tests/` exits 0; no existing test regressed.
 
-## 2. Move `artifact` domain (PR 1)
+## 2. Move `artifact` domain
 
-**Goal**: Relocate agent, skill, and checksum logic — the lowest-coupling domain — to establish the pattern subsequent PRs will follow.
-**Input**: PR 0 merged on `main`. `agents.py` (470 lines), `skills.py` (489 lines), and `checksums.py` (56 lines) still in their original locations with `_`-prefixed cross-module names.
+**Goal**: Relocate agent, skill, and checksum logic — the lowest-coupling domain — to establish the pattern subsequent phases will follow.
+**Input**: Skeleton committed on draft branch. `agents.py` (470 lines), `skills.py` (489 lines), and `checksums.py` (56 lines) still in their original locations with `_`-prefixed cross-module names.
 **Output**: `beacon/domains/artifact/{agent,skill,checksums}.py` with public (non-underscored) names; no `beacon.utils.agents`/`beacon.utils.skills`/`beacon.checksums` call-sites remain.
 **Validation**: `grep -r "from beacon.utils.agents\|from beacon.utils.skills\|from beacon.checksums" libs/beacon/` returns no hits; `pytest` + `abc sync` smoke are green; architecture-test scenarios TC4, TC5, TC6 flip to passing for the artifact slice.
 
@@ -79,12 +81,12 @@ See `AGENTS.md` → "Unit Testing Workflow" and `knowledge/lessons/complete-test
 - [x] 2.5 Update every `from beacon.utils.agents import …`, `from beacon.utils.skills import …`, `from beacon.checksums import …` call-site (CLI, adopt.py, distributor.py, tests)
 - [x] 2.6 Run regression + smoke tests
 - [x] 2.7 Flip the corresponding `xfail` markers in `test_architecture.py` to regular assertions
-- [ ] 2.8 Land PR 1
+- [x] 2.8 Push artifact domain move to draft branch
 
-## 3. Move `warehouse` domain (PR 2)
+## 3. Move `warehouse` domain
 
 **Goal**: Consolidate warehouse connect/validate/catalog under one domain; delete the orphaned top-level `warehouse/` package.
-**Input**: PR 1 merged. `warehouse/validator.py` and `utils/catalog.py` still in original locations; `beacon/warehouse/` package still exists as a single-file package.
+**Input**: Artifact domain moved on draft branch. `warehouse/validator.py` and `utils/catalog.py` still in original locations; `beacon/warehouse/` package still exists as a single-file package.
 **Output**: `beacon/domains/warehouse/{validator,catalog}.py`; `beacon/warehouse/` deleted.
 **Validation**: `ls libs/beacon/src/beacon/warehouse/` fails (directory removed); `pytest` + `abc warehouse connect` + `abc warehouse validate` smoke all green.
 
@@ -94,12 +96,12 @@ See `AGENTS.md` → "Unit Testing Workflow" and `knowledge/lessons/complete-test
 - [x] 3.4 Rename `_`-prefixed cross-module names
 - [x] 3.5 Update all call-sites (`beacon/core/cli/warehouse.py`, adopt, tests)
 - [x] 3.6 Run regression + smoke
-- [ ] 3.7 Land PR 2
+- [x] 3.7 Push warehouse domain move to draft branch
 
-## 4. Move `distribution` domain (PR 3)
+## 4. Move `distribution` domain
 
-**Goal**: Move the sync engine, delta engine, distributor, upgrader, and sync-state bookkeeping into a single domain. This is the largest single PR; it also vacates `core/sync.py` and `core/delta.py` from `core/`.
-**Input**: PR 2 merged. Sync engine and delta engine still in `core/`; distributor/upgrader still top-level; sync_state still in `utils/`.
+**Goal**: Move the sync engine, delta engine, distributor, upgrader, and sync-state bookkeeping into a single domain. This is the largest phase; it also vacates `core/sync.py` and `core/delta.py` from `core/`.
+**Input**: Warehouse domain moved on draft branch. Sync engine and delta engine still in `core/`; distributor/upgrader still top-level; sync_state still in `utils/`.
 **Output**: `beacon/domains/distribution/{distributor,upgrader,sync_engine,delta,state}.py`; `beacon/core/sync.py` and `beacon/core/delta.py` deleted; `beacon/distributor.py`, `beacon/upgrader.py`, `beacon/utils/sync_state.py` deleted.
 **Validation**: `pytest` + `abc sync` (fresh + incremental) + `abc upgrade` + `abc doctor` all green; sync state file `.sync-state` still written with same format.
 
@@ -114,12 +116,12 @@ See `AGENTS.md` → "Unit Testing Workflow" and `knowledge/lessons/complete-test
   - **Input**: `.venv/bin/pytest libs/beacon/tests/` then, in a scratch project connected to `examples/sample-warehouse/`: `abc sync` (fresh clone), `abc sync` (again, incremental path), `abc upgrade`, `abc doctor`
   - **Expected Output**: Pytest exits 0. Fresh `abc sync` emits "Synced N artifacts"; incremental emits "Already up to date" or a delta summary. `abc upgrade` reports template status. `abc doctor` prints a clean report.
   - **Validation**: All commands exit 0; `.sync-state` file in the scratch project contains a 40-char SHA matching `git -C examples/sample-warehouse rev-parse HEAD`.
-- [ ] 4.9 Land PR 3
+- [ ] 4.9 Push distribution domain move to draft branch
 
-## 5. Move `setup` domain (PR 4)
+## 5. Move `setup` domain
 
 **Goal**: Consolidate `abc init`/`abc setup` flows and CLAUDE.md/opencode wiring under one domain.
-**Input**: PR 3 merged. `initializer.py` and `utils/wiring.py` in their original locations with ~15 `_`-prefixed cross-module names in wiring.py.
+**Input**: Distribution domain moved on draft branch. `initializer.py` and `utils/wiring.py` in their original locations with ~15 `_`-prefixed cross-module names in wiring.py.
 **Output**: `beacon/domains/setup/{initializer,wiring}.py`; all wiring helpers public-named.
 **Validation**: `abc init`, `abc setup --manual`, and `abc setup --agent-assisted` all succeed end-to-end on a scratch project.
 
@@ -131,14 +133,14 @@ See `AGENTS.md` → "Unit Testing Workflow" and `knowledge/lessons/complete-test
   - **Input**: `.venv/bin/pytest libs/beacon/tests/` then, in a scratch project: `abc init`, `abc setup --manual`, remove `beacon.yaml`, `abc setup --agent-assisted`
   - **Expected Output**: Pytest exits 0. `abc init` creates `.agentic-beacon/` with expected files; `abc setup --manual` writes `beacon.yaml` with an empty template; `abc setup --agent-assisted` installs the project-setup skill and prints next-steps guidance.
   - **Validation**: Exit 0 on each; `.agentic-beacon/beacon.yaml` and `.agentic-beacon/config.toml` match baseline; CLAUDE.md/opencode.json wiring identical to pre-PR baseline (diff-check against a pre-PR snapshot).
-- [ ] 5.6 Land PR 4
+- [ ] 5.6 Push setup domain move to draft branch
 
-## 6. Move `adoption` domain (PR 5)
+## 6. Move `adoption` domain
 
-**Goal**: Isolate the largest single file (`adopt.py`, 1175 lines) into its own domain. Considered late because its complexity carries the highest chance of subtle breakage, and the previous PRs teach us the move pattern.
-**Input**: PR 4 merged. `adopt.py` still at top-level.
+**Goal**: Isolate the largest single file (`adopt.py`, 1175 lines) into its own domain. Considered late because its complexity carries the highest chance of subtle breakage, and the previous phases teach us the move pattern.
+**Input**: Setup domain moved on draft branch. `adopt.py` still at top-level.
 **Output**: `beacon/domains/adoption/adopter.py` (or split if natural seams appear during the move).
-**Validation**: `abc adopt` on a sample project reproduces the previous-PR output byte-for-byte on non-interactive paths; interactive paths reviewed by a human.
+**Validation**: `abc adopt` on a sample project reproduces the previous-phase output byte-for-byte on non-interactive paths; interactive paths reviewed by a human.
 
 - [ ] 6.1 Move `beacon/adopt.py` → `beacon/domains/adoption/adopter.py` (consider splitting 1175-line file during move if natural seams exist; otherwise move as-is and file a follow-up)
 - [ ] 6.2 Rename cross-module `_`-prefixed names
@@ -148,14 +150,14 @@ See `AGENTS.md` → "Unit Testing Workflow" and `knowledge/lessons/complete-test
   - **Expected Output**: Pytest exits 0. `abc adopt --dry-run` prints the same proposed changes as a pre-PR snapshot.
   - **Validation**: `diff <(abc adopt --dry-run)` against baseline is empty; any difference investigated before merging.
 - [ ] 6.5 **[MANUAL]** Human acceptance smoke — run `abc adopt` (interactive, no `--dry-run`) on a real sample project; confirm the prompts, preview output, and final `.agentic-beacon/` contents match expectations. Required before merging PR 5 per proposal.md "Manual Intervention Requirements".
-- [ ] 6.6 Land PR 5
+- [ ] 6.6 Push adoption domain move to draft branch
 
-## 7. Move `contribution` domain (PR 6)
+## 7. Move `contribution` domain
 
 **Goal**: Relocate contribute flow and split the 878-line `utils/delta.py` between the distribution engine (any remaining engine glue) and the contribution user-facing views.
-**Input**: PR 5 merged. `contribute.py` (605 lines) and `utils/delta.py` (878 lines) still in `utils/`.
-**Output**: `beacon/domains/contribution/{contributor,delta_view}.py`; any engine leftovers from `utils/delta.py` absorbed into `domains/distribution/delta.py` (consistent with Decision 5 Open Question resolved here).
-**Validation**: `abc contribute --all` and `abc contribute <artifact>` behave identically to pre-PR baseline.
+**Input**: Adoption domain moved on draft branch. `contribute.py` (605 lines) and `utils/delta.py` (878 lines) still in `utils/`.
+**Output**: `beacon/domains/contribution/{contributor,delta_view}.py`; any engine leftovers from `utils/delta.py` absorbed into `domains/distribution/delta.py` (consistent with design.md Open Question resolved here).
+**Validation**: `abc contribute --all` and `abc contribute <artifact>` behave identically to pre-phase baseline.
 
 - [ ] 7.1 Move `beacon/utils/contribute.py` → `beacon/domains/contribution/contributor.py`
 - [ ] 7.2 Analyse `beacon/utils/delta.py` (878 lines) — separate engine callers from user-facing views (per design.md Open Questions)
@@ -166,12 +168,12 @@ See `AGENTS.md` → "Unit Testing Workflow" and `knowledge/lessons/complete-test
   - **Input**: `.venv/bin/pytest libs/beacon/tests/` then, in a scratch project with local changes vs. the warehouse: `abc contribute --all --dry-run` and `abc contribute <specific-artifact> --dry-run`
   - **Expected Output**: Pytest exits 0. Contribute preview output matches pre-PR baseline.
   - **Validation**: Diff of `abc contribute --all --dry-run` output against baseline is empty.
-- [ ] 7.7 Land PR 6
+- [ ] 7.7 Push contribution domain move to draft branch
 
-## 8. Thin the CLI layer (PR 7)
+## 8. Thin the CLI layer
 
 **Goal**: Move CLI to its canonical location (`beacon/cli/`), replace all `utils/` imports with `domains/` imports, and enforce the thin-CLI rule (each handler = parsing + one domain call + formatting).
-**Input**: PR 6 merged. CLI still lives at `beacon/core/cli/`; `main.py` is 1757 lines with dozens of `from beacon.utils.*` imports.
+**Input**: Contribution domain moved on draft branch. CLI still lives at `beacon/core/cli/`; `main.py` is 1757 lines with dozens of `from beacon.utils.*` imports.
 **Output**: `beacon/cli/` package; no `utils.*` imports in CLI; TC8 (`test_cli_handlers_have_no_io`) flips from `xfail` to passing.
 **Validation**: Every `abc` subcommand still works; `main.py` size reduced (target: below 800 lines, split by group if needed).
 
@@ -187,12 +189,12 @@ See `AGENTS.md` → "Unit Testing Workflow" and `knowledge/lessons/complete-test
   - **Expected Output**: Every subcommand exits 0 with the same user-visible output as pre-PR.
   - **Validation**: No regressions; `abc --help` output diff vs. baseline is empty.
 - [ ] 8.6 **[MANUAL]** Human acceptance smoke — required before merging PR 7 per proposal.md "Manual Intervention Requirements". Exercise interactive flows (`abc init`, `abc setup`, `abc adopt`) manually to confirm UX is unchanged.
-- [ ] 8.7 Land PR 7
+- [ ] 8.7 Push CLI thinning to draft branch
 
-## 9. Clean up and documentation (PR 8)
+## 9. Clean up and documentation
 
 **Goal**: Delete empty shells, shrink `utils/` and `core/` to their final intended contents, update AGENTS.md and the knowledge base, archive the OpenSpec change.
-**Input**: PR 7 merged. Possibly some dead exports in `utils/__init__.py`; `AGENTS.md` still has the old "CLI Layer Discipline" rule.
+**Input**: CLI thinning complete on draft branch. Possibly some dead exports in `utils/__init__.py`; `AGENTS.md` still has the old "CLI Layer Discipline" rule.
 **Output**: `utils/` contains only `git.py`, `display.py` (total < 500 lines); `core/` contains only `manifest/`, `settings.py`, `exceptions.py`, `gitignore.py`; `AGENTS.md` references the new spec; OpenSpec change archived.
 **Validation**: `wc -l libs/beacon/src/beacon/utils/*.py | tail -1` under 500; `ls libs/beacon/src/beacon/core/` lists exactly the four allowed entries; `openspec list` no longer shows the change in `changes/`.
 
@@ -207,4 +209,4 @@ See `AGENTS.md` → "Unit Testing Workflow" and `knowledge/lessons/complete-test
   - **Expected Output**: Change moves to `openspec/changes/archive/introduce-domain-layer/`; spec merges into `openspec/specs/layered-architecture/spec.md`.
   - **Validation**: `openspec list --json | jq '.changes[] | select(.name == "introduce-domain-layer")'` returns nothing (change no longer active); `ls openspec/specs/layered-architecture/` shows the merged `spec.md`.
 - [ ] 9.8 File follow-up issue: optional `import-linter` rule (Decision 6 mechanism 3)
-- [ ] 9.9 Land PR 8
+- [ ] 9.9 Mark draft ready-for-merge and merge

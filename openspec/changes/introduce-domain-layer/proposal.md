@@ -30,19 +30,19 @@ The `beacon` package has no clear domain layer. Business logic is scattered acro
 - **Internal API**: All internal imports change. Anyone importing from `beacon.utils.*`, `beacon.adopt`, `beacon.distributor`, `beacon.initializer`, `beacon.upgrader`, or `beacon.core.*` will need to update.
 - **Knowledge base**: The `CLI Layer Discipline` rule in `AGENTS.md` is generalized into the new `layered-architecture` spec. Several `knowledge/decisions/*.md` entries need pointers updated.
 - **Dependencies**: None. No new packages; no packages removed.
-- **Migration**: Single PR per domain slice is feasible (see design.md for sequencing). Each slice is behavior-preserving and ends with a green test suite.
+- **Migration**: Single long-running draft PR accumulates all domain moves incrementally (see design.md for sequencing). Review happens continuously; the branch must stay green. One final squash-merge lands the new architecture atomically.
 
 ## Manual Intervention Requirements
 
-- **[Manual Step] Merge each of the 9 PRs via the GitHub UI**
-  - **Rationale**: Per project policy, merges are performed by a human via GitHub — the agent creates branches, commits, and opens PRs, but does not press the green button. Each PR is sequenced (PR N depends on PR N-1 being merged), so the pace of the refactor is bounded by merge cadence.
-  - **Timing**: After each PR is opened, CI is green, and review is complete. Nine merges total across phases 1 → 9.
+- **[Manual Step] Review and merge the single draft PR via the GitHub UI**
+  - **Rationale**: Per project policy, merges are performed by a human via GitHub — the agent pushes commits to the draft branch and addresses review feedback, but does not press the green button. Review happens continuously as the draft evolves; one merge at the end lands the full refactor.
+  - **Timing**: When all 9 phases are complete, CI is green, and review threads are resolved.
 
-- **[Manual Step] (Optional) Acceptance smoke-test after PR 5 (adopt.py move) and PR 7 (CLI thinning)**
-  - **Rationale**: `adopt.py` is 1175 lines and covers the interactive `abc adopt` flow; PR 7 restructures every CLI handler. Both are high-value points for a human to exercise the CLI on a real project to catch interaction regressions the automated smoke tests in tasks.md may miss.
-  - **Timing**: Before merging PR 5 and PR 7. The agent can also run these smokes, but a human review of the interactive UX is strongly advised.
+- **[Manual Step] (Optional) Acceptance smoke-test before final merge**
+  - **Rationale**: `adopt.py` is 1175 lines and covers the interactive `abc adopt` flow; the CLI thinning phase restructures every handler. These are high-value points for a human to exercise the CLI on a real project to catch interaction regressions the automated smoke tests may miss.
+  - **Timing**: Before marking the draft ready-for-merge. The agent runs automated smokes after each phase, but a human review of the interactive UX is strongly advised.
 
-All other work — branch creation, moves, renames, import rewrites, test runs, non-interactive smoke tests, PR creation — is automated by the agent.
+All other work — moves, renames, import rewrites, test runs, non-interactive smoke tests, draft PR management — is automated by the agent.
 
 ---
 
