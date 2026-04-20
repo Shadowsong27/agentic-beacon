@@ -30,6 +30,11 @@ from beacon.domains.contribution.delta_view import (
     show_detailed_diff,
 )
 from beacon.domains.distribution.delta import DeltaComparator
+from beacon.domains.distribution.reset import (
+    count_synced_files,
+    remove_artifacts_dir,
+    reset_artifacts,
+)
 from beacon.domains.distribution.state import (
     read_sync_sha,
     relink_global_sync_state,
@@ -38,6 +43,7 @@ from beacon.domains.distribution.state import (
 from beacon.domains.distribution.sync_engine import SyncEngine
 from beacon.domains.setup.wiring import (
     confirm_prune,
+    has_synced_contexts,
     init_claude_md,
     init_opencode_json,
     is_interactive,
@@ -163,8 +169,6 @@ def sync(
             sys.exit(0)
 
         artifacts_dir = beacon_dir / "artifacts"
-        artifacts_dir.mkdir(exist_ok=True)
-
         sync_engine = SyncEngine(
             warehouse_path=warehouse_path, artifacts_path=artifacts_dir
         )
@@ -313,8 +317,7 @@ def sync(
                 ]
             )
             if not has_opencode and not has_claude:
-                contexts_dir = artifacts_dir / "contexts"
-                if contexts_dir.exists() and any(contexts_dir.rglob("*.md")):
+                if has_synced_contexts(artifacts_dir):
                     if not dry_run and is_interactive():
                         console.print(
                             "\n[yellow]No agent config detected.[/yellow] "
@@ -467,85 +470,6 @@ def delta(*, file: str | None, no_color: bool) -> None:
         sys.exit(1)
 
 
-def _do_reset(project_root: Path) -> None:
-    """Force-overwrite all synced artifacts from warehouse. Used by both reset and update."""
-    beacon_dir = project_root / ".agentic-beacon"
-
-    if not beacon_dir.exists():
-        console.print(f"[red]Error:[/red] No warehouse connected at {project_root}")
-        console.print("Run 'abc warehouse connect' first.")
-        sys.exit(1)
-
-    if not (beacon_dir / "beacon.yaml").exists():
-        console.print("[red]Error:[/red] No beacon.yaml found.")
-        console.print("Run 'abc setup' to create artifact configuration.")
-        sys.exit(1)
-
-    console.print("[blue]Resetting artifacts from warehouse...[/blue]")
-
-    try:
-        warehouse_settings = WorkspaceConfig()
-        warehouse_path = Path(warehouse_settings.warehouse.local_path)
-        beacon_settings = BeaconManifest.from_yaml(beacon_dir / "beacon.yaml")
-
-        artifacts_dir = beacon_dir / "artifacts"
-        artifacts_dir.mkdir(exist_ok=True)
-
-        sync_engine = SyncEngine(
-            warehouse_path=warehouse_path, artifacts_path=artifacts_dir
-        )
-
-        artifact_paths: list[str] = []
-
-        for context_name in beacon_settings.artifacts.contexts:
-            artifact_paths.append(f"contexts/{context_name}")
-
-        for pattern in beacon_settings.artifacts.knowledge:
-            if "*" in pattern or "?" in pattern or "[" in pattern:
-                artifact_paths.extend(sync_engine.expand_glob(pattern))
-            else:
-                artifact_paths.append(pattern)
-
-        for skill_entry in beacon_settings.artifacts.skills:
-            normalized = normalize_skill_entry(skill_entry)
-            skill_dir = warehouse_path / normalized
-            if skill_dir.exists() and skill_dir.is_dir():
-                artifact_paths.extend(sync_engine.expand_glob(f"{normalized}/**/*"))
-            else:
-                artifact_paths.append(normalized)
-
-        copied_count = 0
-        overwritten_count = 0
-        error_count = 0
-
-        for artifact_path in artifact_paths:
-            dest = artifacts_dir / artifact_path
-            if dest.exists():
-                dest.unlink()
-                overwritten_count += 1
-            result = sync_engine.copy_file(artifact_path)
-            if result.action == "copied":
-                copied_count += 1
-            elif result.action == "error":
-                error_count += 1
-                console.print(f"  [red]✗[/red] {artifact_path}: {result.error_message}")
-
-        console.print("\n[bold green]✓ Reset complete![/bold green]")
-        console.print(f"  [blue]Overwritten:[/blue] {overwritten_count} files")
-        new_count = (
-            copied_count - overwritten_count if copied_count > overwritten_count else 0
-        )
-        if new_count:
-            console.print(f"  [blue]New:[/blue] {new_count} files")
-        if error_count > 0:
-            console.print(f"  [red]Errors:[/red] {error_count} files")
-
-    except Exception as e:
-        console.print(f"[red]Error:[/red] {e}")
-        logger.exception("Reset failed")
-        sys.exit(1)
-
-
 @click.command(name="reset")
 @click.option(
     "--project",
@@ -559,7 +483,22 @@ def reset_cmd(*, project: Path | None) -> None:
     Use this when you want to discard local changes and resync from the warehouse.
     """
     project_root = project or find_project_root()
-    _do_reset(project_root)
+    console.print("[blue]Resetting artifacts from warehouse...[/blue]")
+
+    try:
+        overwritten_count, new_count, error_count = reset_artifacts(project_root)
+
+        console.print("\n[bold green]✓ Reset complete![/bold green]")
+        console.print(f"  [blue]Overwritten:[/blue] {overwritten_count} files")
+        if new_count:
+            console.print(f"  [blue]New:[/blue] {new_count} files")
+        if error_count > 0:
+            console.print(f"  [red]Errors:[/red] {error_count} files")
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        logger.exception("Reset failed")
+        sys.exit(1)
 
 
 @click.command(name="update", hidden=True)
@@ -578,7 +517,22 @@ def update(*, project: Path | None) -> None:
         "Use 'abc reset' instead."
     )
     project_root = project or find_project_root()
-    _do_reset(project_root)
+    console.print("[blue]Resetting artifacts from warehouse...[/blue]")
+
+    try:
+        overwritten_count, new_count, error_count = reset_artifacts(project_root)
+
+        console.print("\n[bold green]✓ Reset complete![/bold green]")
+        console.print(f"  [blue]Overwritten:[/blue] {overwritten_count} files")
+        if new_count:
+            console.print(f"  [blue]New:[/blue] {new_count} files")
+        if error_count > 0:
+            console.print(f"  [red]Errors:[/red] {error_count} files")
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        logger.exception("Reset failed")
+        sys.exit(1)
 
 
 @click.command()
@@ -590,13 +544,10 @@ def update(*, project: Path | None) -> None:
 @click.confirmation_option(prompt="Are you sure you want to remove synced artifacts?")
 def clean(*, project: Path | None) -> None:
     """Remove synced artifacts from project (.agentic-beacon/artifacts/)."""
-    import shutil
-
     project_root = project or find_project_root()
     artifacts_dir = project_root / ".agentic-beacon" / "artifacts"
 
-    if artifacts_dir.exists():
-        shutil.rmtree(artifacts_dir)
+    if remove_artifacts_dir(project_root):
         console.print(f"[green]✓ Removed:[/green] {artifacts_dir}")
     else:
         console.print(f"[yellow]No artifacts found at {artifacts_dir}[/yellow]")
@@ -669,8 +620,6 @@ def status(*, project: Path | None) -> None:
 
     show_bundled_skills_status()
 
-    import os as _os
-
-    file_count = sum(len(files) for _, _, files in _os.walk(str(artifacts_dir)))
+    file_count = count_synced_files(project_root)
     console.print(f"[blue]Artifacts location:[/blue] {artifacts_dir}")
     console.print(f"[blue]Total synced files:[/blue] {file_count}")

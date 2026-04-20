@@ -349,6 +349,14 @@ def unwire_skill(project_root: Path, skill_name: str) -> None:
         logger.debug("Removed Claude skill dir: {}", claude_skill)
 
 
+def has_synced_contexts(artifacts_dir: Path) -> bool:
+    """Check if any context files exist in the artifacts directory."""
+    contexts_dir = artifacts_dir / "contexts"
+    if not contexts_dir.exists():
+        return False
+    return any(contexts_dir.rglob("*.md"))
+
+
 def is_interactive() -> bool:
     """Return True if running in an interactive terminal."""
     return sys.stdin.isatty()

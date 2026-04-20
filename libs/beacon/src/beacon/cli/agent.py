@@ -276,39 +276,25 @@ def list_cmd(*, artifact_type: str | None) -> None:
         console.print("Run 'abc sync' to download artifacts from the warehouse.")
         sys.exit(1)
 
-    types_to_show = (
-        [artifact_type] if artifact_type else ["contexts", "knowledge", "skills"]
-    )
-
     section_config = {
         "contexts": ("Synced Contexts", "cyan", "Context"),
         "knowledge": ("Synced Knowledge", "green", "File"),
         "skills": ("Synced Skills", "yellow", "Skill"),
     }
 
-    any_shown = False
-    for section in types_to_show:
-        section_dir = artifacts_dir / section
-        if not section_dir.exists():
-            continue
+    engine = SyncEngine(warehouse_path=Path.cwd(), artifacts_path=artifacts_dir)
+    artifacts = engine.list_artifacts(artifact_type)
 
-        files = sorted(
-            str(f.relative_to(artifacts_dir))
-            for f in section_dir.rglob("*")
-            if f.is_file() and not f.name.startswith(".")
-        )
+    for section, files in artifacts.items():
+        title, color, col_name = section_config[section]
+        table = Table(title=title)
+        table.add_column(col_name, style=color)
+        for item in files:
+            table.add_row(item)
+        console.print(table)
+        console.print()
 
-        if files:
-            title, color, col_name = section_config[section]
-            table = Table(title=title)
-            table.add_column(col_name, style=color)
-            for item in files:
-                table.add_row(item)
-            console.print(table)
-            console.print()
-            any_shown = True
-
-    if not any_shown:
+    if not artifacts:
         label = artifact_type or "artifacts"
         console.print(
             f"[yellow]No {label} found in .agentic-beacon/artifacts/.[/yellow]"

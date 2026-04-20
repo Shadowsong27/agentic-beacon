@@ -18,8 +18,9 @@ from beacon.domains.adoption.adopter import (
 )
 from beacon.domains.artifact.agent import (
     detect_agents_global,
-    global_agent_dirs,
     install_agent_global,
+    read_agent_definition,
+    uninstall_agent_global,
 )
 from beacon.domains.artifact.skill import wire_skills_post_sync
 from beacon.domains.distribution.sync_engine import SyncEngine
@@ -171,9 +172,9 @@ def adopt(*, dry_run: bool) -> None:
         installed_count = 0
         for agent_path in agent_adoptions:
             agent_file = warehouse_path / agent_path
-            if not agent_file.exists():
+            content = read_agent_definition(agent_file)
+            if content is None:
                 continue
-            content = agent_file.read_text(encoding="utf-8")
             agent_name = agent_file.name
             for tool in tools:
                 install_agent_global(tool, agent_name, content)
@@ -188,11 +189,7 @@ def adopt(*, dry_run: bool) -> None:
         removed_count = 0
         for agent_path in agent_unadoptions:
             agent_name = Path(agent_path).name
-            for agent_dir in global_agent_dirs().values():
-                target = agent_dir / agent_name
-                if target.exists():
-                    target.unlink()
-                    removed_count += 1
+            removed_count += uninstall_agent_global(agent_name)
         if removed_count:
             console.print(
                 f"[yellow]−[/yellow] Uninstalled {removed_count} agent(s) from global directories"
@@ -212,31 +209,7 @@ def adopt(*, dry_run: bool) -> None:
                 else:
                     new_artifact_paths.append(c.path)
 
-            expanded: list[str] = []
-            for pattern in new_artifact_paths:
-                if "*" in pattern or "?" in pattern:
-                    import glob as glob_mod
-
-                    matches = [
-                        str(Path(p).relative_to(warehouse_path))
-                        for p in glob_mod.glob(
-                            str(warehouse_path / pattern), recursive=True
-                        )
-                        if Path(p).is_file()
-                    ]
-                    expanded.extend(matches)
-                elif pattern.endswith("/"):
-                    skill_dir = warehouse_path / pattern.rstrip("/")
-                    if skill_dir.is_dir():
-                        for f in skill_dir.rglob("*"):
-                            if f.is_file():
-                                expanded.append(str(f.relative_to(warehouse_path)))
-                elif (warehouse_path / pattern).is_dir():
-                    for f in (warehouse_path / pattern).rglob("*.md"):
-                        if f.is_file():
-                            expanded.append(str(f.relative_to(warehouse_path)))
-                else:
-                    expanded.append(pattern)
+            expanded = sync_engine.expand_artifact_paths(new_artifact_paths)
 
             if expanded:
                 sync_engine.sync_all(

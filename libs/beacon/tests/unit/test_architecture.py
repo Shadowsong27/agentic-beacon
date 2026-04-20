@@ -1,7 +1,6 @@
-"""Architecture tests enforcing the layered-architecture spec.
+"""Architecture tests for beacon package layering.
 
-These tests validate the four-layer package structure, dependency direction,
-bounded contexts, CLI thinness, utility eligibility, and naming conventions.
+These tests enforce the domain-layer design from specs/layered-architecture/spec.md.
 """
 
 import ast
@@ -11,63 +10,57 @@ import pytest
 
 BEACON_SRC = Path(__file__).parents[2] / "src" / "beacon"
 
-# Expected six bounded-context domains
-EXPECTED_DOMAINS = {
-    "warehouse",
-    "setup",
-    "adoption",
-    "distribution",
-    "contribution",
-    "artifact",
-}
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 
-def _all_py_files_under(*paths: Path) -> list[Path]:
-    files = []
-    for path in paths:
-        if path.exists():
-            files.extend(sorted(path.rglob("*.py")))
-    return files
+def _all_py_files_under(directory: Path) -> list[Path]:
+    return sorted(directory.rglob("*.py"))
 
 
 def _parse_file(path: Path) -> ast.AST | None:
     try:
-        return ast.parse(path.read_text(encoding="utf-8"))
+        return ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     except SyntaxError:
         return None
 
 
 def _is_docstring_node(node: ast.AST) -> bool:
-    """Return True if node is a module-level docstring expression."""
+    """Return True if node is a module-level docstring Expr."""
     return isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant)
 
 
-def _get_imported_names(node: ast.ImportFrom) -> list[str]:
-    """Return the actual names imported (handling aliases)."""
-    return [alias.name for alias in node.names]
-
-
-# ─── TC1: Six domains exist ────────────────────────────────────────────
+# ---------------------------------------------------------------------------
+# TC1: Six domain packages exist
+# ---------------------------------------------------------------------------
 
 
 def test_six_domains_exist():
-    """Assert beacon/domains/ contains exactly six subpackages matching the spec."""
+    """Exactly six domain directories shall exist."""
     domains_dir = BEACON_SRC / "domains"
-    assert domains_dir.exists(), "domains/ directory must exist"
-
-    actual = {
-        p.name
-        for p in domains_dir.iterdir()
-        if p.is_dir() and not p.name.startswith("_")
+    expected = {
+        "warehouse",
+        "setup",
+        "adoption",
+        "distribution",
+        "contribution",
+        "artifact",
     }
-    assert actual == EXPECTED_DOMAINS, f"Expected {EXPECTED_DOMAINS}, got {actual}"
+    actual = {
+        d.name
+        for d in domains_dir.iterdir()
+        if d.is_dir() and not d.name.startswith("_")
+    }
+    assert actual == expected, (
+        f"Missing or extra domain dirs: {expected.symmetric_difference(actual)}"
+    )
 
-    for name in EXPECTED_DOMAINS:
-        init = domains_dir / name / "__init__.py"
-        assert init.exists(), f"domains/{name}/__init__.py must exist"
 
-
-# ─── TC2: No stray top-level modules ───────────────────────────────────
+# ---------------------------------------------------------------------------
+# TC2: No stray top-level modules
+# ---------------------------------------------------------------------------
 
 
 def test_no_stray_top_level_modules():
@@ -78,145 +71,97 @@ def test_no_stray_top_level_modules():
             assert path.name in allowed, f"Disallowed top-level file: {path.name}"
 
 
-# ─── TC3: core/ has no domain/cli imports ──────────────────────────────
+# ---------------------------------------------------------------------------
+# TC3: core/ has no domain/cli imports
+# ---------------------------------------------------------------------------
 
 
 def test_core_has_no_domain_imports():
-    """Parse every beacon/core/**/*.py and assert no imports from domains or cli.
-
-    Note: core/cli/ is excluded because it contains CLI handlers that will move
-    to beacon/cli/ in PR 7; CLI handlers are allowed to import from domains.
-    Tripwire: once beacon/cli/ exists, core/cli/ must no longer exist.
-    """
-    cli_dir = BEACON_SRC / "cli"
-    core_cli_dir = BEACON_SRC / "core" / "cli"
-    # Tripwire: when beacon/cli/ is created, core/cli/ should be gone
-    if cli_dir.exists() and core_cli_dir.exists():
-        pytest.fail(
-            "Both beacon/cli/ and beacon/core/cli/ exist. "
-            "PR 7 should have removed core/cli/."
-        )
-
+    """Files under core/ shall not import from domains or cli."""
     core_dir = BEACON_SRC / "core"
+    bad_prefixes = ("beacon.domains.", "beacon.cli")
     for path in _all_py_files_under(core_dir):
-        # Skip CLI handlers — they live under core/cli/ temporarily (PR 7 moves them)
-        if "core/cli/" in str(path):
-            continue
         tree = _parse_file(path)
         if tree is None:
             continue
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom):
-                module = node.module or ""
-                if module.startswith("beacon.domains") or module.startswith(
-                    "beacon.cli"
-                ):
-                    pytest.fail(f"{path}: forbidden import from {module}")
-            elif isinstance(node, ast.Import):
-                for alias in node.names:
-                    if alias.name.startswith("beacon.domains") or alias.name.startswith(
-                        "beacon.cli"
-                    ):
-                        pytest.fail(f"{path}: forbidden import {alias.name}")
+                mod = node.module or ""
+                assert not mod.startswith(bad_prefixes), (
+                    f"{path}: core/ must not import from {mod}"
+                )
 
 
-# ─── TC4: utils/ has no higher-layer imports ───────────────────────────
+# ---------------------------------------------------------------------------
+# TC4: utils/ has no higher-layer imports
+# ---------------------------------------------------------------------------
 
 
 def test_utils_has_no_higher_layer_imports():
-    """Parse every beacon/utils/**/*.py and assert no imports from cli, domains, or core."""
+    """Files under utils/ shall not import from domains, cli, or core."""
     utils_dir = BEACON_SRC / "utils"
+    bad_prefixes = ("beacon.domains.", "beacon.cli", "beacon.core.")
     for path in _all_py_files_under(utils_dir):
         tree = _parse_file(path)
         if tree is None:
             continue
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom):
-                module = node.module or ""
-                if (
-                    module.startswith("beacon.cli")
-                    or module.startswith("beacon.domains")
-                    or module.startswith("beacon.core")
-                ):
-                    pytest.fail(f"{path}: forbidden import from {module}")
-            elif isinstance(node, ast.Import):
-                for alias in node.names:
-                    if (
-                        alias.name.startswith("beacon.cli")
-                        or alias.name.startswith("beacon.domains")
-                        or alias.name.startswith("beacon.core")
-                    ):
-                        pytest.fail(f"{path}: forbidden import {alias.name}")
+                mod = node.module or ""
+                assert not mod.startswith(bad_prefixes), (
+                    f"{path}: utils/ must not import from {mod}"
+                )
 
 
-# ─── TC5: Cross-domain imports use top-level modules ───────────────────
+# ---------------------------------------------------------------------------
+# TC5: Cross-domain imports use top-level
+# ---------------------------------------------------------------------------
 
 
 def test_cross_domain_imports_use_top_level():
-    """
-    For each `from beacon.domains.<A>.<...>` import in beacon/domains/<B>/**,
-    assert <...> has depth exactly 1 (a module directly under domains/<A>/).
-    Only enforced for cross-domain imports (<A> != <B>); same-domain deep
-    imports are allowed.
-    """
+    """Domains shall import from each other's top-level packages, not deep paths."""
     domains_dir = BEACON_SRC / "domains"
     for path in _all_py_files_under(domains_dir):
         tree = _parse_file(path)
         if tree is None:
             continue
-        # Determine which domain this file belongs to
-        path_parts = path.relative_to(domains_dir).parts
-        owning_domain = path_parts[0] if path_parts else ""
-
         for node in ast.walk(tree):
-            if not isinstance(node, ast.ImportFrom):
-                continue
-            module = node.module or ""
-            if not module.startswith("beacon.domains."):
-                continue
-            # module is like "beacon.domains.artifact.agent" or "beacon.domains.artifact.sub.foo"
-            parts = module.split(".")
-            imported_domain = parts[2] if len(parts) >= 3 else ""
-            # Skip same-domain imports — deep imports within a domain are allowed
-            if imported_domain == owning_domain:
-                continue
-            # Cross-domain imports must reference a top-level module (depth == 1)
-            if len(parts) != 4:
-                pytest.fail(
-                    f"{path}: cross-domain import '{module}' must reference a top-level module "
-                    f"directly under domains/{imported_domain}/, not a deeper internal"
-                )
+            if isinstance(node, ast.ImportFrom):
+                mod = node.module or ""
+                if not mod.startswith("beacon.domains."):
+                    continue
+                # e.g. beacon.domains.artifact.skill -> depth 4
+                parts = mod.split(".")
+                if len(parts) > 4:
+                    pytest.fail(
+                        f"{path}: cross-domain import must use top-level, not {mod}"
+                    )
 
 
-# ─── TC6: No underscore-prefixed cross-module imports ──────────────────
+# ---------------------------------------------------------------------------
+# TC6: No underscore cross-module imports
+# ---------------------------------------------------------------------------
 
 
 def test_no_underscore_cross_module_imports():
-    """
-    For every `from beacon.*` import across the package, assert the imported
-    name does not begin with '_'.
-    """
+    """No function, class, or constant imported cross-module starts with underscore."""
     for path in _all_py_files_under(BEACON_SRC):
-        # Skip __init__.py files (they're checked separately)
-        if path.name == "__init__.py":
-            continue
         tree = _parse_file(path)
         if tree is None:
             continue
         for node in ast.walk(tree):
-            if not isinstance(node, ast.ImportFrom):
-                continue
-            module = node.module or ""
-            if not module.startswith("beacon."):
-                continue
-            for name in _get_imported_names(node):
-                if name.startswith("_"):
-                    pytest.fail(
-                        f"{path}: imports underscore-prefixed name '{name}' from {module}"
-                    )
+            if isinstance(node, ast.ImportFrom):
+                for alias in node.names:
+                    if alias.name.startswith("_"):
+                        pytest.fail(
+                            f"{path}: importing underscore-prefixed name "
+                            f"'{alias.name}' from {node.module}"
+                        )
 
 
-# ─── TC7: Empty __init__.py files ──────────────────────────────────────
+# ---------------------------------------------------------------------------
+# TC7: Empty __init__.py files
+# ---------------------------------------------------------------------------
 
 
 def test_init_files_are_empty():
@@ -238,32 +183,66 @@ def test_init_files_are_empty():
             )
 
 
-# ─── TC8: CLI handlers have no I/O ─────────────────────────────────────
+# ---------------------------------------------------------------------------
+# TC8: CLI handlers have no I/O
+# ---------------------------------------------------------------------------
 
 
 def test_cli_handlers_have_no_io():
     """
     Parse every function in beacon/cli/**/*.py decorated with @click.command()
-    or @<group>.command(); assert the body contains no calls to open(),
-    Path.write_text, Path.read_text, yaml.load, tomllib.load, subprocess.run.
+    or @<group>.command(); assert the body contains no forbidden I/O calls.
     """
     cli_dir = BEACON_SRC / "cli"
     if not cli_dir.exists():
         pytest.skip("cli/ directory does not exist yet")
 
+    # Forbidden bare names (e.g. open(), run())
     forbidden_names = {
         "open",
-        "write_text",
-        "read_text",
-        "load",  # yaml.load, tomllib.load
         "run",  # subprocess.run
+        "walk",  # os.walk
+        "glob",  # glob.glob
+        "rmtree",  # shutil.rmtree
+        "copy",  # shutil.copy
+        "copy2",  # shutil.copy2
+        "copytree",  # shutil.copytree
+        "copyfile",  # shutil.copyfile
     }
+
+    # Forbidden attribute chains regardless of receiver name
+    # e.g. any_path.read_text(), shutil.rmtree(...)
     forbidden_attrs = {
-        ("Path", "write_text"),
-        ("Path", "read_text"),
+        # pathlib / os methods
+        "read_text",
+        "write_text",
+        "unlink",
+        "mkdir",
+        "rmdir",
+        "rglob",
+        "glob",
+        # yaml / tomllib
+        "load",
+        # shutil
+        "rmtree",
+        "copy",
+        "copy2",
+        "copytree",
+        "copyfile",
+    }
+
+    # Forbidden two-element chains (module.function)
+    forbidden_module_attrs = {
+        ("subprocess", "run"),
         ("yaml", "load"),
         ("tomllib", "load"),
-        ("subprocess", "run"),
+        ("shutil", "rmtree"),
+        ("shutil", "copy"),
+        ("shutil", "copy2"),
+        ("shutil", "copytree"),
+        ("shutil", "copyfile"),
+        ("glob", "glob"),
+        ("os", "walk"),
     }
 
     def _is_click_command_decorator(node: ast.expr) -> bool:
@@ -280,7 +259,7 @@ def test_cli_handlers_have_no_io():
         """Walk a function body looking for forbidden I/O calls."""
         for child in ast.walk(node):
             if isinstance(child, ast.Call):
-                # Check for open(), Path.write_text(), etc.
+                # Check for bare names: open(), run(), walk(), etc.
                 if (
                     isinstance(child.func, ast.Name)
                     and child.func.id in forbidden_names
@@ -289,6 +268,7 @@ def test_cli_handlers_have_no_io():
                         f"{path}::{func_name}: forbidden call to {child.func.id}()"
                     )
                 elif isinstance(child.func, ast.Attribute):
+                    # Build attribute chain: e.g. ["Path", "write_text"] or ["shutil", "rmtree"]
                     attr_chain = []
                     obj = child.func
                     while isinstance(obj, ast.Attribute):
@@ -297,9 +277,18 @@ def test_cli_handlers_have_no_io():
                     if isinstance(obj, ast.Name):
                         attr_chain.append(obj.id)
                     attr_chain.reverse()
+
+                    # Check tail attribute regardless of receiver (e.g. any_path.read_text())
+                    if attr_chain[-1] in forbidden_attrs:
+                        pytest.fail(
+                            f"{path}::{func_name}: forbidden call to "
+                            f"{'.'.join(attr_chain)}()"
+                        )
+
+                    # Check module.function pairs
                     if len(attr_chain) == 2:
                         pair = (attr_chain[0], attr_chain[1])
-                        if pair in forbidden_attrs:
+                        if pair in forbidden_module_attrs:
                             pytest.fail(
                                 f"{path}::{func_name}: forbidden call to "
                                 f"{'.'.join(attr_chain)}()"
@@ -316,3 +305,43 @@ def test_cli_handlers_have_no_io():
                 )
                 if is_handler:
                     _check_node_for_io(node, path, node.name)
+
+
+# ---------------------------------------------------------------------------
+# TC9: No free functions in cli/
+# ---------------------------------------------------------------------------
+
+
+def test_cli_has_no_free_functions():
+    """
+    beacon/cli/**/*.py shall contain only Click command/group handlers and
+    module-level imports. No free helper functions.
+    """
+    cli_dir = BEACON_SRC / "cli"
+    if not cli_dir.exists():
+        pytest.skip("cli/ directory does not exist yet")
+
+    def _is_click_decorated(node: ast.FunctionDef) -> bool:
+        """Check if function has a click.command or click.group decorator."""
+        for d in node.decorator_list:
+            if isinstance(d, ast.Call):
+                func = d.func
+                if isinstance(func, ast.Attribute) and func.attr in (
+                    "command",
+                    "group",
+                ):
+                    return True
+                if isinstance(func, ast.Name) and func.id in ("command", "group"):
+                    return True
+        return False
+
+    for path in _all_py_files_under(cli_dir):
+        tree = _parse_file(path)
+        if tree is None:
+            continue
+        for node in tree.body:
+            if isinstance(node, ast.FunctionDef) and not _is_click_decorated(node):
+                pytest.fail(
+                    f"{path}: free function '{node.name}' is not allowed in cli/. "
+                    f"Move helpers to the domain layer."
+                )

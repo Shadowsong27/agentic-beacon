@@ -57,7 +57,7 @@ def resolve_skill_contribute_source(
     # Build the candidate paths for modified agents
     candidates: dict[str, Path] = {}
     for agent in modified_agents:
-        live_path = comparator._skill_live_path(agent, relative_path)
+        live_path = comparator.skill_live_path(agent, relative_path)
         if live_path.exists():
             candidates[agent] = live_path
 
@@ -175,7 +175,7 @@ def resolve_agent_contribute_source(
     if not comparator.agents_paths:
         return None
 
-    result = comparator._compare_agent_file(relative_path)
+    result = comparator.compare_agent_file(relative_path)
 
     contributable_tools = [
         tool
@@ -188,7 +188,7 @@ def resolve_agent_contribute_source(
 
     candidates: dict[str, Path] = {}
     for tool in contributable_tools:
-        live_path = comparator._agent_live_path(tool, relative_path)
+        live_path = comparator.agent_live_path(tool, relative_path)
         if live_path.exists():
             candidates[tool] = live_path
 
@@ -364,7 +364,7 @@ def contribute_all(
                 if agent_file.is_file() and agent_file.name != "README.md":
                     seen_rel_paths.add(str(agent_file.relative_to(warehouse_path)))
         for rel_path in sorted(seen_rel_paths):
-            result = comparator._compare_agent_file(rel_path)
+            result = comparator.compare_agent_file(rel_path)
             if result.status in (DeltaStatus.MODIFIED, DeltaStatus.ADDED):
                 agent_paths.append(rel_path)
 

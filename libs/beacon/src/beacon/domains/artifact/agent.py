@@ -43,6 +43,16 @@ def detect_agents_global() -> list[str]:
     return tools
 
 
+def read_agent_definition(agent_file: Path) -> str | None:
+    """Read an agent definition file from the warehouse.
+
+    Returns None if the file does not exist or cannot be read.
+    """
+    if not agent_file.exists():
+        return None
+    return agent_file.read_text(encoding="utf-8")
+
+
 def detect_agents(project_root: Path, *, fallback_to_all: bool = False) -> list[str]:
     """Detect which agent tools are configured in the project.
 
@@ -94,6 +104,20 @@ def install_agent_global(agent: str, agent_name: str, content: str) -> bool:
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(content, encoding="utf-8")
     return True
+
+
+def uninstall_agent_global(agent_name: str) -> int:
+    """Remove an agent definition file from all global agent directories.
+
+    Returns the number of directories from which the agent was removed.
+    """
+    removed_count = 0
+    for agent_dir in global_agent_dirs().values():
+        target = agent_dir / agent_name
+        if target.exists():
+            target.unlink()
+            removed_count += 1
+    return removed_count
 
 
 def list_global_agents() -> None:
@@ -439,7 +463,7 @@ def enrich_agent_stale(
     for agent, status in result.agent_statuses.items():
         if status != DeltaStatus.MODIFIED:
             continue
-        live_file = comparator._agent_live_path(agent, result.path)
+        live_file = comparator.agent_live_path(agent, result.path)
         if not live_file.exists():
             continue
         live_hash = comparator.compute_hash(live_file)

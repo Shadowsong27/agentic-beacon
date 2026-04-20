@@ -15,7 +15,7 @@ from beacon.domains.artifact.agent import update_agent_gitignores
 from beacon.domains.distribution.distributor import WarehouseDistributor
 from beacon.domains.distribution.state import relink_global_sync_state
 from beacon.domains.distribution.upgrader import WarehouseUpgrader
-from beacon.domains.setup.initializer import WarehouseInitializer
+from beacon.domains.setup.initializer import WarehouseInitializer, ensure_beacon_dir
 from beacon.domains.warehouse.validator import WarehouseValidator
 
 console = Console()
@@ -239,8 +239,7 @@ def connect(*, path: Path | None) -> None:
 
     console.print("[green]✓[/green] Warehouse structure validated")
 
-    beacon_dir = Path.cwd() / ".agentic-beacon"
-    beacon_dir.mkdir(exist_ok=True)
+    ensure_beacon_dir(Path.cwd())
 
     try:
         WorkspaceConfig.from_path(warehouse_path)

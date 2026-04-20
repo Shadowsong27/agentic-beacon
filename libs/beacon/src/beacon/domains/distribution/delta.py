@@ -159,7 +159,7 @@ class DeltaComparator:
                 sha256.update(chunk)
         return sha256.hexdigest()
 
-    def _skill_live_path(self, agent: str, relative_path: str) -> Path:
+    def skill_live_path(self, agent: str, relative_path: str) -> Path:
         """Resolve the live installed path for a skill on a given agent.
 
         Skills are stored in the warehouse as skills/<name>/SKILL.md but are
@@ -181,7 +181,7 @@ class DeltaComparator:
             skill_relative = Path(relative_path)
         return agent_root / skill_relative
 
-    def _agent_live_path(self, agent: str, relative_path: str) -> Path:
+    def agent_live_path(self, agent: str, relative_path: str) -> Path:
         """Resolve the global installed path for an agent definition file.
 
         Agent files are stored in the warehouse as agents/<name>.md and are
@@ -205,7 +205,7 @@ class DeltaComparator:
             / agent_relative
         )
 
-    def _compare_agent_file(self, relative_path: str) -> ComparisonResult:
+    def compare_agent_file(self, relative_path: str) -> ComparisonResult:
         """Compare an agent definition file against all global agent directories.
 
         Returns ComparisonResult with per-agent statuses:
@@ -226,7 +226,7 @@ class DeltaComparator:
         agent_statuses: dict[str, DeltaStatus] = {}
 
         for agent in self.agents_paths:
-            live_file = self._agent_live_path(agent, relative_path)
+            live_file = self.agent_live_path(agent, relative_path)
             live_exists = live_file.is_file()
 
             if not live_exists:
@@ -280,7 +280,7 @@ class DeltaComparator:
             return self._compare_skill_file(relative_path)
 
         if is_agent:
-            return self._compare_agent_file(relative_path)
+            return self.compare_agent_file(relative_path)
 
         local_file = self.artifacts_path / relative_path
         warehouse_file = self.warehouse_path / relative_path
@@ -354,7 +354,7 @@ class DeltaComparator:
         agent_statuses: dict[str, DeltaStatus] = {}
 
         for agent, _agent_root in self.skills_paths.items():
-            live_file = self._skill_live_path(agent, relative_path)
+            live_file = self.skill_live_path(agent, relative_path)
             live_exists = live_file.is_file()
 
             if not live_exists and not warehouse_exists:
@@ -600,7 +600,7 @@ class DeltaComparator:
             # Produce a diff section for every agent that has the skill installed
             sections = []
             for agent in self.skills_paths:
-                candidate = self._skill_live_path(agent, relative_path)
+                candidate = self.skill_live_path(agent, relative_path)
                 if candidate.exists():
                     if not warehouse_file.exists():
                         sections.append(
@@ -749,7 +749,7 @@ def enrich_tracked_stale(
             for agent, status in result.agent_statuses.items():
                 if status != DeltaStatus.MODIFIED:
                     continue
-                live_file = comparator._skill_live_path(agent, result.path)
+                live_file = comparator.skill_live_path(agent, result.path)
                 if not live_file.exists():
                     continue
                 live_hash = comparator.compute_hash(live_file)

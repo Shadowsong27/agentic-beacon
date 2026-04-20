@@ -582,7 +582,7 @@ def test_resolve_prompts_when_multi_agent_different_modifications(
         # Hashes must differ to confirm conflict
         hashes = {
             agent: comparator.compute_hash(
-                comparator._skill_live_path(agent, "skills/my-skill/SKILL.md")
+                comparator.skill_live_path(agent, "skills/my-skill/SKILL.md")
             )
             for agent in modified_agents
         }

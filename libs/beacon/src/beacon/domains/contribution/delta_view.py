@@ -83,7 +83,7 @@ def show_delta_summary(
                     seen_rel_paths.add(rel_path)
 
         for rel_path in sorted(seen_rel_paths):
-            result = comparator._compare_agent_file(rel_path)
+            result = comparator.compare_agent_file(rel_path)
             result = enrich_agent_stale(
                 result,
                 warehouse_path=warehouse_path,

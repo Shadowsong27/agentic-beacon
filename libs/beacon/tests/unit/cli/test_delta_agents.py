@@ -328,7 +328,7 @@ def test_tc9_mixed_per_agent_opencode_identical_claudecode_stale(tmp_path, fake_
         },
     )
 
-    # _compare_agent_file would produce: opencode=IDENTICAL (matches warehouse),
+    # compare_agent_file would produce: opencode=IDENTICAL (matches warehouse),
     # claudecode=MODIFIED (old installed != new warehouse). Aggregate = MODIFIED.
     result = ComparisonResult(
         path="agents/pr-reviewer.md",
