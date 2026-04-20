@@ -68,16 +68,23 @@ abc init test-warehouse
 
 **Read:** [CLI Development Workflow](knowledge/facts/cli-development-workflow.md)
 
-### CLI Layer Discipline
+### Domain Layer
 
-**Rule:** `cli.py` must only contain Click command handlers and their immediate argument parsing. All business logic, file operations, and interactive prompts belong in the service/utility layer (`adopt.py`, `utils/*.py`, etc.).
+The `beacon` package uses a four-layer architecture: `cli/` → `domains/` → `core/`, `utils/`.
 
-**Never create helper functions directly in `cli.py`.** If a function is needed by a command, implement it in the appropriate module and import it.
+**Six domains** (each in `libs/beacon/src/beacon/domains/<name>/`):
+- `warehouse` — warehouse connect / validate / catalog; git health checks
+- `setup` — `abc init` / `abc setup` flows; CLAUDE.md / opencode wiring
+- `adoption` — `abc adopt` flow
+- `distribution` — warehouse→project sync, upgrades, sync-state bookkeeping
+- `contribution` — project→warehouse contribute flow
+- `artifact` — agent / skill / rule artifact operations
 
-- Logic that operates on files → `utils/` or the relevant service module
-- Adoption-related logic → `adopt.py`
-- Wiring/agent config logic → `utils/wiring.py`
-- Skill management logic → `utils/skills.py`
+**Dependency rule:** `cli → domains → core, utils`. Cross-domain imports are allowed; `core/` and `utils/` must never import from `domains/` or `cli/`.
+
+**CLI layer rule:** Each handler in `beacon/cli/` must contain only: argument parsing + one domain call + output formatting. No free helper functions; no I/O calls directly in handlers. Enforced by `libs/beacon/tests/unit/test_architecture.py`.
+
+**Read:** [Layered Architecture Spec](openspec/specs/layered-architecture/spec.md)
 
 ### Unit Testing Workflow
 
@@ -134,13 +141,13 @@ Follow the global Python standards from the user's AGENTS.md context:
 
 ### Adding a New CLI Command
 
-**Brief:** Add handler in cli.py → Implement logic → Add tests → Update docs → Test thoroughly
+**Brief:** Add handler in `cli/<group>.py` → Implement domain logic in `domains/<name>/` → Add tests → Update docs → Test thoroughly
 
 **Read:** [Lesson: Adding CLI Command](knowledge/lessons/adding-cli-command.md)
 
 ### Updating Warehouse Structure
 
-**Brief:** Update initializer.py → Regenerate examples/sample-warehouse/ → Update docs → Test abc init and setup
+**Brief:** Update `domains/setup/initializer.py` → Regenerate `examples/sample-warehouse/` → Update docs → Test `abc init` and `abc setup`
 
 **Read:** [Lesson: Updating Warehouse Structure](knowledge/lessons/updating-warehouse-structure.md)
 
@@ -175,4 +182,4 @@ Follow the global Python standards from the user's AGENTS.md context:
 
 ---
 
-**Last Updated:** 2026-03-10
+**Last Updated:** 2026-04-20

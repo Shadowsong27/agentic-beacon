@@ -8,7 +8,6 @@ from loguru import logger
 from rich.console import Console
 
 from beacon.core.exceptions import ContributeError
-from beacon.core.git_health import check_warehouse_git_clean
 from beacon.core.manifest.beacon import BeaconManifest
 from beacon.core.manifest.workspace import WorkspaceConfig
 from beacon.domains.artifact.agent import build_agents_paths
@@ -21,6 +20,7 @@ from beacon.domains.contribution.contributor import (
 )
 from beacon.domains.distribution.delta import DeltaComparator
 from beacon.domains.distribution.state import check_sync_state
+from beacon.domains.warehouse.git_health import check_warehouse_git_clean
 
 console = Console()
 

@@ -7,10 +7,6 @@ import click
 from rich.console import Console
 from rich.table import Table
 
-from beacon.core.git_health import (
-    check_warehouse_git_clean,
-    check_warehouse_on_main_branch,
-)
 from beacon.core.manifest.workspace import WorkspaceConfig
 from beacon.domains.artifact.agent import (
     detect_agents,
@@ -29,6 +25,10 @@ from beacon.domains.distribution.sync_engine import SyncEngine
 from beacon.domains.setup.wiring import (
     wire_contexts_claudecode,
     wire_contexts_opencode,
+)
+from beacon.domains.warehouse.git_health import (
+    check_warehouse_git_clean,
+    check_warehouse_on_main_branch,
 )
 from beacon.utils.display import is_interactive
 from beacon.utils.interaction import ConflictResolution, resolve_conflict

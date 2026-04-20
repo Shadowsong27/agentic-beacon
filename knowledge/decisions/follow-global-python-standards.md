@@ -1,6 +1,6 @@
 # Decision: Follow Global Python Standards
 
-**Date:** 2026-03-07
+**Date:** 2026-04-20 (updated)
 **Status:** Active
 **Context:** Agentic Beacon Framework
 
@@ -56,12 +56,29 @@ Callers must import directly from the module that defines the name:
 ```python
 # correct — import from the defining module
 from beacon.core.manifest.beacon import BeaconManifest
-from beacon.warehouse.validator import WarehouseValidator
+from beacon.domains.warehouse.validator import WarehouseValidator
 
 # wrong — importing through a re-exporting __init__
 from beacon.core.manifest import BeaconManifest
-from beacon.warehouse import WarehouseValidator
+from beacon.domains.warehouse import WarehouseValidator
 ```
+
+### Domain-Layer Import Discipline
+
+The `beacon` package uses a four-layer architecture enforced by `test_architecture.py`:
+
+```
+cli/ → domains/ → core/, utils/
+```
+
+Import rules:
+- `cli/` may import from `domains/`, `core/`, `utils/`
+- `domains/` may import from sibling domains, `core/`, `utils/`
+- `core/` and `utils/` must **never** import from `domains/` or `cli/`
+
+Cross-domain imports must target submodule paths, not deeper internals (max depth: `beacon.domains.X.Y`).
+
+**Read:** [Layered Architecture Spec](../../openspec/specs/layered-architecture/spec.md)
 
 ## Rationale
 

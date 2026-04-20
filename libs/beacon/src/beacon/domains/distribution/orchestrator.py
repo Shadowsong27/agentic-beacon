@@ -13,10 +13,6 @@ from pathlib import Path
 from loguru import logger
 
 from beacon.core.exceptions import BeaconSyncError
-from beacon.core.git_health import (
-    check_warehouse_git_clean,
-    check_warehouse_on_main_branch,
-)
 from beacon.core.gitignore import GitignoreManager
 from beacon.core.manifest.beacon import BeaconManifest
 from beacon.core.manifest.workspace import WorkspaceConfig
@@ -44,6 +40,10 @@ from beacon.domains.setup.wiring import (
     unwire_pruned_artifacts,
     wire_contexts_claudecode,
     wire_contexts_opencode,
+)
+from beacon.domains.warehouse.git_health import (
+    check_warehouse_git_clean,
+    check_warehouse_on_main_branch,
 )
 from beacon.utils.git import find_project_root
 from beacon.utils.interaction import ConflictResolution, resolve_conflict

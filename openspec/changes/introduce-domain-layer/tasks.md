@@ -188,8 +188,8 @@ See `AGENTS.md` → "Unit Testing Workflow" and `knowledge/lessons/complete-test
   - **Input**: `.venv/bin/pytest libs/beacon/tests/` then run every `abc` subcommand once on a scratch project (at minimum: `--version`, `init`, `warehouse connect`, `setup --manual`, `sync`, `doctor`, `contribute --all --dry-run`, `upgrade`, `agent list`, `agent install <name>`).
   - **Expected Output**: Every subcommand exits 0 with the same user-visible output as pre-PR.
   - **Validation**: No regressions; `abc --help` output diff vs. baseline is empty.
-- [ ] 8.6 **[MANUAL]** Human acceptance smoke — required before merging PR 7 per proposal.md "Manual Intervention Requirements". Exercise interactive flows (`abc init`, `abc setup`, `abc adopt`) manually to confirm UX is unchanged.
-- [ ] 8.7 Push CLI thinning to draft branch
+- [x] 8.6 **[MANUAL]** Human acceptance smoke — required before merging PR 7 per proposal.md "Manual Intervention Requirements". Exercise interactive flows (`abc init`, `abc setup`, `abc adopt`) manually to confirm UX is unchanged.
+- [x] 8.7 Push CLI thinning to draft branch
 
 ## 9. Clean up and documentation
 
@@ -198,18 +198,18 @@ See `AGENTS.md` → "Unit Testing Workflow" and `knowledge/lessons/complete-test
 **Output**: `utils/` contains only `git.py`, `display.py` (total < 500 lines); `core/` contains only `manifest/`, `settings.py`, `exceptions.py`, `gitignore.py`; `AGENTS.md` references the new spec; OpenSpec change archived.
 **Validation**: `wc -l libs/beacon/src/beacon/utils/*.py | tail -1` under 500; `ls libs/beacon/src/beacon/core/` lists exactly the four allowed entries; `openspec list` no longer shows the change in `changes/`.
 
-- [ ] 9.1 Delete any now-empty modules; delete `beacon/utils/__init__.py` re-exports if any remain
-- [ ] 9.2 Verify `beacon/utils/` contains only `git.py`, `display.py` (and any new `fs.py`); file sizes total < 500 lines
-- [ ] 9.3 Verify `beacon/core/` contains only `manifest/`, `settings.py`, `exceptions.py`, `gitignore.py`
-- [ ] 9.4 Update `AGENTS.md`: replace "CLI Layer Discipline" rule with a pointer to `openspec/specs/layered-architecture/spec.md`; add a "Domain Layer" section naming the six domains
-- [ ] 9.5 Update `knowledge/facts/repository-structure.md` with the new tree
-- [ ] 9.6 Update `knowledge/decisions/follow-global-python-standards.md` if the absolute-import rule is strengthened by the new spec
+- [x] 9.1 Delete any now-empty modules; delete `beacon/utils/__init__.py` re-exports if any remain
+- [x] 9.2 Verify `beacon/utils/` contains only `git.py`, `display.py` (and any new `fs.py`); file sizes total < 500 lines
+- [x] 9.3 Verify `beacon/core/` contains only `manifest/`, `settings.py`, `exceptions.py`, `gitignore.py`
+- [x] 9.4 Update `AGENTS.md`: replace "CLI Layer Discipline" rule with a pointer to `openspec/specs/layered-architecture/spec.md`; add a "Domain Layer" section naming the six domains
+- [x] 9.5 Update `knowledge/facts/repository-structure.md` with the new tree
+- [x] 9.6 Update `knowledge/decisions/follow-global-python-standards.md` if the absolute-import rule is strengthened by the new spec
 - [ ] 9.7 Archive this change via `/opsx:archive`
   - **Input**: `/opsx:archive introduce-domain-layer`
   - **Expected Output**: Change moves to `openspec/changes/archive/introduce-domain-layer/`; spec merges into `openspec/specs/layered-architecture/spec.md`.
   - **Validation**: `openspec list --json | jq '.changes[] | select(.name == "introduce-domain-layer")'` returns nothing (change no longer active); `ls openspec/specs/layered-architecture/` shows the merged `spec.md`.
-- [ ] 9.8 File follow-up issue: optional `import-linter` rule (Decision 6 mechanism 3)
-- [ ] 9.9 Add upgrader coverage test for `_read_new_template` disk path
+- [x] 9.8 File follow-up issue: optional `import-linter` rule (Decision 6 mechanism 3)
+- [x] 9.9 Add upgrader coverage test for `_read_new_template` disk path
   - **Rationale**: All 22 existing upgrader tests pass `template_overrides=...`, short-circuiting before the disk lookup. The regression where ruff deleted the `TEMPLATES_DIR / rel_path` branch was only caught by human review, not CI.
   - **Test**: `test_read_new_template_falls_back_to_templates_dir` — call `WarehouseUpgrader._read_new_template(rel_path="README.md", template_overrides={})` and assert it returns non-empty content matching `data/templates/README.md`.
   - **Validation**: Test passes before and after the fix; fails on the broken commit (19ed637~1).

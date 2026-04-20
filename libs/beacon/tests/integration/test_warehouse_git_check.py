@@ -6,8 +6,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from beacon.cli.main import main
-from beacon.core.git_health import GitHealthResult, check_warehouse_git_clean
 from beacon.domains.distribution.state import check_sync_state, write_sync_state
+from beacon.domains.warehouse.git_health import (
+    GitHealthResult,
+    check_warehouse_git_clean,
+)
 from click.testing import CliRunner
 
 # ========== Unit tests for check_warehouse_git_clean ==========
@@ -549,7 +552,9 @@ def test_auto_git_uses_targeted_add(tmp_path):
 
 # ========== Unit tests for check_warehouse_on_main_branch ==========
 
-from beacon.core.git_health import check_warehouse_on_main_branch  # noqa: E402
+from beacon.domains.warehouse.git_health import (  # noqa: E402
+    check_warehouse_on_main_branch,
+)
 
 
 def test_on_main_branch_returns_ok(tmp_path):

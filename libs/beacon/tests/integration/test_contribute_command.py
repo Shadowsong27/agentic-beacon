@@ -5,13 +5,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from beacon.cli.main import main
-from beacon.core.git_health import GitHealthResult
 from beacon.domains.artifact.skill import build_skills_paths
 from beacon.domains.contribution.contributor import (
     build_pr_body,
     resolve_skill_contribute_source,
 )
 from beacon.domains.distribution.delta import DeltaComparator, DeltaStatus
+from beacon.domains.warehouse.git_health import GitHealthResult
 from click.testing import CliRunner
 
 KNOWLEDGE_CONTENT_ORIGINAL = "# Type Hints\n\nUse type hints.\n"
