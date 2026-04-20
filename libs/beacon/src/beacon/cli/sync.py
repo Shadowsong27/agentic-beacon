@@ -8,54 +8,37 @@ from loguru import logger
 from rich.console import Console
 from rich.table import Table
 
+from beacon.core.exceptions import BeaconSyncError, ResetError
 from beacon.core.manifest.beacon import BeaconManifest
 from beacon.core.manifest.workspace import WorkspaceConfig
 from beacon.domains.artifact.agent import (
     build_agents_paths,
-    sync_agents_from_warehouse,
-    update_agent_gitignores,
 )
 from beacon.domains.artifact.skill import (
     build_skills_paths,
-    install_bundled_skills_globally,
-    normalize_skill_entry,
     print_bundled_install_result,
     show_bundled_skills_status,
-    skill_name_from_entry,
-    validate_skill_entries,
-    wire_skills_post_sync,
 )
 from beacon.domains.contribution.delta_view import (
     show_delta_summary,
     show_detailed_diff,
 )
 from beacon.domains.distribution.delta import DeltaComparator
+from beacon.domains.distribution.orchestrator import run_sync
 from beacon.domains.distribution.reset import (
     count_synced_files,
     remove_artifacts_dir,
     reset_artifacts,
 )
-from beacon.domains.distribution.state import (
-    read_sync_sha,
-    relink_global_sync_state,
-    write_sync_state,
-)
-from beacon.domains.distribution.sync_engine import SyncEngine
+from beacon.domains.distribution.state import relink_global_sync_state
 from beacon.domains.setup.wiring import (
-    confirm_prune,
-    has_synced_contexts,
     init_claude_md,
     init_opencode_json,
-    unwire_pruned_artifacts,
     wire_contexts_claudecode,
     wire_contexts_opencode,
 )
-from beacon.utils.display import handle_soft_block, is_interactive
-from beacon.utils.git import (
-    check_warehouse_git_clean,
-    check_warehouse_on_main_branch,
-    find_project_root,
-)
+from beacon.utils.display import is_interactive
+from beacon.utils.git import find_project_root
 
 console = Console()
 
@@ -105,295 +88,134 @@ def sync(
         )
         sys.exit(1)
 
-    beacon_dir = Path.cwd() / ".agentic-beacon"
-    if not beacon_dir.exists():
-        console.print("[red]Error:[/red] No .agentic-beacon directory found.")
-        console.print("Run 'abc warehouse connect' to connect to a warehouse first.")
-        sys.exit(1)
+    if dry_run:
+        console.print("[dim]Dry run — no files will be copied or pruned.[/dim]\n")
 
-    config_file = beacon_dir / "config.toml"
-    if not config_file.exists():
-        console.print("[red]Error:[/red] No warehouse connected.")
-        console.print("Run 'abc warehouse connect --path <warehouse>' first.")
-        sys.exit(1)
+    console.print("\n[blue]Syncing artifacts from warehouse...[/blue]\n")
 
-    beacon_yaml = beacon_dir / "beacon.yaml"
-    if not beacon_yaml.exists():
-        console.print("[red]Error:[/red] No beacon.yaml found.")
-        console.print("Run 'abc setup' to create artifact configuration.")
-        sys.exit(1)
+    def log_fn(msg: str) -> None:
+        console.print(f"  {msg}")
 
     try:
-        warehouse_settings = WorkspaceConfig()
-        warehouse_path = Path(warehouse_settings.warehouse.local_path)
-
-        if not warehouse_path.exists():
-            console.print(
-                f"[red]Error:[/red] Warehouse path no longer exists: {warehouse_path}"
-            )
-            console.print("The warehouse may have been moved or deleted.")
-            console.print(
-                "Run 'abc warehouse connect --path <warehouse>' to reconnect."
-            )
-            sys.exit(1)
-
-        if not dry_run and not skip_git_check:
-            git_error = check_warehouse_git_clean(warehouse_path)
-            if git_error:
-                console.print(f"[red]Error:[/red] {git_error}")
-                sys.exit(1)
-
-        if not dry_run and not skip_git_check:
-            branch_error = check_warehouse_on_main_branch(warehouse_path)
-            if branch_error:
-                console.print(f"[red]Error:[/red] {branch_error}")
-                sys.exit(1)
-
-        beacon_settings = BeaconManifest.from_yaml(beacon_yaml)
-
-        validate_skill_entries(beacon_settings)
-
-        total_artifacts = (
-            len(beacon_settings.artifacts.knowledge)
-            + len(beacon_settings.artifacts.skills)
-            + len(beacon_settings.artifacts.contexts)
-        )
-
-        if total_artifacts == 0:
-            console.print(
-                "[yellow]No artifacts configured in beacon.yaml. Nothing to sync.[/yellow]"
-            )
-            print_bundled_install_result(*install_bundled_skills_globally())
-            sync_agents_from_warehouse(warehouse_path, force=force, preserve=preserve)
-            sys.exit(0)
-
-        artifacts_dir = beacon_dir / "artifacts"
-        sync_engine = SyncEngine(
-            warehouse_path=warehouse_path, artifacts_path=artifacts_dir
-        )
-
-        if dry_run:
-            console.print("[dim]Dry run — no files will be copied or pruned.[/dim]\n")
-
-        artifact_paths = []
-        console.print("\n[blue]Syncing artifacts from warehouse...[/blue]\n")
-
-        for artifact_type in ["knowledge", "skills", "contexts"]:
-            artifacts_list = getattr(beacon_settings.artifacts, artifact_type)
-            for pattern in artifacts_list:
-                if "*" in pattern or "?" in pattern or "[" in pattern:
-                    try:
-                        matches = sync_engine.expand_glob(pattern)
-                        if not matches:
-                            console.print(
-                                f"  [yellow]Warning:[/yellow] No files matched pattern: {pattern}"
-                            )
-                        elif verbose_flag:
-                            console.print(
-                                f"  Pattern '{pattern}' matched {len(matches)} files"
-                            )
-                        artifact_paths.extend(matches)
-                    except Exception as e:
-                        console.print(
-                            f"  [red]Error:[/red] Invalid glob pattern '{pattern}': {e}"
-                        )
-                        sys.exit(1)
-                elif artifact_type == "skills":
-                    skill_dir_entry = normalize_skill_entry(pattern)
-                    matches = sync_engine.expand_glob(f"{skill_dir_entry}/**/*")
-                    if matches:
-                        artifact_paths.extend(matches)
-                    else:
-                        console.print(
-                            f"  [yellow]Warning:[/yellow] No files found for skill: "
-                            f"{skill_name_from_entry(pattern)}"
-                        )
-                elif (
-                    artifact_type == "knowledge" and (warehouse_path / pattern).is_dir()
-                ):
-                    matches = sync_engine.expand_glob(f"{pattern}/**/*.md")
-                    if matches:
-                        artifact_paths.extend(matches)
-                    else:
-                        console.print(
-                            f"  [yellow]Warning:[/yellow] No .md files found under: {pattern}"
-                        )
-                else:
-                    artifact_paths.append(pattern)
-
-        old_sync_sha = read_sync_sha(artifacts_dir)
-
-        if not dry_run:
-            write_sync_state(artifacts_dir, warehouse_path)
-
-        if not dry_run:
-            conflicts = sync_engine.classify_conflicts(artifact_paths)
-            overwrite = handle_soft_block(conflicts, force=force, preserve=preserve)
-            if not overwrite and conflicts:
-                preserve = True
-
-        orphans = sync_engine.classify_orphans(artifact_paths)
-        confirmed_prune: list[str] = []
-        if orphans:
-            confirmed_prune = confirm_prune(orphans, dry_run=dry_run)
-
-        def log_fn(msg: str) -> None:
-            console.print(f"  {msg}")
-
-        summary = sync_engine.sync_all(
-            artifact_paths=artifact_paths,
+        result = run_sync(
             preserve=preserve,
-            paths_to_prune=confirmed_prune if not dry_run else None,
+            force=force,
             verbose=verbose_flag,
             dry_run=dry_run,
+            skip_git_check=skip_git_check,
             log_fn=log_fn if (verbose_flag or dry_run) else None,
         )
-
-        if not dry_run:
-            from beacon.core.gitignore import GitignoreManager
-
-            gitignore_mgr = GitignoreManager(Path.cwd())
-            gitignore_mgr.ensure_entries()
-
-        action_word = "Would copy" if dry_run else "Copied"
-        done_label = "Dry run complete" if dry_run else "Sync complete"
-        console.print(f"\n[bold green]✓ {done_label}[/bold green]")
-        console.print(f"  [blue]{action_word}:[/blue] {summary.copied} files")
-        console.print(f"  [blue]Unchanged:[/blue] {summary.skipped} files")
-        if summary.preserved > 0:
-            console.print(
-                f"  [yellow]{'Would preserve' if dry_run else 'Preserved'}:[/yellow] "
-                f"{summary.preserved} locally modified files"
-            )
-            if not dry_run:
-                console.print("  [dim]Use 'abc delta' to review local changes.[/dim]")
-        if dry_run and orphans:
-            console.print(
-                f"  [yellow]Would remove:[/yellow] {len(orphans)} artifact(s) "
-                f"no longer in beacon.yaml (confirmation required)"
-            )
-        elif summary.pruned > 0:
-            console.print(
-                f"  [yellow]Removed:[/yellow] "
-                f"{summary.pruned} artifact(s) no longer in beacon.yaml"
-            )
-        if summary.errors > 0:
-            console.print(f"  [red]Errors:[/red] {summary.errors} files")
-            for path, msg in summary.failed_files:
-                console.print(f"    [red]✗[/red] {path}: {msg}")
-
-        if dry_run:
-            console.print(
-                "\n  [dim]Run without --dry-run to apply these changes.[/dim]"
-            )
-            return
-
-        project_root = Path.cwd()
-        wiring_notes: list[str] = []
-
-        if summary.pruned_paths:
-            unwire_pruned_artifacts(project_root, summary.pruned_paths, artifacts_dir)
-
-        if beacon_settings.artifacts.contexts:
-            oc_added = wire_contexts_opencode(project_root, artifacts_dir)
-            if oc_added:
-                console.print(
-                    f"\n[green]✓[/green] Wired {len(oc_added)} context(s) into opencode.json"
-                )
-
-            cc_added = wire_contexts_claudecode(project_root, artifacts_dir)
-            if cc_added:
-                console.print(
-                    f"[green]✓[/green] Wired {len(cc_added)} context(s) into CLAUDE.md"
-                )
-
-            has_opencode = (project_root / "opencode.json").exists()
-            has_claude = any(
-                p.exists()
-                for p in [
-                    project_root / ".claude" / "CLAUDE.md",
-                    project_root / "CLAUDE.md",
-                ]
-            )
-            if not has_opencode and not has_claude:
-                if has_synced_contexts(artifacts_dir):
-                    if not dry_run and is_interactive():
-                        console.print(
-                            "\n[yellow]No agent config detected.[/yellow] "
-                            "Set one up to wire contexts automatically."
-                        )
-                        if click.confirm("  Initialize opencode.json?", default=False):
-                            init_opencode_json(project_root)
-                            oc_init = wire_contexts_opencode(
-                                project_root, artifacts_dir
-                            )
-                            if oc_init:
-                                console.print(
-                                    f"[green]✓[/green] Created opencode.json and "
-                                    f"wired {len(oc_init)} context(s)"
-                                )
-                        if click.confirm("  Initialize CLAUDE.md?", default=False):
-                            init_claude_md(project_root)
-                            cc_init = wire_contexts_claudecode(
-                                project_root, artifacts_dir
-                            )
-                            if cc_init:
-                                console.print(
-                                    f"[green]✓[/green] Created CLAUDE.md and "
-                                    f"wired {len(cc_init)} context(s)"
-                                )
-                    else:
-                        wiring_notes.append(
-                            "  Contexts synced — wire them into your agent config:\n"
-                            '  [bold]opencode.json[/bold] → add to "instructions" array:\n'
-                            '    ".agentic-beacon/artifacts/contexts/<name>.md"\n'
-                            "  [bold]CLAUDE.md[/bold] → add a line per context:\n"
-                            "    @.agentic-beacon/artifacts/contexts/<name>.md"
-                        )
-
-        if beacon_settings.artifacts.skills:
-            wired_skills, wire_errors = wire_skills_post_sync(
-                project_root, artifacts_dir, force=force, preserve=preserve
-            )
-            if wired_skills:
-                console.print(
-                    f"[green]✓[/green] Installed {len(wired_skills)} skill(s) "
-                    f"({', '.join(wired_skills)})"
-                )
-            if wire_errors:
-                for err in wire_errors:
-                    console.print(f"  [yellow]⚠[/yellow] Skill wiring: {err}")
-
-            update_agent_gitignores(project_root)
-
-        if wiring_notes:
-            console.print("\n[bold]Manual wiring required:[/bold]")
-            for note in wiring_notes:
-                console.print(note)
-
-        print_bundled_install_result(*install_bundled_skills_globally())
-
-        sync_agents_from_warehouse(warehouse_path, force=force, preserve=preserve)
-
-        if old_sync_sha is not None:
-            try:
-                from beacon.domains.adoption.adopter import count_unadopted_since
-
-                unadopted_count = count_unadopted_since(
-                    warehouse_path, beacon_settings, old_sync_sha
-                )
-                if unadopted_count > 0:
-                    console.print(
-                        f"\n[cyan]{unadopted_count} new artifact(s) available "
-                        f"-- run [bold]abc adopt[/bold] to review[/cyan]"
-                    )
-            except Exception:
-                pass
-
+    except BeaconSyncError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        if e.hint:
+            console.print(f"\n  [dim]{e.hint}[/dim]")
+        sys.exit(1)
     except Exception as e:
         console.print(f"\n[red]Error:[/red] Sync failed: {e}")
         logger.exception("Sync failed")
         sys.exit(1)
+
+    # ── Summary output ──
+    if result.no_artifacts:
+        console.print(
+            "[yellow]No artifacts configured in beacon.yaml. Nothing to sync.[/yellow]"
+        )
+
+    action_word = "Would copy" if result.dry_run else "Copied"
+    done_label = "Dry run complete" if result.dry_run else "Sync complete"
+    console.print(f"\n[bold green]✓ {done_label}[/bold green]")
+    console.print(f"  [blue]{action_word}:[/blue] {result.summary.copied} files")
+    console.print(f"  [blue]Unchanged:[/blue] {result.summary.skipped} files")
+    if result.summary.preserved > 0:
+        console.print(
+            f"  [yellow]{'Would preserve' if result.dry_run else 'Preserved'}:[/yellow] "
+            f"{result.summary.preserved} locally modified files"
+        )
+        if not result.dry_run:
+            console.print("  [dim]Use 'abc delta' to review local changes.[/dim]")
+    if result.dry_run and result.orphans:
+        console.print(
+            f"  [yellow]Would remove:[/yellow] {len(result.orphans)} artifact(s) "
+            f"no longer in beacon.yaml (confirmation required)"
+        )
+    elif result.summary.pruned > 0:
+        console.print(
+            f"  [yellow]Removed:[/yellow] "
+            f"{result.summary.pruned} artifact(s) no longer in beacon.yaml"
+        )
+    if result.summary.errors > 0:
+        console.print(f"  [red]Errors:[/red] {result.summary.errors} files")
+        for path, msg in result.summary.failed_files:
+            console.print(f"    [red]✗[/red] {path}: {msg}")
+
+    if result.dry_run:
+        console.print("\n  [dim]Run without --dry-run to apply these changes.[/dim]")
+        return
+
+    # ── Wiring output ──
+    if result.oc_added:
+        console.print(
+            f"\n[green]✓[/green] Wired {len(result.oc_added)} context(s) into opencode.json"
+        )
+    if result.cc_added:
+        console.print(
+            f"[green]✓[/green] Wired {len(result.cc_added)} context(s) into CLAUDE.md"
+        )
+
+    if result.wired_skills:
+        console.print(
+            f"[green]✓[/green] Installed {len(result.wired_skills)} skill(s) "
+            f"({', '.join(result.wired_skills)})"
+        )
+    if result.wire_errors:
+        for err in result.wire_errors:
+            console.print(f"  [yellow]⚠[/yellow] Skill wiring: {err}")
+
+    if result.wiring_notes:
+        console.print("\n[bold]Manual wiring required:[/bold]")
+        for note in result.wiring_notes:
+            console.print(note)
+
+    if result.agent_config_init_needed:
+        if is_interactive():
+            console.print(
+                "\n[yellow]No agent config detected.[/yellow] "
+                "Set one up to wire contexts automatically."
+            )
+            if click.confirm("  Initialize opencode.json?", default=False):
+                init_opencode_json(result.project_root)
+                oc_init = wire_contexts_opencode(
+                    result.project_root, result.artifacts_dir
+                )
+                if oc_init:
+                    console.print(
+                        f"[green]✓[/green] Created opencode.json and "
+                        f"wired {len(oc_init)} context(s)"
+                    )
+            if click.confirm("  Initialize CLAUDE.md?", default=False):
+                init_claude_md(result.project_root)
+                cc_init = wire_contexts_claudecode(
+                    result.project_root, result.artifacts_dir
+                )
+                if cc_init:
+                    console.print(
+                        f"[green]✓[/green] Created CLAUDE.md and "
+                        f"wired {len(cc_init)} context(s)"
+                    )
+        else:
+            console.print(
+                "\n[bold]Manual wiring required:[/bold]\n"
+                "  Contexts synced — wire them into your agent config:\n"
+                '  [bold]opencode.json[/bold] → add to "instructions" array:\n'
+                '    ".agentic-beacon/artifacts/contexts/<name>.md"\n'
+                "  [bold]CLAUDE.md[/bold] → add a line per context:\n"
+                "    @.agentic-beacon/artifacts/contexts/<name>.md"
+            )
+
+    print_bundled_install_result(result.bundled_installed, result.bundled_skipped)
+
+    if result.adoption_notification:
+        console.print(f"\n[cyan]{result.adoption_notification}[/cyan]")
 
 
 @click.command()
@@ -494,6 +316,9 @@ def reset_cmd(*, project: Path | None) -> None:
         if error_count > 0:
             console.print(f"  [red]Errors:[/red] {error_count} files")
 
+    except ResetError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
         logger.exception("Reset failed")
@@ -515,23 +340,7 @@ def update(*, project: Path | None) -> None:
         "[yellow]Deprecation warning:[/yellow] 'abc update' is deprecated. "
         "Use 'abc reset' instead."
     )
-    project_root = project or find_project_root()
-    console.print("[blue]Resetting artifacts from warehouse...[/blue]")
-
-    try:
-        overwritten_count, new_count, error_count = reset_artifacts(project_root)
-
-        console.print("\n[bold green]✓ Reset complete![/bold green]")
-        console.print(f"  [blue]Overwritten:[/blue] {overwritten_count} files")
-        if new_count:
-            console.print(f"  [blue]New:[/blue] {new_count} files")
-        if error_count > 0:
-            console.print(f"  [red]Errors:[/red] {error_count} files")
-
-    except Exception as e:
-        console.print(f"[red]Error:[/red] {e}")
-        logger.exception("Reset failed")
-        sys.exit(1)
+    reset_cmd.callback(project=project)
 
 
 @click.command()
@@ -544,11 +353,12 @@ def update(*, project: Path | None) -> None:
 def clean(*, project: Path | None) -> None:
     """Remove synced artifacts from project (.agentic-beacon/artifacts/)."""
     project_root = project or find_project_root()
-    artifacts_dir = project_root / ".agentic-beacon" / "artifacts"
+    removed = remove_artifacts_dir(project_root)
 
-    if remove_artifacts_dir(project_root):
-        console.print(f"[green]✓ Removed:[/green] {artifacts_dir}")
+    if removed:
+        console.print(f"[green]✓ Removed:[/green] {removed}")
     else:
+        artifacts_dir = project_root / ".agentic-beacon" / "artifacts"
         console.print(f"[yellow]No artifacts found at {artifacts_dir}[/yellow]")
 
 

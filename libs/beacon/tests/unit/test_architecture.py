@@ -119,7 +119,12 @@ def test_utils_has_no_higher_layer_imports():
 
 
 def test_cross_domain_imports_use_top_level():
-    """Domains shall import from each other's top-level packages, not deep paths."""
+    """Cross-domain imports shall not exceed depth 4 (beacon.domains.X.Y).
+
+    Because __init__.py files must remain empty (no re-exports), imports
+    frequently target submodules (e.g. beacon.domains.artifact.skill).
+    The enforced rule is: module path may be at most 4 parts deep.
+    """
     domains_dir = BEACON_SRC / "domains"
     for path in _all_py_files_under(domains_dir):
         tree = _parse_file(path)
@@ -345,3 +350,113 @@ def test_cli_has_no_free_functions():
                     f"{path}: free function '{node.name}' is not allowed in cli/. "
                     f"Move helpers to the domain layer."
                 )
+
+
+# ---------------------------------------------------------------------------
+# TC10: domains/ and core/ are Click/Rich/sys.exit-free
+#
+# Waivers below document known violations pending cleanup.
+# Each entry is a relative path (from beacon/) → set of allowed breach types.
+# Allowed breach types: "click", "rich", "sys.exit"
+#
+# To clean a file: remove its entry from _TC10_WAIVERS (or shrink the set).
+# If a waiver disappears without a corresponding code fix, the test fails.
+# If new code introduces a violation without a waiver, the test fails.
+# ---------------------------------------------------------------------------
+
+_TC10_WAIVERS: dict[str, set[str]] = {
+    # TODO: extract interactive UX to CLI layer
+    "domains/adoption/apply.py": {"click", "rich"},
+    "domains/artifact/agent.py": {"click", "rich", "sys.exit"},
+    "domains/artifact/skill.py": {"rich", "sys.exit"},
+    "domains/contribution/contributor.py": {"rich"},
+    "domains/contribution/delta_view.py": {"rich", "sys.exit"},
+    "domains/distribution/state.py": {"click", "rich"},
+    "domains/distribution/upgrader.py": {"click"},
+    "domains/setup/wiring.py": {"click", "rich"},
+    "domains/warehouse/catalog.py": {"rich"},
+}
+
+
+def test_domains_and_core_are_cli_free():
+    """domains/ and core/ shall not import click, rich, or call sys.exit.
+
+    Violations are tracked in _TC10_WAIVERS above.  Files with a waiver are
+    allowed to keep their current breach type(s); any *new* violation in a
+    non-waived file (or a new breach type in a waived file) causes a failure.
+
+    To clean up a violation: fix the code and remove the file from _TC10_WAIVERS
+    (or remove just the breach type).  The test will then enforce the improvement
+    permanently.
+    """
+    roots = [BEACON_SRC / "domains", BEACON_SRC / "core"]
+    failures: list[str] = []
+
+    for root in roots:
+        if not root.exists():
+            continue
+        for path in _all_py_files_under(root):
+            tree = _parse_file(path)
+            if tree is None:
+                continue
+
+            rel = str(path.relative_to(BEACON_SRC))
+            allowed = _TC10_WAIVERS.get(rel, set())
+
+            found_click = False
+            found_rich = False
+            found_sys_exit = False
+
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import | ast.ImportFrom):
+                    if isinstance(node, ast.Import):
+                        names = [alias.name.split(".")[0] for alias in node.names]
+                    else:
+                        names = [(node.module or "").split(".")[0]]
+                    for top in names:
+                        if top == "click":
+                            found_click = True
+                        elif top == "rich":
+                            found_rich = True
+
+                elif isinstance(node, ast.Call):
+                    if (
+                        isinstance(node.func, ast.Attribute)
+                        and isinstance(node.func.value, ast.Name)
+                        and node.func.value.id == "sys"
+                        and node.func.attr == "exit"
+                    ):
+                        found_sys_exit = True
+
+            if found_click and "click" not in allowed:
+                failures.append(
+                    f"{rel}: imports 'click' — move interactive UX to cli/ layer "
+                    f"(or add waiver to _TC10_WAIVERS)"
+                )
+            if found_rich and "rich" not in allowed:
+                failures.append(
+                    f"{rel}: imports 'rich' — move display output to cli/ layer "
+                    f"(or add waiver to _TC10_WAIVERS)"
+                )
+            if found_sys_exit and "sys.exit" not in allowed:
+                failures.append(
+                    f"{rel}: calls sys.exit() — raise an exception instead; "
+                    f"CLI layer owns process exit (or add waiver to _TC10_WAIVERS)"
+                )
+
+    # Also verify no waived file has *disappeared* (stale waivers are noise)
+    all_rel_paths = set()
+    for root in roots:
+        if root.exists():
+            for path in _all_py_files_under(root):
+                all_rel_paths.add(str(path.relative_to(BEACON_SRC)))
+
+    for waived_path in _TC10_WAIVERS:
+        if waived_path not in all_rel_paths:
+            failures.append(
+                f"_TC10_WAIVERS entry '{waived_path}' no longer exists — "
+                f"remove the stale waiver"
+            )
+
+    if failures:
+        pytest.fail("\n" + "\n".join(failures))

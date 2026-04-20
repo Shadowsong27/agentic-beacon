@@ -8,6 +8,8 @@ from rich.console import Console
 from rich.table import Table
 
 from beacon.core.manifest.beacon import ArtifactsConfig, BeaconManifest
+from beacon.domains.artifact.agent import detect_agents
+from beacon.utils.interaction import ConflictResolution, resolve_conflict
 
 _BUNDLED_DATA_DIR = Path(__file__).parent.parent.parent / "data"
 BUNDLED_SKILLS_DIR = _BUNDLED_DATA_DIR / "skills"
@@ -46,8 +48,6 @@ def build_skills_paths(project_root: Path) -> dict[str, Path]:
     `abc contribute` so both commands always compare/read from the same
     live agent locations.
     """
-    from beacon.domains.artifact.agent import detect_agents
-
     skills_paths: dict[str, Path] = {}
     for agent in detect_agents(project_root):
         if agent == "opencode":
@@ -331,9 +331,6 @@ def wire_skills_post_sync(
     Uses fallback_to_all so skills are always wired regardless of whether agent
     config files exist yet.
     """
-    from beacon.domains.artifact.agent import detect_agents
-    from beacon.utils.display import handle_soft_block
-
     agents = detect_agents(project_root, fallback_to_all=True)
 
     skills_dir = artifacts_dir / "skills"
@@ -364,10 +361,14 @@ def wire_skills_post_sync(
                     wiring_conflicts.append((agent, name, str(dest)))
 
     if wiring_conflicts:
-        conflict_paths = [str(dest) for _, _, dest in wiring_conflicts]
-        overwrite = handle_soft_block(conflict_paths, force=force, preserve=preserve)
-        if not overwrite:
+        resolution = resolve_conflict(
+            force=force, preserve=preserve, has_conflicts=True
+        )
+        if resolution == ConflictResolution.SKIP:
             preserve = True  # skip conflicting live skill files
+        elif resolution == ConflictResolution.NEEDS_CONFIRMATION:
+            # Without an interactive prompt, skip conflicts conservatively
+            preserve = True
 
     installed: list[str] = []
     errors: list[str] = []

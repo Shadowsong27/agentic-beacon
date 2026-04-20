@@ -7,6 +7,10 @@ import click
 from rich.console import Console
 from rich.table import Table
 
+from beacon.core.git_health import (
+    check_warehouse_git_clean,
+    check_warehouse_on_main_branch,
+)
 from beacon.core.manifest.workspace import WorkspaceConfig
 from beacon.domains.artifact.agent import (
     detect_agents,
@@ -26,11 +30,8 @@ from beacon.domains.setup.wiring import (
     wire_contexts_claudecode,
     wire_contexts_opencode,
 )
-from beacon.utils.display import handle_soft_block
-from beacon.utils.git import (
-    check_warehouse_git_clean,
-    check_warehouse_on_main_branch,
-)
+from beacon.utils.display import is_interactive
+from beacon.utils.interaction import ConflictResolution, resolve_conflict
 
 console = Console()
 
@@ -87,8 +88,18 @@ def agents_sync(*, preserve: bool, force: bool, skip_git_check: bool) -> None:
         sys.exit(1)
 
     if not skip_git_check:
-        check_warehouse_git_clean(warehouse_path)
-        check_warehouse_on_main_branch(warehouse_path)
+        git_result = check_warehouse_git_clean(warehouse_path)
+        if not git_result.ok:
+            console.print(f"[red]Error:[/red] {git_result.error_message}")
+            if git_result.hint:
+                console.print(f"\n  [dim]{git_result.hint}[/dim]")
+            sys.exit(1)
+        branch_result = check_warehouse_on_main_branch(warehouse_path)
+        if not branch_result.ok:
+            console.print(f"[red]Error:[/red] {branch_result.error_message}")
+            if branch_result.hint:
+                console.print(f"\n  [dim]{branch_result.hint}[/dim]")
+            sys.exit(1)
 
     sync_agents_from_warehouse(warehouse_path, force=force, preserve=preserve)
 
@@ -167,8 +178,21 @@ def install_artifact(
         sys.exit(1)
 
     conflicts = engine.classify_conflicts(files_to_copy)
-    overwrite = handle_soft_block(conflicts, force=force, preserve=preserve)
-    if not overwrite and conflicts:
+    resolution = resolve_conflict(
+        force=force, preserve=preserve, has_conflicts=bool(conflicts)
+    )
+    if resolution == ConflictResolution.NEEDS_CONFIRMATION:
+        if not is_interactive():
+            console.print(
+                "[red]Error:[/red] Non-interactive mode — cannot prompt for overwrite.\n"
+                "Use --force to overwrite or --preserve to skip conflicting files."
+            )
+            sys.exit(1)
+        if not click.confirm(
+            "Overwrite these files with warehouse content?", default=False
+        ):
+            preserve = True
+    elif resolution == ConflictResolution.SKIP:
         preserve = True
 
     copy_errors: list[str] = []

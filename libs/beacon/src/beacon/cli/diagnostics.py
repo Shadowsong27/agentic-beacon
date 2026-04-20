@@ -7,7 +7,7 @@ from rich.console import Console
 
 from beacon.core.manifest.beacon import BeaconManifest
 from beacon.core.manifest.workspace import WorkspaceConfig
-from beacon.domains.adoption.adopter import (
+from beacon.domains.adoption.discovery import (
     find_knowledge_node_for_file,
     is_knowledge_node,
 )

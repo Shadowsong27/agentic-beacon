@@ -1,8 +1,10 @@
 """Artifact reset operations for the distribution domain."""
 
-import sys
+import os
+import shutil
 from pathlib import Path
 
+from beacon.core.exceptions import ResetError
 from beacon.core.manifest.beacon import BeaconManifest
 from beacon.core.manifest.workspace import WorkspaceConfig
 from beacon.domains.artifact.skill import normalize_skill_entry
@@ -13,19 +15,20 @@ def reset_artifacts(project_root: Path) -> tuple[int, int, int]:
     """Force-overwrite all synced artifacts from warehouse.
 
     Returns (overwritten_count, new_count, error_count).
-    Raises SystemExit on configuration errors.
+    Raises ResetError on configuration errors.
     """
     beacon_dir = project_root / ".agentic-beacon"
 
     if not beacon_dir.exists():
-        print(f"Error: No warehouse connected at {project_root}", file=sys.stderr)
-        print("Run 'abc warehouse connect' first.", file=sys.stderr)
-        sys.exit(1)
+        raise ResetError(
+            f"No warehouse connected at {project_root}\n"
+            "Run 'abc warehouse connect' first."
+        )
 
     if not (beacon_dir / "beacon.yaml").exists():
-        print("Error: No beacon.yaml found.", file=sys.stderr)
-        print("Run 'abc setup' to create artifact configuration.", file=sys.stderr)
-        sys.exit(1)
+        raise ResetError(
+            "No beacon.yaml found.\nRun 'abc setup' to create artifact configuration."
+        )
 
     warehouse_settings = WorkspaceConfig()
     warehouse_path = Path(warehouse_settings.warehouse.local_path)
@@ -78,18 +81,16 @@ def reset_artifacts(project_root: Path) -> tuple[int, int, int]:
     return overwritten_count, new_count, error_count
 
 
-def remove_artifacts_dir(project_root: Path) -> bool:
+def remove_artifacts_dir(project_root: Path) -> Path | None:
     """Remove the .agentic-beacon/artifacts directory.
 
-    Returns True if the directory was removed, False if it didn't exist.
+    Returns the removed directory path if it existed, None otherwise.
     """
-    import shutil
-
     artifacts_dir = project_root / ".agentic-beacon" / "artifacts"
     if artifacts_dir.exists():
         shutil.rmtree(artifacts_dir)
-        return True
-    return False
+        return artifacts_dir
+    return None
 
 
 def count_synced_files(project_root: Path) -> int:
@@ -97,8 +98,6 @@ def count_synced_files(project_root: Path) -> int:
 
     Returns 0 if the directory does not exist.
     """
-    import os
-
     artifacts_dir = project_root / ".agentic-beacon" / "artifacts"
     if not artifacts_dir.exists():
         return 0

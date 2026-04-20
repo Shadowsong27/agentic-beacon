@@ -3,10 +3,12 @@
 import datetime
 import shutil
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 
 from rich.console import Console
 
+from beacon.core.exceptions import ContributeError
 from beacon.core.manifest.beacon import BeaconManifest
 from beacon.domains.distribution.delta import DeltaComparator, DeltaStatus
 
@@ -18,6 +20,7 @@ def resolve_skill_contribute_source(
     relative_path: str,
     artifacts_dir: Path,
     dry_run: bool = False,
+    chooser: Callable[[dict[str, Path]], str] | None = None,
 ) -> Path | None:
     """Resolve which file to read when contributing a skill back to the warehouse.
 
@@ -28,15 +31,15 @@ def resolve_skill_contribute_source(
     - No agents configured → fall back to artifact snapshot (backward compat).
     - One agent modified → use that agent's copy.
     - Multiple agents modified with identical content → use any (they agree).
-    - Multiple agents modified with different content → prompt user to choose.
+    - Multiple agents modified with different content → call ``chooser`` to pick.
     - No agent has a modified copy (IDENTICAL/MISSING/ADDED) → return None,
       letting the caller decide (IDENTICAL means nothing to contribute).
 
-    Returns the absolute Path of the file to copy, or None if nothing to contribute.
-    Exits with an error message if the user cancels the prompt.
-    """
-    import click
+    ``chooser`` receives a dict of {agent_name: path} and must return the chosen
+    agent name. Defaults to picking the first candidate (non-interactive).
 
+    Returns the absolute Path of the file to copy, or None if nothing to contribute.
+    """
     if not comparator.skills_paths:
         # No agents detected — fall back to artifact snapshot
         return artifacts_dir / relative_path
@@ -86,7 +89,7 @@ def resolve_skill_contribute_source(
         )
         return next(iter(candidates.values()))  # placeholder; not used in dry-run
 
-    # Prompt the user to choose
+    # Delegate the choice to the caller-supplied chooser (CLI owns interactive UX).
     console.print(
         f"\n[yellow]Conflict:[/yellow] '{relative_path}' has been modified differently across agents:\n"
     )
@@ -95,20 +98,10 @@ def resolve_skill_contribute_source(
         live_path = candidates[agent]
         console.print(f"  [{i}] {agent}")
         console.print(f"      [dim]{live_path}[/dim]")
-
     console.print()
-    valid = [str(i) for i in range(1, len(agent_list) + 1)]
-    while True:
-        raw = click.prompt(
-            f"Which version to contribute to the warehouse? ({'/'.join(valid)})",
-            default="",
-            show_default=False,
-        ).strip()
-        if raw in valid:
-            break
-        console.print(f"  [red]Invalid choice.[/red] Enter {' or '.join(valid)}.")
 
-    chosen_agent = agent_list[int(raw) - 1]
+    _chooser = chooser or (lambda c: next(iter(c)))
+    chosen_agent = _chooser(candidates)
     console.print(f"  Using [bold]{chosen_agent}[/bold] version.\n")
     return candidates[chosen_agent]
 
@@ -156,6 +149,7 @@ def resolve_agent_contribute_source(
     comparator: DeltaComparator,
     relative_path: str,
     dry_run: bool = False,
+    chooser: Callable[[dict[str, Path]], str] | None = None,
 ) -> Path | None:
     """Resolve which global agent file to read when contributing back to the warehouse.
 
@@ -165,13 +159,14 @@ def resolve_agent_contribute_source(
     - No agents configured → return None (nothing to contribute).
     - One tool has a modified or new copy → use it.
     - Multiple tools modified/added with identical content → use any.
-    - Multiple tools modified/added with different content → prompt user to choose.
+    - Multiple tools modified/added with different content → call ``chooser`` to pick.
     - No tool has a modified or new copy → return None (identical to warehouse).
+
+    ``chooser`` receives a dict of {tool_name: path} and must return the chosen tool
+    name. Defaults to picking the first candidate (non-interactive).
 
     Returns the absolute Path of the file to copy, or None if nothing to contribute.
     """
-    import click
-
     if not comparator.agents_paths:
         return None
 
@@ -203,7 +198,7 @@ def resolve_agent_contribute_source(
     if len(set(hashes.values())) == 1:
         return next(iter(candidates.values()))
 
-    # Genuinely different — prompt or report
+    # Genuinely different — report or delegate to caller-supplied chooser
     if dry_run:
         console.print(
             f"\n[yellow]Conflict:[/yellow] '{relative_path}' has been modified differently "
@@ -214,23 +209,13 @@ def resolve_agent_contribute_source(
     console.print(
         f"\n[yellow]Conflict:[/yellow] '{relative_path}' has been modified differently across tools:\n"
     )
-    tool_list = list(candidates.keys())
-    for i, tool in enumerate(tool_list, 1):
+    for i, (tool, path) in enumerate(candidates.items(), 1):
         console.print(f"  [{i}] {tool}")
-        console.print(f"      [dim]{candidates[tool]}[/dim]")
+        console.print(f"      [dim]{path}[/dim]")
     console.print()
-    valid = [str(i) for i in range(1, len(tool_list) + 1)]
-    while True:
-        raw = click.prompt(
-            f"Which version to contribute to the warehouse? ({'/'.join(valid)})",
-            default="",
-            show_default=False,
-        ).strip()
-        if raw in valid:
-            break
-        console.print(f"  [red]Invalid choice.[/red] Enter {' or '.join(valid)}.")
 
-    chosen = tool_list[int(raw) - 1]
+    _chooser = chooser or (lambda c: next(iter(c)))
+    chosen = _chooser(candidates)
     console.print(f"  Using [bold]{chosen}[/bold] version.\n")
     return candidates[chosen]
 
@@ -243,6 +228,7 @@ def contribute_single(
     file_path: str,
     dry_run: bool,
     project_root: Path,
+    chooser: Callable[[dict[str, Path]], str] | None = None,
 ) -> list[tuple[str, str]]:
     """Contribute a single artifact back to the warehouse.
 
@@ -256,15 +242,13 @@ def contribute_single(
 
     Returns a list of (path, status_label) tuples for contributed files.
     """
-    import sys
-
     is_skill = file_path.startswith("skills/") and bool(comparator.skills_paths)
     is_agent = file_path.startswith("agents/") and bool(comparator.agents_paths)
 
     if is_skill:
-        # Resolve the live agent source (may prompt user if multiple agents conflict)
+        # Resolve the live agent source (may invoke chooser if multiple agents conflict)
         local_path = resolve_skill_contribute_source(
-            comparator, file_path, artifacts_dir, dry_run=dry_run
+            comparator, file_path, artifacts_dir, dry_run=dry_run, chooser=chooser
         )
         if local_path is None:
             console.print(
@@ -274,7 +258,7 @@ def contribute_single(
             return []
     elif is_agent:
         local_path = resolve_agent_contribute_source(
-            comparator, file_path, dry_run=dry_run
+            comparator, file_path, dry_run=dry_run, chooser=chooser
         )
         if local_path is None:
             console.print(
@@ -285,11 +269,10 @@ def contribute_single(
     else:
         local_path = artifacts_dir / file_path
         if not local_path.exists():
-            console.print(f"[red]Error:[/red] '{file_path}' does not exist locally.")
-            console.print(
+            raise ContributeError(
+                f"'{file_path}' does not exist locally.\n"
                 "Create the file in .agentic-beacon/artifacts/ first, then contribute it."
             )
-            sys.exit(1)
 
     if not is_skill and not is_agent:
         result = comparator.compare_file(file_path)
@@ -317,6 +300,7 @@ def contribute_all(
     project_root: Path,
     include_unregistered: bool = False,
     ignore_skill_patterns: list[str] | None = None,
+    chooser: Callable[[dict[str, Path]], str] | None = None,
 ) -> list[tuple[str, str]]:
     """Contribute all tracked modified/added artifacts and modified agents to the warehouse.
 
@@ -382,7 +366,7 @@ def contribute_all(
 
         if is_skill:
             local_path = resolve_skill_contribute_source(
-                comparator, result.path, artifacts_dir, dry_run=dry_run
+                comparator, result.path, artifacts_dir, dry_run=dry_run, chooser=chooser
             )
             if local_path is None:
                 console.print(
@@ -434,7 +418,7 @@ def contribute_all(
     # Contribute modified agent definitions (always included, no beacon.yaml entry)
     for rel_path in agent_paths:
         local_path = resolve_agent_contribute_source(
-            comparator, rel_path, dry_run=dry_run
+            comparator, rel_path, dry_run=dry_run, chooser=chooser
         )
         if local_path is None:
             console.print(

@@ -14,6 +14,7 @@ from beacon.domains.distribution.state import (
 )
 from beacon.utils.display import is_interactive
 from beacon.utils.git import hash_content
+from beacon.utils.interaction import ConflictResolution, resolve_conflict
 
 console = Console()
 
@@ -301,7 +302,6 @@ def handle_install_agent(
     records sync-state for each successful write. Does NOT update beacon.yaml.
     """
     from beacon.core.manifest.workspace import WorkspaceConfig
-    from beacon.utils.display import handle_soft_block
 
     beacon_dir = Path.cwd() / ".agentic-beacon"
     if not beacon_dir.exists():
@@ -345,9 +345,23 @@ def handle_install_agent(
         if dest.exists() and dest.read_text(encoding="utf-8") != content:
             conflicts.append(str(dest))
 
-    overwrite = handle_soft_block(conflicts, force=force, preserve=preserve)
-    if not overwrite and conflicts:
+    resolution = resolve_conflict(
+        force=force, preserve=preserve, has_conflicts=bool(conflicts)
+    )
+    if resolution == ConflictResolution.SKIP:
         preserve = True  # skip conflicting files
+    elif resolution == ConflictResolution.NEEDS_CONFIRMATION:
+        # Non-interactive mode with conflicts — cannot prompt; refuse to proceed.
+        conflict_list = "\n".join(f"  • {p}" for p in conflicts)
+        console.print(
+            f"\n[yellow]Warning:[/yellow] {len(conflicts)} global agent file(s) "
+            f"differ from the warehouse:\n{conflict_list}\n"
+        )
+        console.print(
+            "[red]Error:[/red] Non-interactive mode — cannot prompt for overwrite.\n"
+            "Use --force to overwrite or --preserve to skip conflicting files."
+        )
+        sys.exit(1)
 
     written_any = False
     for tool in tools:

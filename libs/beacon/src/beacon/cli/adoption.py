@@ -9,13 +9,10 @@ from rich.table import Table
 
 from beacon.core.manifest.beacon import BeaconManifest
 from beacon.core.manifest.workspace import WorkspaceConfig
-from beacon.domains.adoption.adopter import (
-    AdoptApp,
-    AdoptCandidate,
-    apply_adoption,
-    discover_adoptable,
-    is_agent_installed,
-)
+from beacon.domains.adoption.apply import apply_adoption
+from beacon.domains.adoption.discovery import discover_adoptable, is_agent_installed
+from beacon.domains.adoption.models import AdoptCandidate
+from beacon.domains.adoption.tui import AdoptApp
 from beacon.domains.artifact.agent import (
     detect_agents_global,
     install_agent_global,
@@ -47,9 +44,7 @@ def adopt(*, dry_run: bool) -> None:
     to a full view where you can also unadopt currently adopted artifacts.
     Artifacts added within the last few commits are tagged with how recent they are.
     """
-    from beacon.domains.adoption.adopter import (
-        cleanup_unadopted_artifacts,
-    )
+    from beacon.domains.adoption.apply import cleanup_unadopted_artifacts
 
     project_root = find_project_root()
     beacon_dir = project_root / ".agentic-beacon"

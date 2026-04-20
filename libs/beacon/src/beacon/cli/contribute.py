@@ -7,6 +7,8 @@ import click
 from loguru import logger
 from rich.console import Console
 
+from beacon.core.exceptions import ContributeError
+from beacon.core.git_health import check_warehouse_git_clean
 from beacon.core.manifest.beacon import BeaconManifest
 from beacon.core.manifest.workspace import WorkspaceConfig
 from beacon.domains.artifact.agent import build_agents_paths
@@ -19,9 +21,6 @@ from beacon.domains.contribution.contributor import (
 )
 from beacon.domains.distribution.delta import DeltaComparator
 from beacon.domains.distribution.state import check_sync_state
-from beacon.utils.git import (
-    check_warehouse_git_clean,
-)
 
 console = Console()
 
@@ -97,6 +96,20 @@ def contribute(
         console.print("Run 'abc setup' to create artifact configuration.")
         sys.exit(1)
 
+    def _chooser(candidates: dict[str, Path]) -> str:
+        """Prompt the user to choose among conflicting agent copies."""
+        items = list(candidates.keys())
+        valid = [str(i) for i in range(1, len(items) + 1)]
+        while True:
+            raw = click.prompt(
+                f"Which version to contribute to the warehouse? ({'/'.join(valid)})",
+                default="",
+                show_default=False,
+            ).strip()
+            if raw in valid:
+                return items[int(raw) - 1]
+            console.print(f"  [red]Invalid choice.[/red] Enter {' or '.join(valid)}.")
+
     try:
         warehouse_settings = WorkspaceConfig()
         warehouse_path = Path(warehouse_settings.warehouse.local_path)
@@ -111,9 +124,11 @@ def contribute(
             sys.exit(1)
 
         if not dry_run and not skip_git_check:
-            git_error = check_warehouse_git_clean(warehouse_path)
-            if git_error:
-                console.print(f"[red]Error:[/red] {git_error}")
+            git_result = check_warehouse_git_clean(warehouse_path)
+            if not git_result.ok:
+                console.print(f"[red]Error:[/red] {git_result.error_message}")
+                if git_result.hint:
+                    console.print(f"\n  [dim]{git_result.hint}[/dim]")
                 sys.exit(1)
 
         artifacts_dir = beacon_dir / "artifacts"
@@ -148,6 +163,7 @@ def contribute(
                     file,
                     dry_run=True,
                     project_root=project_root,
+                    chooser=_chooser,
                 )
                 if preview and not click.confirm(
                     "\nProceed with contribute?", default=True
@@ -162,6 +178,7 @@ def contribute(
                 file,
                 dry_run,
                 project_root=project_root,
+                chooser=_chooser,
             )
         else:
             if not dry_run:
@@ -175,6 +192,7 @@ def contribute(
                     project_root=project_root,
                     include_unregistered=not exclude_unregistered,
                     ignore_skill_patterns=ignore_skill_patterns,
+                    chooser=_chooser,
                 )
                 if preview and not click.confirm(
                     "\nProceed with contribute?", default=True
@@ -190,6 +208,7 @@ def contribute(
                 project_root=project_root,
                 include_unregistered=not exclude_unregistered,
                 ignore_skill_patterns=ignore_skill_patterns,
+                chooser=_chooser,
             )
 
         if not dry_run and contributed:
@@ -198,6 +217,9 @@ def contribute(
             else:
                 auto_git_contribute(warehouse_path, contributed)
 
+    except ContributeError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
     except Exception as e:
         console.print(f"\n[red]Error:[/red] Contribute failed: {e}")
         logger.exception("Contribute failed")

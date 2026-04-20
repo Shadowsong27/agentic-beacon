@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 from beacon.cli.main import main
+from beacon.core.git_health import GitHealthResult
 from beacon.domains.artifact.skill import build_skills_paths
 from beacon.domains.contribution.contributor import (
     build_pr_body,
@@ -893,7 +894,10 @@ def test_contribute_auto_git_creates_pr(project_with_delta, tmp_path):
 
     runner = CliRunner()
     with (
-        patch("beacon.cli.contribute.check_warehouse_git_clean", return_value=None),
+        patch(
+            "beacon.cli.contribute.check_warehouse_git_clean",
+            return_value=GitHealthResult(ok=True),
+        ),
         patch("beacon.cli.contribute.check_sync_state", return_value=None),
         patch("beacon.domains.contribution.contributor.subprocess.run") as mock_run,
     ):
@@ -934,7 +938,10 @@ def test_contribute_auto_git_fallback_when_push_fails(project_with_delta):
 
     runner = CliRunner()
     with (
-        patch("beacon.cli.contribute.check_warehouse_git_clean", return_value=None),
+        patch(
+            "beacon.cli.contribute.check_warehouse_git_clean",
+            return_value=GitHealthResult(ok=True),
+        ),
         patch("beacon.cli.contribute.check_sync_state", return_value=None),
         patch("beacon.domains.contribution.contributor.subprocess.run") as mock_run,
     ):
@@ -958,7 +965,10 @@ def test_contribute_auto_git_fallback_when_gh_not_installed(project_with_delta):
 
     runner = CliRunner()
     with (
-        patch("beacon.cli.contribute.check_warehouse_git_clean", return_value=None),
+        patch(
+            "beacon.cli.contribute.check_warehouse_git_clean",
+            return_value=GitHealthResult(ok=True),
+        ),
         patch("beacon.cli.contribute.check_sync_state", return_value=None),
         patch("beacon.domains.contribution.contributor.subprocess.run") as mock_run,
     ):
@@ -1204,7 +1214,10 @@ def test_default_auto_git_includes_untracked_in_pr(project_with_untracked):
 
     runner = CliRunner()
     with (
-        patch("beacon.cli.contribute.check_warehouse_git_clean", return_value=None),
+        patch(
+            "beacon.cli.contribute.check_warehouse_git_clean",
+            return_value=GitHealthResult(ok=True),
+        ),
         patch("beacon.cli.contribute.check_sync_state", return_value=None),
         patch("beacon.domains.contribution.contributor.subprocess.run") as mock_run,
     ):

@@ -17,9 +17,8 @@ from pathlib import Path
 import pytest
 import pytest_asyncio  # noqa: F401 – ensures asyncio marks resolve
 from beacon.core.manifest.beacon import ArtifactsConfig, BeaconManifest
-from beacon.domains.adoption.adopter import (
-    AdoptCandidate,
-    apply_adoption,
+from beacon.domains.adoption.apply import apply_adoption
+from beacon.domains.adoption.discovery import (
     count_unadopted_since,
     discover_adoptable,
     extract_heading_description,
@@ -27,6 +26,7 @@ from beacon.domains.adoption.adopter import (
     find_knowledge_node_for_file,
     list_knowledge_nodes,
 )
+from beacon.domains.adoption.models import AdoptCandidate
 from click.testing import CliRunner
 
 # ---------------------------------------------------------------------------
@@ -685,7 +685,7 @@ class TestCountUnadoptedSince:
 class TestAdoptTUI:
     async def test_select_all(self, tmp_path):
         """TC1: Press `a` -> all checkboxes toggled on."""
-        from beacon.domains.adoption.adopter import AdoptApp
+        from beacon.domains.adoption.tui import AdoptApp
         from textual.widgets import Checkbox
 
         candidates = [
@@ -698,7 +698,7 @@ class TestAdoptTUI:
         # Import the inner class by running through compose
         # We need to test the inner _InnerApp — replicate the logic
         # to create a testable instance
-        from beacon.domains.adoption.adopter import make_cb_id
+        from beacon.domains.adoption.tui import make_cb_id
         from textual.app import App, ComposeResult
         from textual.binding import Binding
         from textual.containers import VerticalScroll
@@ -756,7 +756,7 @@ class TestAdoptTUI:
 
     async def test_select_none(self, tmp_path):
         """TC2: Press `n` -> all checkboxes toggled off."""
-        from beacon.domains.adoption.adopter import make_cb_id
+        from beacon.domains.adoption.tui import make_cb_id
         from textual.app import App, ComposeResult
         from textual.binding import Binding
         from textual.containers import VerticalScroll
@@ -797,7 +797,7 @@ class TestAdoptTUI:
 
     async def test_enter_returns_selected(self, tmp_path):
         """TC3: Press `enter` -> returns selected paths."""
-        from beacon.domains.adoption.adopter import make_cb_id
+        from beacon.domains.adoption.tui import make_cb_id
         from textual.app import App, ComposeResult
         from textual.binding import Binding
         from textual.containers import VerticalScroll
