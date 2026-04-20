@@ -14,7 +14,7 @@ from beacon.domains.artifact.checksums import (
     read_checksums,
     write_checksums,
 )
-from beacon.initializer import TEMPLATE_FILES, WarehouseInitializer
+from beacon.domains.setup.initializer import TEMPLATE_FILES, WarehouseInitializer
 
 # ---------------------------------------------------------------------------
 # compute_sha256

@@ -1,8 +1,8 @@
 """Tests for abc sync post-sync wiring: opencode.json, CLAUDE.md, skills.
 
 Covers the three helper functions introduced in the auto-wiring feature:
-  - _wire_contexts_opencode
-  - _wire_contexts_claudecode
+  - wire_contexts_opencode
+  - wire_contexts_claudecode
   - wire_skills_post_sync
 
 And integration tests through the full `abc sync` CLI command.
@@ -22,7 +22,7 @@ from beacon.domains.artifact.skill import (
     wire_single_skill,
     wire_skills_post_sync,
 )
-from beacon.utils.wiring import _wire_contexts_claudecode, _wire_contexts_opencode
+from beacon.domains.setup.wiring import wire_contexts_claudecode, wire_contexts_opencode
 from click.testing import CliRunner
 
 # ---------------------------------------------------------------------------
@@ -64,16 +64,16 @@ def project_with_skill(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Unit tests: _wire_contexts_opencode
+# Unit tests: wire_contexts_opencode
 # ---------------------------------------------------------------------------
 
 
-def test_wire_contexts_opencode_appends_paths(project_with_contexts):
+def testwire_contexts_opencode_appends_paths(project_with_contexts):
     project = project_with_contexts
     (project / "opencode.json").write_text(json.dumps({"instructions": []}))
 
     artifacts_dir = project / ".agentic-beacon" / "artifacts"
-    added = _wire_contexts_opencode(project, artifacts_dir)
+    added = wire_contexts_opencode(project, artifacts_dir)
 
     assert len(added) == 2
     data = json.loads((project / "opencode.json").read_text())
@@ -81,13 +81,13 @@ def test_wire_contexts_opencode_appends_paths(project_with_contexts):
     assert ".agentic-beacon/artifacts/contexts/python.md" in data["instructions"]
 
 
-def test_wire_contexts_opencode_idempotent(project_with_contexts):
+def testwire_contexts_opencode_idempotent(project_with_contexts):
     project = project_with_contexts
     (project / "opencode.json").write_text(json.dumps({"instructions": []}))
     artifacts_dir = project / ".agentic-beacon" / "artifacts"
 
-    _wire_contexts_opencode(project, artifacts_dir)
-    added_second = _wire_contexts_opencode(project, artifacts_dir)
+    wire_contexts_opencode(project, artifacts_dir)
+    added_second = wire_contexts_opencode(project, artifacts_dir)
 
     assert added_second == []
     data = json.loads((project / "opencode.json").read_text())
@@ -96,28 +96,28 @@ def test_wire_contexts_opencode_idempotent(project_with_contexts):
     assert len(instructions) == len(set(instructions))
 
 
-def test_wire_contexts_opencode_skips_if_no_opencode_json(project_with_contexts):
+def testwire_contexts_opencode_skips_if_no_opencode_json(project_with_contexts):
     project = project_with_contexts
     artifacts_dir = project / ".agentic-beacon" / "artifacts"
 
-    added = _wire_contexts_opencode(project, artifacts_dir)
+    added = wire_contexts_opencode(project, artifacts_dir)
 
     assert added == []
 
 
-def test_wire_contexts_opencode_skips_if_no_contexts(tmp_path):
+def testwire_contexts_opencode_skips_if_no_contexts(tmp_path):
     (tmp_path / "opencode.json").write_text(json.dumps({"instructions": []}))
     artifacts_dir = tmp_path / ".agentic-beacon" / "artifacts"
     artifacts_dir.mkdir(parents=True)
 
-    added = _wire_contexts_opencode(tmp_path, artifacts_dir)
+    added = wire_contexts_opencode(tmp_path, artifacts_dir)
 
     assert added == []
     data = json.loads((tmp_path / "opencode.json").read_text())
     assert data["instructions"] == []
 
 
-def test_wire_contexts_opencode_preserves_existing_instructions(
+def testwire_contexts_opencode_preserves_existing_instructions(
     project_with_contexts,
 ):
     project = project_with_contexts
@@ -125,14 +125,14 @@ def test_wire_contexts_opencode_preserves_existing_instructions(
     (project / "opencode.json").write_text(json.dumps({"instructions": existing}))
     artifacts_dir = project / ".agentic-beacon" / "artifacts"
 
-    _wire_contexts_opencode(project, artifacts_dir)
+    wire_contexts_opencode(project, artifacts_dir)
 
     data = json.loads((project / "opencode.json").read_text())
     assert "some/existing/instruction.md" in data["instructions"]
     assert len(data["instructions"]) == 3  # 1 existing + 2 new contexts
 
 
-def test_wire_contexts_opencode_handles_missing_instructions_key(
+def testwire_contexts_opencode_handles_missing_instructions_key(
     project_with_contexts,
 ):
     project = project_with_contexts
@@ -140,7 +140,7 @@ def test_wire_contexts_opencode_handles_missing_instructions_key(
     (project / "opencode.json").write_text(json.dumps({"model": "gpt-4"}))
     artifacts_dir = project / ".agentic-beacon" / "artifacts"
 
-    added = _wire_contexts_opencode(project, artifacts_dir)
+    added = wire_contexts_opencode(project, artifacts_dir)
 
     assert len(added) == 2
     data = json.loads((project / "opencode.json").read_text())
@@ -148,16 +148,16 @@ def test_wire_contexts_opencode_handles_missing_instructions_key(
 
 
 # ---------------------------------------------------------------------------
-# Unit tests: _wire_contexts_claudecode
+# Unit tests: wire_contexts_claudecode
 # ---------------------------------------------------------------------------
 
 
-def test_wire_contexts_claudecode_appends_refs(project_with_contexts):
+def testwire_contexts_claudecode_appends_refs(project_with_contexts):
     project = project_with_contexts
     (project / "CLAUDE.md").write_text("# Project\n")
     artifacts_dir = project / ".agentic-beacon" / "artifacts"
 
-    added = _wire_contexts_claudecode(project, artifacts_dir)
+    added = wire_contexts_claudecode(project, artifacts_dir)
 
     assert len(added) == 2
     content = (project / "CLAUDE.md").read_text()
@@ -165,36 +165,36 @@ def test_wire_contexts_claudecode_appends_refs(project_with_contexts):
     assert "@.agentic-beacon/artifacts/contexts/python.md" in content
 
 
-def test_wire_contexts_claudecode_idempotent(project_with_contexts):
+def testwire_contexts_claudecode_idempotent(project_with_contexts):
     project = project_with_contexts
     (project / "CLAUDE.md").write_text("# Project\n")
     artifacts_dir = project / ".agentic-beacon" / "artifacts"
 
-    _wire_contexts_claudecode(project, artifacts_dir)
-    added_second = _wire_contexts_claudecode(project, artifacts_dir)
+    wire_contexts_claudecode(project, artifacts_dir)
+    added_second = wire_contexts_claudecode(project, artifacts_dir)
 
     assert added_second == []
     content = (project / "CLAUDE.md").read_text()
     assert content.count("@.agentic-beacon/artifacts/contexts/global.md") == 1
 
 
-def test_wire_contexts_claudecode_skips_if_no_claude_md(project_with_contexts):
+def testwire_contexts_claudecode_skips_if_no_claude_md(project_with_contexts):
     project = project_with_contexts
     artifacts_dir = project / ".agentic-beacon" / "artifacts"
 
-    added = _wire_contexts_claudecode(project, artifacts_dir)
+    added = wire_contexts_claudecode(project, artifacts_dir)
 
     assert added == []
 
 
-def test_wire_contexts_claudecode_finds_dotclaude_claude_md(project_with_contexts):
+def testwire_contexts_claudecode_finds_dotclaude_claude_md(project_with_contexts):
     project = project_with_contexts
     claude_dir = project / ".claude"
     claude_dir.mkdir()
     (claude_dir / "CLAUDE.md").write_text("# Project\n")
     artifacts_dir = project / ".agentic-beacon" / "artifacts"
 
-    added = _wire_contexts_claudecode(project, artifacts_dir)
+    added = wire_contexts_claudecode(project, artifacts_dir)
 
     assert len(added) == 2
     content = (claude_dir / "CLAUDE.md").read_text()
@@ -529,7 +529,7 @@ def test_sync_prints_manual_instructions_when_no_agent_config_non_interactive(
     monkeypatch.chdir(project)
     # No opencode.json, no CLAUDE.md; simulate non-interactive (CI) environment
 
-    with patch("beacon.core.cli.main._is_interactive", return_value=False):
+    with patch("beacon.core.cli.main.is_interactive", return_value=False):
         result = runner.invoke(main, ["sync"])
 
     assert result.exit_code == 0
@@ -541,7 +541,7 @@ def test_sync_interactive_init_opencode_json(full_sync_project, monkeypatch):
     monkeypatch.chdir(project)
     # No opencode.json, no CLAUDE.md; user answers yes/no to prompts
 
-    with patch("beacon.core.cli.main._is_interactive", return_value=True):
+    with patch("beacon.core.cli.main.is_interactive", return_value=True):
         # "y" for opencode.json prompt, "n" for CLAUDE.md prompt
         result = runner.invoke(main, ["sync"], input="y\nn\n")
 
@@ -557,7 +557,7 @@ def test_sync_interactive_init_claude_md(full_sync_project, monkeypatch):
     monkeypatch.chdir(project)
     # No opencode.json, no CLAUDE.md; user answers no/yes to prompts
 
-    with patch("beacon.core.cli.main._is_interactive", return_value=True):
+    with patch("beacon.core.cli.main.is_interactive", return_value=True):
         # "n" for opencode.json (contexts), "y" for CLAUDE.md (contexts),
         # "n" for opencode.json (skills), "n" for CLAUDE.md (skills)
         # (CLAUDE.md alone doesn't create .claude/ so skill prompt also fires)
@@ -664,7 +664,7 @@ def test_sync_skill_no_agent_config_no_prompt(skills_only_project, monkeypatch):
     project, runner = skills_only_project
     monkeypatch.chdir(project)
 
-    with patch("beacon.core.cli.main._is_interactive", return_value=True):
+    with patch("beacon.core.cli.main.is_interactive", return_value=True):
         result = runner.invoke(main, ["sync"])
 
     assert result.exit_code == 0
@@ -678,7 +678,7 @@ def test_sync_skill_dry_run_does_not_prompt(skills_only_project, monkeypatch):
     project, runner = skills_only_project
     monkeypatch.chdir(project)
 
-    with patch("beacon.core.cli.main._is_interactive", return_value=True):
+    with patch("beacon.core.cli.main.is_interactive", return_value=True):
         result = runner.invoke(main, ["sync", "--dry-run"])
 
     assert result.exit_code == 0
@@ -705,7 +705,7 @@ def test_sync_skill_empty_skills_dir_no_prompt(tmp_path, valid_warehouse, monkey
     monkeypatch.chdir(project)
     runner = CliRunner()
 
-    with patch("beacon.core.cli.main._is_interactive", return_value=False):
+    with patch("beacon.core.cli.main.is_interactive", return_value=False):
         result = runner.invoke(main, ["sync"])
 
     assert result.exit_code == 0
@@ -734,7 +734,7 @@ def test_sync_skill_dir_without_skill_md_no_prompt(
         "  knowledge: []\n"
     )
 
-    with patch("beacon.core.cli.main._is_interactive", return_value=False):
+    with patch("beacon.core.cli.main.is_interactive", return_value=False):
         result = runner.invoke(main, ["sync"])
 
     assert result.exit_code == 0
@@ -867,7 +867,7 @@ def test_sync_full_project_skills_wired_even_when_contexts_need_agent_config(
     project, runner = full_sync_project
     monkeypatch.chdir(project)
 
-    with patch("beacon.core.cli.main._is_interactive", return_value=False):
+    with patch("beacon.core.cli.main.is_interactive", return_value=False):
         result = runner.invoke(main, ["sync"])
 
     assert result.exit_code == 0

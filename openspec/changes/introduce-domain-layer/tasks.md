@@ -105,18 +105,18 @@ See `AGENTS.md` → "Unit Testing Workflow" and `knowledge/lessons/complete-test
 **Output**: `beacon/domains/distribution/{distributor,upgrader,sync_engine,delta,state}.py`; `beacon/core/sync.py` and `beacon/core/delta.py` deleted; `beacon/distributor.py`, `beacon/upgrader.py`, `beacon/utils/sync_state.py` deleted.
 **Validation**: `pytest` + `abc sync` (fresh + incremental) + `abc upgrade` + `abc doctor` all green; sync state file `.sync-state` still written with same format.
 
-- [ ] 4.1 Move `beacon/distributor.py` → `beacon/domains/distribution/distributor.py`
-- [ ] 4.2 Move `beacon/upgrader.py` → `beacon/domains/distribution/upgrader.py`
-- [ ] 4.3 Move `beacon/core/sync.py` → `beacon/domains/distribution/sync_engine.py`
-- [ ] 4.4 Move `beacon/core/delta.py` → `beacon/domains/distribution/delta.py` (the engine; contribution-facing views move in PR 6)
-- [ ] 4.5 Move `beacon/utils/sync_state.py` → `beacon/domains/distribution/state.py` (sync-state bookkeeping is distribution's own aggregate)
-- [ ] 4.6 Rename cross-module `_`-prefixed names (e.g. `_check_sync_state` → `check_sync_state`, `_read_sync_sha` → `read_sync_sha`, etc.)
-- [ ] 4.7 Update all call-sites (CLI main, adopt, contribute, tests)
-- [ ] 4.8 Run regression + smoke
+- [x] 4.1 Move `beacon/distributor.py` → `beacon/domains/distribution/distributor.py`
+- [x] 4.2 Move `beacon/upgrader.py` → `beacon/domains/distribution/upgrader.py`
+- [x] 4.3 Move `beacon/core/sync.py` → `beacon/domains/distribution/sync_engine.py`
+- [x] 4.4 Move `beacon/core/delta.py` → `beacon/domains/distribution/delta.py` (the engine; contribution-facing views move in PR 6)
+- [x] 4.5 Move `beacon/utils/sync_state.py` → `beacon/domains/distribution/state.py` (sync-state bookkeeping is distribution's own aggregate)
+- [x] 4.6 Rename cross-module `_`-prefixed names (e.g. `_check_sync_state` → `check_sync_state`, `_read_sync_sha` → `read_sync_sha`, etc.)
+- [x] 4.7 Update all call-sites (CLI main, adopt, contribute, tests)
+- [x] 4.8 Run regression + smoke
   - **Input**: `.venv/bin/pytest libs/beacon/tests/` then, in a scratch project connected to `examples/sample-warehouse/`: `abc sync` (fresh clone), `abc sync` (again, incremental path), `abc upgrade`, `abc doctor`
   - **Expected Output**: Pytest exits 0. Fresh `abc sync` emits "Synced N artifacts"; incremental emits "Already up to date" or a delta summary. `abc upgrade` reports template status. `abc doctor` prints a clean report.
   - **Validation**: All commands exit 0; `.sync-state` file in the scratch project contains a 40-char SHA matching `git -C examples/sample-warehouse rev-parse HEAD`.
-- [ ] 4.9 Push distribution domain move to draft branch
+- [x] 4.9 Push distribution domain move to draft branch
 
 ## 5. Move `setup` domain
 
@@ -125,15 +125,15 @@ See `AGENTS.md` → "Unit Testing Workflow" and `knowledge/lessons/complete-test
 **Output**: `beacon/domains/setup/{initializer,wiring}.py`; all wiring helpers public-named.
 **Validation**: `abc init`, `abc setup --manual`, and `abc setup --agent-assisted` all succeed end-to-end on a scratch project.
 
-- [ ] 5.1 Move `beacon/initializer.py` → `beacon/domains/setup/initializer.py`
-- [ ] 5.2 Move `beacon/utils/wiring.py` → `beacon/domains/setup/wiring.py`
-- [ ] 5.3 Rename cross-module `_`-prefixed names (~15 functions in wiring.py alone)
-- [ ] 5.4 Update all call-sites (CLI main, tests)
-- [ ] 5.5 Run regression + smoke
+- [x] 5.1 Move `beacon/initializer.py` → `beacon/domains/setup/initializer.py`
+- [x] 5.2 Move `beacon/utils/wiring.py` → `beacon/domains/setup/wiring.py`
+- [x] 5.3 Rename cross-module `_`-prefixed names (~15 functions in wiring.py alone)
+- [x] 5.4 Update all call-sites (CLI main, tests)
+- [x] 5.5 Run regression + smoke
   - **Input**: `.venv/bin/pytest libs/beacon/tests/` then, in a scratch project: `abc init`, `abc setup --manual`, remove `beacon.yaml`, `abc setup --agent-assisted`
   - **Expected Output**: Pytest exits 0. `abc init` creates `.agentic-beacon/` with expected files; `abc setup --manual` writes `beacon.yaml` with an empty template; `abc setup --agent-assisted` installs the project-setup skill and prints next-steps guidance.
   - **Validation**: Exit 0 on each; `.agentic-beacon/beacon.yaml` and `.agentic-beacon/config.toml` match baseline; CLAUDE.md/opencode.json wiring identical to pre-PR baseline (diff-check against a pre-PR snapshot).
-- [ ] 5.6 Push setup domain move to draft branch
+- [x] 5.6 Push setup domain move to draft branch
 
 ## 6. Move `adoption` domain
 

@@ -200,7 +200,7 @@ def test_init_skips_git_init_when_git_exists(runner, tmp_path):
 
 def test_init_result_in_place_flag_true_when_dir_exists(tmp_path):
     """WarehouseInitializer.init() returns in_place=True for existing dirs."""
-    from beacon.initializer import WarehouseInitializer
+    from beacon.domains.setup.initializer import WarehouseInitializer
 
     initializer = WarehouseInitializer(warehouse_path=tmp_path)
     result = initializer.init(init_git=False)
@@ -209,7 +209,7 @@ def test_init_result_in_place_flag_true_when_dir_exists(tmp_path):
 
 def test_init_result_in_place_flag_false_for_new_dir(tmp_path):
     """WarehouseInitializer.init() returns in_place=False for new dirs."""
-    from beacon.initializer import WarehouseInitializer
+    from beacon.domains.setup.initializer import WarehouseInitializer
 
     new_dir = tmp_path / "brand-new"
     initializer = WarehouseInitializer(warehouse_path=new_dir)

@@ -8,7 +8,7 @@ from loguru import logger
 
 from beacon.domains.artifact.checksums import compute_sha256, write_checksums
 
-_DATA_DIR = Path(__file__).parent / "data"
+_DATA_DIR = Path(__file__).parent.parent.parent / "data"
 TEMPLATES_DIR = _DATA_DIR / "templates"
 
 # Relative paths (from warehouse root) of all template-generated files.

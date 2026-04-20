@@ -43,6 +43,17 @@ from beacon.domains.distribution.state import (
     write_sync_state,
 )
 from beacon.domains.distribution.sync_engine import SyncEngine
+from beacon.domains.setup.wiring import (
+    confirm_prune,
+    create_beacon_template,
+    init_claude_md,
+    init_opencode_json,
+    install_project_setup_skill,
+    is_interactive,
+    unwire_pruned_artifacts,
+    wire_contexts_claudecode,
+    wire_contexts_opencode,
+)
 from beacon.utils.contribute import (
     _auto_git_contribute,
     _contribute_all,
@@ -61,17 +72,6 @@ from beacon.utils.git import (
     _check_warehouse_git_clean,
     _check_warehouse_on_main_branch,
     find_project_root,
-)
-from beacon.utils.wiring import (
-    _confirm_prune,
-    _create_beacon_template,
-    _init_claude_md,
-    _init_opencode_json,
-    _install_project_setup_skill,
-    _is_interactive,
-    _unwire_pruned_artifacts,
-    _wire_contexts_claudecode,
-    _wire_contexts_opencode,
 )
 
 console = Console()
@@ -174,7 +174,7 @@ def setup(*, manual: bool, agent_assisted: bool) -> None:
             sys.exit(0)
 
     if workflow == "manual":
-        _create_beacon_template(beacon_yaml)
+        create_beacon_template(beacon_yaml)
         console.print("\n[bold green]✓ Created beacon.yaml template[/bold green]")
         console.print(f"  [blue]Location:[/blue] {beacon_yaml}")
         console.print("\n[bold]Next Steps:[/bold]")
@@ -192,8 +192,8 @@ def setup(*, manual: bool, agent_assisted: bool) -> None:
         )
 
     elif workflow == "agent-assisted":
-        _create_beacon_template(beacon_yaml)
-        _install_project_setup_skill(beacon_dir)
+        create_beacon_template(beacon_yaml)
+        install_project_setup_skill(beacon_dir)
         console.print("\n[bold green]✓ Agent-assisted setup ready[/bold green]")
         console.print(f"  [blue]beacon.yaml:[/blue] {beacon_yaml}")
         console.print(f"  [blue]Catalog:[/blue] {beacon_dir / 'warehouse-catalog.md'}")
@@ -383,7 +383,7 @@ def sync(
         orphans = sync_engine.classify_orphans(artifact_paths)
         confirmed_prune: list[str] = []
         if orphans:
-            confirmed_prune = _confirm_prune(orphans, dry_run=dry_run)
+            confirmed_prune = confirm_prune(orphans, dry_run=dry_run)
 
         def log_fn(msg: str) -> None:
             console.print(f"  {msg}")
@@ -440,16 +440,16 @@ def sync(
         wiring_notes: list[str] = []
 
         if summary.pruned_paths:
-            _unwire_pruned_artifacts(project_root, summary.pruned_paths, artifacts_dir)
+            unwire_pruned_artifacts(project_root, summary.pruned_paths, artifacts_dir)
 
         if beacon_settings.artifacts.contexts:
-            oc_added = _wire_contexts_opencode(project_root, artifacts_dir)
+            oc_added = wire_contexts_opencode(project_root, artifacts_dir)
             if oc_added:
                 console.print(
                     f"\n[green]✓[/green] Wired {len(oc_added)} context(s) into opencode.json"
                 )
 
-            cc_added = _wire_contexts_claudecode(project_root, artifacts_dir)
+            cc_added = wire_contexts_claudecode(project_root, artifacts_dir)
             if cc_added:
                 console.print(
                     f"[green]✓[/green] Wired {len(cc_added)} context(s) into CLAUDE.md"
@@ -466,14 +466,14 @@ def sync(
             if not has_opencode and not has_claude:
                 contexts_dir = artifacts_dir / "contexts"
                 if contexts_dir.exists() and any(contexts_dir.rglob("*.md")):
-                    if not dry_run and _is_interactive():
+                    if not dry_run and is_interactive():
                         console.print(
                             "\n[yellow]No agent config detected.[/yellow] "
                             "Set one up to wire contexts automatically."
                         )
                         if click.confirm("  Initialize opencode.json?", default=False):
-                            _init_opencode_json(project_root)
-                            oc_init = _wire_contexts_opencode(
+                            init_opencode_json(project_root)
+                            oc_init = wire_contexts_opencode(
                                 project_root, artifacts_dir
                             )
                             if oc_init:
@@ -482,8 +482,8 @@ def sync(
                                     f"wired {len(oc_init)} context(s)"
                                 )
                         if click.confirm("  Initialize CLAUDE.md?", default=False):
-                            _init_claude_md(project_root)
-                            cc_init = _wire_contexts_claudecode(
+                            init_claude_md(project_root)
+                            cc_init = wire_contexts_claudecode(
                                 project_root, artifacts_dir
                             )
                             if cc_init:
@@ -726,8 +726,8 @@ def install_artifact(
             )
 
     elif artifact_type == "contexts":
-        wired_opencode = _wire_contexts_opencode(project_root, artifacts_dir)
-        wired_claudecode = _wire_contexts_claudecode(project_root, artifacts_dir)
+        wired_opencode = wire_contexts_opencode(project_root, artifacts_dir)
+        wired_claudecode = wire_contexts_claudecode(project_root, artifacts_dir)
         if wired_opencode or wired_claudecode:
             console.print("[green]✓[/green] Context copied and wired into agent config")
         else:
@@ -1360,7 +1360,7 @@ def adopt(*, dry_run: bool) -> None:
         console.print("\n[dim]Run without --dry-run to interactively adopt.[/dim]")
         return
 
-    if not _is_interactive():
+    if not is_interactive():
         console.print("[bold]Unadopted artifacts:[/bold]")
         for c in candidates:
             desc = f" — {c.description}" if c.description else ""
@@ -1511,8 +1511,8 @@ def adopt(*, dry_run: bool) -> None:
 
                 for c in non_agent_selections:
                     if c.artifact_type == "contexts":
-                        _wire_contexts_opencode(project_root, artifacts_dir)
-                        _wire_contexts_claudecode(project_root, artifacts_dir)
+                        wire_contexts_opencode(project_root, artifacts_dir)
+                        wire_contexts_claudecode(project_root, artifacts_dir)
                         break
 
                 has_skills = any(
