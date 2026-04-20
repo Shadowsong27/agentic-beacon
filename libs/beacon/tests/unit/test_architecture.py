@@ -71,8 +71,8 @@ def test_six_domains_exist():
 
 
 def test_no_stray_top_level_modules():
-    """The only .py files directly under beacon/ shall be __init__.py and cli.py."""
-    allowed = {"__init__.py", "cli.py"}
+    """The only .py file directly under beacon/ shall be __init__.py."""
+    allowed = {"__init__.py"}
     for path in BEACON_SRC.iterdir():
         if path.is_file() and path.suffix == ".py":
             assert path.name in allowed, f"Disallowed top-level file: {path.name}"

@@ -37,7 +37,7 @@ Repository = "https://github.com/Shadowsong27/agentic-beacon"
 Issues = "https://github.com/Shadowsong27/agentic-beacon/issues"
 
 [project.scripts]
-abc = "beacon.cli:main"
+abc = "beacon.cli.main:main"
 
 [project.optional-dependencies]
 dev = [
