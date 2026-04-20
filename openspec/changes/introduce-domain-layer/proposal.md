@@ -7,8 +7,8 @@ The `beacon` package has no clear domain layer. Business logic is scattered acro
 - **Introduce a domain layer** at `beacon/domains/` split by bounded context: `warehouse`, `setup`, `adoption`, `distribution`, `contribution`, `artifact`. Each domain owns its services, models, workflows, and persisted state as a self-contained package.
 - **Thin the CLI layer** (`beacon/cli/`, renamed from `beacon/core/cli/`): Click handlers only — argument parsing, output formatting, and a single call into a domain service per command. No file I/O or business logic in handlers.
 - **Shrink `utils/`** to genuine shared primitives only: `git.py` (project-root detection, clean checks), `display.py` (Rich console helpers), and a new `fs.py` if filesystem helpers emerge. Everything else moves to the appropriate domain.
-- **Dissolve the top-level service files**: `adopt.py` → `domains/adoption/`; `distributor.py` → `domains/distribution/`; `initializer.py` → `domains/setup/`; `upgrader.py` → `domains/distribution/upgrader.py`; `checksums.py` → `domains/sync/` or `domains/artifact/`.
-- **Rationalize `core/`** into `beacon/core/` (or rename to `beacon/shared/`) holding only cross-domain primitives: `manifest/` models, `exceptions.py`, `settings.py`, `gitignore.py`. The sync engine (`core/sync.py`) and delta engine (`core/delta.py`) move to `domains/sync/` and `domains/distribution/` respectively.
+- **Dissolve the top-level service files**: `adopt.py` → `domains/adoption/`; `distributor.py` → `domains/distribution/`; `initializer.py` → `domains/setup/`; `upgrader.py` → `domains/distribution/upgrader.py`; `checksums.py` → `domains/artifact/`.
+- **Rationalize `core/`** into `beacon/core/` holding only cross-domain primitives: `manifest/` models, `exceptions.py`, `settings.py`, `gitignore.py`. The sync engine (`core/sync.py`) and delta engine (`core/delta.py`) move to `domains/distribution/sync_engine.py` and `domains/distribution/delta.py`.
 - **Remove the `_private` naming on cross-module functions**. Functions imported by another module are part of a public domain API and must be renamed without the leading underscore as part of the move.
 - **BREAKING (internal only)**: Import paths change. No public Python API is documented, so external consumers are unaffected; the `abc` CLI surface is unchanged.
 
@@ -30,19 +30,19 @@ The `beacon` package has no clear domain layer. Business logic is scattered acro
 - **Internal API**: All internal imports change. Anyone importing from `beacon.utils.*`, `beacon.adopt`, `beacon.distributor`, `beacon.initializer`, `beacon.upgrader`, or `beacon.core.*` will need to update.
 - **Knowledge base**: The `CLI Layer Discipline` rule in `AGENTS.md` is generalized into the new `layered-architecture` spec. Several `knowledge/decisions/*.md` entries need pointers updated.
 - **Dependencies**: None. No new packages; no packages removed.
-- **Migration**: Single PR per domain slice is feasible (see design.md for sequencing). Each slice is behavior-preserving and ends with a green test suite.
+- **Migration**: Single long-running draft PR accumulates all domain moves incrementally (see design.md for sequencing). Review happens continuously; the branch must stay green. One final squash-merge lands the new architecture atomically.
 
 ## Manual Intervention Requirements
 
-- **[Manual Step] Merge each of the 9 PRs via the GitHub UI**
-  - **Rationale**: Per project policy, merges are performed by a human via GitHub — the agent creates branches, commits, and opens PRs, but does not press the green button. Each PR is sequenced (PR N depends on PR N-1 being merged), so the pace of the refactor is bounded by merge cadence.
-  - **Timing**: After each PR is opened, CI is green, and review is complete. Nine merges total across phases 1 → 9.
+- **[Manual Step] Review and merge the single draft PR via the GitHub UI**
+  - **Rationale**: Per project policy, merges are performed by a human via GitHub — the agent pushes commits to the draft branch and addresses review feedback, but does not press the green button. Review happens continuously as the draft evolves; one merge at the end lands the full refactor.
+  - **Timing**: When all 9 phases are complete, CI is green, and review threads are resolved.
 
-- **[Manual Step] (Optional) Acceptance smoke-test after PR 5 (adopt.py move) and PR 7 (CLI thinning)**
-  - **Rationale**: `adopt.py` is 1175 lines and covers the interactive `abc adopt` flow; PR 7 restructures every CLI handler. Both are high-value points for a human to exercise the CLI on a real project to catch interaction regressions the automated smoke tests in tasks.md may miss.
-  - **Timing**: Before merging PR 5 and PR 7. The agent can also run these smokes, but a human review of the interactive UX is strongly advised.
+- **[Manual Step] (Optional) Acceptance smoke-test before final merge**
+  - **Rationale**: `adopt.py` is 1175 lines and covers the interactive `abc adopt` flow; the CLI thinning phase restructures every handler. These are high-value points for a human to exercise the CLI on a real project to catch interaction regressions the automated smoke tests may miss.
+  - **Timing**: Before marking the draft ready-for-merge. The agent runs automated smokes after each phase, but a human review of the interactive UX is strongly advised.
 
-All other work — branch creation, moves, renames, import rewrites, test runs, non-interactive smoke tests, PR creation — is automated by the agent.
+All other work — moves, renames, import rewrites, test runs, non-interactive smoke tests, draft PR management — is automated by the agent.
 
 ---
 

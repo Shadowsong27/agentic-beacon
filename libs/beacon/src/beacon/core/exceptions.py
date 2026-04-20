@@ -41,3 +41,23 @@ class WarehouseValidationError(ConfigurationError):
     """Raised when warehouse structure validation fails."""
 
     pass
+
+
+class ResetError(ConfigurationError):
+    """Raised when artifact reset cannot proceed due to configuration issues."""
+
+    pass
+
+
+class BeaconSyncError(BeaconError):
+    """Raised when the sync pipeline cannot proceed."""
+
+    def __init__(self, message: str, hint: str | None = None) -> None:
+        super().__init__(message)
+        self.hint = hint
+
+
+class ContributeError(BeaconError):
+    """Raised when a contribute operation cannot proceed."""
+
+    pass

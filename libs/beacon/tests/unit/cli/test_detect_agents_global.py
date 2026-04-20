@@ -1,4 +1,4 @@
-"""Tests for _detect_agents_global() function.
+"""Tests for detect_agents_global() function.
 
 TDD Test Cases:
 - TC1: Both ~/.config/opencode/ and ~/.claude/ exist → ["opencode", "claudecode"]
@@ -8,11 +8,11 @@ TDD Test Cases:
 - TC5: ~/.config/opencode is a file (not dir) → not counted
 """
 
-from beacon.utils.agents import _detect_agents_global
+from beacon.domains.artifact.agent import detect_agents_global
 
 
 class TestDetectAgentsGlobal:
-    """Tests for _detect_agents_global() covering TC1-TC5."""
+    """Tests for detect_agents_global() covering TC1-TC5."""
 
     def test_tc1_both_dirs_exist(self, tmp_path, monkeypatch):
         """TC1: Both ~/.config/opencode/ and ~/.claude/ exist → ["opencode", "claudecode"]."""
@@ -21,7 +21,7 @@ class TestDetectAgentsGlobal:
         (fake_home / ".claude").mkdir(parents=True)
         monkeypatch.setattr("pathlib.Path.home", lambda: fake_home)
 
-        result = _detect_agents_global()
+        result = detect_agents_global()
 
         assert "opencode" in result
         assert "claudecode" in result
@@ -33,7 +33,7 @@ class TestDetectAgentsGlobal:
         fake_home.mkdir(exist_ok=True)
         monkeypatch.setattr("pathlib.Path.home", lambda: fake_home)
 
-        result = _detect_agents_global()
+        result = detect_agents_global()
 
         assert result == ["opencode"]
 
@@ -43,7 +43,7 @@ class TestDetectAgentsGlobal:
         (fake_home / ".claude").mkdir(parents=True)
         monkeypatch.setattr("pathlib.Path.home", lambda: fake_home)
 
-        result = _detect_agents_global()
+        result = detect_agents_global()
 
         assert result == ["claudecode"]
 
@@ -53,7 +53,7 @@ class TestDetectAgentsGlobal:
         fake_home.mkdir(parents=True)
         monkeypatch.setattr("pathlib.Path.home", lambda: fake_home)
 
-        result = _detect_agents_global()
+        result = detect_agents_global()
 
         assert result == []
 
@@ -64,6 +64,6 @@ class TestDetectAgentsGlobal:
         (fake_home / ".config" / "opencode").write_text("not a dir")
         monkeypatch.setattr("pathlib.Path.home", lambda: fake_home)
 
-        result = _detect_agents_global()
+        result = detect_agents_global()
 
         assert "opencode" not in result

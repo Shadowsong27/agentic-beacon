@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from beacon.cli import main
+from beacon.cli.main import main
 from beacon.core.manifest.beacon import BeaconManifest
 from click.testing import CliRunner
 

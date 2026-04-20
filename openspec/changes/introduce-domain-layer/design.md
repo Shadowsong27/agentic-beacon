@@ -122,30 +122,33 @@ Keep both layers; their purposes differ:
 
 This lets us reject the current lazy pattern of dropping anything non-CLI into `utils/`.
 
-### Decision 5 — Migration strategy: one domain per PR
+### Decision 5 — Migration strategy: continuous draft PR
 
-Do **not** attempt a single atomic refactor. Sequence:
+Rather than splitting into 9 small PRs (which creates merge-queue friction and blocks review on sequencing), we use a **single long-running draft PR** that accumulates domain moves incrementally. Review happens continuously on the draft; the PR is marked ready-for-merge only when all domains are moved and tests are green.
 
-1. **PR 0** — add `domains/` skeleton, move no code. Land the `layered-architecture` spec.
-2. **PR 1** — move `artifact` domain (agents, skills, checksums). Lowest-coupling first — feeds into every other domain.
-3. **PR 2** — move `warehouse` domain (validator, catalog).
-4. **PR 3** — move `distribution` domain (distributor, upgrader, sync engine, delta engine, sync_state). Largest; pulls `core/sync.py` + `core/delta.py` out of `core/`.
-5. **PR 4** — move `setup` domain (initializer, wiring).
-6. **PR 5** — move `adoption` domain (adopt.py is 1175 lines; isolate last).
-7. **PR 6** — move `contribution` domain (contribute + user-facing delta views).
-8. **PR 7** — thin `cli/main.py`: replace imports-from-utils with imports-from-domains, un-underscore public names.
-9. **PR 8** — delete empty shells, update `AGENTS.md`, update knowledge base pointers.
+**Why a single draft PR:**
+- The refactor is behaviour-preserving; there is no partial-value state — a half-moved domain layer is arguably *more* confusing than the old layout.
+- Reviewers can see the full diff evolve and comment on patterns (naming, import style, `xfail` handling) once rather than repeating feedback across 9 PRs.
+- CI runs on every push; the draft branch must stay green throughout.
+- When complete, one squash-merge atomically lands the new architecture.
 
-Each PR is self-contained and leaves tests green. Rollback of any PR is just a revert.
-
-**Why not do it in a single PR:** a single PR touching ~9,500 lines would be unreviewable and would block other work for days. Per-domain PRs are reviewable in under an hour each and parallelisable with other feature work.
+**Phase sequencing (still honoured within the single branch):**
+1. Skeleton + architecture test (no code moves).
+2. Move `artifact` domain (lowest coupling).
+3. Move `warehouse` domain.
+4. Move `distribution` domain (largest; vacates `core/sync.py` + `core/delta.py`).
+5. Move `setup` domain.
+6. Move `adoption` domain (`adopt.py` is 1175 lines; isolate late).
+7. Move `contribution` domain (split `utils/delta.py` views).
+8. Thin CLI layer (`core/cli/` → `cli/`, un-underscore public names).
+9. Clean up: delete empty shells, update docs, archive change.
 
 ### Decision 6 — Enforcement
 
 Three mechanisms, ordered by cost:
 
 1. **Convention documented in the `layered-architecture` spec** — required; zero-cost; the baseline.
-2. **A short `tests/test_architecture.py`** that walks `beacon/` and asserts dependency direction (e.g., `core/` modules have no `from beacon.domains` or `from beacon.cli` imports). Low-cost; runs in CI. **Include in this change.**
+2. **A short `libs/beacon/tests/unit/test_architecture.py`** that walks `beacon/` and asserts dependency direction (e.g., `core/` modules have no `from beacon.domains` or `from beacon.cli` imports). Low-cost; runs in CI. **Include in this change.**
 3. **An `import-linter` or `ruff` custom rule** — deferred to a follow-up if the test proves flaky or hard to read.
 
 ## Impacted Modules & Systems
@@ -176,7 +179,7 @@ Three mechanisms, ordered by cost:
 
 **Code Changes (tests):**
 - `libs/beacon/tests/**/*.py` — every test that imports from `beacon.utils.*`, `beacon.adopt`, `beacon.distributor`, `beacon.initializer`, `beacon.upgrader`, `beacon.checksums`, `beacon.core.sync`, `beacon.core.delta`, or `beacon.warehouse` must update its import paths. Test logic unchanged.
-- `libs/beacon/tests/test_architecture.py` — **new** file added in PR 0, validates every architectural rule in `specs/layered-architecture/spec.md`.
+- `libs/beacon/tests/unit/test_architecture.py` — **new** file added in PR 0, validates every architectural rule in `specs/layered-architecture/spec.md`.
 
 **Data/Schema Changes:**
 - None. No database, no Pydantic model, no file format changes.
@@ -194,14 +197,14 @@ Three mechanisms, ordered by cost:
 
 **Repository Branch Strategy:**
 - Repositories to be modified: `agentic-beacon` (this repo; single-repo change)
-- Feature branch naming: one branch per PR in the sequence — e.g., `refactor/domain-skeleton` (PR 0), `refactor/domain-artifact` (PR 1), `refactor/domain-warehouse` (PR 2), `refactor/domain-distribution` (PR 3), `refactor/domain-setup` (PR 4), `refactor/domain-adoption` (PR 5), `refactor/domain-contribution` (PR 6), `refactor/cli-thinning` (PR 7), `refactor/cleanup-docs` (PR 8)
-- Base branch: `main` for PR 0; each subsequent PR branches from the previous PR's merge commit on `main` (strict sequencing — no parallel PRs in this refactor)
-- Branch cutting: the agent runs `git checkout main && git pull && git checkout -b <branch>` before each PR's work begins
+- Feature branch: `refactor/introduce-domain-layer` (single long-running branch)
+- Base branch: `main`
+- Workflow: agent pushes incremental commits to the draft branch; reviewer leaves comments on the draft; agent addresses feedback in follow-up commits; when all phases are complete and approved, the draft is marked ready and merged.
 
 ## Risks / Trade-offs
 
-- **[Risk] Merge conflicts during the multi-PR sequence** → Mitigation: each PR is scoped to one domain; sequence them serially. Pause other refactors in affected files until the sequence completes.
-- **[Risk] Hidden call-sites miss the rename from `_private` to `public`** → Mitigation: grep-verify before and after each PR; the architecture test catches imports from `_`-prefixed names at module boundaries.
+- **[Risk] Long-running draft PR grows large and unreviewable** → Mitigation: commits are scoped by phase (one commit per domain move); reviewer can read commit-by-commit rather than the full diff. Rebase/squash only at the end.
+- **[Risk] Hidden call-sites miss the rename from `_private` to `public`** → Mitigation: grep-verify before and after each phase; the architecture test catches imports from `_`-prefixed names at module boundaries.
 - **[Risk] Developers continue to drop new logic into `utils/` out of habit** → Mitigation: the `layered-architecture` spec's "utils eligibility" scenario is testable; CI review catches violations.
 - **[Risk] The `artifact` domain becomes a second dumping ground** → Mitigation: the spec requires each domain's scope to be articulable in one sentence; `artifact` = "definition, identification, and integrity of distributable artifact types (agents, skills, rules, commands, contexts)". Anything that doesn't fit that sentence does not belong there.
 - **[Trade-off] No DDD ceremony (aggregates, repositories, domain events)** → we gain simplicity at the cost of formal purity. The package is too small to benefit from full DDD; we adopt only the bounded-context idea. If scale grows, we can layer the rest on.
@@ -209,18 +212,20 @@ Three mechanisms, ordered by cost:
 
 ## Migration Plan
 
-1. Merge PR 0 (skeleton + spec). Freeze non-trivial edits to `utils/` and top-level service files during the sequence.
-2. Execute PRs 1–8 in order. After each, run the full test suite (`pytest`) and one happy-path smoke: `abc init`, `abc warehouse connect`, `abc sync` against `examples/sample-warehouse/`.
-3. On completion, update `AGENTS.md`:
+1. Open draft PR from `refactor/introduce-domain-layer` to `main`. Push the skeleton + architecture test first.
+2. Execute phases 1–9 on the draft branch. After each phase, run the full test suite (`pytest`) and one happy-path smoke: `abc init`, `abc warehouse connect`, `abc sync` against `examples/sample-warehouse/`.
+3. Review continuously on the draft. Address feedback as follow-up commits.
+4. When all phases are complete and approved, mark the draft ready-for-review and merge.
+5. On merge, update `AGENTS.md`:
    - Replace "CLI Layer Discipline" rule with a pointer to the new spec.
    - Add a "Domain Layer" section naming the six domains.
-4. Update `knowledge/facts/repository-structure.md` with the new tree.
-5. Open a follow-up issue for the optional `import-linter` rule (Decision 6, mechanism 3).
+6. Update `knowledge/facts/repository-structure.md` with the new tree.
+7. Open a follow-up issue for the optional `import-linter` rule (Decision 6, mechanism 3).
 
-**Rollback**: each PR is reverted independently. If a later-sequence PR uncovers a design flaw, revert only from that PR forward; earlier domain moves stand on their own.
+**Rollback**: revert the single merge commit. If a design flaw is discovered late, the branch can be rebased to fix it; individual phase commits are not merged independently.
 
 ## Open Questions
 
-- Should `cli/main.py` be split per-subcommand-group (`cli/setup.py`, `cli/sync.py`, etc.) in PR 8, or left as one large file? Leaning toward splitting, because 1757 lines will still be too large even after logic is removed — but this is a presentation concern that can slip to a follow-up.
-- Should `core/` be renamed to `shared/` once the sync/delta engines leave? Argument for: "core" is overloaded and the remaining contents (models, settings) read as "shared primitives". Argument against: churn. Default: keep `core/`.
-- Does `contribution` need its own delta-view module, or should it import from `distribution/delta.py`? Current `utils/delta.py` is 878 lines and mixes both engine output and contribution user-facing views. Resolve during PR 7 with a second read.
+- ~~Should `cli/main.py` be split per-subcommand-group (`cli/setup.py`, `cli/sync.py`, etc.) in PR 8, or left as one large file?~~ **Resolved: Yes — split in PR 8.** `cli/main.py` becomes the Click group + registration only; handlers move to `cli/setup.py`, `cli/sync.py`, `cli/contribute.py`, `cli/agent.py`, `cli/warehouse.py`.
+- ~~Should `core/` be renamed to `shared/` once the sync/delta engines leave?~~ **Resolved: Keep `core/`.** The churn outweighs the clarity gain; "core" is already understood in the codebase.
+- Does `contribution` need its own delta-view module, or should it import from `distribution/delta.py`? **Deferred to PR 7.** Current `utils/delta.py` is 878 lines and mixes both engine output and contribution user-facing views. Re-evaluate during PR 7 implementation with a second read of the actual code.

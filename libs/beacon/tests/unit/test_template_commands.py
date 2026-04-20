@@ -10,7 +10,7 @@ import re
 from pathlib import Path
 
 import click
-from beacon.cli import main
+from beacon.cli.main import main
 from beacon.data.historical_hashes import KNOWN_TEMPLATE_HASHES, normalise_path
 
 _TEMPLATES_DIR = Path(__file__).parent.parent.parent / "src/beacon/data/templates"

@@ -23,7 +23,7 @@ No other top-level code packages SHALL exist under `beacon/` (test packages, `da
 
 #### Scenario: Layered test catches stray top-level modules
 
-- **WHEN** `pytest tests/test_architecture.py` runs
+- **WHEN** `pytest libs/beacon/tests/unit/test_architecture.py` runs
 - **THEN** it SHALL fail if any `.py` file exists directly under `beacon/` other than `__init__.py` and `cli.py`
 
 ### Requirement: Dependency direction
@@ -37,18 +37,27 @@ Imports between layers SHALL follow one direction only: `cli → domains → cor
 
 #### Scenario: `core/` does not depend on `domains/`
 
-- **WHEN** `pytest tests/test_architecture.py` runs
+- **WHEN** `pytest libs/beacon/tests/unit/test_architecture.py` runs
 - **THEN** it SHALL fail if any module under `beacon/core/` contains a `from beacon.domains` or `from beacon.cli` import (or the `import beacon.domains` / `import beacon.cli` equivalents)
 
 #### Scenario: `utils/` does not depend on `core/` or above
 
-- **WHEN** `pytest tests/test_architecture.py` runs
+- **WHEN** `pytest libs/beacon/tests/unit/test_architecture.py` runs
 - **THEN** it SHALL fail if any module under `beacon/utils/` contains a `from beacon.cli`, `from beacon.domains`, or `from beacon.core` import
 
-#### Scenario: Cross-domain imports go through top-level modules
+#### Scenario: Cross-domain imports are bounded by depth
 
 - **WHEN** a module in `beacon/domains/<A>/` imports from `beacon/domains/<B>/`
-- **THEN** the import path MUST reference a module directly under `beacon/domains/<B>/`, not a deeper internal module
+- **THEN** the import path MUST be at most four parts deep: `beacon.domains.<B>.<module>`
+- **NOTE** Because `__init__.py` files are empty (no re-exports), imports target submodules
+  directly rather than the package. The constraint is therefore depth ≤ 4, not "package only".
+  Imports five or more parts deep (e.g. `beacon.domains.B.sub.nested`) are forbidden.
+
+#### Scenario: TC5 enforces the depth limit
+
+- **WHEN** `pytest libs/beacon/tests/unit/test_architecture.py` runs
+- **THEN** it SHALL fail if any cross-domain import (`from beacon.domains.<B>.*`) exceeds
+  four path components
 
 ### Requirement: Bounded contexts
 
@@ -121,7 +130,7 @@ Any function, class, or constant defined in module A and imported by module B SH
 
 #### Scenario: Architecture test catches `_`-prefixed imports
 
-- **WHEN** `pytest tests/test_architecture.py` runs
+- **WHEN** `pytest libs/beacon/tests/unit/test_architecture.py` runs
 - **THEN** it SHALL fail if any `from beacon.*` import statement references a name beginning with `_`
 
 ### Requirement: Empty `__init__.py` files
@@ -130,14 +139,30 @@ Every `__init__.py` under `beacon/` SHALL contain only a module docstring (or be
 
 #### Scenario: `__init__.py` has no executable imports
 
-- **WHEN** `pytest tests/test_architecture.py` runs
+- **WHEN** `pytest libs/beacon/tests/unit/test_architecture.py` runs
 - **THEN** it SHALL fail if any `__init__.py` under `beacon/` contains an `import` or `from` statement, an `__all__` assignment, or any non-docstring statement
 
 ### Requirement: Architecture verification test
 
-The repository SHALL include `libs/beacon/tests/test_architecture.py` which validates every scenario marked "architecture test" above. This test SHALL run as part of the default `pytest` invocation.
+The repository SHALL include `libs/beacon/tests/unit/test_architecture.py` which validates every scenario marked "architecture test" above. This test SHALL run as part of the default `pytest` invocation.
 
 #### Scenario: Architecture test runs by default
 
 - **WHEN** a contributor runs `pytest` from the repository root
 - **THEN** `test_architecture.py` SHALL be collected and executed without requiring extra flags or markers
+
+### Requirement: Domain and core layers are CLI-framework-free
+
+Modules under `beacon/domains/` and `beacon/core/` SHALL NOT import `click`, `rich`, or call
+`sys.exit(...)`. Interactive UX (prompts, confirmations, console output, process termination)
+belongs exclusively in `beacon/cli/`.
+
+Domain functions that need caller input SHALL accept callback parameters or return structured
+result objects; CLI handlers own the UX.
+
+#### Scenario: TC10 enforces the no-CLI-in-domains rule
+
+- **WHEN** `pytest libs/beacon/tests/unit/test_architecture.py` runs
+- **THEN** it SHALL fail if any module under `beacon/domains/` or `beacon/core/` imports
+  `click` or `rich`, or calls `sys.exit(...)`, unless the file has an explicit entry in
+  the `_TC10_WAIVERS` dict (which documents known violations pending cleanup)

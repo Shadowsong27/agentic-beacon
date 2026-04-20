@@ -5,9 +5,9 @@ import json
 from pathlib import Path
 
 import pytest
-from beacon.checksums import compute_sha256
-from beacon.initializer import WarehouseInitializer
-from beacon.upgrader import FileState, WarehouseUpgrader
+from beacon.domains.artifact.checksums import compute_sha256
+from beacon.domains.distribution.upgrader import FileState, WarehouseUpgrader
+from beacon.domains.setup.initializer import WarehouseInitializer
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -334,3 +334,28 @@ def test_new_template_checksum_stored_after_creation(tmp_path):
 
     hashes = json.loads(cs_path.read_text())["files"]
     assert hashes["skills/README.md"] == compute_sha256(new_content)
+
+
+# ---------------------------------------------------------------------------
+# _read_new_template — disk-path coverage (regression guard)
+# ---------------------------------------------------------------------------
+
+
+def test_read_new_template_falls_back_to_templates_dir(tmp_path):
+    """_read_new_template with no overrides reads content from TEMPLATES_DIR on disk.
+
+    All other upgrader tests pass template_overrides=..., which short-circuits before
+    the disk lookup.  This test exercises the actual TEMPLATES_DIR / rel_path branch so
+    a future edit that accidentally removes it is caught by CI.
+    """
+    from beacon.domains.setup.initializer import TEMPLATES_DIR
+
+    wh = _make_warehouse(tmp_path)
+    upgrader = WarehouseUpgrader(warehouse_path=wh)
+
+    # README.md is a bundled template file that exists on disk in TEMPLATES_DIR.
+    result = upgrader._read_new_template("README.md", template_overrides={})
+
+    expected = (TEMPLATES_DIR / "README.md").read_text(encoding="utf-8")
+    assert result == expected
+    assert len(result) > 0, "_read_new_template returned empty string for README.md"
