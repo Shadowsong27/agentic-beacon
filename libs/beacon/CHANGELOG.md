@@ -1,5 +1,35 @@
 # Changelog
 
+## [2.6.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v2.5.0...agentic-beacon@v2.6.0) (2026-04-20)
+
+
+### Features
+
+* **adopt+doctor:** knowledge node TUI, abc doctor command, and README with screenshot ([18ba254](https://github.com/Shadowsong27/agentic-beacon/commit/18ba254bbfc6502643287bb116f0099d5ab3795c))
+* **adopt:** implement abc adopt command with TUI and sync notification ([db8c22f](https://github.com/Shadowsong27/agentic-beacon/commit/db8c22f6c42bb1f9f307b7974518d5c82a4cca8e))
+* **adopt:** redesign TUI with collapsible tree, description panel, and per-type icons ([fd127a1](https://github.com/Shadowsong27/agentic-beacon/commit/fd127a1ab2e4b5510fd53fa20573a1bdcfa0d323))
+* **delta+adopt:** stale status detection and abc adopt command ([#90](https://github.com/Shadowsong27/agentic-beacon/issues/90)) ([bfa73d4](https://github.com/Shadowsong27/agentic-beacon/commit/bfa73d4105b3a92df0b6e52cd0fb4eec54c52c51))
+
+
+### Bug Fixes
+
+* **tests:** update imports to use beacon.utils.* modules ([414c9b1](https://github.com/Shadowsong27/agentic-beacon/commit/414c9b17d7d6234fb3204de71e2320a707caf633))
+* update agent sync-state HEAD even when content is unchanged ([2874ef9](https://github.com/Shadowsong27/agentic-beacon/commit/2874ef9072231baa59fa912acbcb04b3976988cc))
+* update agent sync-state HEAD even when content is unchanged ([#89](https://github.com/Shadowsong27/agentic-beacon/issues/89)) ([3d8cce7](https://github.com/Shadowsong27/agentic-beacon/commit/3d8cce7ca6ce0c766e949d048f3a9352ee0a7651))
+
+
+### Code Refactoring
+
+* extract cli.py utils into beacon/utils/ package ([fba4c63](https://github.com/Shadowsong27/agentic-beacon/commit/fba4c6376f55a370b2df8895e6d9760e7353a7d0))
+* extract manifest models into core/manifest/ package ([7ce5a9b](https://github.com/Shadowsong27/agentic-beacon/commit/7ce5a9bbb1212feb8d8b7fca30833b6d3b54f160))
+* introduce domain layer (artifact + warehouse) ([#91](https://github.com/Shadowsong27/agentic-beacon/issues/91)) ([856b117](https://github.com/Shadowsong27/agentic-beacon/commit/856b117dc104ec410cf6805d80f688ddb44d184c))
+* split cli into core/cli package, enforce absolute imports and clean __init__.py ([4c1f3c7](https://github.com/Shadowsong27/agentic-beacon/commit/4c1f3c72d94ebdd015136057c8151853f1a4b605))
+
+
+### Miscellaneous Chores
+
+* merge from remote main ([b833a97](https://github.com/Shadowsong27/agentic-beacon/commit/b833a9712c264cbbb5cdc339d379f5dcbf9d4c66))
+
 ## [2.5.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v2.4.0...agentic-beacon@v2.5.0) (2026-04-11)
 
 
