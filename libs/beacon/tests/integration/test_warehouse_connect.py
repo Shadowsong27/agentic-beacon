@@ -14,7 +14,7 @@ import json
 from pathlib import Path
 
 import pytest
-from beacon.cli import main
+from beacon.cli.main import main
 from click.testing import CliRunner
 
 # ========== Task 3.1: Warehouse Command Group ==========

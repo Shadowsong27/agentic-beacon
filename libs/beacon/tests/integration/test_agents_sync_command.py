@@ -22,7 +22,7 @@ import json
 import subprocess
 
 import pytest
-from beacon.cli import main
+from beacon.cli.main import main
 from click.testing import CliRunner
 
 SAMPLE_AGENT_MD = "You are a helpful assistant specialized in Python.\n"

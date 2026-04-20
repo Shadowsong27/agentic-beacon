@@ -21,7 +21,7 @@ import json
 from pathlib import Path
 
 import pytest
-from beacon.cli import main
+from beacon.cli.main import main
 from beacon.domains.artifact.skill import wire_skills_post_sync
 from click.testing import CliRunner
 

@@ -4,7 +4,7 @@ import json
 
 import pytest
 import yaml
-from beacon.cli import main
+from beacon.cli.main import main
 from click.testing import CliRunner
 
 SAMPLE_SKILL_MD = """\

@@ -330,7 +330,7 @@ def wire_skills_post_sync(
     config files exist yet.
     """
     from beacon.domains.artifact.agent import detect_agents
-    from beacon.utils.display import _handle_soft_block
+    from beacon.utils.display import handle_soft_block
 
     agents = detect_agents(project_root, fallback_to_all=True)
 
@@ -363,7 +363,7 @@ def wire_skills_post_sync(
 
     if wiring_conflicts:
         conflict_paths = [str(dest) for _, _, dest in wiring_conflicts]
-        overwrite = _handle_soft_block(conflict_paths, force=force, preserve=preserve)
+        overwrite = handle_soft_block(conflict_paths, force=force, preserve=preserve)
         if not overwrite:
             preserve = True  # skip conflicting live skill files
 

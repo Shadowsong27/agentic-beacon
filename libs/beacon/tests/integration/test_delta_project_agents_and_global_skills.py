@@ -11,7 +11,7 @@ Covers:
 from pathlib import Path
 
 import pytest
-from beacon.cli import main
+from beacon.cli.main import main
 from beacon.core.manifest.beacon import BeaconManifest
 from beacon.domains.artifact.agent import find_project_level_agents
 from beacon.domains.artifact.skill import (

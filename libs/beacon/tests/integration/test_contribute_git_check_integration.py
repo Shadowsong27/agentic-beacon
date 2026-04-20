@@ -9,7 +9,7 @@ All tests are marked `integration` and can be run independently:
 import subprocess
 
 import pytest
-from beacon.cli import main
+from beacon.cli.main import main
 from click.testing import CliRunner
 
 pytestmark = pytest.mark.integration

@@ -277,7 +277,7 @@ def handle_install_agent(
     records sync-state for each successful write. Does NOT update beacon.yaml.
     """
     from beacon.core.manifest.workspace import WorkspaceConfig
-    from beacon.utils.display import _handle_soft_block
+    from beacon.utils.display import handle_soft_block
 
     beacon_dir = Path.cwd() / ".agentic-beacon"
     if not beacon_dir.exists():
@@ -321,7 +321,7 @@ def handle_install_agent(
         if dest.exists() and dest.read_text(encoding="utf-8") != content:
             conflicts.append(str(dest))
 
-    overwrite = _handle_soft_block(conflicts, force=force, preserve=preserve)
+    overwrite = handle_soft_block(conflicts, force=force, preserve=preserve)
     if not overwrite and conflicts:
         preserve = True  # skip conflicting files
 

@@ -11,7 +11,7 @@ Following TDD workflow for tasks 7.1-7.7:
 """
 
 import pytest
-from beacon.cli import main
+from beacon.cli.main import main
 from beacon.core.manifest.beacon import ArtifactsConfig, BeaconManifest
 from beacon.domains.artifact.skill import validate_skill_entries
 from click.testing import CliRunner

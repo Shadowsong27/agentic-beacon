@@ -18,7 +18,7 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
-from beacon.cli import main
+from beacon.cli.main import main
 from beacon.domains.artifact.skill import (
     install_bundled_skills_globally,
     show_bundled_skills_status,
@@ -38,7 +38,7 @@ def _real_bundled_skill_content() -> str:
     import beacon.cli as cli_module
 
     skill_file = (
-        Path(cli_module.__file__).parent
+        Path(cli_module.__file__).parent.parent
         / "data"
         / "skills"
         / BUNDLED_SKILL_NAME

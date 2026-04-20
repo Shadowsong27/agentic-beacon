@@ -8,7 +8,7 @@ from rich.console import Console
 console = Console()
 
 
-def _handle_soft_block(
+def handle_soft_block(
     conflicts: list[str],
     force: bool,
     preserve: bool,
@@ -98,7 +98,7 @@ def _interactive_select(
         return []
 
 
-def _print_doctor_summary(issues: list[str], fixes_applied: list[str]) -> None:
+def print_doctor_summary(issues: list[str], fixes_applied: list[str]) -> None:
     console.print()
     if fixes_applied:
         console.print(f"[green]Applied {len(fixes_applied)} fix(es):[/green]")

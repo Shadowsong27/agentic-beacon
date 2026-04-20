@@ -1,5 +1,5 @@
-"""CLI entry point shim — implementation lives in beacon.core.cli."""
+"""CLI entry point shim — implementation lives in beacon.cli."""
 
-from beacon.core.cli.main import main
+from beacon.cli.main import main
 
 __all__ = ["main"]

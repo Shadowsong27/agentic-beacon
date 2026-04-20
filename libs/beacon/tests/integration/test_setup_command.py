@@ -10,7 +10,7 @@ Following TDD workflow for tasks 4.1-4.6:
 """
 
 import yaml
-from beacon.cli import main
+from beacon.cli.main import main
 from click.testing import CliRunner
 
 # ========== Task 4.1: Setup Command Implementation ==========

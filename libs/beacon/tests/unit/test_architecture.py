@@ -191,10 +191,6 @@ def test_cross_domain_imports_use_top_level():
 # ─── TC6: No underscore-prefixed cross-module imports ──────────────────
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="will pass after each PR renames its _-prefixed functions (PRs 1-7)",
-)
 def test_no_underscore_cross_module_imports():
     """
     For every `from beacon.*` import across the package, assert the imported
@@ -245,10 +241,6 @@ def test_init_files_are_empty():
 # ─── TC8: CLI handlers have no I/O ─────────────────────────────────────
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="will pass after PR 7 (CLI thinning)",
-)
 def test_cli_handlers_have_no_io():
     """
     Parse every function in beacon/cli/**/*.py decorated with @click.command()

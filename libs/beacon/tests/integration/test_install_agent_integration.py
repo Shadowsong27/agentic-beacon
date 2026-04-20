@@ -15,7 +15,7 @@ import json
 from pathlib import Path
 
 import pytest
-from beacon.cli import main
+from beacon.cli.main import main
 from beacon.domains.distribution.state import global_sync_state_file
 from click.testing import CliRunner
 

@@ -177,14 +177,14 @@ See `AGENTS.md` → "Unit Testing Workflow" and `knowledge/lessons/complete-test
 **Output**: `beacon/cli/` package; no `utils.*` imports in CLI; TC8 (`test_cli_handlers_have_no_io`) flips from `xfail` to passing.
 **Validation**: Every `abc` subcommand still works; `main.py` size reduced (target: below 800 lines, split by group if needed).
 
-- [ ] 8.1 Rename `beacon/core/cli/` → `beacon/cli/`; update `beacon/cli.py` shim import
-- [ ] 8.2 Replace all `from beacon.utils.*` imports in `cli/main.py` and `cli/warehouse.py` with `from beacon.domains.*` imports
-- [ ] 8.3 Verify each handler contains only: argument parsing + one domain call + output formatting (per the "Thin CLI layer" spec requirement). Inline any leftover helpers into their owning domain.
+- [x] 8.1 Rename `beacon/core/cli/` → `beacon/cli/`; update `beacon/cli.py` shim import
+- [x] 8.2 Replace all `from beacon.utils.*` imports in `cli/main.py` and `cli/warehouse.py` with `from beacon.domains.*` imports
+- [x] 8.3 Verify each handler contains only: argument parsing + one domain call + output formatting (per the "Thin CLI layer" spec requirement). Inline any leftover helpers into their owning domain.
   - **Input**: `.venv/bin/pytest libs/beacon/tests/unit/test_architecture.py::test_cli_handlers_have_no_io -v`
   - **Expected Output**: Test passes (no longer `xfail`).
   - **Validation**: No CLI handler body contains `open()`, `Path.write_text`, `Path.read_text`, `yaml.load`, `tomllib.load`, or `subprocess.run`; AST scan confirms.
-- [ ] 8.4 Split `cli/main.py` by subcommand group: `cli/setup.py`, `cli/sync.py`, `cli/contribute.py`, `cli/agent.py`. Keep `cli/main.py` as the Click group + registration only.
-- [ ] 8.5 Run regression + full subcommand smoke
+- [x] 8.4 Split `cli/main.py` by subcommand group: `cli/setup.py`, `cli/sync.py`, `cli/contribute.py`, `cli/agent.py`. Keep `cli/main.py` as the Click group + registration only.
+- [x] 8.5 Run regression + full subcommand smoke
   - **Input**: `.venv/bin/pytest libs/beacon/tests/` then run every `abc` subcommand once on a scratch project (at minimum: `--version`, `init`, `warehouse connect`, `setup --manual`, `sync`, `doctor`, `contribute --all --dry-run`, `upgrade`, `agent list`, `agent install <name>`).
   - **Expected Output**: Every subcommand exits 0 with the same user-visible output as pre-PR.
   - **Validation**: No regressions; `abc --help` output diff vs. baseline is empty.

@@ -1181,7 +1181,7 @@ class TestAdoptTreeTUI:
 class TestAdoptDryRunIntegration:
     def test_dry_run_prints_candidates(self, tmp_path, monkeypatch):
         """abc adopt --dry-run shows table of candidates and exits without changes."""
-        from beacon.cli import main
+        from beacon.cli.main import main
 
         # Set up a minimal project
         project = tmp_path / "project"
@@ -1225,7 +1225,7 @@ class TestAdoptDryRunIntegration:
 
     def test_no_sync_state_shows_full_scan(self, tmp_path, monkeypatch):
         """abc adopt without sync state performs full scan (no longer requires sync first)."""
-        from beacon.cli import main
+        from beacon.cli.main import main
 
         project = tmp_path / "project"
         project.mkdir()
@@ -1257,7 +1257,7 @@ class TestAdoptDryRunIntegration:
 
     def test_all_adopted_exits_cleanly(self, tmp_path, monkeypatch):
         """abc adopt when all artifacts already adopted exits cleanly with message."""
-        from beacon.cli import main
+        from beacon.cli.main import main
 
         project = tmp_path / "project"
         project.mkdir()
@@ -1297,7 +1297,7 @@ class TestAdoptDryRunIntegration:
 class TestSyncNotification:
     def test_sync_prints_notification_when_unadopted(self, tmp_path, monkeypatch):
         """After sync, if unadopted artifacts exist, notification is printed."""
-        from beacon.cli import main
+        from beacon.cli.main import main
 
         project = tmp_path / "project"
         project.mkdir()
@@ -1339,7 +1339,7 @@ class TestSyncNotification:
 
     def test_sync_no_notification_when_all_adopted(self, tmp_path, monkeypatch):
         """No notification when all new warehouse artifacts are already in beacon.yaml."""
-        from beacon.cli import main
+        from beacon.cli.main import main
 
         project = tmp_path / "project"
         project.mkdir()
@@ -1381,7 +1381,7 @@ class TestSyncNotification:
 
     def test_sync_dry_run_no_notification(self, tmp_path, monkeypatch):
         """--dry-run: no adoption notification even when unadopted artifacts exist."""
-        from beacon.cli import main
+        from beacon.cli.main import main
 
         project = tmp_path / "project"
         project.mkdir()
