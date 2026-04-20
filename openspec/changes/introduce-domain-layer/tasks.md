@@ -149,7 +149,7 @@ See `AGENTS.md` → "Unit Testing Workflow" and `knowledge/lessons/complete-test
   - **Input**: `.venv/bin/pytest libs/beacon/tests/` then `abc adopt --dry-run` against a sample project that has existing agents (see `examples/sample-warehouse` for a template)
   - **Expected Output**: Pytest exits 0. `abc adopt --dry-run` prints the same proposed changes as a pre-PR snapshot.
   - **Validation**: `diff <(abc adopt --dry-run)` against baseline is empty; any difference investigated before merging.
-- [ ] 6.5 **[MANUAL]** Human acceptance smoke — run `abc adopt` (interactive, no `--dry-run`) on a real sample project; confirm the prompts, preview output, and final `.agentic-beacon/` contents match expectations. Required before merging PR 5 per proposal.md "Manual Intervention Requirements".
+- [x] 6.5 **[MANUAL]** Human acceptance smoke — run `abc adopt` (interactive, no `--dry-run`) on a real sample project; confirm the prompts, preview output, and final `.agentic-beacon/` contents match expectations. Required before merging PR 5 per proposal.md "Manual Intervention Requirements".
 - [x] 6.6 Push adoption domain move to draft branch
 
 ## 7. Move `contribution` domain
@@ -159,16 +159,16 @@ See `AGENTS.md` → "Unit Testing Workflow" and `knowledge/lessons/complete-test
 **Output**: `beacon/domains/contribution/{contributor,delta_view}.py`; any engine leftovers from `utils/delta.py` absorbed into `domains/distribution/delta.py` (consistent with design.md Open Question resolved here).
 **Validation**: `abc contribute --all` and `abc contribute <artifact>` behave identically to pre-phase baseline.
 
-- [ ] 7.1 Move `beacon/utils/contribute.py` → `beacon/domains/contribution/contributor.py`
-- [ ] 7.2 Analyse `beacon/utils/delta.py` (878 lines) — separate engine callers from user-facing views (per design.md Open Questions)
-- [ ] 7.3 Move user-facing pieces of `utils/delta.py` → `beacon/domains/contribution/delta_view.py`; any remaining engine glue moves to `domains/distribution/delta.py`
-- [ ] 7.4 Rename cross-module `_`-prefixed names
-- [ ] 7.5 Update all call-sites (CLI main, tests)
-- [ ] 7.6 Run regression + smoke
+- [x] 7.1 Move `beacon/utils/contribute.py` → `beacon/domains/contribution/contributor.py`
+- [x] 7.2 Analyse `beacon/utils/delta.py` (878 lines) — separate engine callers from user-facing views (per design.md Open Questions)
+- [x] 7.3 Move user-facing pieces of `utils/delta.py` → `beacon/domains/contribution/delta_view.py`; any remaining engine glue moves to `domains/distribution/delta.py`
+- [x] 7.4 Rename cross-module `_`-prefixed names
+- [x] 7.5 Update all call-sites (CLI main, tests)
+- [x] 7.6 Run regression + smoke
   - **Input**: `.venv/bin/pytest libs/beacon/tests/` then, in a scratch project with local changes vs. the warehouse: `abc contribute --all --dry-run` and `abc contribute <specific-artifact> --dry-run`
   - **Expected Output**: Pytest exits 0. Contribute preview output matches pre-PR baseline.
   - **Validation**: Diff of `abc contribute --all --dry-run` output against baseline is empty.
-- [ ] 7.7 Push contribution domain move to draft branch
+- [x] 7.7 Push contribution domain move to draft branch
 
 ## 8. Thin the CLI layer
 

@@ -1,7 +1,7 @@
-"""Unit tests for _collect_artifact_paths — knowledge node expansion.
+"""Unit tests for collect_artifact_paths — knowledge node expansion.
 
 Bug: When beacon.yaml contains a node-level knowledge entry (directory path like
-``knowledge/python``), _collect_artifact_paths was adding the raw directory string
+``knowledge/python``), collect_artifact_paths was adding the raw directory string
 to the tracked set instead of expanding it to individual .md file paths.
 
 This caused _find_untracked_local_files to report every synced knowledge file as
@@ -18,8 +18,8 @@ TDD Test Cases:
 from pathlib import Path
 
 from beacon.core.manifest.beacon import BeaconManifest
+from beacon.domains.contribution.delta_view import collect_artifact_paths
 from beacon.domains.distribution.delta import DeltaComparator
-from beacon.utils.delta import _collect_artifact_paths
 
 
 def _make_manifest(knowledge: list[str]) -> BeaconManifest:
@@ -57,7 +57,7 @@ class TestCollectArtifactPathsKnowledgeNodes:
         comparator = _make_comparator(warehouse, artifacts)
         manifest = _build_manifest(["knowledge/python"])
 
-        paths = _collect_artifact_paths(comparator, manifest)
+        paths = collect_artifact_paths(comparator, manifest)
 
         assert "knowledge/python/decisions/typing.md" in paths
         assert "knowledge/python/lessons/async.md" in paths
@@ -76,7 +76,7 @@ class TestCollectArtifactPathsKnowledgeNodes:
         comparator = _make_comparator(warehouse, artifacts)
         manifest = _build_manifest(["knowledge/python/"])
 
-        paths = _collect_artifact_paths(comparator, manifest)
+        paths = collect_artifact_paths(comparator, manifest)
 
         assert "knowledge/python/facts/basics.md" in paths
         assert "knowledge/python/" not in paths
@@ -93,7 +93,7 @@ class TestCollectArtifactPathsKnowledgeNodes:
         comparator = _make_comparator(warehouse, artifacts)
         manifest = _build_manifest(["knowledge/doc.md"])
 
-        paths = _collect_artifact_paths(comparator, manifest)
+        paths = collect_artifact_paths(comparator, manifest)
 
         assert "knowledge/doc.md" in paths
 
@@ -116,7 +116,7 @@ class TestCollectArtifactPathsKnowledgeNodes:
         comparator = _make_comparator(warehouse, artifacts)
         manifest = _build_manifest(["knowledge/python"])
 
-        paths = _collect_artifact_paths(comparator, manifest)
+        paths = collect_artifact_paths(comparator, manifest)
 
         assert "knowledge/python/decisions/existing.md" in paths
         assert "knowledge/python/decisions/new-local.md" in paths
@@ -133,7 +133,7 @@ class TestCollectArtifactPathsKnowledgeNodes:
         comparator = _make_comparator(warehouse, artifacts)
         manifest = _build_manifest(["knowledge/data-platform/clickhouse"])
 
-        paths = _collect_artifact_paths(comparator, manifest)
+        paths = collect_artifact_paths(comparator, manifest)
 
         assert "knowledge/data-platform/clickhouse/facts/schema.md" in paths
         assert "knowledge/data-platform/clickhouse" not in paths

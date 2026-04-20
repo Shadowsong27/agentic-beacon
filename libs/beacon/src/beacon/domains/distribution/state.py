@@ -8,7 +8,7 @@ import click
 from loguru import logger
 from rich.console import Console
 
-from beacon.utils.git import _get_warehouse_head_sha
+from beacon.utils.git import get_warehouse_head_sha
 
 console = Console()
 
@@ -39,7 +39,7 @@ def write_sync_state(artifacts_dir: Path, warehouse_path: Path) -> None:
     Called at the end of a successful (non-dry-run) sync so contribute can
     verify the snapshot was taken against the current warehouse HEAD.
     """
-    sha = _get_warehouse_head_sha(warehouse_path)
+    sha = get_warehouse_head_sha(warehouse_path)
     if sha is None:
         return  # Warehouse has no git — nothing to record
     state_file = artifacts_dir / SYNC_STATE_FILENAME
@@ -74,7 +74,7 @@ def check_sync_state(artifacts_dir: Path, warehouse_path: Path) -> str | None:
         )
 
     recorded_sha = state_file.read_text().strip()
-    current_sha = _get_warehouse_head_sha(warehouse_path)
+    current_sha = get_warehouse_head_sha(warehouse_path)
 
     if current_sha is None:
         return None  # Can't determine current SHA — skip silently
@@ -138,7 +138,7 @@ def write_agent_sync_state(
     wh_entries = warehouses.setdefault(wh_key, {})
     wh_entries[relative_path] = {
         "content_hash": content_hash,
-        "warehouse_head": _get_warehouse_head_sha(warehouse_path) or "",
+        "warehouse_head": get_warehouse_head_sha(warehouse_path) or "",
         "installed_at": datetime.now(UTC).isoformat(),
     }
     state["warehouses"] = warehouses

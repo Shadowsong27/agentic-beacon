@@ -7,10 +7,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 from beacon.cli import main
 from beacon.domains.distribution.state import check_sync_state, write_sync_state
-from beacon.utils.git import _check_warehouse_git_clean
+from beacon.utils.git import check_warehouse_git_clean
 from click.testing import CliRunner
 
-# ========== Unit tests for _check_warehouse_git_clean ==========
+# ========== Unit tests for check_warehouse_git_clean ==========
 
 
 def test_clean_repo_returns_none(tmp_path):
@@ -19,7 +19,7 @@ def test_clean_repo_returns_none(tmp_path):
     git_dir.mkdir()
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(stdout="", returncode=0)
-        result = _check_warehouse_git_clean(tmp_path)
+        result = check_warehouse_git_clean(tmp_path)
     assert result is None
 
 
@@ -29,7 +29,7 @@ def test_dirty_repo_returns_error_message(tmp_path):
     git_dir.mkdir()
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(stdout=" M knowledge/file.md\n", returncode=0)
-        result = _check_warehouse_git_clean(tmp_path)
+        result = check_warehouse_git_clean(tmp_path)
     assert result is not None
     assert "uncommitted changes" in result
     assert "--skip-git-check" in result
@@ -37,7 +37,7 @@ def test_dirty_repo_returns_error_message(tmp_path):
 
 def test_no_git_dir_returns_none(tmp_path):
     """Warehouse without .git directory → returns None (skip silently)."""
-    result = _check_warehouse_git_clean(tmp_path)
+    result = check_warehouse_git_clean(tmp_path)
     assert result is None
 
 
@@ -45,7 +45,7 @@ def test_git_not_installed_returns_none(tmp_path, capsys):
     """git binary not found → returns None (skip with warning)."""
     (tmp_path / ".git").mkdir()
     with patch("subprocess.run", side_effect=FileNotFoundError):
-        result = _check_warehouse_git_clean(tmp_path)
+        result = check_warehouse_git_clean(tmp_path)
     assert result is None
 
 
@@ -53,7 +53,7 @@ def test_git_timeout_returns_none(tmp_path):
     """git status times out → returns None (skip with warning)."""
     (tmp_path / ".git").mkdir()
     with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("git", 10)):
-        result = _check_warehouse_git_clean(tmp_path)
+        result = check_warehouse_git_clean(tmp_path)
     assert result is None
 
 
@@ -62,7 +62,7 @@ def test_error_message_contains_warehouse_path(tmp_path):
     (tmp_path / ".git").mkdir()
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(stdout="M  file.md\n", returncode=0)
-        result = _check_warehouse_git_clean(tmp_path)
+        result = check_warehouse_git_clean(tmp_path)
     assert result is not None
     # Path may be abbreviated with ~ for home dir; either way it should appear
     short = str(tmp_path).replace(str(Path.home()), "~")
@@ -124,9 +124,7 @@ def test_sync_proceeds_when_warehouse_clean(connected_project):
 
     with (
         patch("subprocess.run") as mock_run,
-        patch(
-            "beacon.core.cli.main._check_warehouse_on_main_branch", return_value=None
-        ),
+        patch("beacon.core.cli.main.check_warehouse_on_main_branch", return_value=None),
     ):
         mock_run.return_value = MagicMock(stdout="", returncode=0)
         result = runner.invoke(main, ["sync"])
@@ -156,7 +154,7 @@ def test_sync_dry_run_bypasses_git_check(connected_project):
     (warehouse / ".git").mkdir()
 
     # subprocess.run should NOT be called for the git check during dry-run
-    with patch("beacon.core.cli.main._check_warehouse_git_clean") as mock_check:
+    with patch("beacon.core.cli.main.check_warehouse_git_clean") as mock_check:
         result = runner.invoke(main, ["sync", "--dry-run"])
 
     mock_check.assert_not_called()
@@ -241,7 +239,7 @@ def test_contribute_dry_run_bypasses_git_check(connected_project_with_artifact):
     warehouse = connected_project_with_artifact["warehouse"]
     (warehouse / ".git").mkdir()
 
-    with patch("beacon.core.cli.main._check_warehouse_git_clean") as mock_check:
+    with patch("beacon.core.cli.main.check_warehouse_git_clean") as mock_check:
         result = runner.invoke(main, ["contribute", "knowledge/lesson.md", "--dry-run"])
 
     mock_check.assert_not_called()
@@ -282,7 +280,7 @@ def test_clean_up_to_date_repo_returns_none(tmp_path):
             MagicMock(stdout="", returncode=0),  # git fetch --quiet
             MagicMock(stdout="0\n", returncode=0),  # git rev-list --count HEAD..@{u}
         ]
-        result = _check_warehouse_git_clean(tmp_path)
+        result = check_warehouse_git_clean(tmp_path)
     assert result is None
 
 
@@ -295,7 +293,7 @@ def test_behind_remote_returns_error(tmp_path):
             MagicMock(stdout="", returncode=0),  # git fetch --quiet
             MagicMock(stdout="3\n", returncode=0),  # 3 commits behind
         ]
-        result = _check_warehouse_git_clean(tmp_path)
+        result = check_warehouse_git_clean(tmp_path)
     assert result is not None
     assert "behind" in result
     assert "3" in result
@@ -312,7 +310,7 @@ def test_no_upstream_configured_returns_none(tmp_path):
             MagicMock(stdout="", returncode=0),  # git fetch --quiet
             MagicMock(stdout="", returncode=128),  # no upstream → non-zero exit
         ]
-        result = _check_warehouse_git_clean(tmp_path)
+        result = check_warehouse_git_clean(tmp_path)
     assert result is None
 
 
@@ -324,7 +322,7 @@ def test_fetch_timeout_returns_none_with_warning(tmp_path, capsys):
             MagicMock(stdout="", returncode=0),  # git status --porcelain
             subprocess.TimeoutExpired("git", 15),  # git fetch times out
         ]
-        result = _check_warehouse_git_clean(tmp_path)
+        result = check_warehouse_git_clean(tmp_path)
     assert result is None
 
 
@@ -519,7 +517,7 @@ def test_contribute_skip_git_check_bypasses_sync_state(connected_project_with_ar
 
 def test_auto_git_uses_targeted_add(tmp_path):
     """_auto_git_contribute stages only contributed files, not all warehouse files."""
-    from beacon.utils.contribute import _auto_git_contribute
+    from beacon.domains.contribution.contributor import auto_git_contribute
 
     (tmp_path / ".git").mkdir()
     contributed = [
@@ -529,7 +527,7 @@ def test_auto_git_uses_targeted_add(tmp_path):
 
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
-        _auto_git_contribute(tmp_path, contributed)
+        auto_git_contribute(tmp_path, contributed)
 
     # Find the git add call
     add_call = next(
@@ -546,9 +544,9 @@ def test_auto_git_uses_targeted_add(tmp_path):
     assert "." not in args[args.index("--") :]
 
 
-# ========== Unit tests for _check_warehouse_on_main_branch ==========
+# ========== Unit tests for check_warehouse_on_main_branch ==========
 
-from beacon.utils.git import _check_warehouse_on_main_branch  # noqa: E402
+from beacon.utils.git import check_warehouse_on_main_branch  # noqa: E402
 
 
 def test_on_main_branch_returns_none(tmp_path):
@@ -556,7 +554,7 @@ def test_on_main_branch_returns_none(tmp_path):
     (tmp_path / ".git").mkdir()
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(stdout="main\n", returncode=0)
-        result = _check_warehouse_on_main_branch(tmp_path)
+        result = check_warehouse_on_main_branch(tmp_path)
     assert result is None
 
 
@@ -565,7 +563,7 @@ def test_on_master_branch_returns_none(tmp_path):
     (tmp_path / ".git").mkdir()
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(stdout="master\n", returncode=0)
-        result = _check_warehouse_on_main_branch(tmp_path)
+        result = check_warehouse_on_main_branch(tmp_path)
     assert result is None
 
 
@@ -574,7 +572,7 @@ def test_on_feature_branch_returns_error(tmp_path):
     (tmp_path / ".git").mkdir()
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(stdout="feat/my-experiment\n", returncode=0)
-        result = _check_warehouse_on_main_branch(tmp_path)
+        result = check_warehouse_on_main_branch(tmp_path)
     assert result is not None
     assert "feat/my-experiment" in result
     assert "git checkout main" in result
@@ -586,7 +584,7 @@ def test_detached_head_returns_error(tmp_path):
     (tmp_path / ".git").mkdir()
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(stdout="", returncode=128)
-        result = _check_warehouse_on_main_branch(tmp_path)
+        result = check_warehouse_on_main_branch(tmp_path)
     assert result is not None
     assert "detached" in result
     assert "--skip-git-check" in result
@@ -594,7 +592,7 @@ def test_detached_head_returns_error(tmp_path):
 
 def test_no_git_dir_returns_none_branch_check(tmp_path):
     """Warehouse without .git → returns None (skip silently)."""
-    result = _check_warehouse_on_main_branch(tmp_path)
+    result = check_warehouse_on_main_branch(tmp_path)
     assert result is None
 
 
@@ -602,7 +600,7 @@ def test_git_not_found_returns_none_branch_check(tmp_path):
     """git not installed → returns None (skip silently)."""
     (tmp_path / ".git").mkdir()
     with patch("subprocess.run", side_effect=FileNotFoundError):
-        result = _check_warehouse_on_main_branch(tmp_path)
+        result = check_warehouse_on_main_branch(tmp_path)
     assert result is None
 
 
@@ -637,9 +635,7 @@ def test_sync_proceeds_when_warehouse_on_main(connected_project):
 
     with (
         patch("subprocess.run") as mock_run,
-        patch(
-            "beacon.core.cli.main._check_warehouse_on_main_branch", return_value=None
-        ),
+        patch("beacon.core.cli.main.check_warehouse_on_main_branch", return_value=None),
     ):
         mock_run.return_value = MagicMock(stdout="", returncode=0)
         result = runner.invoke(main, ["sync"])
@@ -666,7 +662,7 @@ def test_sync_dry_run_bypasses_branch_guard(connected_project):
     warehouse = connected_project["warehouse"]
     (warehouse / ".git").mkdir()
 
-    with patch("beacon.core.cli.main._check_warehouse_on_main_branch") as mock_branch:
+    with patch("beacon.core.cli.main.check_warehouse_on_main_branch") as mock_branch:
         result = runner.invoke(main, ["sync", "--dry-run"])
 
     mock_branch.assert_not_called()

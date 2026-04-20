@@ -1,4 +1,4 @@
-"""Unit tests for _render_knowledge_node_group — fraction badge display.
+"""Unit tests for render_knowledge_node_group — fraction badge display.
 
 When a knowledge node has missing files, the header badge should show the count
 as a fraction of the total files in the warehouse node (e.g. "2/5 missing")
@@ -16,11 +16,11 @@ from io import StringIO
 from pathlib import Path
 
 # We capture Rich output by redirecting the module-level console.
-# _render_knowledge_node_group uses the module-level `console` from utils/delta,
+# render_knowledge_node_group uses the module-level `console` from utils/delta,
 # so we monkey-patch it.
-import beacon.utils.delta as delta_module
+import beacon.domains.contribution.delta_view as delta_view_module
+from beacon.domains.contribution.delta_view import render_knowledge_node_group
 from beacon.domains.distribution.delta import DeltaStatus
-from beacon.utils.delta import _render_knowledge_node_group
 from rich.console import Console
 
 _STATUS_MARKUP = {
@@ -34,12 +34,12 @@ _STATUS_MARKUP = {
 def _capture(node_path: str, results, warehouse_path: Path) -> str:
     buf = StringIO()
     patched = Console(file=buf, highlight=False, markup=True)
-    original = delta_module.console
-    delta_module.console = patched
+    original = delta_view_module.console
+    delta_view_module.console = patched
     try:
-        _render_knowledge_node_group(node_path, results, _STATUS_MARKUP, warehouse_path)
+        render_knowledge_node_group(node_path, results, _STATUS_MARKUP, warehouse_path)
     finally:
-        delta_module.console = original
+        delta_view_module.console = original
     return buf.getvalue()
 
 

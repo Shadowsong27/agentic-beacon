@@ -12,7 +12,7 @@ from beacon.domains.distribution.state import (
     relink_global_sync_state,
     write_agent_sync_state,
 )
-from beacon.utils.git import _hash_content
+from beacon.utils.git import hash_content
 
 console = Console()
 
@@ -249,7 +249,7 @@ def sync_agents_from_warehouse(
             # Always update sync-state HEAD, even when content is unchanged.
             # Without this, 'abc delta' keeps reporting agents as stale after a
             # sync that found nothing to write (warehouse advanced, content same).
-            write_agent_sync_state(warehouse_path, rel, _hash_content(content))
+            write_agent_sync_state(warehouse_path, rel, hash_content(content))
             if written:
                 installed.append(agent_name)
 
@@ -338,7 +338,7 @@ def handle_install_agent(
         # Always update sync-state HEAD, even when content is unchanged.
         # Without this, 'abc delta' keeps reporting the agent as stale after
         # install finds nothing to write (warehouse advanced, content same).
-        write_agent_sync_state(warehouse_path, artifact, _hash_content(content))
+        write_agent_sync_state(warehouse_path, artifact, hash_content(content))
         if written:
             console.print(f"[green]Installed[/green] {artifact} → {dest}")
             written_any = True

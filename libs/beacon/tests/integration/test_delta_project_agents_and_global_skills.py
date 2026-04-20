@@ -18,8 +18,8 @@ from beacon.domains.artifact.skill import (
     bundled_skill_names,
     find_global_untracked_skills,
 )
+from beacon.domains.contribution.delta_view import find_untracked_local_files
 from beacon.domains.distribution.delta import DeltaComparator
-from beacon.utils.delta import _find_untracked_local_files
 from click.testing import CliRunner
 
 # ---------------------------------------------------------------------------
@@ -506,11 +506,11 @@ def test_find_global_untracked_skills_multiple_patterns(isolated_home_for_skills
 
 
 # ---------------------------------------------------------------------------
-# GlobalSettings ignore patterns — _find_untracked_local_files
+# GlobalSettings ignore patterns — find_untracked_local_files
 # ---------------------------------------------------------------------------
 
 
-def test_find_untracked_local_files_skill_ignore_exact(tmp_path):
+def testfind_untracked_local_files_skill_ignore_exact(tmp_path):
     """Exact skill name in ignore_patterns suppresses that skill."""
     warehouse = tmp_path / "warehouse"
     warehouse.mkdir()
@@ -530,7 +530,7 @@ def test_find_untracked_local_files_skill_ignore_exact(tmp_path):
         artifacts={"knowledge": [], "skills": [], "contexts": []}
     )
 
-    result = _find_untracked_local_files(
+    result = find_untracked_local_files(
         comparator,
         beacon_settings,
         artifacts,
@@ -540,7 +540,7 @@ def test_find_untracked_local_files_skill_ignore_exact(tmp_path):
     assert result == []
 
 
-def test_find_untracked_local_files_skill_ignore_glob(tmp_path):
+def testfind_untracked_local_files_skill_ignore_glob(tmp_path):
     """Glob pattern in ignore_patterns filters matching skills, keeps others."""
     warehouse = tmp_path / "warehouse"
     warehouse.mkdir()
@@ -561,7 +561,7 @@ def test_find_untracked_local_files_skill_ignore_glob(tmp_path):
         artifacts={"knowledge": [], "skills": [], "contexts": []}
     )
 
-    result = _find_untracked_local_files(
+    result = find_untracked_local_files(
         comparator, beacon_settings, artifacts, ignore_patterns=["openspec-*"]
     )
 
@@ -570,7 +570,7 @@ def test_find_untracked_local_files_skill_ignore_glob(tmp_path):
     assert any("my-skill" in p for p in paths)
 
 
-def test_find_untracked_local_files_no_ignore_returns_all(tmp_path):
+def testfind_untracked_local_files_no_ignore_returns_all(tmp_path):
     """Without ignore_patterns, all untracked skills are returned."""
     warehouse = tmp_path / "warehouse"
     warehouse.mkdir()
@@ -591,7 +591,7 @@ def test_find_untracked_local_files_no_ignore_returns_all(tmp_path):
         artifacts={"knowledge": [], "skills": [], "contexts": []}
     )
 
-    result = _find_untracked_local_files(comparator, beacon_settings, artifacts)
+    result = find_untracked_local_files(comparator, beacon_settings, artifacts)
 
     paths = [rel for rel, _ in result]
     assert any("openspec-apply-change" in p for p in paths)

@@ -27,7 +27,7 @@ def find_project_root() -> Path:
     return current
 
 
-def _check_warehouse_git_clean(warehouse_path: Path) -> str | None:
+def check_warehouse_git_clean(warehouse_path: Path) -> str | None:
     """Check if the warehouse git working tree is clean and up to date with remote.
 
     Returns an error message string if there are uncommitted changes or if the
@@ -106,7 +106,7 @@ def _check_warehouse_git_clean(warehouse_path: Path) -> str | None:
     return None
 
 
-def _check_warehouse_on_main_branch(warehouse_path: Path) -> str | None:
+def check_warehouse_on_main_branch(warehouse_path: Path) -> str | None:
     """Check that the warehouse git repo is on the main (or master) branch.
 
     Returns an error message string if the warehouse is on a non-main branch,
@@ -162,7 +162,7 @@ def _check_warehouse_on_main_branch(warehouse_path: Path) -> str | None:
     return None
 
 
-def _get_warehouse_head_sha(warehouse_path: Path) -> str | None:
+def get_warehouse_head_sha(warehouse_path: Path) -> str | None:
     """Return the current HEAD commit SHA of the warehouse git repo, or None."""
     if not (warehouse_path / ".git").exists():
         return None
@@ -180,7 +180,7 @@ def _get_warehouse_head_sha(warehouse_path: Path) -> str | None:
     return result.stdout.strip() or None
 
 
-def _get_file_hash_at_sha(
+def get_file_hash_at_sha(
     warehouse_path: Path, relative_path: str, sha: str
 ) -> str | None:
     """Return SHA-256 of a file in the warehouse repo at a specific commit, or None.
@@ -202,6 +202,6 @@ def _get_file_hash_at_sha(
     return hashlib.sha256(result.stdout).hexdigest()
 
 
-def _hash_content(content: str) -> str:
+def hash_content(content: str) -> str:
     """Return SHA-256 hex digest of UTF-8 encoded content string."""
     return hashlib.sha256(content.encode("utf-8")).hexdigest()

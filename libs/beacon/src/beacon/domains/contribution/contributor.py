@@ -13,7 +13,7 @@ from beacon.domains.distribution.delta import DeltaComparator, DeltaStatus
 console = Console()
 
 
-def _resolve_skill_contribute_source(
+def resolve_skill_contribute_source(
     comparator: DeltaComparator,
     relative_path: str,
     artifacts_dir: Path,
@@ -113,7 +113,7 @@ def _resolve_skill_contribute_source(
     return candidates[chosen_agent]
 
 
-def _propagate_skill_to_agents(
+def propagate_skill_to_agents(
     project_root: Path, relative_path: str, source_path: Path
 ) -> None:
     """After contributing a skill file to the warehouse, propagate all files in
@@ -152,7 +152,7 @@ def _propagate_skill_to_agents(
             )
 
 
-def _resolve_agent_contribute_source(
+def resolve_agent_contribute_source(
     comparator: DeltaComparator,
     relative_path: str,
     dry_run: bool = False,
@@ -160,7 +160,7 @@ def _resolve_agent_contribute_source(
     """Resolve which global agent file to read when contributing back to the warehouse.
 
     Agent files live in global directories (~/.config/opencode/agents/ or
-    ~/.claude/agents/). The logic mirrors _resolve_skill_contribute_source:
+    ~/.claude/agents/). The logic mirrors resolve_skill_contribute_source:
 
     - No agents configured → return None (nothing to contribute).
     - One tool has a modified or new copy → use it.
@@ -235,7 +235,7 @@ def _resolve_agent_contribute_source(
     return candidates[chosen]
 
 
-def _contribute_single(
+def contribute_single(
     comparator: DeltaComparator,
     beacon_settings: BeaconManifest,
     warehouse_path: Path,
@@ -263,7 +263,7 @@ def _contribute_single(
 
     if is_skill:
         # Resolve the live agent source (may prompt user if multiple agents conflict)
-        local_path = _resolve_skill_contribute_source(
+        local_path = resolve_skill_contribute_source(
             comparator, file_path, artifacts_dir, dry_run=dry_run
         )
         if local_path is None:
@@ -273,7 +273,7 @@ def _contribute_single(
             )
             return []
     elif is_agent:
-        local_path = _resolve_agent_contribute_source(
+        local_path = resolve_agent_contribute_source(
             comparator, file_path, dry_run=dry_run
         )
         if local_path is None:
@@ -301,14 +301,14 @@ def _contribute_single(
             return []
 
     dest_existed = (warehouse_path / file_path).exists()
-    _copy_to_warehouse(local_path, warehouse_path / file_path, file_path, dry_run)
+    copy_to_warehouse(local_path, warehouse_path / file_path, file_path, dry_run)
     if is_skill and not dry_run:
-        _propagate_skill_to_agents(project_root, file_path, local_path)
+        propagate_skill_to_agents(project_root, file_path, local_path)
     status_label = "modified" if dest_existed else "added"
     return [(file_path, status_label)]
 
 
-def _contribute_all(
+def contribute_all(
     comparator: DeltaComparator,
     beacon_settings: BeaconManifest,
     warehouse_path: Path,
@@ -334,7 +334,7 @@ def _contribute_all(
 
     Returns a list of (path, status_label) tuples for contributed files.
     """
-    from .delta import _find_untracked_local_files
+    from beacon.domains.contribution.delta_view import find_untracked_local_files
 
     summary = comparator.compare_from_config(beacon_settings)
     contributable = summary.modified + summary.added
@@ -343,7 +343,7 @@ def _contribute_all(
     if include_unregistered:
         unregistered_paths = [
             p
-            for p, _agents in _find_untracked_local_files(
+            for p, _agents in find_untracked_local_files(
                 comparator, beacon_settings, artifacts_dir, ignore_skill_patterns
             )
         ]
@@ -381,7 +381,7 @@ def _contribute_all(
         is_skill = result.path.startswith("skills/") and bool(comparator.skills_paths)
 
         if is_skill:
-            local_path = _resolve_skill_contribute_source(
+            local_path = resolve_skill_contribute_source(
                 comparator, result.path, artifacts_dir, dry_run=dry_run
             )
             if local_path is None:
@@ -398,11 +398,11 @@ def _contribute_all(
                 )
                 continue
 
-        _copy_to_warehouse(
+        copy_to_warehouse(
             local_path, warehouse_path / result.path, result.path, dry_run
         )
         if is_skill and not dry_run:
-            _propagate_skill_to_agents(project_root, result.path, local_path)
+            propagate_skill_to_agents(project_root, result.path, local_path)
         status_label = "modified" if result.status == DeltaStatus.MODIFIED else "added"
         contributed.append((result.path, status_label))
 
@@ -428,12 +428,12 @@ def _contribute_all(
                 continue
         else:
             local_path = artifacts_dir / rel_path
-        _copy_to_warehouse(local_path, warehouse_path / rel_path, rel_path, dry_run)
+        copy_to_warehouse(local_path, warehouse_path / rel_path, rel_path, dry_run)
         contributed.append((rel_path, "added"))
 
     # Contribute modified agent definitions (always included, no beacon.yaml entry)
     for rel_path in agent_paths:
-        local_path = _resolve_agent_contribute_source(
+        local_path = resolve_agent_contribute_source(
             comparator, rel_path, dry_run=dry_run
         )
         if local_path is None:
@@ -441,13 +441,13 @@ def _contribute_all(
                 f"  [yellow]Skipping[/yellow] {rel_path} (no modified copy found)"
             )
             continue
-        _copy_to_warehouse(local_path, warehouse_path / rel_path, rel_path, dry_run)
+        copy_to_warehouse(local_path, warehouse_path / rel_path, rel_path, dry_run)
         contributed.append((rel_path, "modified"))
 
     return contributed
 
 
-def _copy_to_warehouse(
+def copy_to_warehouse(
     local_path: Path, dest_path: Path, display_path: str, dry_run: bool
 ) -> None:
     """Copy a local artifact to the warehouse, creating parent dirs as needed."""
@@ -459,7 +459,7 @@ def _copy_to_warehouse(
     console.print(f"  [green]✓[/green] {display_path}")
 
 
-def _print_contribute_next_steps(warehouse_path: Path, contributed: list[str]) -> None:
+def print_contribute_next_steps(warehouse_path: Path, contributed: list[str]) -> None:
     """Print post-contribute git workflow (used when --manual-git is set)."""
     count = len(contributed)
     console.print(
@@ -478,7 +478,7 @@ def _print_contribute_next_steps(warehouse_path: Path, contributed: list[str]) -
     console.print("  cd my-project && abc sync")
 
 
-def _build_pr_body(contributed: list[tuple[str, str]]) -> str:
+def build_pr_body(contributed: list[tuple[str, str]]) -> str:
     """Build the PR body listing contributed artifacts with their status."""
     lines = ["## Contributed artifacts", ""]
     for path, status in contributed:
@@ -486,7 +486,7 @@ def _build_pr_body(contributed: list[tuple[str, str]]) -> str:
     return "\n".join(lines)
 
 
-def _auto_git_contribute(
+def auto_git_contribute(
     warehouse_path: Path,
     contributed: list[tuple[str, str]],
 ) -> None:
@@ -502,7 +502,7 @@ def _auto_git_contribute(
         console.print(
             "[yellow]Warning:[/yellow] Warehouse has no .git — skipping auto git workflow."
         )
-        _print_contribute_next_steps(warehouse_path, paths)
+        print_contribute_next_steps(warehouse_path, paths)
         return
 
     timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -522,7 +522,7 @@ def _auto_git_contribute(
         )
         if detail:
             console.print(f"  [dim]{detail}[/dim]")
-        _print_contribute_next_steps(warehouse_path, paths)
+        print_contribute_next_steps(warehouse_path, paths)
 
     try:
         r = _git(["checkout", "-b", branch])
@@ -551,7 +551,7 @@ def _auto_git_contribute(
         _fallback("git push failed", r.stderr.strip())
         return
 
-    pr_body = _build_pr_body(contributed)
+    pr_body = build_pr_body(contributed)
     try:
         r = subprocess.run(
             [

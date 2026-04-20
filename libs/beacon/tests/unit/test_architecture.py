@@ -123,10 +123,6 @@ def test_core_has_no_domain_imports():
 # ─── TC4: utils/ has no higher-layer imports ───────────────────────────
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="will pass after PR 1 (artifact) moves agents/skills out, since those currently import from beacon.core",
-)
 def test_utils_has_no_higher_layer_imports():
     """Parse every beacon/utils/**/*.py and assert no imports from cli, domains, or core."""
     utils_dir = BEACON_SRC / "utils"

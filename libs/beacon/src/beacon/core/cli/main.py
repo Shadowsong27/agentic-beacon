@@ -35,6 +35,16 @@ from beacon.domains.artifact.skill import (
     wire_single_skill,
     wire_skills_post_sync,
 )
+from beacon.domains.contribution.contributor import (
+    auto_git_contribute,
+    contribute_all,
+    contribute_single,
+    print_contribute_next_steps,
+)
+from beacon.domains.contribution.delta_view import (
+    show_delta_summary,
+    show_detailed_diff,
+)
 from beacon.domains.distribution.delta import DeltaComparator
 from beacon.domains.distribution.state import (
     check_sync_state,
@@ -54,23 +64,13 @@ from beacon.domains.setup.wiring import (
     wire_contexts_claudecode,
     wire_contexts_opencode,
 )
-from beacon.utils.contribute import (
-    _auto_git_contribute,
-    _contribute_all,
-    _contribute_single,
-    _print_contribute_next_steps,
-)
-from beacon.utils.delta import (
-    _show_delta_summary,
-    _show_detailed_diff,
-)
 from beacon.utils.display import (
     _handle_soft_block,
     _print_doctor_summary,
 )
 from beacon.utils.git import (
-    _check_warehouse_git_clean,
-    _check_warehouse_on_main_branch,
+    check_warehouse_git_clean,
+    check_warehouse_on_main_branch,
     find_project_root,
 )
 
@@ -284,13 +284,13 @@ def sync(
             sys.exit(1)
 
         if not dry_run and not skip_git_check:
-            git_error = _check_warehouse_git_clean(warehouse_path)
+            git_error = check_warehouse_git_clean(warehouse_path)
             if git_error:
                 console.print(f"[red]Error:[/red] {git_error}")
                 sys.exit(1)
 
         if not dry_run and not skip_git_check:
-            branch_error = _check_warehouse_on_main_branch(warehouse_path)
+            branch_error = check_warehouse_on_main_branch(warehouse_path)
             if branch_error:
                 console.print(f"[red]Error:[/red] {branch_error}")
                 sys.exit(1)
@@ -597,8 +597,8 @@ def agents_sync(*, preserve: bool, force: bool, skip_git_check: bool) -> None:
         sys.exit(1)
 
     if not skip_git_check:
-        _check_warehouse_git_clean(warehouse_path)
-        _check_warehouse_on_main_branch(warehouse_path)
+        check_warehouse_git_clean(warehouse_path)
+        check_warehouse_on_main_branch(warehouse_path)
 
     sync_agents_from_warehouse(warehouse_path, force=force, preserve=preserve)
 
@@ -810,9 +810,9 @@ def delta(*, file: str | None, no_color: bool) -> None:
         )
 
         if file:
-            _show_detailed_diff(comparator, beacon_settings, file, no_color)
+            show_detailed_diff(comparator, beacon_settings, file, no_color)
         else:
-            _show_delta_summary(
+            show_delta_summary(
                 comparator, beacon_settings, warehouse_path, project_root
             )
 
@@ -907,7 +907,7 @@ def contribute(
             sys.exit(1)
 
         if not dry_run and not skip_git_check:
-            git_error = _check_warehouse_git_clean(warehouse_path)
+            git_error = check_warehouse_git_clean(warehouse_path)
             if git_error:
                 console.print(f"[red]Error:[/red] {git_error}")
                 sys.exit(1)
@@ -936,7 +936,7 @@ def contribute(
         if file:
             if not dry_run:
                 console.print("[dim]Preview:[/dim]\n")
-                preview = _contribute_single(
+                preview = contribute_single(
                     comparator,
                     beacon_settings,
                     warehouse_path,
@@ -950,7 +950,7 @@ def contribute(
                 ):
                     console.print("[dim]Aborted.[/dim]")
                     return
-            contributed = _contribute_single(
+            contributed = contribute_single(
                 comparator,
                 beacon_settings,
                 warehouse_path,
@@ -962,7 +962,7 @@ def contribute(
         else:
             if not dry_run:
                 console.print("[dim]Preview:[/dim]\n")
-                preview = _contribute_all(
+                preview = contribute_all(
                     comparator,
                     beacon_settings,
                     warehouse_path,
@@ -977,7 +977,7 @@ def contribute(
                 ):
                     console.print("[dim]Aborted.[/dim]")
                     return
-            contributed = _contribute_all(
+            contributed = contribute_all(
                 comparator,
                 beacon_settings,
                 warehouse_path,
@@ -990,11 +990,9 @@ def contribute(
 
         if not dry_run and contributed:
             if manual_git:
-                _print_contribute_next_steps(
-                    warehouse_path, [p for p, _ in contributed]
-                )
+                print_contribute_next_steps(warehouse_path, [p for p, _ in contributed])
             else:
-                _auto_git_contribute(warehouse_path, contributed)
+                auto_git_contribute(warehouse_path, contributed)
 
     except Exception as e:
         console.print(f"\n[red]Error:[/red] Contribute failed: {e}")

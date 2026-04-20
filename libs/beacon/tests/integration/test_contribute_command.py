@@ -6,8 +6,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 from beacon.cli import main
 from beacon.domains.artifact.skill import build_skills_paths
+from beacon.domains.contribution.contributor import (
+    build_pr_body,
+    resolve_skill_contribute_source,
+)
 from beacon.domains.distribution.delta import DeltaComparator, DeltaStatus
-from beacon.utils.contribute import _build_pr_body, _resolve_skill_contribute_source
 from click.testing import CliRunner
 
 KNOWLEDGE_CONTENT_ORIGINAL = "# Type Hints\n\nUse type hints.\n"
@@ -443,13 +446,13 @@ def test_build_skills_paths_matches_delta_detection(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Unit tests: _resolve_skill_contribute_source()
+# Unit tests: resolve_skill_contribute_source()
 # ---------------------------------------------------------------------------
 
 
 @pytest.fixture
 def resolver_setup(tmp_path, valid_warehouse):
-    """Shared setup for _resolve_skill_contribute_source tests."""
+    """Shared setup for resolve_skill_contribute_source tests."""
     artifacts_dir = tmp_path / "artifacts"
     artifacts_dir.mkdir()
 
@@ -471,7 +474,7 @@ def test_resolve_returns_none_when_no_agents(resolver_setup, tmp_path):
     valid_warehouse, artifacts_dir = resolver_setup
 
     comparator = DeltaComparator(valid_warehouse, artifacts_dir)
-    result = _resolve_skill_contribute_source(
+    result = resolve_skill_contribute_source(
         comparator, "skills/my-skill/SKILL.md", artifacts_dir
     )
     # Fallback to snapshot path
@@ -490,7 +493,7 @@ def test_resolve_returns_none_when_live_identical(resolver_setup, tmp_path):
     comparator = DeltaComparator(
         valid_warehouse, artifacts_dir, skills_paths={"opencode": opencode_skills}
     )
-    result = _resolve_skill_contribute_source(
+    result = resolve_skill_contribute_source(
         comparator, "skills/my-skill/SKILL.md", artifacts_dir
     )
     assert result is None
@@ -508,7 +511,7 @@ def test_resolve_returns_live_path_when_single_agent_modified(resolver_setup, tm
     comparator = DeltaComparator(
         valid_warehouse, artifacts_dir, skills_paths={"opencode": opencode_skills}
     )
-    result = _resolve_skill_contribute_source(
+    result = resolve_skill_contribute_source(
         comparator, "skills/my-skill/SKILL.md", artifacts_dir
     )
     assert result == live_dir / "SKILL.md"
@@ -534,7 +537,7 @@ def test_resolve_returns_live_path_when_multi_agent_identical_modification(
         artifacts_dir,
         skills_paths={"opencode": opencode_skills, "claudecode": claude_skills},
     )
-    result = _resolve_skill_contribute_source(
+    result = resolve_skill_contribute_source(
         comparator, "skills/my-skill/SKILL.md", artifacts_dir
     )
     assert result is not None
@@ -890,9 +893,9 @@ def test_contribute_auto_git_creates_pr(project_with_delta, tmp_path):
 
     runner = CliRunner()
     with (
-        patch("beacon.core.cli.main._check_warehouse_git_clean", return_value=None),
+        patch("beacon.core.cli.main.check_warehouse_git_clean", return_value=None),
         patch("beacon.core.cli.main.check_sync_state", return_value=None),
-        patch("beacon.utils.contribute.subprocess.run") as mock_run,
+        patch("beacon.domains.contribution.contributor.subprocess.run") as mock_run,
     ):
         mock_run.side_effect = [
             _make_completed(0),  # git checkout -b
@@ -931,9 +934,9 @@ def test_contribute_auto_git_fallback_when_push_fails(project_with_delta):
 
     runner = CliRunner()
     with (
-        patch("beacon.core.cli.main._check_warehouse_git_clean", return_value=None),
+        patch("beacon.core.cli.main.check_warehouse_git_clean", return_value=None),
         patch("beacon.core.cli.main.check_sync_state", return_value=None),
-        patch("beacon.utils.contribute.subprocess.run") as mock_run,
+        patch("beacon.domains.contribution.contributor.subprocess.run") as mock_run,
     ):
         mock_run.side_effect = [
             _make_completed(0),  # git checkout -b
@@ -955,9 +958,9 @@ def test_contribute_auto_git_fallback_when_gh_not_installed(project_with_delta):
 
     runner = CliRunner()
     with (
-        patch("beacon.core.cli.main._check_warehouse_git_clean", return_value=None),
+        patch("beacon.core.cli.main.check_warehouse_git_clean", return_value=None),
         patch("beacon.core.cli.main.check_sync_state", return_value=None),
-        patch("beacon.utils.contribute.subprocess.run") as mock_run,
+        patch("beacon.domains.contribution.contributor.subprocess.run") as mock_run,
     ):
         mock_run.side_effect = [
             _make_completed(0),  # git checkout -b
@@ -975,23 +978,23 @@ def test_contribute_auto_git_fallback_when_gh_not_installed(project_with_delta):
 
 
 # ---------------------------------------------------------------------------
-# Unit tests: _build_pr_body()
+# Unit tests: build_pr_body()
 # ---------------------------------------------------------------------------
 
 
-def test_build_pr_body_lists_files():
+def testbuild_pr_body_lists_files():
     contributed = [
         ("knowledge/python/type-hints.md", "modified"),
         ("contexts/global.md", "added"),
     ]
-    body = _build_pr_body(contributed)
+    body = build_pr_body(contributed)
     assert "## Contributed artifacts" in body
     assert "`knowledge/python/type-hints.md` (modified)" in body
     assert "`contexts/global.md` (added)" in body
 
 
-def test_build_pr_body_single_file():
-    body = _build_pr_body([("knowledge/lesson.md", "modified")])
+def testbuild_pr_body_single_file():
+    body = build_pr_body([("knowledge/lesson.md", "modified")])
     assert "`knowledge/lesson.md` (modified)" in body
 
 
@@ -1201,9 +1204,9 @@ def test_default_auto_git_includes_untracked_in_pr(project_with_untracked):
 
     runner = CliRunner()
     with (
-        patch("beacon.core.cli.main._check_warehouse_git_clean", return_value=None),
+        patch("beacon.core.cli.main.check_warehouse_git_clean", return_value=None),
         patch("beacon.core.cli.main.check_sync_state", return_value=None),
-        patch("beacon.utils.contribute.subprocess.run") as mock_run,
+        patch("beacon.domains.contribution.contributor.subprocess.run") as mock_run,
     ):
         mock_run.side_effect = [
             _make_completed(0),  # git checkout -b
