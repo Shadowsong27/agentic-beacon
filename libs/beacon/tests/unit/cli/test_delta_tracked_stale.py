@@ -1,4 +1,4 @@
-"""Tests for _enrich_tracked_stale — MODIFIED→STALE enrichment for tracked artifacts.
+"""Tests for enrich_tracked_stale — MODIFIED→STALE enrichment for tracked artifacts.
 
 Covers:
 - TC1: Knowledge file MODIFIED, local == synced content → enriched to STALE
@@ -15,13 +15,13 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from beacon.core.delta import (
+from beacon.domains.distribution.delta import (
     ComparisonResult,
     DeltaComparator,
     DeltaStatus,
     DeltaSummary,
+    enrich_tracked_stale,
 )
-from beacon.utils.delta import _enrich_tracked_stale
 
 
 def _sha256(data: bytes) -> str:
@@ -137,7 +137,7 @@ def test_tc1_knowledge_user_unchanged_becomes_stale(
         ]
     )
 
-    enriched = _enrich_tracked_stale(
+    enriched = enrich_tracked_stale(
         summary,
         warehouse_path=warehouse,
         artifacts_path=artifacts,
@@ -181,7 +181,7 @@ def test_tc2_knowledge_user_edited_stays_modified(
         ]
     )
 
-    enriched = _enrich_tracked_stale(
+    enriched = enrich_tracked_stale(
         summary,
         warehouse_path=warehouse,
         artifacts_path=artifacts,
@@ -218,7 +218,7 @@ def test_tc3_no_git_no_enrichment(tmp_path, artifacts):
         ]
     )
 
-    enriched = _enrich_tracked_stale(
+    enriched = enrich_tracked_stale(
         summary,
         warehouse_path=plain_warehouse,
         artifacts_path=artifacts,
@@ -241,7 +241,7 @@ def test_tc4_no_sync_sha_no_enrichment(warehouse, artifacts, comparator_factory)
         results=[ComparisonResult(path="knowledge/doc.md", status=DeltaStatus.MODIFIED)]
     )
 
-    enriched = _enrich_tracked_stale(
+    enriched = enrich_tracked_stale(
         summary,
         warehouse_path=warehouse,
         artifacts_path=artifacts,
@@ -264,7 +264,7 @@ def test_tc5_snapshot_current_no_enrichment(warehouse, artifacts, comparator_fac
         results=[ComparisonResult(path="knowledge/doc.md", status=DeltaStatus.MODIFIED)]
     )
 
-    enriched = _enrich_tracked_stale(
+    enriched = enrich_tracked_stale(
         summary,
         warehouse_path=warehouse,
         artifacts_path=artifacts,
@@ -319,7 +319,7 @@ def test_tc6_skill_user_unchanged_becomes_stale(tmp_path, warehouse, artifacts):
         ]
     )
 
-    enriched = _enrich_tracked_stale(
+    enriched = enrich_tracked_stale(
         summary,
         warehouse_path=warehouse,
         artifacts_path=artifacts,
@@ -372,7 +372,7 @@ def test_tc7_skill_user_edited_stays_modified(tmp_path, warehouse, artifacts):
         ]
     )
 
-    enriched = _enrich_tracked_stale(
+    enriched = enrich_tracked_stale(
         summary,
         warehouse_path=warehouse,
         artifacts_path=artifacts,

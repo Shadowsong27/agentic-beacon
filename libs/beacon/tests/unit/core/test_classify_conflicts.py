@@ -14,7 +14,7 @@ TDD Test Cases for classify_conflicts (5.2):
 
 from pathlib import Path
 
-from beacon.core.sync import SyncEngine
+from beacon.domains.distribution.sync_engine import SyncEngine
 
 
 class TestFilesIdentical:

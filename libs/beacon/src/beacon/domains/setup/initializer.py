@@ -6,10 +6,10 @@ from typing import Any
 
 from loguru import logger
 
-from .checksums import compute_sha256, write_checksums
+from beacon.domains.artifact.checksums import compute_sha256, write_checksums
 
-_DATA_DIR = Path(__file__).parent / "data"
-_TEMPLATES_DIR = _DATA_DIR / "templates"
+_DATA_DIR = Path(__file__).parent.parent.parent / "data"
+TEMPLATES_DIR = _DATA_DIR / "templates"
 
 # Relative paths (from warehouse root) of all template-generated files.
 # Keep in sync with _create_* methods below.
@@ -115,14 +115,14 @@ class WarehouseInitializer:
 
     def _render_template(self, rel_path: str, org_name: str) -> str:
         """Read a template file and substitute the org_name placeholder."""
-        content = (_TEMPLATES_DIR / rel_path).read_text(encoding="utf-8")
+        content = (TEMPLATES_DIR / rel_path).read_text(encoding="utf-8")
         return content.replace("{org_name}", org_name)
 
     def _create_agents(self) -> None:
         """Create agents directory with README template."""
         self._write_if_missing(
             self.warehouse_path / "agents" / "README.md",
-            (_TEMPLATES_DIR / "agents" / "README.md").read_text(encoding="utf-8"),
+            (TEMPLATES_DIR / "agents" / "README.md").read_text(encoding="utf-8"),
         )
 
     def _create_contexts(self) -> None:
@@ -165,7 +165,7 @@ class WarehouseInitializer:
         )
         self._write_if_missing(
             self.warehouse_path / ".gitignore",
-            (_TEMPLATES_DIR / ".gitignore").read_text(encoding="utf-8"),
+            (TEMPLATES_DIR / ".gitignore").read_text(encoding="utf-8"),
         )
 
     def _install_bundled_skills(self) -> None:
@@ -228,3 +228,13 @@ class WarehouseInitializer:
             raise
         except FileNotFoundError:
             logger.warning("Git not found in PATH, skipping git initialization")
+
+
+def ensure_beacon_dir(project_root: Path) -> Path:
+    """Ensure .agentic-beacon directory exists, creating it if necessary.
+
+    Returns the path to the beacon directory.
+    """
+    beacon_dir = project_root / ".agentic-beacon"
+    beacon_dir.mkdir(exist_ok=True)
+    return beacon_dir

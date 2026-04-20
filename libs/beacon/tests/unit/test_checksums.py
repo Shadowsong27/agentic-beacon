@@ -3,18 +3,18 @@
 import hashlib
 import json
 
-from beacon.checksums import (
-    compute_sha256,
-    compute_sha256_bytes,
-    read_checksums,
-    write_checksums,
-)
 from beacon.data.historical_hashes import (
     KNOWN_TEMPLATE_HASHES,
     is_known_hash,
     normalise_path,
 )
-from beacon.initializer import TEMPLATE_FILES, WarehouseInitializer
+from beacon.domains.artifact.checksums import (
+    compute_sha256,
+    compute_sha256_bytes,
+    read_checksums,
+    write_checksums,
+)
+from beacon.domains.setup.initializer import TEMPLATE_FILES, WarehouseInitializer
 
 # ---------------------------------------------------------------------------
 # compute_sha256

@@ -21,8 +21,8 @@ import json
 from pathlib import Path
 
 import pytest
-from beacon.cli import main
-from beacon.utils.skills import _wire_skills_post_sync
+from beacon.cli.main import main
+from beacon.domains.artifact.skill import wire_skills_post_sync
 from click.testing import CliRunner
 
 SAMPLE_SKILL_MD = """\
@@ -206,7 +206,7 @@ def test_tc1_wiring_target_not_exist_writes(tmp_path):
     """TC1: Skill wiring target does not exist → writes without prompt."""
     project, artifacts_dir = _make_project_with_skill(tmp_path, live_content=None)
 
-    installed, errors = _wire_skills_post_sync(project, artifacts_dir)
+    installed, errors = wire_skills_post_sync(project, artifacts_dir)
 
     assert any("my-skill" in s for s in installed)
     assert errors == []
@@ -219,7 +219,7 @@ def test_tc2_wiring_target_identical_skips(tmp_path):
         tmp_path, live_content=SAMPLE_SKILL_MD
     )
 
-    installed, errors = _wire_skills_post_sync(project, artifacts_dir)
+    installed, errors = wire_skills_post_sync(project, artifacts_dir)
 
     # No change needed — identical content, so nothing installed
     assert not any("my-skill" in s for s in installed)
@@ -232,7 +232,7 @@ def test_tc4_wiring_target_differs_preserve_skips(tmp_path):
         tmp_path, live_content="# User's local version\n"
     )
 
-    installed, errors = _wire_skills_post_sync(project, artifacts_dir, preserve=True)
+    installed, errors = wire_skills_post_sync(project, artifacts_dir, preserve=True)
 
     # Preserve skips conflicting wiring
     assert not any("my-skill" in s for s in installed)
@@ -247,7 +247,7 @@ def test_tc5_wiring_target_differs_force_overwrites(tmp_path):
         tmp_path, live_content="# User's local version\n"
     )
 
-    installed, errors = _wire_skills_post_sync(project, artifacts_dir, force=True)
+    installed, errors = wire_skills_post_sync(project, artifacts_dir, force=True)
 
     assert any("my-skill" in s for s in installed)
     live = project / ".opencode" / "skills" / "my-skill" / "SKILL.md"

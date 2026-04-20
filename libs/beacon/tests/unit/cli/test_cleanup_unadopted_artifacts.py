@@ -15,7 +15,7 @@ from click.testing import CliRunner
 def _invoke_cleanup(unadoptions, artifacts_dir, warehouse_path, confirm=True):
     """Call cleanup_unadopted_artifacts via Click's test CliRunner."""
     import click
-    from beacon.adopt import cleanup_unadopted_artifacts
+    from beacon.domains.adoption.apply import cleanup_unadopted_artifacts
 
     @click.command()
     def _cmd():

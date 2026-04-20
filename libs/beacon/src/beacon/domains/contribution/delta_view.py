@@ -1,4 +1,7 @@
-"""Delta utility functions for Beacon CLI."""
+"""Delta view functions for the contribution domain.
+
+User-facing output formatting for `abc delta` and `abc contribute` commands.
+"""
 
 import fnmatch
 from pathlib import Path
@@ -6,153 +9,30 @@ from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 
-from beacon.core.delta import (
+from beacon.core.manifest.beacon import BeaconManifest
+from beacon.domains.distribution.delta import (
     ComparisonResult,
     DeltaComparator,
     DeltaStatus,
-    DeltaSummary,
+    enrich_tracked_stale,
 )
-from beacon.core.manifest.beacon import BeaconManifest
-
-from .git import _get_file_hash_at_sha, _get_warehouse_head_sha
-from .sync_state import _SYNC_STATE_FILENAME, _read_sync_sha
+from beacon.domains.distribution.state import SYNC_STATE_FILENAME, read_sync_sha
+from beacon.utils.git import get_warehouse_head_sha
 
 console = Console()
 
 
-def _enrich_tracked_stale(
-    summary: DeltaSummary,
-    *,
-    warehouse_path: Path,
-    artifacts_path: Path,
-    comparator: DeltaComparator,
-) -> DeltaSummary:
-    """Re-classify MODIFIED tracked artifacts to STALE when the difference is purely upstream.
-
-    A tracked artifact (skill / knowledge / context) is STALE — not MODIFIED — when:
-    - The local file content matches the warehouse file at the last recorded sync SHA
-      (meaning the user has *not* touched the local copy since the last sync), AND
-    - The current warehouse file differs from that sync-SHA content
-      (meaning the warehouse moved forward after the user's last sync).
-
-    This is the tracked-artifact analogue of the per-agent MODIFIED→STALE enrichment.
-    It uses ``git show <sync_sha>:<path>`` on the warehouse repo instead of a stored
-    content_hash, so no format changes to .sync-state are required.
-
-    Falls back silently when:
-    - The warehouse has no git repo
-    - No sync SHA is recorded
-    - The snapshot is already current
-    - git is unavailable or returns an error for a given path
-
-    For skills (compared against live agent dirs):
-        Each per-agent MODIFIED status is checked independently.
-        If the live skill file matches the synced version, that agent→STALE.
-        The aggregate status is recomputed across the updated per-agent map.
-
-    For knowledge / contexts (compared against artifacts_path):
-        The local artifact hash is compared against the synced warehouse content.
-        If they match, the result is upgraded to STALE.
-    """
-    from beacon.core.delta import DeltaStatus
-
-    if not (warehouse_path / ".git").exists():
-        return summary
-
-    sync_sha = _read_sync_sha(artifacts_path)
-    if not sync_sha:
-        return summary
-
-    current_sha = _get_warehouse_head_sha(warehouse_path)
-    if not current_sha or current_sha == sync_sha:
-        return summary  # Snapshot is current — no enrichment needed
-
-    # Priority map for re-aggregating skill per-agent statuses
-    _priority = {
-        DeltaStatus.ADDED: 4,
-        DeltaStatus.MODIFIED: 3,
-        DeltaStatus.STALE: 2,
-        DeltaStatus.MISSING: 1,
-        DeltaStatus.IDENTICAL: 0,
-    }
-
-    new_results = []
-    for result in summary.results:
-        if result.status != DeltaStatus.MODIFIED:
-            new_results.append(result)
-            continue
-
-        # Fetch the warehouse file content at the last sync SHA once per result.
-        synced_hash = _get_file_hash_at_sha(warehouse_path, result.path, sync_sha)
-        if synced_hash is None:
-            new_results.append(result)
-            continue
-
-        is_skill = result.path.startswith("skills/") and bool(comparator.skills_paths)
-
-        if is_skill:
-            # Per-agent check: if live skill file == synced content → STALE for that agent
-            new_agent_statuses = dict(result.agent_statuses)
-            changed = False
-            for agent, status in result.agent_statuses.items():
-                if status != DeltaStatus.MODIFIED:
-                    continue
-                live_file = comparator._skill_live_path(agent, result.path)
-                if not live_file.exists():
-                    continue
-                live_hash = comparator.compute_hash(live_file)
-                if live_hash == synced_hash:
-                    new_agent_statuses[agent] = DeltaStatus.STALE
-                    changed = True
-
-            if not changed:
-                new_results.append(result)
-                continue
-
-            new_aggregate = max(
-                new_agent_statuses.values(), key=lambda s: _priority.get(s, 0)
-            )
-            new_results.append(
-                ComparisonResult(
-                    path=result.path,
-                    status=new_aggregate,
-                    local_hash=result.local_hash,
-                    warehouse_hash=result.warehouse_hash,
-                    agent_statuses=new_agent_statuses,
-                )
-            )
-        else:
-            # Knowledge / context: compare local artifact hash against synced content
-            local_file = artifacts_path / result.path
-            if not local_file.exists():
-                new_results.append(result)
-                continue
-            local_hash = result.local_hash or comparator.compute_hash(local_file)
-            if local_hash == synced_hash:
-                new_results.append(
-                    ComparisonResult(
-                        path=result.path,
-                        status=DeltaStatus.STALE,
-                        local_hash=result.local_hash,
-                        warehouse_hash=result.warehouse_hash,
-                        agent_statuses=result.agent_statuses,
-                    )
-                )
-            else:
-                new_results.append(result)
-
-    summary.results = new_results
-    return summary
-
-
-def _show_delta_summary(
+def show_delta_summary(
     comparator: DeltaComparator,
     beacon_settings: BeaconManifest,
     warehouse_path: Path | None = None,
     project_root: Path | None = None,
 ) -> None:
     """Show summary of all artifact differences."""
-    from .agents import _enrich_agent_stale, _find_project_level_agents
+    from beacon.domains.artifact.agent import (
+        enrich_agent_stale,
+        find_project_level_agents,
+    )
 
     summary = comparator.compare_from_config(beacon_settings)
 
@@ -160,7 +40,7 @@ def _show_delta_summary(
     # touched since the last sync and the warehouse has since moved forward.
     # Falls back silently when git is unavailable or the snapshot is current.
     if warehouse_path is not None:
-        summary = _enrich_tracked_stale(
+        summary = enrich_tracked_stale(
             summary,
             warehouse_path=warehouse_path,
             artifacts_path=comparator.artifacts_path,
@@ -171,8 +51,8 @@ def _show_delta_summary(
     # is stale — these represent genuine local edits on top of an outdated snapshot.
     snapshot_stale = False
     if warehouse_path is not None:
-        recorded_sha = _read_sync_sha(comparator.artifacts_path)
-        current_sha = _get_warehouse_head_sha(warehouse_path)
+        recorded_sha = read_sync_sha(comparator.artifacts_path)
+        current_sha = get_warehouse_head_sha(warehouse_path)
         if recorded_sha and current_sha and recorded_sha != current_sha:
             snapshot_stale = True
 
@@ -180,7 +60,7 @@ def _show_delta_summary(
     # so agents that exist globally but not yet in the warehouse show as ADDED.
     agent_results = []
     if comparator.agents_paths and warehouse_path is not None:
-        current_head = _get_warehouse_head_sha(warehouse_path) or ""
+        current_head = get_warehouse_head_sha(warehouse_path) or ""
 
         # Collect all unique agent file names across all global tool dirs and warehouse
         seen_rel_paths: set[str] = set()
@@ -203,8 +83,8 @@ def _show_delta_summary(
                     seen_rel_paths.add(rel_path)
 
         for rel_path in sorted(seen_rel_paths):
-            result = comparator._compare_agent_file(rel_path)
-            result = _enrich_agent_stale(
+            result = comparator.compare_agent_file(rel_path)
+            result = enrich_agent_stale(
                 result,
                 warehouse_path=warehouse_path,
                 current_head=current_head,
@@ -214,19 +94,19 @@ def _show_delta_summary(
 
     ignore_skill_patterns = beacon_settings.ignore.skills
 
-    untracked = _find_untracked_local_files(
+    untracked = find_untracked_local_files(
         comparator, beacon_settings, comparator.artifacts_path, ignore_skill_patterns
     )
 
     # Detect project-scoped agents (not part of the global/contribution flow)
     project_level_agents: dict[str, list[str]] = (
-        _find_project_level_agents(project_root) if project_root is not None else {}
+        find_project_level_agents(project_root) if project_root is not None else {}
     )
 
     # Detect non-bundled skills accidentally placed in global skill dirs
-    from .skills import _find_global_untracked_skills
+    from beacon.domains.artifact.skill import find_global_untracked_skills
 
-    global_untracked_skills = _find_global_untracked_skills(ignore_skill_patterns)
+    global_untracked_skills = find_global_untracked_skills(ignore_skill_patterns)
 
     has_agent_diffs = any(r.status != DeltaStatus.IDENTICAL for r in agent_results)
 
@@ -269,10 +149,10 @@ def _show_delta_summary(
                         tracked_agents.append(a)
 
         # Group knowledge node file results separately from standalone entries
-        node_entries = _knowledge_node_entries(
+        node_entries = knowledge_node_entries(
             beacon_settings, comparator.warehouse_path
         )
-        node_file_groups, standalone_results = _partition_tracked_diffs(
+        node_file_groups, standalone_results = partition_tracked_diffs(
             tracked_diffs, node_entries
         )
 
@@ -287,15 +167,13 @@ def _show_delta_summary(
                     for a, s in result.agent_statuses.items():
                         agent_cells[a] = _AGENT_STATUS_MARKUP.get(s, s.value)
                 rows.append((sm, result.path, agent_cells))
-            console.print(
-                _render_delta_table(rows, "Tracked Artifacts", tracked_agents)
-            )
+            console.print(render_delta_table(rows, "Tracked Artifacts", tracked_agents))
         elif node_file_groups:
             console.print("[bold]Tracked Artifacts[/bold]")
 
         for node_path in sorted(node_file_groups.keys()):
             console.print()
-            _render_knowledge_node_group(
+            render_knowledge_node_group(
                 node_path,
                 node_file_groups[node_path],
                 _STATUS_MARKUP,
@@ -333,7 +211,7 @@ def _show_delta_summary(
 
         console.print()
         console.print(
-            _render_delta_table(
+            render_delta_table(
                 rows,
                 "Untracked Artifacts [dim](not in beacon.yaml)[/dim]",
                 untracked_agents,
@@ -366,7 +244,7 @@ def _show_delta_summary(
 
         console.print()
         console.print(
-            _render_delta_table(
+            render_delta_table(
                 rows,
                 "Agents [dim](global)[/dim]",
                 agent_tools,
@@ -529,7 +407,7 @@ def _show_delta_summary(
         )
 
 
-def _show_detailed_diff(
+def show_detailed_diff(
     comparator: DeltaComparator,
     beacon_settings: BeaconManifest,
     file_path: str,
@@ -539,7 +417,7 @@ def _show_detailed_diff(
     import sys
 
     # Check if file is tracked in beacon.yaml
-    all_paths = _collect_artifact_paths(comparator, beacon_settings)
+    all_paths = collect_artifact_paths(comparator, beacon_settings)
     if file_path not in all_paths:
         console.print(
             f"[red]Error:[/red] File '{file_path}' is not tracked in beacon.yaml."
@@ -578,7 +456,7 @@ def _show_detailed_diff(
         console.print("[dim]No differences to display.[/dim]")
 
 
-def _format_skill_agent_statuses(agent_statuses: dict) -> str:
+def format_skill_agent_statuses(agent_statuses: dict) -> str:
     """Format per-agent skill statuses for display.
 
     e.g. "opencode: modified, claudecode: identical"
@@ -597,7 +475,7 @@ def _format_skill_agent_statuses(agent_statuses: dict) -> str:
     return ", ".join(parts)
 
 
-def _knowledge_node_entries(
+def knowledge_node_entries(
     beacon_settings: BeaconManifest, warehouse_path: Path
 ) -> list[str]:
     """Return the knowledge node paths (directory entries) declared in beacon.yaml.
@@ -614,7 +492,7 @@ def _knowledge_node_entries(
     return sorted(nodes, key=len, reverse=True)
 
 
-def _partition_tracked_diffs(
+def partition_tracked_diffs(
     tracked_diffs: list[ComparisonResult],
     node_entries: list[str],
 ) -> tuple[dict[str, list[ComparisonResult]], list[ComparisonResult]]:
@@ -643,7 +521,7 @@ def _partition_tracked_diffs(
     return node_file_groups, standalone_results
 
 
-def _render_knowledge_node_group(
+def render_knowledge_node_group(
     node_path: str,
     results: list[ComparisonResult],
     status_markup: dict[DeltaStatus, str],
@@ -703,7 +581,7 @@ def _render_knowledge_node_group(
     console.print(table)
 
 
-def _render_delta_table(
+def render_delta_table(
     rows: list[tuple[str, str, dict[str, str]]],
     title: str,
     agents: list[str],
@@ -735,7 +613,7 @@ def _render_delta_table(
     return table
 
 
-def _collect_artifact_paths(
+def collect_artifact_paths(
     comparator: DeltaComparator, beacon_settings: BeaconManifest
 ) -> set:
     """Collect all artifact paths from beacon.yaml, expanding globs.
@@ -743,9 +621,11 @@ def _collect_artifact_paths(
     Globs both the warehouse and local artifacts directory so that locally-added
     files (not yet in the warehouse) are included.
     """
-    from beacon.core.sync import SyncEngine
-
-    from .skills import _normalize_skill_entry, _skill_name_from_entry
+    from beacon.domains.artifact.skill import (
+        normalize_skill_entry,
+        skill_name_from_entry,
+    )
+    from beacon.domains.distribution.sync_engine import SyncEngine
 
     sync_engine = SyncEngine(
         warehouse_path=comparator.warehouse_path,
@@ -764,11 +644,11 @@ def _collect_artifact_paths(
                             paths.add(str(match.relative_to(comparator.artifacts_path)))
             elif artifact_type == "skills":
                 # Expand skill directory entry to individual file paths
-                skill_dir_entry = _normalize_skill_entry(pattern)
+                skill_dir_entry = normalize_skill_entry(pattern)
                 paths.update(sync_engine.expand_glob(f"{skill_dir_entry}/**/*"))
                 # Also scan live agent dirs to catch ADDED files
                 if comparator.skills_paths:
-                    skill_name = _skill_name_from_entry(pattern)
+                    skill_name = skill_name_from_entry(pattern)
                     for _agent, agent_root in comparator.skills_paths.items():
                         agent_skill_dir = agent_root / skill_name
                         if agent_skill_dir.exists():
@@ -801,7 +681,7 @@ def _collect_artifact_paths(
     return paths
 
 
-def _infer_artifact_type(file_path: str) -> str | None:
+def infer_artifact_type(file_path: str) -> str | None:
     """Infer artifact type from a relative path prefix.
 
     Returns "knowledge", "skills", "contexts", or None if unrecognisable.
@@ -812,7 +692,7 @@ def _infer_artifact_type(file_path: str) -> str | None:
     return None
 
 
-def _find_untracked_local_files(
+def find_untracked_local_files(
     comparator: DeltaComparator,
     beacon_settings: BeaconManifest,
     artifacts_dir: Path,
@@ -832,7 +712,7 @@ def _find_untracked_local_files(
     (.opencode/skills/, .claude/skills/). It is never a source of truth for delta —
     skills are always compared against their live agent installation, not the snapshot.
     """
-    tracked = _collect_artifact_paths(comparator, beacon_settings)
+    tracked = collect_artifact_paths(comparator, beacon_settings)
     patterns = ignore_patterns or []
 
     # Scan artifacts_dir for untracked knowledge and context files.
@@ -841,7 +721,7 @@ def _find_untracked_local_files(
     artifacts_untracked: list[str] = []
     if artifacts_dir.exists():
         for file_path in sorted(artifacts_dir.rglob("*")):
-            if file_path.is_file() and file_path.name != _SYNC_STATE_FILENAME:
+            if file_path.is_file() and file_path.name != SYNC_STATE_FILENAME:
                 rel = str(file_path.relative_to(artifacts_dir))
                 if rel.startswith("skills/"):
                     continue  # skills live in agent dirs, not here

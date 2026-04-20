@@ -12,7 +12,7 @@ Tasks 6.6-6.8 (--preserve, --prune, --verbose) covered in test_sync_preserve_pru
 
 import os
 
-from beacon.core.sync import SyncEngine
+from beacon.domains.distribution.sync_engine import SyncEngine
 
 # ========== Task 6.1 & 6.2: SyncEngine Creation and Pure Copy ==========
 

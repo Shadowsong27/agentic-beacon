@@ -5,56 +5,60 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from beacon.cli import main
-from beacon.utils.git import _check_warehouse_git_clean
-from beacon.utils.sync_state import _check_sync_state, _write_sync_state
+from beacon.cli.main import main
+from beacon.domains.distribution.state import check_sync_state, write_sync_state
+from beacon.domains.warehouse.git_health import (
+    GitHealthResult,
+    check_warehouse_git_clean,
+)
 from click.testing import CliRunner
 
-# ========== Unit tests for _check_warehouse_git_clean ==========
+# ========== Unit tests for check_warehouse_git_clean ==========
 
 
-def test_clean_repo_returns_none(tmp_path):
-    """Clean warehouse (empty porcelain output) → returns None."""
+def test_clean_repo_returns_ok(tmp_path):
+    """Clean warehouse (empty porcelain output) → ok=True."""
     git_dir = tmp_path / ".git"
     git_dir.mkdir()
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(stdout="", returncode=0)
-        result = _check_warehouse_git_clean(tmp_path)
-    assert result is None
+        result = check_warehouse_git_clean(tmp_path)
+    assert result.ok is True
 
 
 def test_dirty_repo_returns_error_message(tmp_path):
-    """Dirty warehouse (non-empty porcelain output) → returns error message."""
+    """Dirty warehouse (non-empty porcelain output) → ok=False with error message."""
     git_dir = tmp_path / ".git"
     git_dir.mkdir()
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(stdout=" M knowledge/file.md\n", returncode=0)
-        result = _check_warehouse_git_clean(tmp_path)
-    assert result is not None
-    assert "uncommitted changes" in result
-    assert "--skip-git-check" in result
+        result = check_warehouse_git_clean(tmp_path)
+    assert result.ok is False
+    assert "uncommitted changes" in result.error_message
 
 
-def test_no_git_dir_returns_none(tmp_path):
-    """Warehouse without .git directory → returns None (skip silently)."""
-    result = _check_warehouse_git_clean(tmp_path)
-    assert result is None
+def test_no_git_dir_returns_ok(tmp_path):
+    """Warehouse without .git directory → ok=True (skip silently)."""
+    result = check_warehouse_git_clean(tmp_path)
+    assert result.ok is True
 
 
-def test_git_not_installed_returns_none(tmp_path, capsys):
-    """git binary not found → returns None (skip with warning)."""
+def test_git_not_installed_returns_ok(tmp_path, capsys):
+    """git binary not found → ok=True (skip with warning)."""
     (tmp_path / ".git").mkdir()
     with patch("subprocess.run", side_effect=FileNotFoundError):
-        result = _check_warehouse_git_clean(tmp_path)
-    assert result is None
+        result = check_warehouse_git_clean(tmp_path)
+    assert result.ok is True
+    assert result.warning_message is not None
 
 
-def test_git_timeout_returns_none(tmp_path):
-    """git status times out → returns None (skip with warning)."""
+def test_git_timeout_returns_ok(tmp_path):
+    """git status times out → ok=True (skip with warning)."""
     (tmp_path / ".git").mkdir()
     with patch("subprocess.run", side_effect=subprocess.TimeoutExpired("git", 10)):
-        result = _check_warehouse_git_clean(tmp_path)
-    assert result is None
+        result = check_warehouse_git_clean(tmp_path)
+    assert result.ok is True
+    assert result.warning_message is not None
 
 
 def test_error_message_contains_warehouse_path(tmp_path):
@@ -62,11 +66,11 @@ def test_error_message_contains_warehouse_path(tmp_path):
     (tmp_path / ".git").mkdir()
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(stdout="M  file.md\n", returncode=0)
-        result = _check_warehouse_git_clean(tmp_path)
-    assert result is not None
+        result = check_warehouse_git_clean(tmp_path)
+    assert result.ok is False
     # Path may be abbreviated with ~ for home dir; either way it should appear
     short = str(tmp_path).replace(str(Path.home()), "~")
-    assert short in result
+    assert short in result.error_message
 
 
 # ========== Shared fixture ==========
@@ -125,7 +129,8 @@ def test_sync_proceeds_when_warehouse_clean(connected_project):
     with (
         patch("subprocess.run") as mock_run,
         patch(
-            "beacon.core.cli.main._check_warehouse_on_main_branch", return_value=None
+            "beacon.domains.distribution.orchestrator.check_warehouse_on_main_branch",
+            return_value=GitHealthResult(ok=True),
         ),
     ):
         mock_run.return_value = MagicMock(stdout="", returncode=0)
@@ -156,7 +161,9 @@ def test_sync_dry_run_bypasses_git_check(connected_project):
     (warehouse / ".git").mkdir()
 
     # subprocess.run should NOT be called for the git check during dry-run
-    with patch("beacon.core.cli.main._check_warehouse_git_clean") as mock_check:
+    with patch(
+        "beacon.domains.distribution.orchestrator.check_warehouse_git_clean"
+    ) as mock_check:
         result = runner.invoke(main, ["sync", "--dry-run"])
 
     mock_check.assert_not_called()
@@ -208,7 +215,7 @@ def test_contribute_proceeds_when_warehouse_clean(connected_project_with_artifac
 
     with (
         patch("subprocess.run") as mock_run,
-        patch("beacon.core.cli.main._check_sync_state", return_value=None),
+        patch("beacon.cli.contribute.check_sync_state", return_value=None),
     ):
         mock_run.return_value = MagicMock(stdout="", returncode=0)
         result = runner.invoke(main, ["contribute", "knowledge/lesson.md"], input="y\n")
@@ -241,7 +248,7 @@ def test_contribute_dry_run_bypasses_git_check(connected_project_with_artifact):
     warehouse = connected_project_with_artifact["warehouse"]
     (warehouse / ".git").mkdir()
 
-    with patch("beacon.core.cli.main._check_warehouse_git_clean") as mock_check:
+    with patch("beacon.cli.contribute.check_warehouse_git_clean") as mock_check:
         result = runner.invoke(main, ["contribute", "knowledge/lesson.md", "--dry-run"])
 
     mock_check.assert_not_called()
@@ -273,8 +280,8 @@ def test_contribute_no_git_dir_proceeds(connected_project_with_artifact):
 # ========== Unit tests for Gap 1: remote-behind check ==========
 
 
-def test_clean_up_to_date_repo_returns_none(tmp_path):
-    """Clean warehouse that is current with remote → returns None."""
+def test_clean_up_to_date_repo_returns_ok(tmp_path):
+    """Clean warehouse that is current with remote → ok=True."""
     (tmp_path / ".git").mkdir()
     with patch("subprocess.run") as mock_run:
         mock_run.side_effect = [
@@ -282,12 +289,12 @@ def test_clean_up_to_date_repo_returns_none(tmp_path):
             MagicMock(stdout="", returncode=0),  # git fetch --quiet
             MagicMock(stdout="0\n", returncode=0),  # git rev-list --count HEAD..@{u}
         ]
-        result = _check_warehouse_git_clean(tmp_path)
-    assert result is None
+        result = check_warehouse_git_clean(tmp_path)
+    assert result.ok is True
 
 
 def test_behind_remote_returns_error(tmp_path):
-    """Warehouse behind its remote by N commits → returns error with count."""
+    """Warehouse behind its remote by N commits → ok=False with error message."""
     (tmp_path / ".git").mkdir()
     with patch("subprocess.run") as mock_run:
         mock_run.side_effect = [
@@ -295,16 +302,16 @@ def test_behind_remote_returns_error(tmp_path):
             MagicMock(stdout="", returncode=0),  # git fetch --quiet
             MagicMock(stdout="3\n", returncode=0),  # 3 commits behind
         ]
-        result = _check_warehouse_git_clean(tmp_path)
-    assert result is not None
-    assert "behind" in result
-    assert "3" in result
-    assert "git pull" in result
-    assert "--skip-git-check" in result
+        result = check_warehouse_git_clean(tmp_path)
+    assert result.ok is False
+    assert "behind" in result.error_message
+    assert "3" in result.error_message
+    assert "git pull" in result.error_message
+    assert "--skip-git-check" in result.hint
 
 
-def test_no_upstream_configured_returns_none(tmp_path):
-    """rev-list fails (no upstream) → returns None, skip silently."""
+def test_no_upstream_configured_returns_ok(tmp_path):
+    """rev-list fails (no upstream) → ok=True, skip silently."""
     (tmp_path / ".git").mkdir()
     with patch("subprocess.run") as mock_run:
         mock_run.side_effect = [
@@ -312,27 +319,24 @@ def test_no_upstream_configured_returns_none(tmp_path):
             MagicMock(stdout="", returncode=0),  # git fetch --quiet
             MagicMock(stdout="", returncode=128),  # no upstream → non-zero exit
         ]
-        result = _check_warehouse_git_clean(tmp_path)
-    assert result is None
+        result = check_warehouse_git_clean(tmp_path)
+    assert result.ok is True
 
 
-def test_fetch_timeout_returns_none_with_warning(tmp_path, capsys):
-    """git fetch timeout → returns None (skip with warning)."""
+def test_fetch_timeout_returns_ok_with_warning(tmp_path, capsys):
+    """git fetch timeout → ok=True (skip with warning)."""
     (tmp_path / ".git").mkdir()
     with patch("subprocess.run") as mock_run:
         mock_run.side_effect = [
             MagicMock(stdout="", returncode=0),  # git status --porcelain
             subprocess.TimeoutExpired("git", 15),  # git fetch times out
         ]
-        result = _check_warehouse_git_clean(tmp_path)
-    assert result is None
-
-
-# ========== Unit tests for Gap 2: _write_sync_state / _check_sync_state ==========
+        result = check_warehouse_git_clean(tmp_path)
+    assert result.ok is True
 
 
 def test_write_sync_state_records_sha(tmp_path):
-    """_write_sync_state writes warehouse HEAD SHA to .sync-state file."""
+    """write_sync_state writes warehouse HEAD SHA to .sync-state file."""
     artifacts_dir = tmp_path / "artifacts"
     artifacts_dir.mkdir()
     warehouse = tmp_path / "warehouse"
@@ -341,7 +345,7 @@ def test_write_sync_state_records_sha(tmp_path):
 
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(stdout="abc123\n", returncode=0)
-        _write_sync_state(artifacts_dir, warehouse)
+        write_sync_state(artifacts_dir, warehouse)
 
     state_file = artifacts_dir / ".sync-state"
     assert state_file.exists()
@@ -349,21 +353,21 @@ def test_write_sync_state_records_sha(tmp_path):
 
 
 def test_write_sync_state_skips_when_no_git(tmp_path):
-    """_write_sync_state does nothing when warehouse has no git repo."""
+    """write_sync_state does nothing when warehouse has no git repo."""
     artifacts_dir = tmp_path / "artifacts"
     artifacts_dir.mkdir()
     warehouse = tmp_path / "warehouse"
     warehouse.mkdir()
     # No .git dir
 
-    _write_sync_state(artifacts_dir, warehouse)
+    write_sync_state(artifacts_dir, warehouse)
 
     state_file = artifacts_dir / ".sync-state"
     assert not state_file.exists()
 
 
 def test_check_sync_state_returns_none_when_sha_matches(tmp_path):
-    """_check_sync_state returns None when recorded SHA matches warehouse HEAD."""
+    """check_sync_state returns None when recorded SHA matches warehouse HEAD."""
     artifacts_dir = tmp_path / "artifacts"
     artifacts_dir.mkdir()
     (artifacts_dir / "knowledge").mkdir()
@@ -375,13 +379,13 @@ def test_check_sync_state_returns_none_when_sha_matches(tmp_path):
 
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(stdout="deadbeef\n", returncode=0)
-        result = _check_sync_state(artifacts_dir, warehouse)
+        result = check_sync_state(artifacts_dir, warehouse)
 
     assert result is None
 
 
 def test_check_sync_state_warns_when_sha_differs(tmp_path):
-    """_check_sync_state returns error when snapshot is based on older warehouse commit."""
+    """check_sync_state returns error when snapshot is based on older warehouse commit."""
     artifacts_dir = tmp_path / "artifacts"
     artifacts_dir.mkdir()
     (artifacts_dir / "knowledge").mkdir()
@@ -393,7 +397,7 @@ def test_check_sync_state_warns_when_sha_differs(tmp_path):
 
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(stdout="newsha\n", returncode=0)
-        result = _check_sync_state(artifacts_dir, warehouse)
+        result = check_sync_state(artifacts_dir, warehouse)
 
     assert result is not None
     assert "stale" in result or "older" in result
@@ -402,7 +406,7 @@ def test_check_sync_state_warns_when_sha_differs(tmp_path):
 
 
 def test_check_sync_state_warns_when_no_state_file(tmp_path):
-    """_check_sync_state warns when artifacts exist but no .sync-state file."""
+    """check_sync_state warns when artifacts exist but no .sync-state file."""
     artifacts_dir = tmp_path / "artifacts"
     artifacts_dir.mkdir()
     (artifacts_dir / "knowledge").mkdir()
@@ -412,14 +416,14 @@ def test_check_sync_state_warns_when_no_state_file(tmp_path):
     warehouse.mkdir()
     (warehouse / ".git").mkdir()
 
-    result = _check_sync_state(artifacts_dir, warehouse)
+    result = check_sync_state(artifacts_dir, warehouse)
 
     assert result is not None
     assert "abc sync" in result
 
 
 def test_check_sync_state_warns_when_artifacts_empty(tmp_path):
-    """_check_sync_state warns when artifacts directory is empty (sync never run)."""
+    """check_sync_state warns when artifacts directory is empty (sync never run)."""
     artifacts_dir = tmp_path / "artifacts"
     artifacts_dir.mkdir()
     # Empty — no files, no .sync-state
@@ -427,21 +431,21 @@ def test_check_sync_state_warns_when_artifacts_empty(tmp_path):
     warehouse.mkdir()
     (warehouse / ".git").mkdir()
 
-    result = _check_sync_state(artifacts_dir, warehouse)
+    result = check_sync_state(artifacts_dir, warehouse)
 
     assert result is not None
     assert "abc sync" in result
 
 
 def test_check_sync_state_returns_none_when_no_git(tmp_path):
-    """_check_sync_state returns None when warehouse has no git (check skipped)."""
+    """check_sync_state returns None when warehouse has no git (check skipped)."""
     artifacts_dir = tmp_path / "artifacts"
     artifacts_dir.mkdir()
     warehouse = tmp_path / "warehouse"
     warehouse.mkdir()
     # No .git dir
 
-    result = _check_sync_state(artifacts_dir, warehouse)
+    result = check_sync_state(artifacts_dir, warehouse)
 
     assert result is None
 
@@ -519,7 +523,7 @@ def test_contribute_skip_git_check_bypasses_sync_state(connected_project_with_ar
 
 def test_auto_git_uses_targeted_add(tmp_path):
     """_auto_git_contribute stages only contributed files, not all warehouse files."""
-    from beacon.utils.contribute import _auto_git_contribute
+    from beacon.domains.contribution.contributor import auto_git_contribute
 
     (tmp_path / ".git").mkdir()
     contributed = [
@@ -529,7 +533,7 @@ def test_auto_git_uses_targeted_add(tmp_path):
 
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
-        _auto_git_contribute(tmp_path, contributed)
+        auto_git_contribute(tmp_path, contributed)
 
     # Find the git add call
     add_call = next(
@@ -546,64 +550,64 @@ def test_auto_git_uses_targeted_add(tmp_path):
     assert "." not in args[args.index("--") :]
 
 
-# ========== Unit tests for _check_warehouse_on_main_branch ==========
+# ========== Unit tests for check_warehouse_on_main_branch ==========
 
-from beacon.utils.git import _check_warehouse_on_main_branch  # noqa: E402
+from beacon.domains.warehouse.git_health import (  # noqa: E402
+    check_warehouse_on_main_branch,
+)
 
 
-def test_on_main_branch_returns_none(tmp_path):
-    """Warehouse on 'main' → returns None."""
+def test_on_main_branch_returns_ok(tmp_path):
+    """Warehouse on 'main' → ok=True."""
     (tmp_path / ".git").mkdir()
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(stdout="main\n", returncode=0)
-        result = _check_warehouse_on_main_branch(tmp_path)
-    assert result is None
+        result = check_warehouse_on_main_branch(tmp_path)
+    assert result.ok is True
 
 
-def test_on_master_branch_returns_none(tmp_path):
-    """Warehouse on 'master' → returns None (accepted alias)."""
+def test_on_master_branch_returns_ok(tmp_path):
+    """Warehouse on 'master' → ok=True (accepted alias)."""
     (tmp_path / ".git").mkdir()
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(stdout="master\n", returncode=0)
-        result = _check_warehouse_on_main_branch(tmp_path)
-    assert result is None
+        result = check_warehouse_on_main_branch(tmp_path)
+    assert result.ok is True
 
 
 def test_on_feature_branch_returns_error(tmp_path):
-    """Warehouse on a non-main branch → returns error message."""
+    """Warehouse on a non-main branch → ok=False with error message."""
     (tmp_path / ".git").mkdir()
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(stdout="feat/my-experiment\n", returncode=0)
-        result = _check_warehouse_on_main_branch(tmp_path)
-    assert result is not None
-    assert "feat/my-experiment" in result
-    assert "git checkout main" in result
-    assert "--skip-git-check" in result
+        result = check_warehouse_on_main_branch(tmp_path)
+    assert result.ok is False
+    assert "feat/my-experiment" in result.error_message
+    assert "git checkout main" in result.error_message
 
 
 def test_detached_head_returns_error(tmp_path):
-    """Warehouse in detached HEAD state → returns error message."""
+    """Warehouse in detached HEAD state → ok=False with error message."""
     (tmp_path / ".git").mkdir()
     with patch("subprocess.run") as mock_run:
         mock_run.return_value = MagicMock(stdout="", returncode=128)
-        result = _check_warehouse_on_main_branch(tmp_path)
-    assert result is not None
-    assert "detached" in result
-    assert "--skip-git-check" in result
+        result = check_warehouse_on_main_branch(tmp_path)
+    assert result.ok is False
+    assert "detached" in result.error_message
 
 
-def test_no_git_dir_returns_none_branch_check(tmp_path):
-    """Warehouse without .git → returns None (skip silently)."""
-    result = _check_warehouse_on_main_branch(tmp_path)
-    assert result is None
+def test_no_git_dir_returns_ok_branch_check(tmp_path):
+    """Warehouse without .git → ok=True (skip silently)."""
+    result = check_warehouse_on_main_branch(tmp_path)
+    assert result.ok is True
 
 
-def test_git_not_found_returns_none_branch_check(tmp_path):
-    """git not installed → returns None (skip silently)."""
+def test_git_not_found_returns_ok_branch_check(tmp_path):
+    """git not installed → ok=True (skip silently)."""
     (tmp_path / ".git").mkdir()
     with patch("subprocess.run", side_effect=FileNotFoundError):
-        result = _check_warehouse_on_main_branch(tmp_path)
-    assert result is None
+        result = check_warehouse_on_main_branch(tmp_path)
+    assert result.ok is True
 
 
 # ========== Integration tests: abc sync branch guard ==========
@@ -638,7 +642,8 @@ def test_sync_proceeds_when_warehouse_on_main(connected_project):
     with (
         patch("subprocess.run") as mock_run,
         patch(
-            "beacon.core.cli.main._check_warehouse_on_main_branch", return_value=None
+            "beacon.domains.distribution.orchestrator.check_warehouse_on_main_branch",
+            return_value=GitHealthResult(ok=True),
         ),
     ):
         mock_run.return_value = MagicMock(stdout="", returncode=0)
@@ -666,7 +671,9 @@ def test_sync_dry_run_bypasses_branch_guard(connected_project):
     warehouse = connected_project["warehouse"]
     (warehouse / ".git").mkdir()
 
-    with patch("beacon.core.cli.main._check_warehouse_on_main_branch") as mock_branch:
+    with patch(
+        "beacon.domains.distribution.orchestrator.check_warehouse_on_main_branch"
+    ) as mock_branch:
         result = runner.invoke(main, ["sync", "--dry-run"])
 
     mock_branch.assert_not_called()

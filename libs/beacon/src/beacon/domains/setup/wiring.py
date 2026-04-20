@@ -1,8 +1,7 @@
-"""Wiring utility functions for Beacon CLI."""
+"""Wiring functions for Beacon CLI setup and sync flows."""
 
 import json
 import shutil
-import sys
 from pathlib import Path
 
 import click
@@ -12,7 +11,7 @@ from rich.console import Console
 console = Console()
 
 
-def _create_beacon_template(path: Path) -> None:
+def create_beacon_template(path: Path) -> None:
     """Create empty beacon.yaml template with commented examples."""
     template = """\
 # beacon.yaml - Declare which warehouse artifacts this project needs.
@@ -51,15 +50,14 @@ artifacts:
     path.write_text(template)
 
 
-def _install_project_setup_skill(beacon_dir: Path) -> None:
+def install_project_setup_skill(beacon_dir: Path) -> None:
     """Install project-setup skill and generate warehouse catalog.
 
     This generates a warehouse catalog file that AI agents can read
     to understand what artifacts are available and populate beacon.yaml.
     """
     from beacon.core.manifest.workspace import WorkspaceConfig
-
-    from .catalog import _generate_warehouse_catalog
+    from beacon.domains.warehouse.catalog import generate_warehouse_catalog
 
     try:
         config_file = beacon_dir / "config.toml"
@@ -76,7 +74,7 @@ def _install_project_setup_skill(beacon_dir: Path) -> None:
             return
 
         # Generate warehouse catalog
-        catalog = _generate_warehouse_catalog(warehouse_path)
+        catalog = generate_warehouse_catalog(warehouse_path)
         catalog_path = beacon_dir / "warehouse-catalog.md"
         catalog_path.write_text(catalog, encoding="utf-8")
 
@@ -84,7 +82,7 @@ def _install_project_setup_skill(beacon_dir: Path) -> None:
         console.print(f"[yellow]Warning:[/yellow] Could not generate catalog: {e}")
 
 
-def _wire_contexts_opencode(project_root: Path, artifacts_dir: Path) -> list[str]:
+def wire_contexts_opencode(project_root: Path, artifacts_dir: Path) -> list[str]:
     """Append synced context paths to opencode.json instructions.
 
     Returns the list of paths that were newly added (empty if nothing changed
@@ -123,7 +121,7 @@ def _wire_contexts_opencode(project_root: Path, artifacts_dir: Path) -> list[str
     return added
 
 
-def _wire_contexts_claudecode(project_root: Path, artifacts_dir: Path) -> list[str]:
+def wire_contexts_claudecode(project_root: Path, artifacts_dir: Path) -> list[str]:
     """Append synced context @-references to CLAUDE.md.
 
     Checks .claude/CLAUDE.md then root CLAUDE.md. Returns the list of paths
@@ -172,7 +170,7 @@ def _wire_contexts_claudecode(project_root: Path, artifacts_dir: Path) -> list[s
     return added
 
 
-def _init_opencode_json(project_root: Path) -> None:
+def init_opencode_json(project_root: Path) -> None:
     """Create a minimal opencode.json if one does not already exist."""
     opencode_json = project_root / "opencode.json"
     if not opencode_json.exists():
@@ -180,14 +178,14 @@ def _init_opencode_json(project_root: Path) -> None:
         opencode_json.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
 
-def _init_claude_md(project_root: Path) -> None:
+def init_claude_md(project_root: Path) -> None:
     """Create an empty CLAUDE.md at the project root if none exists."""
     claude_md = project_root / "CLAUDE.md"
     if not claude_md.exists():
         claude_md.write_text("", encoding="utf-8")
 
 
-def _confirm_prune(orphans: list, *, dry_run: bool = False) -> list[str]:
+def confirm_prune(orphans: list, *, dry_run: bool = False) -> list[str]:
     """Prompt the user to confirm deletion of orphaned artifacts.
 
     Orphans are files that exist in artifacts/ but are no longer listed in
@@ -254,7 +252,7 @@ def _confirm_prune(orphans: list, *, dry_run: bool = False) -> list[str]:
     return confirmed
 
 
-def _unwire_pruned_artifacts(
+def unwire_pruned_artifacts(
     project_root: Path, pruned_paths: list[str], artifacts_dir: Path
 ) -> None:
     """Remove wiring for pruned artifacts from agent config files.
@@ -281,15 +279,15 @@ def _unwire_pruned_artifacts(
             # Path inside artifacts_dir
             artifact_abs = artifacts_dir / rel_path
             rel_to_project = str(artifact_abs.relative_to(project_root))
-            _unwire_context_opencode(project_root, rel_to_project)
-            _unwire_context_claudecode(project_root, rel_to_project)
+            unwire_context_opencode(project_root, rel_to_project)
+            unwire_context_claudecode(project_root, rel_to_project)
 
         elif artifact_type == "skills" and len(parts) >= 2:
             skill_name = parts[1]
-            _unwire_skill(project_root, skill_name)
+            unwire_skill(project_root, skill_name)
 
 
-def _unwire_context_opencode(project_root: Path, rel_path: str) -> None:
+def unwire_context_opencode(project_root: Path, rel_path: str) -> None:
     """Remove a context path from opencode.json instructions."""
     opencode_json = project_root / "opencode.json"
     if not opencode_json.exists():
@@ -306,7 +304,7 @@ def _unwire_context_opencode(project_root: Path, rel_path: str) -> None:
         logger.debug("Unwired context from opencode.json: {}", rel_path)
 
 
-def _unwire_context_claudecode(project_root: Path, rel_path: str) -> None:
+def unwire_context_claudecode(project_root: Path, rel_path: str) -> None:
     """Remove a context @-reference from CLAUDE.md."""
     claude_md = next(
         (
@@ -332,7 +330,7 @@ def _unwire_context_claudecode(project_root: Path, rel_path: str) -> None:
     logger.debug("Unwired context from CLAUDE.md: {}", rel_path)
 
 
-def _unwire_skill(project_root: Path, skill_name: str) -> None:
+def unwire_skill(project_root: Path, skill_name: str) -> None:
     """Remove a skill's wiring directories for all detected agents."""
     opencode_skill = project_root / ".opencode" / "skills" / skill_name
     if opencode_skill.exists():
@@ -350,6 +348,9 @@ def _unwire_skill(project_root: Path, skill_name: str) -> None:
         logger.debug("Removed Claude skill dir: {}", claude_skill)
 
 
-def _is_interactive() -> bool:
-    """Return True if running in an interactive terminal."""
-    return sys.stdin.isatty()
+def has_synced_contexts(artifacts_dir: Path) -> bool:
+    """Check if any context files exist in the artifacts directory."""
+    contexts_dir = artifacts_dir / "contexts"
+    if not contexts_dir.exists():
+        return False
+    return any(contexts_dir.rglob("*.md"))

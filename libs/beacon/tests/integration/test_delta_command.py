@@ -4,7 +4,7 @@ Following TDD workflow for tasks 9.1-9.7.
 """
 
 import pytest
-from beacon.cli import main
+from beacon.cli.main import main
 from click.testing import CliRunner
 
 

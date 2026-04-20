@@ -1,14 +1,14 @@
 """Tests for global agent sync-state helpers.
 
-TDD Test Cases for _read_global_sync_state / _write_global_sync_state (4.1):
+TDD Test Cases for read_global_sync_state / write_global_sync_state (4.1):
 - TC1: File does not exist → returns {}
 - TC2: File exists with valid JSON including version field → returns parsed dict
-- TC3: _write_global_sync_state() with new data → file created with "version": 1
-- TC4: _write_global_sync_state() overwrites existing → file updated, version preserved
+- TC3: write_global_sync_state() with new data → file created with "version": 1
+- TC4: write_global_sync_state() overwrites existing → file updated, version preserved
 - TC5: File exists with unknown version value → reader warns and returns {}
 - TC6: File exists with invalid JSON → reader warns and returns {}
 
-TDD Test Cases for _relink_global_sync_state (4.3):
+TDD Test Cases for relink_global_sync_state (4.3):
 - TC1: No state file → no prompt, returns False
 - TC2: State file has entry for current path → no prompt, returns False
 - TC3: State file has entry for /old/path/warehouse, current path is /new/path/warehouse → prompt shown
@@ -19,15 +19,15 @@ TDD Test Cases for _relink_global_sync_state (4.3):
 
 import json
 
-from beacon.utils.sync_state import (
-    _read_global_sync_state,
-    _relink_global_sync_state,
-    _write_global_sync_state,
+from beacon.domains.distribution.state import (
+    read_global_sync_state,
+    relink_global_sync_state,
+    write_global_sync_state,
 )
 
 
 class TestReadWriteGlobalSyncState:
-    """Tests for _read_global_sync_state / _write_global_sync_state covering TC1-TC6."""
+    """Tests for read_global_sync_state / write_global_sync_state covering TC1-TC6."""
 
     def test_tc1_file_does_not_exist(self, tmp_path, monkeypatch):
         """TC1: File does not exist → returns {}."""
@@ -35,7 +35,7 @@ class TestReadWriteGlobalSyncState:
         fake_home.mkdir()
         monkeypatch.setattr("pathlib.Path.home", lambda: fake_home)
 
-        result = _read_global_sync_state()
+        result = read_global_sync_state()
         assert result == {}
 
     def test_tc2_valid_json_with_version(self, tmp_path, monkeypatch):
@@ -47,17 +47,17 @@ class TestReadWriteGlobalSyncState:
         state_file.write_text(json.dumps(data), encoding="utf-8")
         monkeypatch.setattr("pathlib.Path.home", lambda: fake_home)
 
-        result = _read_global_sync_state()
+        result = read_global_sync_state()
         assert result["version"] == 1
         assert "warehouses" in result
 
     def test_tc3_write_creates_file_with_version(self, tmp_path, monkeypatch):
-        """TC3: _write_global_sync_state() with new data → file created with "version": 1."""
+        """TC3: write_global_sync_state() with new data → file created with "version": 1."""
         fake_home = tmp_path / "home"
         fake_home.mkdir()
         monkeypatch.setattr("pathlib.Path.home", lambda: fake_home)
 
-        _write_global_sync_state({"warehouses": {}})
+        write_global_sync_state({"warehouses": {}})
 
         state_file = fake_home / ".config" / "agentic-beacon" / "sync-state.json"
         assert state_file.exists()
@@ -65,14 +65,14 @@ class TestReadWriteGlobalSyncState:
         assert data["version"] == 1
 
     def test_tc4_write_overwrites_existing(self, tmp_path, monkeypatch):
-        """TC4: _write_global_sync_state() overwrites existing → updated, version preserved."""
+        """TC4: write_global_sync_state() overwrites existing → updated, version preserved."""
         fake_home = tmp_path / "home"
         state_file = fake_home / ".config" / "agentic-beacon" / "sync-state.json"
         state_file.parent.mkdir(parents=True)
         state_file.write_text(json.dumps({"version": 1, "warehouses": {}}))
         monkeypatch.setattr("pathlib.Path.home", lambda: fake_home)
 
-        _write_global_sync_state({"warehouses": {"/new/path": {"file.md": {}}}})
+        write_global_sync_state({"warehouses": {"/new/path": {"file.md": {}}}})
 
         data = json.loads(state_file.read_text())
         assert data["version"] == 1
@@ -86,7 +86,7 @@ class TestReadWriteGlobalSyncState:
         state_file.write_text(json.dumps({"version": 99, "warehouses": {}}))
         monkeypatch.setattr("pathlib.Path.home", lambda: fake_home)
 
-        result = _read_global_sync_state()
+        result = read_global_sync_state()
         assert result == {}
 
     def test_tc6_invalid_json_returns_empty(self, tmp_path, monkeypatch):
@@ -97,12 +97,12 @@ class TestReadWriteGlobalSyncState:
         state_file.write_text("not valid json {{{{")
         monkeypatch.setattr("pathlib.Path.home", lambda: fake_home)
 
-        result = _read_global_sync_state()
+        result = read_global_sync_state()
         assert result == {}
 
 
 class TestRelinkGlobalSyncState:
-    """Tests for _relink_global_sync_state covering TC1-TC6."""
+    """Tests for relink_global_sync_state covering TC1-TC6."""
 
     def test_tc1_no_state_file_returns_false(self, tmp_path, monkeypatch):
         """TC1: No state file → no prompt, returns False."""
@@ -110,7 +110,7 @@ class TestRelinkGlobalSyncState:
         fake_home.mkdir()
         monkeypatch.setattr("pathlib.Path.home", lambda: fake_home)
 
-        result = _relink_global_sync_state(tmp_path / "my-warehouse")
+        result = relink_global_sync_state(tmp_path / "my-warehouse")
         assert result is False
 
     def test_tc2_state_has_current_path_returns_false(self, tmp_path, monkeypatch):
@@ -125,7 +125,7 @@ class TestRelinkGlobalSyncState:
         )
         monkeypatch.setattr("pathlib.Path.home", lambda: fake_home)
 
-        result = _relink_global_sync_state(warehouse)
+        result = relink_global_sync_state(warehouse)
         assert result is False
 
     def test_tc3_matching_dir_name_prompts(self, tmp_path, monkeypatch):
@@ -143,7 +143,7 @@ class TestRelinkGlobalSyncState:
 
         # Simulate user answering "N" (decline)
         monkeypatch.setattr("click.prompt", lambda *a, **kw: "N")
-        result = _relink_global_sync_state(new_warehouse)
+        result = relink_global_sync_state(new_warehouse)
         assert result is False
 
     def test_tc4_user_confirms_relinks(self, tmp_path, monkeypatch):
@@ -162,7 +162,7 @@ class TestRelinkGlobalSyncState:
         monkeypatch.setattr("pathlib.Path.home", lambda: fake_home)
         monkeypatch.setattr("click.prompt", lambda *a, **kw: "y")
 
-        result = _relink_global_sync_state(new_warehouse)
+        result = relink_global_sync_state(new_warehouse)
         assert result is True
 
         data = _json.loads(state_file.read_text())
@@ -184,7 +184,7 @@ class TestRelinkGlobalSyncState:
         monkeypatch.setattr("pathlib.Path.home", lambda: fake_home)
         monkeypatch.setattr("click.prompt", lambda *a, **kw: "N")
 
-        result = _relink_global_sync_state(new_warehouse)
+        result = relink_global_sync_state(new_warehouse)
         assert result is False
 
         data = _json.loads(state_file.read_text())
@@ -222,6 +222,6 @@ class TestRelinkGlobalSyncState:
 
         monkeypatch.setattr("click.prompt", mock_prompt)
 
-        result = _relink_global_sync_state(new_warehouse)
+        result = relink_global_sync_state(new_warehouse)
         assert result is True
         assert len(prompt_calls) > 0

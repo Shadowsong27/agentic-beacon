@@ -9,7 +9,7 @@ Following TDD workflow for tasks 8.1-8.6:
 """
 
 import pytest
-from beacon.core.delta import (
+from beacon.domains.distribution.delta import (
     ComparisonResult,
     DeltaComparator,
     DeltaStatus,

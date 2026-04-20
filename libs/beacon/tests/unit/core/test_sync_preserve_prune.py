@@ -3,7 +3,7 @@
 Following TDD workflow for tasks 6.6-6.8.
 """
 
-from beacon.core.sync import SyncEngine
+from beacon.domains.distribution.sync_engine import SyncEngine
 
 # ========== Task 6.6: --preserve flag ==========
 

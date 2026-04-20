@@ -1,6 +1,6 @@
 # Fact: Repository Structure
 
-**Last Updated:** 2026-03-07
+**Last Updated:** 2026-04-20
 **Context:** Agentic Beacon Framework
 
 ---
@@ -19,8 +19,33 @@ agentic-beacon/
 │   ├── lessons/
 │   └── facts/
 ├── libs/beacon/          # CLI source code
-│   └── src/beacon/data/skills/  # Bundled skills (SSOT for distributed skills)
-│       └── record-knowledge/
+│   └── src/beacon/
+│       ├── cli/          # Click handlers (thin layer: parse + call + format)
+│       │   ├── main.py       # Click group + registration only
+│       │   ├── setup.py      # abc init, abc setup handlers
+│       │   ├── sync.py       # abc sync, abc doctor, abc upgrade handlers
+│       │   ├── contribute.py # abc contribute handlers
+│       │   ├── adoption.py   # abc adopt handlers
+│       │   ├── agent.py      # abc agent handlers
+│       │   └── warehouse.py  # abc warehouse handlers
+│       ├── domains/      # Application / domain logic per bounded context
+│       │   ├── warehouse/    # Warehouse connect, validate, catalog, git health
+│       │   ├── setup/        # abc init/setup flows; CLAUDE.md/opencode wiring
+│       │   ├── adoption/     # abc adopt flow
+│       │   ├── distribution/ # Warehouse→project sync, upgrades, sync-state
+│       │   ├── contribution/ # Project→warehouse contribute flow
+│       │   └── artifact/     # Agent/skill/rule artifact operations
+│       ├── core/         # Cross-domain primitives (models, settings, exceptions)
+│       │   ├── manifest/     # Pydantic domain models
+│       │   ├── settings.py
+│       │   ├── exceptions.py
+│       │   └── gitignore.py
+│       ├── utils/        # Generic helpers (git, display, interaction)
+│       └── data/skills/  # Bundled skills (SSOT for distributed skills)
+│           └── record-knowledge/
+├── openspec/             # OpenSpec change artifacts
+│   ├── changes/          # Active changes
+│   └── specs/            # Published specifications
 ├── skills/               # Project skills README only (no bundled skills here)
 ├── AGENTS.md             # Project-level agent context
 ├── opencode.json         # Context loading configuration
@@ -31,6 +56,7 @@ agentic-beacon/
 
 **Source Code:**
 - `libs/beacon/` - The CLI package source code
+- Follows a four-layer architecture: `cli/` → `domains/` → `core/`, `utils/`
 
 **Documentation:**
 - `docs/` - Conceptual design and architecture documentation
@@ -59,3 +85,4 @@ agentic-beacon/
 - Users create warehouses with `abc init`
 - No temporary documentation in workflows folder
 - Examples must match `abc init` output
+- Dependency rule: `cli → domains → core, utils`; `core/` and `utils/` must never import from `domains/` or `cli/`

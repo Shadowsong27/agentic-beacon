@@ -1,4 +1,4 @@
-"""SHA256 checksum utilities for warehouse template tracking."""
+"""Checksum operations for the artifact domain."""
 
 import hashlib
 import json

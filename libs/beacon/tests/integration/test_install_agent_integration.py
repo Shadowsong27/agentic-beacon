@@ -15,8 +15,8 @@ import json
 from pathlib import Path
 
 import pytest
-from beacon.cli import main
-from beacon.utils.sync_state import _global_sync_state_file
+from beacon.cli.main import main
+from beacon.domains.distribution.state import global_sync_state_file
 from click.testing import CliRunner
 
 AGENT_CONTENT = """\
@@ -94,7 +94,7 @@ def test_tc1_both_tools_fresh_install(connected_project):
     assert (claude_dir / "agents" / "code-reviewer.md").exists()
 
     # Sync-state populated
-    state_file = _global_sync_state_file()
+    state_file = global_sync_state_file()
     assert state_file.exists()
     state = json.loads(state_file.read_text())
     assert state.get("version") == 1
@@ -164,7 +164,7 @@ def test_tc4_identical_content_updates_sync_state_head(connected_project):
     assert result.exit_code == 0
 
     # Sync-state SHOULD be updated even though no file write happened
-    state_file = _global_sync_state_file()
+    state_file = global_sync_state_file()
     assert state_file.exists(), "sync-state file should exist after install"
     state = json.loads(state_file.read_text())
     agent_state = (
@@ -193,7 +193,7 @@ def test_tc6_force_overwrites_without_prompt(connected_project):
     assert (opencode_dir / "agents" / "code-reviewer.md").read_text() == AGENT_CONTENT
 
     # Sync-state should be updated
-    state_file = _global_sync_state_file()
+    state_file = global_sync_state_file()
     assert state_file.exists()
     state = json.loads(state_file.read_text())
     warehouses = state.get("warehouses", {})
@@ -219,7 +219,7 @@ def test_tc7_preserve_skips_without_prompt(connected_project):
     assert "Old version" in (claude_dir / "agents" / "code-reviewer.md").read_text()
 
     # Sync-state should NOT be updated (all files were skipped)
-    state_file = _global_sync_state_file()
+    state_file = global_sync_state_file()
     if state_file.exists():
         state = json.loads(state_file.read_text())
         warehouses = state.get("warehouses", {})

@@ -1,4 +1,4 @@
-"""Agent utility functions for Beacon CLI."""
+"""Agent operations for the artifact domain."""
 
 import sys
 from pathlib import Path
@@ -7,17 +7,21 @@ import click
 from rich.console import Console
 from rich.table import Table
 
-from beacon.core.delta import ComparisonResult, DeltaComparator
-
-from .git import _hash_content
-from .sync_state import _relink_global_sync_state, _write_agent_sync_state
+from beacon.domains.distribution.delta import ComparisonResult, DeltaComparator
+from beacon.domains.distribution.state import (
+    relink_global_sync_state,
+    write_agent_sync_state,
+)
+from beacon.utils.display import is_interactive
+from beacon.utils.git import hash_content
+from beacon.utils.interaction import ConflictResolution, resolve_conflict
 
 console = Console()
 
 _ALL_KNOWN_AGENTS = ["opencode", "claudecode"]
 
 
-def _global_agent_dirs() -> dict[str, Path]:
+def global_agent_dirs() -> dict[str, Path]:
     """Return global agent definition directories per tool."""
     return {
         "opencode": Path.home() / ".config" / "opencode" / "agents",
@@ -25,7 +29,7 @@ def _global_agent_dirs() -> dict[str, Path]:
     }
 
 
-def _detect_agents_global() -> list[str]:
+def detect_agents_global() -> list[str]:
     """Detect which agent tools are available on this machine via home-dir paths.
 
     Checks only home-directory paths (not project-relative paths).
@@ -41,7 +45,17 @@ def _detect_agents_global() -> list[str]:
     return tools
 
 
-def _detect_agents(project_root: Path, *, fallback_to_all: bool = False) -> list[str]:
+def read_agent_definition(agent_file: Path) -> str | None:
+    """Read an agent definition file from the warehouse.
+
+    Returns None if the file does not exist or cannot be read.
+    """
+    if not agent_file.exists():
+        return None
+    return agent_file.read_text(encoding="utf-8")
+
+
+def detect_agents(project_root: Path, *, fallback_to_all: bool = False) -> list[str]:
     """Detect which agent tools are configured in the project.
 
     When fallback_to_all=True and no config files are found, returns all known
@@ -57,7 +71,7 @@ def _detect_agents(project_root: Path, *, fallback_to_all: bool = False) -> list
     return agents
 
 
-def _build_agents_paths() -> dict[str, Path]:
+def build_agents_paths() -> dict[str, Path]:
     """Return a mapping of tool name → global agents directory for detected tools.
 
     This is the shared detection logic used by both `abc delta` and
@@ -65,7 +79,7 @@ def _build_agents_paths() -> dict[str, Path]:
     global agent locations.
     """
     agents_paths: dict[str, Path] = {}
-    for tool in _detect_agents_global():
+    for tool in detect_agents_global():
         if tool == "opencode":
             agents_paths["opencode"] = Path.home() / ".config" / "opencode" / "agents"
         elif tool == "claudecode":
@@ -73,7 +87,7 @@ def _build_agents_paths() -> dict[str, Path]:
     return agents_paths
 
 
-def _install_agent_global(agent: str, agent_name: str, content: str) -> bool:
+def install_agent_global(agent: str, agent_name: str, content: str) -> bool:
     """Write an agent definition file to the global agent directory for a tool.
 
     Creates parent dirs if needed.
@@ -85,7 +99,7 @@ def _install_agent_global(agent: str, agent_name: str, content: str) -> bool:
         agent_name: Filename (e.g. "code-reviewer.md").
         content: File content to write.
     """
-    agent_dirs = _global_agent_dirs()
+    agent_dirs = global_agent_dirs()
     dest = agent_dirs[agent] / agent_name
     if dest.exists() and dest.read_text(encoding="utf-8") == content:
         return False
@@ -94,9 +108,23 @@ def _install_agent_global(agent: str, agent_name: str, content: str) -> bool:
     return True
 
 
-def _list_global_agents() -> None:
+def uninstall_agent_global(agent_name: str) -> int:
+    """Remove an agent definition file from all global agent directories.
+
+    Returns the number of directories from which the agent was removed.
+    """
+    removed_count = 0
+    for agent_dir in global_agent_dirs().values():
+        target = agent_dir / agent_name
+        if target.exists():
+            target.unlink()
+            removed_count += 1
+    return removed_count
+
+
+def list_global_agents() -> None:
     """Display globally installed agent files from all detected tool directories."""
-    agent_dirs = _global_agent_dirs()
+    agent_dirs = global_agent_dirs()
 
     # Union of all agent filenames across detected tools, deduplicated
     seen: dict[str, list[str]] = {}  # filename -> list of tools that have it
@@ -121,7 +149,7 @@ def _list_global_agents() -> None:
     console.print(table)
 
 
-def _find_project_level_agents(project_root: Path) -> dict[str, list[str]]:
+def find_project_level_agents(project_root: Path) -> dict[str, list[str]]:
     """Return project-scoped agent files per tool that live outside the global dirs.
 
     Checks .claude/agents/ (Claude Code) and .opencode/agents/ (OpenCode) under
@@ -145,7 +173,7 @@ def _find_project_level_agents(project_root: Path) -> dict[str, list[str]]:
     return result
 
 
-def _update_agent_gitignores(project_root: Path) -> None:
+def update_agent_gitignores(project_root: Path) -> None:
     """Add gitignore entries to agent subdirectory .gitignore files.
 
     Updates .claude/.gitignore and .opencode/.gitignore if those directories
@@ -162,7 +190,7 @@ def _update_agent_gitignores(project_root: Path) -> None:
         GitignoreManager(opencode_dir).ensure_entries(["skills/", "command/"])
 
 
-def _sync_agents_from_warehouse(
+def sync_agents_from_warehouse(
     warehouse_path: Path,
     *,
     force: bool = False,
@@ -188,11 +216,11 @@ def _sync_agents_from_warehouse(
     if not agent_files:
         return
 
-    tools = _detect_agents_global()
+    tools = detect_agents_global()
     if not tools:
         return
 
-    agent_dirs = _global_agent_dirs()
+    agent_dirs = global_agent_dirs()
 
     # Build list of (relative_path, content, agent_name) tuples
     entries: list[tuple[str, str, str]] = []
@@ -218,8 +246,7 @@ def _sync_agents_from_warehouse(
             f"\n[yellow]Warning:[/yellow] {len(conflicts)} global agent file(s) "
             f"differ from the warehouse and will be overwritten:\n{conflict_list}\n"
         )
-        is_interactive = sys.stdin.isatty()
-        if is_interactive:
+        if is_interactive():
             if not click.confirm(
                 "Overwrite local agent files with warehouse versions?", default=False
             ):
@@ -243,11 +270,11 @@ def _sync_agents_from_warehouse(
                 skipped.append(agent_name)
                 continue
 
-            written = _install_agent_global(tool, agent_name, content)
+            written = install_agent_global(tool, agent_name, content)
             # Always update sync-state HEAD, even when content is unchanged.
             # Without this, 'abc delta' keeps reporting agents as stale after a
             # sync that found nothing to write (warehouse advanced, content same).
-            _write_agent_sync_state(warehouse_path, rel, _hash_content(content))
+            write_agent_sync_state(warehouse_path, rel, hash_content(content))
             if written:
                 installed.append(agent_name)
 
@@ -265,7 +292,7 @@ def _sync_agents_from_warehouse(
         )
 
 
-def _handle_install_agent(
+def handle_install_agent(
     artifact: str, *, force: bool = False, preserve: bool = False
 ) -> None:
     """Handle 'abc install agents/<name>.md' — global install for all detected tools.
@@ -275,8 +302,6 @@ def _handle_install_agent(
     records sync-state for each successful write. Does NOT update beacon.yaml.
     """
     from beacon.core.manifest.workspace import WorkspaceConfig
-
-    from .display import _handle_soft_block
 
     beacon_dir = Path.cwd() / ".agentic-beacon"
     if not beacon_dir.exists():
@@ -300,10 +325,10 @@ def _handle_install_agent(
     agent_name = Path(artifact).name
 
     # Relink sync state if warehouse path has changed
-    _relink_global_sync_state(warehouse_path)
+    relink_global_sync_state(warehouse_path)
 
     # Detect tools
-    tools = _detect_agents_global()
+    tools = detect_agents_global()
     if not tools:
         console.print(
             "[yellow]Warning:[/yellow] No agent tools detected "
@@ -313,16 +338,30 @@ def _handle_install_agent(
         return
 
     # Soft-block pre-check: check for conflicting global agent files
-    agent_dirs = _global_agent_dirs()
+    agent_dirs = global_agent_dirs()
     conflicts: list[str] = []
     for tool in tools:
         dest = agent_dirs[tool] / agent_name
         if dest.exists() and dest.read_text(encoding="utf-8") != content:
             conflicts.append(str(dest))
 
-    overwrite = _handle_soft_block(conflicts, force=force, preserve=preserve)
-    if not overwrite and conflicts:
+    resolution = resolve_conflict(
+        force=force, preserve=preserve, has_conflicts=bool(conflicts)
+    )
+    if resolution == ConflictResolution.SKIP:
         preserve = True  # skip conflicting files
+    elif resolution == ConflictResolution.NEEDS_CONFIRMATION:
+        # Non-interactive mode with conflicts — cannot prompt; refuse to proceed.
+        conflict_list = "\n".join(f"  • {p}" for p in conflicts)
+        console.print(
+            f"\n[yellow]Warning:[/yellow] {len(conflicts)} global agent file(s) "
+            f"differ from the warehouse:\n{conflict_list}\n"
+        )
+        console.print(
+            "[red]Error:[/red] Non-interactive mode — cannot prompt for overwrite.\n"
+            "Use --force to overwrite or --preserve to skip conflicting files."
+        )
+        sys.exit(1)
 
     written_any = False
     for tool in tools:
@@ -333,11 +372,11 @@ def _handle_install_agent(
             console.print(f"[yellow]Skipped[/yellow] {dest} (preserved local version)")
             continue
 
-        written = _install_agent_global(tool, agent_name, content)
+        written = install_agent_global(tool, agent_name, content)
         # Always update sync-state HEAD, even when content is unchanged.
         # Without this, 'abc delta' keeps reporting the agent as stale after
         # install finds nothing to write (warehouse advanced, content same).
-        _write_agent_sync_state(warehouse_path, artifact, _hash_content(content))
+        write_agent_sync_state(warehouse_path, artifact, hash_content(content))
         if written:
             console.print(f"[green]Installed[/green] {artifact} → {dest}")
             written_any = True
@@ -350,7 +389,7 @@ def _handle_install_agent(
         )
 
 
-def _enrich_agent_stale(
+def enrich_agent_stale(
     result: ComparisonResult,
     *,
     warehouse_path: Path,
@@ -383,14 +422,13 @@ def _enrich_agent_stale(
         comparator: DeltaComparator used to hash live agent files (needed for
             MODIFIED → STALE detection).  If None, that branch is skipped.
     """
-    from beacon.core.delta import ComparisonResult, DeltaStatus
-
-    from .sync_state import _read_global_sync_state
+    from beacon.domains.distribution.delta import ComparisonResult, DeltaStatus
+    from beacon.domains.distribution.state import read_global_sync_state
 
     if result.status not in (DeltaStatus.IDENTICAL, DeltaStatus.MODIFIED):
         return result
 
-    state = _read_global_sync_state()
+    state = read_global_sync_state()
     warehouses = state.get("warehouses", {})
     wh_entries = warehouses.get(str(warehouse_path), {})
     entry = wh_entries.get(result.path)
@@ -439,7 +477,7 @@ def _enrich_agent_stale(
     for agent, status in result.agent_statuses.items():
         if status != DeltaStatus.MODIFIED:
             continue
-        live_file = comparator._agent_live_path(agent, result.path)
+        live_file = comparator.agent_live_path(agent, result.path)
         if not live_file.exists():
             continue
         live_hash = comparator.compute_hash(live_file)

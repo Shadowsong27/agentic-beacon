@@ -1,4 +1,4 @@
-"""Warehouse catalog utility functions for Beacon CLI."""
+"""Warehouse catalog operations for the warehouse domain."""
 
 from pathlib import Path
 
@@ -9,7 +9,7 @@ from beacon.core.manifest.beacon import BeaconManifest
 console = Console()
 
 
-def _generate_warehouse_catalog(warehouse_path: Path) -> str:
+def generate_warehouse_catalog(warehouse_path: Path) -> str:
     """Scan warehouse and generate markdown catalog for AI agents.
 
     Args:
@@ -111,18 +111,17 @@ def _extract_description(file_path: Path) -> str:
     return ""
 
 
-def _register_in_beacon_yaml(
+def register_in_beacon_yaml(
     beacon_settings: BeaconManifest, beacon_yaml: Path, file_path: str
 ) -> bool:
     """Add an explicit path to beacon.yaml under the appropriate artifact type.
 
     Returns True if the file was added (i.e. it wasn't already listed explicitly).
     """
-    from .delta import _infer_artifact_type
-
-    artifact_type = _infer_artifact_type(file_path)
-    if artifact_type is None:
+    first_part = Path(file_path).parts[0] if Path(file_path).parts else ""
+    if first_part not in ("knowledge", "skills", "contexts"):
         return False
+    artifact_type = first_part
 
     current_list: list[str] = getattr(beacon_settings.artifacts, artifact_type)
     if file_path not in current_list:

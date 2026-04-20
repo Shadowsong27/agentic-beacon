@@ -7,9 +7,13 @@ from typing import Any
 
 import click
 
-from .checksums import compute_sha256, read_checksums, write_checksums
-from .data.historical_hashes import is_known_hash, normalise_path
-from .initializer import _TEMPLATES_DIR, TEMPLATE_FILES
+from beacon.data.historical_hashes import is_known_hash, normalise_path
+from beacon.domains.artifact.checksums import (
+    compute_sha256,
+    read_checksums,
+    write_checksums,
+)
+from beacon.domains.setup.initializer import TEMPLATE_FILES, TEMPLATES_DIR
 
 
 class FileState(str, Enum):
@@ -71,10 +75,11 @@ class WarehouseUpgrader:
         """
         if rel_path in template_overrides:
             return template_overrides[rel_path]
-        tmpl_path = _TEMPLATES_DIR / rel_path
+
+        tmpl_path = TEMPLATES_DIR / rel_path
         if tmpl_path.exists():
             return tmpl_path.read_text(encoding="utf-8")
-        data_path = _TEMPLATES_DIR.parent / rel_path
+        data_path = TEMPLATES_DIR.parent / rel_path
         if data_path.exists():
             return data_path.read_text(encoding="utf-8")
         return ""

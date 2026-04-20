@@ -12,7 +12,7 @@ def isolated_home(tmp_path, monkeypatch):
     """Redirect Path.home() to a clean temp directory.
 
     Use this fixture in tests that invoke CLI commands which call
-    _detect_agents_global() or _build_agents_paths(), to prevent real global
+    detect_agents_global() or build_agents_paths(), to prevent real global
     agent installs from leaking into the test.
     """
     home = tmp_path / "home"

@@ -7,8 +7,8 @@ Regression tests for:
 """
 
 import pytest
-from beacon.distributor import WarehouseDistributor
-from beacon.utils.catalog import _generate_warehouse_catalog
+from beacon.domains.distribution.distributor import WarehouseDistributor
+from beacon.domains.warehouse.catalog import generate_warehouse_catalog
 
 
 @pytest.fixture
@@ -139,7 +139,7 @@ def test_catalog_context_example_uses_full_path(temp_dir):
     (wh / "skills").mkdir()
     (wh / "contexts" / "AGENTS.md").write_text("# Context")
 
-    catalog = _generate_warehouse_catalog(wh)
+    catalog = generate_warehouse_catalog(wh)
 
     assert "AGENTS.global.md" not in catalog, (
         "Catalog must not reference old 'AGENTS.global.md' naming convention"
@@ -157,7 +157,7 @@ def test_catalog_knowledge_example_uses_knowledge_prefix(temp_dir):
     (wh / "knowledge").mkdir()
     (wh / "skills").mkdir()
 
-    catalog = _generate_warehouse_catalog(wh)
+    catalog = generate_warehouse_catalog(wh)
 
     # The Usage block should have knowledge/ prefix on example paths
     assert "knowledge/" in catalog
@@ -171,6 +171,6 @@ def test_catalog_skills_example_uses_skills_prefix(temp_dir):
     (wh / "knowledge").mkdir()
     (wh / "skills").mkdir()
 
-    catalog = _generate_warehouse_catalog(wh)
+    catalog = generate_warehouse_catalog(wh)
 
     assert "skills/" in catalog

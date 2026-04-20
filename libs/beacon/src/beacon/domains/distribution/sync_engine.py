@@ -72,9 +72,10 @@ class SyncEngine:
     artifacts_path: Path
 
     def __post_init__(self) -> None:
-        """Normalize paths to Path objects."""
+        """Normalize paths and ensure artifacts directory exists."""
         self.warehouse_path = Path(self.warehouse_path)
         self.artifacts_path = Path(self.artifacts_path)
+        self.artifacts_path.mkdir(parents=True, exist_ok=True)
         logger.debug(
             "SyncEngine initialized: warehouse={}, artifacts={}",
             self.warehouse_path,
@@ -363,6 +364,68 @@ class SyncEngine:
                 relative_paths.append(str(rel_path))
 
         return relative_paths
+
+    def list_artifacts(self, artifact_type: str | None = None) -> dict[str, list[str]]:
+        """List synced artifacts by type.
+
+        Returns a mapping of artifact type (contexts/knowledge/skills) to
+        sorted lists of relative paths. If artifact_type is specified,
+        only that type is included.
+        """
+        types_to_show = (
+            [artifact_type] if artifact_type else ["contexts", "knowledge", "skills"]
+        )
+        result: dict[str, list[str]] = {}
+        for section in types_to_show:
+            section_dir = self.artifacts_path / section
+            if not section_dir.exists():
+                continue
+            files = sorted(
+                str(f.relative_to(self.artifacts_path))
+                for f in section_dir.rglob("*")
+                if f.is_file() and not f.name.startswith(".")
+            )
+            if files:
+                result[section] = files
+        return result
+
+    def expand_artifact_paths(self, patterns: list[str]) -> list[str]:
+        """Expand artifact path patterns to concrete file paths.
+
+        Handles:
+        - Glob patterns (with * or ?)
+        - Skill directories (ending with /)
+        - Knowledge directories (expanded to **/*.md)
+        - Single files
+
+        Returns list of warehouse-relative paths.
+        """
+        import glob as glob_mod
+
+        expanded: list[str] = []
+        for pattern in patterns:
+            if "*" in pattern or "?" in pattern:
+                matches = [
+                    str(Path(p).relative_to(self.warehouse_path))
+                    for p in glob_mod.glob(
+                        str(self.warehouse_path / pattern), recursive=True
+                    )
+                    if Path(p).is_file()
+                ]
+                expanded.extend(matches)
+            elif pattern.endswith("/"):
+                skill_dir = self.warehouse_path / pattern.rstrip("/")
+                if skill_dir.is_dir():
+                    for f in skill_dir.rglob("*"):
+                        if f.is_file():
+                            expanded.append(str(f.relative_to(self.warehouse_path)))
+            elif (self.warehouse_path / pattern).is_dir():
+                for f in (self.warehouse_path / pattern).rglob("*.md"):
+                    if f.is_file():
+                        expanded.append(str(f.relative_to(self.warehouse_path)))
+            else:
+                expanded.append(pattern)
+        return expanded
 
     def files_identical(self, file1: Path, file2: Path) -> bool:
         """Check if two files have identical content using hash comparison.

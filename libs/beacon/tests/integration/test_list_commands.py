@@ -1,7 +1,7 @@
 """Tests for abc list and abc warehouse list commands."""
 
 import pytest
-from beacon.cli import main
+from beacon.cli.main import main
 from click.testing import CliRunner
 
 # ---------------------------------------------------------------------------
