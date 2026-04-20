@@ -213,4 +213,4 @@ See `AGENTS.md` → "Unit Testing Workflow" and `knowledge/lessons/complete-test
   - **Rationale**: All 22 existing upgrader tests pass `template_overrides=...`, short-circuiting before the disk lookup. The regression where ruff deleted the `TEMPLATES_DIR / rel_path` branch was only caught by human review, not CI.
   - **Test**: `test_read_new_template_falls_back_to_templates_dir` — call `WarehouseUpgrader._read_new_template(rel_path="README.md", template_overrides={})` and assert it returns non-empty content matching `data/templates/README.md`.
   - **Validation**: Test passes before and after the fix; fails on the broken commit (19ed637~1).
-- [ ] 9.10 Mark draft ready-for-merge and merge
+- [x] 9.10 Mark draft ready-for-merge and merge
