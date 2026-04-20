@@ -25,10 +25,10 @@ from beacon.domains.artifact.agent import (
 from beacon.domains.artifact.skill import wire_skills_post_sync
 from beacon.domains.distribution.sync_engine import SyncEngine
 from beacon.domains.setup.wiring import (
-    is_interactive,
     wire_contexts_claudecode,
     wire_contexts_opencode,
 )
+from beacon.utils.display import is_interactive
 from beacon.utils.git import find_project_root
 
 console = Console()

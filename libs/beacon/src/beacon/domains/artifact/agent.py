@@ -12,6 +12,7 @@ from beacon.domains.distribution.state import (
     relink_global_sync_state,
     write_agent_sync_state,
 )
+from beacon.utils.display import is_interactive
 from beacon.utils.git import hash_content
 
 console = Console()
@@ -244,8 +245,7 @@ def sync_agents_from_warehouse(
             f"\n[yellow]Warning:[/yellow] {len(conflicts)} global agent file(s) "
             f"differ from the warehouse and will be overwritten:\n{conflict_list}\n"
         )
-        is_interactive = sys.stdin.isatty()
-        if is_interactive:
+        if is_interactive():
             if not click.confirm(
                 "Overwrite local agent files with warehouse versions?", default=False
             ):

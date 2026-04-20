@@ -8,6 +8,11 @@ from rich.console import Console
 console = Console()
 
 
+def is_interactive() -> bool:
+    """Return True if running in an interactive terminal."""
+    return sys.stdin.isatty()
+
+
 def handle_soft_block(
     conflicts: list[str],
     force: bool,
@@ -36,15 +41,13 @@ def handle_soft_block(
         return True  # --force: overwrite all conflicts silently
 
     # Interactive vs non-interactive
-    is_interactive = sys.stdin.isatty()
-
     conflict_list = "\n".join(f"  • {p}" for p in conflicts)
     console.print(
         f"\n[yellow]Warning:[/yellow] {len(conflicts)} file(s) have local changes "
         f"that differ from the warehouse:\n{conflict_list}\n"
     )
 
-    if not is_interactive:
+    if not is_interactive():
         console.print(
             "[red]Error:[/red] Non-interactive mode — cannot prompt for overwrite.\n"
             "Use --force to overwrite or --preserve to skip conflicting files."

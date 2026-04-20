@@ -8,7 +8,9 @@ from rich.console import Console
 from rich.table import Table
 
 from beacon.core.manifest.beacon import ArtifactsConfig, BeaconManifest
-from beacon.core.paths import BUNDLED_SKILLS_DIR
+
+_BUNDLED_DATA_DIR = Path(__file__).parent.parent.parent / "data"
+BUNDLED_SKILLS_DIR = _BUNDLED_DATA_DIR / "skills"
 
 console = Console()
 

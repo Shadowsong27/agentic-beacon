@@ -46,12 +46,11 @@ from beacon.domains.setup.wiring import (
     has_synced_contexts,
     init_claude_md,
     init_opencode_json,
-    is_interactive,
     unwire_pruned_artifacts,
     wire_contexts_claudecode,
     wire_contexts_opencode,
 )
-from beacon.utils.display import handle_soft_block
+from beacon.utils.display import handle_soft_block, is_interactive
 from beacon.utils.git import (
     check_warehouse_git_clean,
     check_warehouse_on_main_branch,

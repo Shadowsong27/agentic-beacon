@@ -2,7 +2,6 @@
 
 import json
 import shutil
-import sys
 from pathlib import Path
 
 import click
@@ -355,8 +354,3 @@ def has_synced_contexts(artifacts_dir: Path) -> bool:
     if not contexts_dir.exists():
         return False
     return any(contexts_dir.rglob("*.md"))
-
-
-def is_interactive() -> bool:
-    """Return True if running in an interactive terminal."""
-    return sys.stdin.isatty()
