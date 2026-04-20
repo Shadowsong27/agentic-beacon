@@ -6,7 +6,7 @@ Covers:
 - 7.3 Unit tests for description extraction helpers
 - 7.4 TUI tests using textual's run_test() harness
 - 7.5 Integration test for abc adopt --dry-run
-- 7.6 Unit tests for _count_unadopted_since() and sync notification
+- 7.6 Unit tests for count_unadopted_since() and sync notification
 """
 
 from __future__ import annotations
@@ -16,17 +16,17 @@ from pathlib import Path
 
 import pytest
 import pytest_asyncio  # noqa: F401 – ensures asyncio marks resolve
-from beacon.adopt import (
-    AdoptCandidate,
-    _count_unadopted_since,
-    _extract_heading_description,
-    _extract_skill_description,
-    _find_knowledge_node_for_file,
-    _list_knowledge_nodes,
-    apply_adoption,
-    discover_adoptable,
-)
 from beacon.core.manifest.beacon import ArtifactsConfig, BeaconManifest
+from beacon.domains.adoption.adopter import (
+    AdoptCandidate,
+    apply_adoption,
+    count_unadopted_since,
+    discover_adoptable,
+    extract_heading_description,
+    extract_skill_description,
+    find_knowledge_node_for_file,
+    list_knowledge_nodes,
+)
 from click.testing import CliRunner
 
 # ---------------------------------------------------------------------------
@@ -94,44 +94,44 @@ class TestExtractSkillDescription:
     def test_yaml_frontmatter(self):
         """TC1: SKILL.md with YAML frontmatter description."""
         content = "---\ndescription: Generate tests\n---\n\n# Skill"
-        assert _extract_skill_description(content) == "Generate tests"
+        assert extract_skill_description(content) == "Generate tests"
 
     def test_markdown_bold(self):
         """TC5: SKILL.md with **description:** markdown bold."""
         content = "# My Skill\n\n**description:** Generate tests\n"
-        assert _extract_skill_description(content) == "Generate tests"
+        assert extract_skill_description(content) == "Generate tests"
 
     def test_no_description(self):
         """TC4: File with no frontmatter and no bold description."""
         content = "# My Skill\n\nSome content here.\n"
-        assert _extract_skill_description(content) == ""
+        assert extract_skill_description(content) == ""
 
     def test_frontmatter_no_description_field(self):
         """Frontmatter exists but no description key."""
         content = "---\nname: foo\n---\n# Skill"
-        assert _extract_skill_description(content) == ""
+        assert extract_skill_description(content) == ""
 
 
 class TestExtractHeadingDescription:
     def test_context_heading(self):
         """TC2: Context file starting with # Platform Standards."""
         content = "# Platform Standards\n\nContent here.\n"
-        assert _extract_heading_description(content) == "Platform Standards"
+        assert extract_heading_description(content) == "Platform Standards"
 
     def test_knowledge_heading(self):
         """TC3: Knowledge file starting with # Python Async."""
         content = "# Python Async\n\nAsync patterns.\n"
-        assert _extract_heading_description(content) == "Python Async"
+        assert extract_heading_description(content) == "Python Async"
 
     def test_no_heading(self):
         """TC4: File with no heading returns empty string."""
         content = "Just some content without a heading.\n"
-        assert _extract_heading_description(content) == ""
+        assert extract_heading_description(content) == ""
 
     def test_heading_with_extra_spaces(self):
         """Heading with leading/trailing whitespace is stripped."""
         content = "#  My Topic  \n"
-        assert _extract_heading_description(content) == "My Topic"
+        assert extract_heading_description(content) == "My Topic"
 
 
 # ---------------------------------------------------------------------------
@@ -142,35 +142,35 @@ class TestExtractHeadingDescription:
 class TestFindKnowledgeNodeForFile:
     def test_flat_node_decisions(self):
         assert (
-            _find_knowledge_node_for_file("knowledge/global/decisions/foo.md")
+            find_knowledge_node_for_file("knowledge/global/decisions/foo.md")
             == "knowledge/global"
         )
 
     def test_flat_node_lessons(self):
         assert (
-            _find_knowledge_node_for_file("knowledge/global/lessons/bar.md")
+            find_knowledge_node_for_file("knowledge/global/lessons/bar.md")
             == "knowledge/global"
         )
 
     def test_flat_node_facts(self):
         assert (
-            _find_knowledge_node_for_file("knowledge/global/facts/baz.md")
+            find_knowledge_node_for_file("knowledge/global/facts/baz.md")
             == "knowledge/global"
         )
 
     def test_nested_node(self):
         assert (
-            _find_knowledge_node_for_file(
+            find_knowledge_node_for_file(
                 "knowledge/languages/python/decisions/typing.md"
             )
             == "knowledge/languages/python"
         )
 
     def test_file_not_under_subtype(self):
-        assert _find_knowledge_node_for_file("knowledge/python/basics.md") is None
+        assert find_knowledge_node_for_file("knowledge/python/basics.md") is None
 
     def test_file_outside_knowledge(self):
-        assert _find_knowledge_node_for_file("contexts/foo.md") is None
+        assert find_knowledge_node_for_file("contexts/foo.md") is None
 
 
 class TestListKnowledgeNodes:
@@ -178,7 +178,7 @@ class TestListKnowledgeNodes:
         warehouse = _make_warehouse(tmp_path)
         (warehouse / "knowledge" / "global" / "facts").mkdir(parents=True)
         (warehouse / "knowledge" / "global" / "facts" / "foo.md").write_text("# Foo")
-        nodes = _list_knowledge_nodes(warehouse)
+        nodes = list_knowledge_nodes(warehouse)
         assert nodes == ["knowledge/global"]
 
     def test_nested_nodes(self, tmp_path):
@@ -189,7 +189,7 @@ class TestListKnowledgeNodes:
         (warehouse / "knowledge" / "languages" / "typescript" / "lessons").mkdir(
             parents=True
         )
-        nodes = _list_knowledge_nodes(warehouse)
+        nodes = list_knowledge_nodes(warehouse)
         assert set(nodes) == {
             "knowledge/languages/python",
             "knowledge/languages/typescript",
@@ -200,12 +200,12 @@ class TestListKnowledgeNodes:
         # languages/ has no decisions/lessons/facts directly — it's just a grouping folder
         (warehouse / "knowledge" / "languages").mkdir(parents=True)
         (warehouse / "knowledge" / "languages" / "README.md").write_text("# Languages")
-        nodes = _list_knowledge_nodes(warehouse)
+        nodes = list_knowledge_nodes(warehouse)
         assert nodes == []
 
     def test_empty_knowledge_dir(self, tmp_path):
         warehouse = _make_warehouse(tmp_path)
-        assert _list_knowledge_nodes(warehouse) == []
+        assert list_knowledge_nodes(warehouse) == []
 
     def test_mixed_flat_and_nested(self, tmp_path):
         warehouse = _make_warehouse(tmp_path)
@@ -213,7 +213,7 @@ class TestListKnowledgeNodes:
         (warehouse / "knowledge" / "domains" / "web-services" / "decisions").mkdir(
             parents=True
         )
-        nodes = _list_knowledge_nodes(warehouse)
+        nodes = list_knowledge_nodes(warehouse)
         assert set(nodes) == {"knowledge/global", "knowledge/domains/web-services"}
 
     def test_dual_role_node_and_parent(self, tmp_path):
@@ -227,7 +227,7 @@ class TestListKnowledgeNodes:
         (warehouse / "knowledge" / "data-platform" / "dbt" / "decisions").mkdir(
             parents=True
         )
-        nodes = _list_knowledge_nodes(warehouse)
+        nodes = list_knowledge_nodes(warehouse)
         assert set(nodes) == {
             "knowledge/data-platform",
             "knowledge/data-platform/clickhouse",
@@ -616,7 +616,7 @@ class TestApplyAdoption:
 
 
 # ---------------------------------------------------------------------------
-# 7.6 _count_unadopted_since()
+# 7.6 count_unadopted_since()
 # ---------------------------------------------------------------------------
 
 
@@ -634,7 +634,7 @@ class TestCountUnadoptedSince:
         _git_add_commit(warehouse, "add contexts")
 
         beacon = _make_beacon_settings()
-        assert _count_unadopted_since(warehouse, beacon, old_sha) == 3
+        assert count_unadopted_since(warehouse, beacon, old_sha) == 3
 
     def test_three_new_two_adopted(self, tmp_path):
         """TC2: 3 new artifact paths in diff, 2 in beacon.yaml -> returns 1."""
@@ -649,7 +649,7 @@ class TestCountUnadoptedSince:
         _git_add_commit(warehouse, "add contexts")
 
         beacon = _make_beacon_settings(contexts=["contexts/a.md", "contexts/b.md"])
-        assert _count_unadopted_since(warehouse, beacon, old_sha) == 1
+        assert count_unadopted_since(warehouse, beacon, old_sha) == 1
 
     def test_no_new_paths(self, tmp_path):
         """TC3: No new artifact paths in diff -> returns 0."""
@@ -659,7 +659,7 @@ class TestCountUnadoptedSince:
         sha = _git_add_commit(warehouse, "init")
 
         beacon = _make_beacon_settings()
-        assert _count_unadopted_since(warehouse, beacon, sha) == 0
+        assert count_unadopted_since(warehouse, beacon, sha) == 0
 
     def test_new_paths_outside_adoptable_dirs(self, tmp_path):
         """TC4: New paths outside contexts/skills/knowledge -> returns 0."""
@@ -673,7 +673,7 @@ class TestCountUnadoptedSince:
         _git_add_commit(warehouse, "add docs")
 
         beacon = _make_beacon_settings()
-        assert _count_unadopted_since(warehouse, beacon, old_sha) == 0
+        assert count_unadopted_since(warehouse, beacon, old_sha) == 0
 
 
 # ---------------------------------------------------------------------------
@@ -685,7 +685,7 @@ class TestCountUnadoptedSince:
 class TestAdoptTUI:
     async def test_select_all(self, tmp_path):
         """TC1: Press `a` -> all checkboxes toggled on."""
-        from beacon.adopt import AdoptApp
+        from beacon.domains.adoption.adopter import AdoptApp
         from textual.widgets import Checkbox
 
         candidates = [
@@ -698,7 +698,7 @@ class TestAdoptTUI:
         # Import the inner class by running through compose
         # We need to test the inner _InnerApp — replicate the logic
         # to create a testable instance
-        from beacon.adopt import _make_cb_id
+        from beacon.domains.adoption.adopter import make_cb_id
         from textual.app import App, ComposeResult
         from textual.binding import Binding
         from textual.containers import VerticalScroll
@@ -722,7 +722,7 @@ class TestAdoptTUI:
                 yield Header(show_clock=False)
                 with VerticalScroll():
                     for c in self._candidates:
-                        cb_id = _make_cb_id(c.path)
+                        cb_id = make_cb_id(c.path)
                         self._path_by_id[cb_id] = c.path
                         label = c.path
                         if c.description:
@@ -756,16 +756,11 @@ class TestAdoptTUI:
 
     async def test_select_none(self, tmp_path):
         """TC2: Press `n` -> all checkboxes toggled off."""
-        from beacon.adopt import _make_cb_id
+        from beacon.domains.adoption.adopter import make_cb_id
         from textual.app import App, ComposeResult
         from textual.binding import Binding
         from textual.containers import VerticalScroll
         from textual.widgets import Checkbox, Footer, Header
-
-        candidates = [
-            AdoptCandidate("contexts", "contexts/a.md", "Alpha"),
-            AdoptCandidate("contexts", "contexts/b.md", "Beta"),
-        ]
 
         class TestApp(App[list[str]]):
             BINDINGS = [
@@ -774,17 +769,12 @@ class TestAdoptTUI:
                 Binding("escape", "cancel", "Cancel"),
             ]
 
-            def __init__(self):
-                super().__init__()
-                self._path_by_id: dict[str, str] = {}
-
             def compose(self) -> ComposeResult:
-                yield Header(show_clock=False)
-                with VerticalScroll():
-                    for c in candidates:
-                        cb_id = _make_cb_id(c.path)
-                        self._path_by_id[cb_id] = c.path
-                        yield Checkbox(c.path, id=cb_id, value=True)  # start checked
+                yield Header()
+                yield VerticalScroll(
+                    Checkbox(label="a", id=make_cb_id("contexts/a.md")),
+                    Checkbox(label="b", id=make_cb_id("contexts/b.md")),
+                )
                 yield Footer()
 
             def action_select_all(self):
@@ -799,14 +789,15 @@ class TestAdoptTUI:
                 self.exit([])
 
         app = TestApp()
-        async with app.run_test(headless=True) as pilot:
+        async with app.run_test() as pilot:
             await pilot.press("n")
-            checkboxes = app.query(Checkbox).results()
+            await pilot.pause()
+            checkboxes = list(app.query(Checkbox))
             assert not any(cb.value for cb in checkboxes)
 
     async def test_enter_returns_selected(self, tmp_path):
-        """TC3: Press Enter with 2 of 3 checked -> returns exactly the 2 selected paths."""
-        from beacon.adopt import _make_cb_id
+        """TC3: Press `enter` -> returns selected paths."""
+        from beacon.domains.adoption.adopter import make_cb_id
         from textual.app import App, ComposeResult
         from textual.binding import Binding
         from textual.containers import VerticalScroll
@@ -832,7 +823,7 @@ class TestAdoptTUI:
                 yield Header(show_clock=False)
                 with VerticalScroll():
                     for i, c in enumerate(candidates):
-                        cb_id = _make_cb_id(c.path)
+                        cb_id = make_cb_id(c.path)
                         self._path_by_id[cb_id] = c.path
                         # Check the first two, leave third unchecked
                         yield Checkbox(c.path, id=cb_id, value=(i < 2))

@@ -6,7 +6,7 @@ Provides:
 - discover_adoptable(): full-scan discovery with recent-commit annotation
 - AdoptApp: textual TUI for interactive selection and unadoption
 - apply_adoption(): update beacon.yaml with selected/removed artifacts
-- _count_unadopted_since(): lightweight count for sync notification
+- count_unadopted_since(): lightweight count for sync notification
 """
 
 from __future__ import annotations
@@ -56,7 +56,7 @@ class AdoptResult:
 # ─────────────────────────────────────────────────────────────
 
 
-def _classify_artifact_type(path: str) -> str | None:
+def classify_artifact_type(path: str) -> str | None:
     """Return artifact_type for a warehouse-relative path, or None if not adoptable."""
     for atype in _ADOPTABLE_TYPES:
         if path.startswith(atype + "/"):
@@ -64,7 +64,7 @@ def _classify_artifact_type(path: str) -> str | None:
     return None
 
 
-def _skill_dir_from_path(path: str) -> str:
+def skill_dir_from_path(path: str) -> str:
     """Convert any file under a skill dir to the directory form with trailing slash.
 
     E.g. "skills/foo/SKILL.md" → "skills/foo/"
@@ -75,7 +75,7 @@ def _skill_dir_from_path(path: str) -> str:
     return path
 
 
-def _find_knowledge_node_for_file(file_path: str) -> str | None:
+def find_knowledge_node_for_file(file_path: str) -> str | None:
     """Find the knowledge node path for a file under knowledge/.
 
     A node is identified by the first path segment that is decisions/lessons/facts.
@@ -90,12 +90,12 @@ def _find_knowledge_node_for_file(file_path: str) -> str | None:
     return None
 
 
-def _is_knowledge_node(dir_path: Path) -> bool:
+def is_knowledge_node(dir_path: Path) -> bool:
     """Return True if dir_path directly contains decisions/, lessons/, or facts/."""
     return any((dir_path / st).is_dir() for st in _KNOWLEDGE_SUBTYPES)
 
 
-def _collect_knowledge_nodes(
+def collect_knowledge_nodes(
     current: Path, warehouse_path: Path, nodes: list[str]
 ) -> None:
     """Recursively collect knowledge node paths (warehouse-relative) into nodes.
@@ -103,7 +103,7 @@ def _collect_knowledge_nodes(
     Recursion always continues — a directory can be both a node and a parent of
     child nodes (e.g. data-platform/ has its own decisions/ AND sub-nodes clickhouse/, dbt/).
     """
-    if _is_knowledge_node(current):
+    if is_knowledge_node(current):
         nodes.append(str(current.relative_to(warehouse_path)).replace("\\", "/"))
     for child in sorted(current.iterdir()):
         if (
@@ -111,10 +111,10 @@ def _collect_knowledge_nodes(
             and not child.name.startswith(".")
             and child.name not in _KNOWLEDGE_SUBTYPES
         ):
-            _collect_knowledge_nodes(child, warehouse_path, nodes)
+            collect_knowledge_nodes(child, warehouse_path, nodes)
 
 
-def _list_knowledge_nodes(warehouse_path: Path) -> list[str]:
+def list_knowledge_nodes(warehouse_path: Path) -> list[str]:
     """Return all warehouse-relative knowledge node paths.
 
     Only directories that directly contain decisions/, lessons/, or facts/ are nodes.
@@ -124,7 +124,7 @@ def _list_knowledge_nodes(warehouse_path: Path) -> list[str]:
     if not knowledge_dir.exists():
         return []
     nodes: list[str] = []
-    _collect_knowledge_nodes(knowledge_dir, warehouse_path, nodes)
+    collect_knowledge_nodes(knowledge_dir, warehouse_path, nodes)
     return nodes
 
 
@@ -136,13 +136,13 @@ def adoption_target_dirs() -> list[Path]:
     ]
 
 
-def _is_agent_installed(agent_path: str) -> bool:
+def is_agent_installed(agent_path: str) -> bool:
     """Return True if the warehouse agent is installed in any global agent directory."""
     filename = Path(agent_path).name
     return any((d / filename).exists() for d in adoption_target_dirs())
 
 
-def _is_adopted(path: str, beacon_settings: BeaconManifest) -> bool:
+def is_adopted(path: str, beacon_settings: BeaconManifest) -> bool:
     """Return True if path is already declared in beacon.yaml.
 
     Handles exact matches and glob patterns (e.g. ``knowledge/**/*.md``).
@@ -163,7 +163,7 @@ def _is_adopted(path: str, beacon_settings: BeaconManifest) -> bool:
     return False
 
 
-def _extract_skill_description(content: str) -> str:
+def extract_skill_description(content: str) -> str:
     """Extract description from SKILL.md YAML frontmatter or markdown bold syntax."""
     if content.startswith("---"):
         try:
@@ -180,7 +180,7 @@ def _extract_skill_description(content: str) -> str:
     return ""
 
 
-def _extract_heading_description(content: str) -> str:
+def extract_heading_description(content: str) -> str:
     """Extract the first # Heading from markdown content."""
     for line in content.splitlines():
         stripped = line.strip()
@@ -189,23 +189,23 @@ def _extract_heading_description(content: str) -> str:
     return ""
 
 
-def _extract_description(warehouse_path: Path, candidate_path: str) -> str:
+def extract_description(warehouse_path: Path, candidate_path: str) -> str:
     """Extract a human-readable description from a warehouse artifact."""
-    artifact_type = _classify_artifact_type(candidate_path)
+    artifact_type = classify_artifact_type(candidate_path)
     if artifact_type == "skills":
         parts = candidate_path.split("/")
         if len(parts) >= 2:
             skill_md = warehouse_path / "skills" / parts[1] / "SKILL.md"
             if skill_md.exists():
-                return _extract_skill_description(skill_md.read_text(encoding="utf-8"))
+                return extract_skill_description(skill_md.read_text(encoding="utf-8"))
     else:
         file_path = warehouse_path / candidate_path
         if file_path.exists():
-            return _extract_heading_description(file_path.read_text(encoding="utf-8"))
+            return extract_heading_description(file_path.read_text(encoding="utf-8"))
     return ""
 
 
-def _run_git_diff(warehouse_path: Path, old_sha: str, diff_filter: str) -> list[str]:
+def run_git_diff(warehouse_path: Path, old_sha: str, diff_filter: str) -> list[str]:
     """Run git diff --name-only with the given filter and return file paths."""
     try:
         result = subprocess.run(
@@ -229,7 +229,7 @@ def _run_git_diff(warehouse_path: Path, old_sha: str, diff_filter: str) -> list[
     return [p for p in result.stdout.strip().splitlines() if p]
 
 
-def _build_new_file_commits_map(
+def build_new_file_commits_map(
     warehouse_path: Path,
     max_commits: int = _NEW_TAG_MAX_COMMITS,
 ) -> dict[str, int]:
@@ -271,12 +271,12 @@ def _build_new_file_commits_map(
     return file_map
 
 
-def _annotate_with_commits_ago(
+def annotate_with_commits_ago(
     candidates: list[AdoptCandidate],
     warehouse_path: Path,
 ) -> None:
     """Set commits_ago on candidates added within _NEW_TAG_MAX_COMMITS commits of HEAD."""
-    file_map = _build_new_file_commits_map(warehouse_path)
+    file_map = build_new_file_commits_map(warehouse_path)
     if not file_map:
         return
     for candidate in candidates:
@@ -290,7 +290,7 @@ def _annotate_with_commits_ago(
             candidate.commits_ago = min_n
 
 
-def _build_candidates(
+def build_candidates(
     warehouse_path: Path,
     paths: list[str],
     beacon_settings: BeaconManifest,
@@ -306,23 +306,23 @@ def _build_candidates(
     candidates: list[AdoptCandidate] = []
 
     for path in paths:
-        artifact_type = _classify_artifact_type(path)
+        artifact_type = classify_artifact_type(path)
         if artifact_type is None:
             continue
 
         if artifact_type == "skills":
-            skill_dir = _skill_dir_from_path(path)
+            skill_dir = skill_dir_from_path(path)
             skill_key = skill_dir.rstrip("/")
             if skill_key in seen_skill_dirs:
                 continue
-            if _is_adopted(skill_dir, beacon_settings):
+            if is_adopted(skill_dir, beacon_settings):
                 continue
             seen_skill_dirs.add(skill_key)
             skill_md = (
                 warehouse_path / "skills" / skill_key.split("/", 1)[-1] / "SKILL.md"
             )
             desc = (
-                _extract_skill_description(skill_md.read_text(encoding="utf-8"))
+                extract_skill_description(skill_md.read_text(encoding="utf-8"))
                 if skill_md.exists()
                 else ""
             )
@@ -335,12 +335,12 @@ def _build_candidates(
                 )
             )
         elif artifact_type == "knowledge":
-            knowledge_node = _find_knowledge_node_for_file(path)
+            knowledge_node = find_knowledge_node_for_file(path)
             if knowledge_node is None:
                 continue  # file not under decisions/lessons/facts — not a valid node
             if knowledge_node in seen_knowledge_subdirs:
                 continue
-            if _is_adopted(knowledge_node, beacon_settings):
+            if is_adopted(knowledge_node, beacon_settings):
                 continue
             seen_knowledge_subdirs.add(knowledge_node)
             candidates.append(
@@ -352,9 +352,9 @@ def _build_candidates(
                 )
             )
         else:
-            if _is_adopted(path, beacon_settings):
+            if is_adopted(path, beacon_settings):
                 continue
-            desc = _extract_description(warehouse_path, path)
+            desc = extract_description(warehouse_path, path)
             candidates.append(
                 AdoptCandidate(
                     artifact_type=artifact_type,
@@ -367,7 +367,7 @@ def _build_candidates(
     return candidates
 
 
-def _discover_all(
+def discover_all(
     warehouse_path: Path,
     beacon_settings: BeaconManifest,
 ) -> list[AdoptCandidate]:
@@ -384,8 +384,8 @@ def _discover_all(
 
     # Contexts — list_available returns paths like "contexts/foo.md"
     for ctx_path in available.get("contexts", []):
-        if not _is_adopted(ctx_path, beacon_settings):
-            desc = _extract_description(warehouse_path, ctx_path)
+        if not is_adopted(ctx_path, beacon_settings):
+            desc = extract_description(warehouse_path, ctx_path)
             candidates.append(
                 AdoptCandidate(
                     artifact_type="contexts",
@@ -396,12 +396,12 @@ def _discover_all(
             )
 
     # Knowledge — discover nodes (dirs with decisions/lessons/facts) directly
-    for knowledge_path in _list_knowledge_nodes(warehouse_path):
-        if not _is_adopted(knowledge_path, beacon_settings):
+    for knowledge_path in list_knowledge_nodes(warehouse_path):
+        if not is_adopted(knowledge_path, beacon_settings):
             desc = ""
             node_dir = warehouse_path / knowledge_path
             for f in sorted(node_dir.rglob("*.md")):
-                candidate_desc = _extract_heading_description(
+                candidate_desc = extract_heading_description(
                     f.read_text(encoding="utf-8")
                 )
                 if candidate_desc:
@@ -419,10 +419,10 @@ def _discover_all(
     # Skills — list_available returns skill names like "example-skill"
     for skill_name in available.get("skills", []):
         skill_path = f"skills/{skill_name}/"
-        if not _is_adopted(skill_path, beacon_settings):
+        if not is_adopted(skill_path, beacon_settings):
             skill_md = warehouse_path / "skills" / skill_name / "SKILL.md"
             desc = (
-                _extract_skill_description(skill_md.read_text(encoding="utf-8"))
+                extract_skill_description(skill_md.read_text(encoding="utf-8"))
                 if skill_md.exists()
                 else ""
             )
@@ -438,8 +438,8 @@ def _discover_all(
     # Agents — list_available returns paths like "agents/code-reviewer.md"
     # "adopted" means installed in a global agent directory, not beacon.yaml
     for agent_path in available.get("agents", []):
-        if not _is_agent_installed(agent_path):
-            desc = _extract_description(warehouse_path, agent_path)
+        if not is_agent_installed(agent_path):
+            desc = extract_description(warehouse_path, agent_path)
             candidates.append(
                 AdoptCandidate(
                     artifact_type="agents",
@@ -480,12 +480,12 @@ def discover_adoptable(
         - candidates: unadopted AdoptCandidates with commits_ago annotated
         - updated_adopted_paths: always empty (retained for API compatibility)
     """
-    candidates = _discover_all(warehouse_path, beacon_settings)
-    _annotate_with_commits_ago(candidates, warehouse_path)
+    candidates = discover_all(warehouse_path, beacon_settings)
+    annotate_with_commits_ago(candidates, warehouse_path)
     return candidates, []
 
 
-def _count_unadopted_since(
+def count_unadopted_since(
     warehouse_path: Path,
     beacon_settings: BeaconManifest,
     sync_sha: str,
@@ -494,35 +494,35 @@ def _count_unadopted_since(
 
     Uses only git diff + path comparison — no file reads for descriptions.
     """
-    new_paths = _run_git_diff(warehouse_path, sync_sha, "A")
+    new_paths = run_git_diff(warehouse_path, sync_sha, "A")
     seen_skill_dirs: set[str] = set()
     seen_knowledge_nodes: set[str] = set()
     count = 0
 
     for path in new_paths:
-        artifact_type = _classify_artifact_type(path)
+        artifact_type = classify_artifact_type(path)
         if artifact_type is None or artifact_type == "agents":
             continue
         if artifact_type == "skills":
-            skill_dir = _skill_dir_from_path(path)
+            skill_dir = skill_dir_from_path(path)
             skill_key = skill_dir.rstrip("/")
             if skill_key in seen_skill_dirs:
                 continue
-            if not _is_adopted(skill_dir, beacon_settings):
+            if not is_adopted(skill_dir, beacon_settings):
                 seen_skill_dirs.add(skill_key)
                 count += 1
         elif artifact_type == "knowledge":
             # Beacon.yaml stores node-level paths; check at node level
-            node = _find_knowledge_node_for_file(path)
+            node = find_knowledge_node_for_file(path)
             if node is None:
                 continue
             if node in seen_knowledge_nodes:
                 continue
-            if not _is_adopted(node, beacon_settings):
+            if not is_adopted(node, beacon_settings):
                 seen_knowledge_nodes.add(node)
                 count += 1
         else:
-            if not _is_adopted(path, beacon_settings):
+            if not is_adopted(path, beacon_settings):
                 count += 1
 
     return count
@@ -677,13 +677,13 @@ def cleanup_unadopted_artifacts(
     console.print(f"[green]✓[/green] Deleted {deleted} file(s).")
 
 
-def _iter_selectable_leaves(node):
+def iter_selectable_leaves(node):
     """Yield tree nodes that have a 'selected' key in their data, recursively."""
     if node.data is not None and "selected" in node.data:
         yield node
     else:
         for child in node.children:
-            yield from _iter_selectable_leaves(child)
+            yield from iter_selectable_leaves(child)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -748,7 +748,7 @@ _SECTION_META: dict[str, tuple[str, str]] = {
 }
 
 
-def _make_cb_id(path: str) -> str:
+def make_cb_id(path: str) -> str:
     """Generate a valid Textual widget ID from a warehouse path."""
     return "cb_" + re.sub(r"[^a-zA-Z0-9_-]", "_", path.rstrip("/"))
 
@@ -886,7 +886,7 @@ class AdoptApp:
                     for path in self_inner._adopted_paths:
                         if path in unadopted_paths:
                             continue
-                        atype = _classify_artifact_type(path)
+                        atype = classify_artifact_type(path)
                         if atype is None:
                             # Infer type from first path segment
                             atype = path.split("/")[0] if "/" in path else "contexts"
@@ -1113,7 +1113,7 @@ class AdoptApp:
                 to_adopt: list[str] = []
                 to_unadopt: list[str] = []
                 for section_node in tree.root.children:
-                    for leaf in _iter_selectable_leaves(section_node):
+                    for leaf in iter_selectable_leaves(section_node):
                         path = leaf.data["path"]
                         selected = leaf.data.get("selected", False)
                         orig_adopted = leaf.data.get("originally_adopted", False)
@@ -1144,7 +1144,7 @@ class AdoptApp:
             def action_select_all(self_inner) -> None:  # noqa: N805
                 tree = self_inner.query_one("#tree", Tree)
                 for section_node in tree.root.children:
-                    for leaf in _iter_selectable_leaves(section_node):
+                    for leaf in iter_selectable_leaves(section_node):
                         leaf.data["selected"] = True
                         leaf.set_label(
                             _leaf_label(
@@ -1159,7 +1159,7 @@ class AdoptApp:
             def action_select_none(self_inner) -> None:  # noqa: N805
                 tree = self_inner.query_one("#tree", Tree)
                 for section_node in tree.root.children:
-                    for leaf in _iter_selectable_leaves(section_node):
+                    for leaf in iter_selectable_leaves(section_node):
                         leaf.data["selected"] = False
                         leaf.set_label(
                             _leaf_label(

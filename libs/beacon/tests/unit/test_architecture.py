@@ -70,10 +70,6 @@ def test_six_domains_exist():
 # ─── TC2: No stray top-level modules ───────────────────────────────────
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="will pass after PR 3 (distribution), PR 4 (setup), PR 5 (adoption) all land",
-)
 def test_no_stray_top_level_modules():
     """The only .py files directly under beacon/ shall be __init__.py and cli.py."""
     allowed = {"__init__.py", "cli.py"}

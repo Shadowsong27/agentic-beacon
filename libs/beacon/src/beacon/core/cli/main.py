@@ -526,9 +526,9 @@ def sync(
 
         if old_sync_sha is not None:
             try:
-                from beacon.adopt import _count_unadopted_since
+                from beacon.domains.adoption.adopter import count_unadopted_since
 
-                unadopted_count = _count_unadopted_since(
+                unadopted_count = count_unadopted_since(
                     warehouse_path, beacon_settings, old_sync_sha
                 )
                 if unadopted_count > 0:
@@ -1301,13 +1301,13 @@ def adopt(*, dry_run: bool) -> None:
     to a full view where you can also unadopt currently adopted artifacts.
     Artifacts added within the last few commits are tagged with how recent they are.
     """
-    from beacon.adopt import (
+    from beacon.domains.adoption.adopter import (
         AdoptApp,
         AdoptCandidate,
-        _is_agent_installed,
         apply_adoption,
         cleanup_unadopted_artifacts,
         discover_adoptable,
+        is_agent_installed,
     )
 
     project_root = find_project_root()
@@ -1388,7 +1388,7 @@ def adopt(*, dry_run: bool) -> None:
             warehouse_root=warehouse_path, target_root=warehouse_path
         )
         available_agents = distributor.list_available().get("agents", [])
-        adopted_paths += [p for p in available_agents if _is_agent_installed(p)]
+        adopted_paths += [p for p in available_agents if is_agent_installed(p)]
     except Exception:
         pass
 
@@ -1553,7 +1553,10 @@ def doctor(*, fix: bool) -> None:
 
     Use --fix to automatically repair file-level knowledge path entries.
     """
-    from beacon.adopt import _find_knowledge_node_for_file, _is_knowledge_node
+    from beacon.domains.adoption.adopter import (
+        find_knowledge_node_for_file,
+        is_knowledge_node,
+    )
 
     issues: list[str] = []
     fixes_applied: list[str] = []
@@ -1637,7 +1640,7 @@ def doctor(*, fix: bool) -> None:
         if entry.endswith(".md") or any(
             seg in entry.split("/") for seg in ("decisions", "lessons", "facts")
         ):
-            node = _find_knowledge_node_for_file(entry)
+            node = find_knowledge_node_for_file(entry)
             file_level.append((entry, node))
 
     if not file_level:
@@ -1664,7 +1667,7 @@ def doctor(*, fix: bool) -> None:
                 if entry.endswith(".md") or any(
                     seg in entry.split("/") for seg in ("decisions", "lessons", "facts")
                 ):
-                    node = _find_knowledge_node_for_file(entry)
+                    node = find_knowledge_node_for_file(entry)
                     if node and node not in seen:
                         new_entries.append(node)
                         seen.add(node)
@@ -1692,7 +1695,7 @@ def doctor(*, fix: bool) -> None:
             node_dir = warehouse_path / entry
             if not node_dir.exists():
                 missing_nodes.append(entry)
-            elif not _is_knowledge_node(node_dir):
+            elif not is_knowledge_node(node_dir):
                 invalid_nodes.append(entry)
 
         if missing_nodes:

@@ -142,15 +142,15 @@ See `AGENTS.md` → "Unit Testing Workflow" and `knowledge/lessons/complete-test
 **Output**: `beacon/domains/adoption/adopter.py` (or split if natural seams appear during the move).
 **Validation**: `abc adopt` on a sample project reproduces the previous-phase output byte-for-byte on non-interactive paths; interactive paths reviewed by a human.
 
-- [ ] 6.1 Move `beacon/adopt.py` → `beacon/domains/adoption/adopter.py` (consider splitting 1175-line file during move if natural seams exist; otherwise move as-is and file a follow-up)
-- [ ] 6.2 Rename cross-module `_`-prefixed names
-- [ ] 6.3 Update all call-sites (CLI main, tests)
-- [ ] 6.4 Run regression + smoke
+- [x] 6.1 Move `beacon/adopt.py` → `beacon/domains/adoption/adopter.py` (consider splitting 1175-line file during move if natural seams exist; otherwise move as-is and file a follow-up)
+- [x] 6.2 Rename cross-module `_`-prefixed names
+- [x] 6.3 Update all call-sites (CLI main, tests)
+- [x] 6.4 Run regression + smoke
   - **Input**: `.venv/bin/pytest libs/beacon/tests/` then `abc adopt --dry-run` against a sample project that has existing agents (see `examples/sample-warehouse` for a template)
   - **Expected Output**: Pytest exits 0. `abc adopt --dry-run` prints the same proposed changes as a pre-PR snapshot.
   - **Validation**: `diff <(abc adopt --dry-run)` against baseline is empty; any difference investigated before merging.
 - [ ] 6.5 **[MANUAL]** Human acceptance smoke — run `abc adopt` (interactive, no `--dry-run`) on a real sample project; confirm the prompts, preview output, and final `.agentic-beacon/` contents match expectations. Required before merging PR 5 per proposal.md "Manual Intervention Requirements".
-- [ ] 6.6 Push adoption domain move to draft branch
+- [x] 6.6 Push adoption domain move to draft branch
 
 ## 7. Move `contribution` domain
 
