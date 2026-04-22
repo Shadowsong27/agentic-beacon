@@ -237,5 +237,8 @@ def adopt(*, dry_run: bool) -> None:
 
     if non_agent_unadoptions:
         cleanup_unadopted_artifacts(
-            non_agent_unadoptions, artifacts_dir, warehouse_path
+            non_agent_unadoptions,
+            artifacts_dir,
+            warehouse_path,
+            project_root=project_root,
         )

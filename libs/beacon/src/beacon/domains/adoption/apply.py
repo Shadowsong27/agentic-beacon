@@ -72,11 +72,16 @@ def cleanup_unadopted_artifacts(
     unadoptions: list[str],
     artifacts_dir: Path,
     warehouse_path: Path,
+    *,
+    project_root: Path | None = None,
 ) -> None:
     """Prompt to delete local artifact files for unadopted entries.
 
     Always requires confirmation.  Files that differ from the warehouse copy
     are flagged as locally modified so the user can make an informed choice.
+
+    When project_root is provided, skill unadoptions also remove live agent
+    copies under .opencode/skills/<name>/ and .claude/skills/<name>/.
     """
     import hashlib
 
@@ -117,6 +122,33 @@ def cleanup_unadopted_artifacts(
                 modified = True
             to_delete.append((rel, local_entry, modified))
 
+        parts = entry_clean.split("/")
+        if project_root is not None and len(parts) >= 2 and parts[0] == "skills":
+            from beacon.domains.artifact.skill import build_skills_paths
+
+            skill_name = parts[1]
+            warehouse_skill_dir = warehouse_path / "skills" / skill_name
+            for agent, live_skills_root in build_skills_paths(project_root).items():
+                live_skill_dir = live_skills_root / skill_name
+                if not live_skill_dir.is_dir():
+                    continue
+                for f in live_skill_dir.rglob("*"):
+                    if not f.is_file():
+                        continue
+                    rel_within_skill = f.relative_to(live_skill_dir)
+                    warehouse_file = warehouse_skill_dir / rel_within_skill
+                    if warehouse_file.exists():
+                        modified = _sha256(f) != _sha256(warehouse_file)
+                    else:
+                        modified = True
+                    display_label = str(
+                        Path(".opencode" if agent == "opencode" else ".claude")
+                        / "skills"
+                        / skill_name
+                        / rel_within_skill
+                    )
+                    to_delete.append((display_label, f, modified))
+
     if not to_delete:
         return
 
@@ -152,13 +184,32 @@ def cleanup_unadopted_artifacts(
         except OSError:
             pass
 
+    live_skill_roots: list[Path] = []
+    if project_root is not None:
+        from beacon.domains.artifact.skill import build_skills_paths
+
+        for live_skills_root in build_skills_paths(project_root).values():
+            for entry in unadoptions:
+                entry_clean = entry.rstrip("/")
+                parts = entry_clean.split("/")
+                if len(parts) >= 2 and parts[0] == "skills":
+                    live_skill_roots.append(live_skills_root / parts[1])
+
     for _, path, _ in to_delete:
         for parent in path.parents:
             if parent == artifacts_dir:
+                break
+            if any(parent == r for r in live_skill_roots):
                 break
             try:
                 parent.rmdir()
             except OSError:
                 break
+
+    for live_skill_dir in live_skill_roots:
+        try:
+            live_skill_dir.rmdir()
+        except OSError:
+            pass
 
     console.print(f"[green]✓[/green] Deleted {deleted} file(s).")

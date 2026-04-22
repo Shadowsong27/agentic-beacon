@@ -7,19 +7,24 @@ Test Cases:
 - TC4: user declines confirmation → files kept, no deletion
 - TC5: directory-level unadoption (skill dir) → all files collected and listed
 - TC6: no local files for unadopted entry → no prompt shown (nothing to do)
+- TC7: skill unadoption with project_root → live agent copies are also deleted
 """
 
 from click.testing import CliRunner
 
 
-def _invoke_cleanup(unadoptions, artifacts_dir, warehouse_path, confirm=True):
+def _invoke_cleanup(
+    unadoptions, artifacts_dir, warehouse_path, confirm=True, project_root=None
+):
     """Call cleanup_unadopted_artifacts via Click's test CliRunner."""
     import click
     from beacon.domains.adoption.apply import cleanup_unadopted_artifacts
 
     @click.command()
     def _cmd():
-        cleanup_unadopted_artifacts(unadoptions, artifacts_dir, warehouse_path)
+        cleanup_unadopted_artifacts(
+            unadoptions, artifacts_dir, warehouse_path, project_root=project_root
+        )
 
     runner = CliRunner()
     input_str = "y\n" if confirm else "n\n"
@@ -132,3 +137,51 @@ class TestCleanupUnadoptedArtifacts:
 
         assert result.exit_code == 0
         assert "Delete" not in result.output
+
+    def test_tc7_skill_unadoption_also_deletes_live_agent_copies(self, tmp_path):
+        """TC7: unadopting a skill with project_root removes live .opencode and .claude copies."""
+        project_root = tmp_path / "project"
+        artifacts = project_root / ".agentic-beacon" / "artifacts"
+        warehouse = tmp_path / "warehouse"
+
+        content = "# Skill content"
+
+        # Staging copy
+        staging_skill = artifacts / "skills" / "my-tool"
+        staging_skill.mkdir(parents=True)
+        (staging_skill / "SKILL.md").write_text(content)
+
+        # Warehouse copy (for hash comparison → classify as clean)
+        warehouse_skill = warehouse / "skills" / "my-tool"
+        warehouse_skill.mkdir(parents=True)
+        (warehouse_skill / "SKILL.md").write_text(content)
+
+        # Live opencode copy — opencode.json sentinel triggers detect_agents for opencode
+        (project_root / "opencode.json").write_text("{}")
+        opencode_skill = project_root / ".opencode" / "skills" / "my-tool"
+        opencode_skill.mkdir(parents=True)
+        (opencode_skill / "SKILL.md").write_text(content)
+
+        # Live claudecode copy — .claude dir acts as sentinel for claudecode detection
+        claudecode_skill = project_root / ".claude" / "skills" / "my-tool"
+        claudecode_skill.mkdir(parents=True)
+        (claudecode_skill / "SKILL.md").write_text(content)
+
+        result = _invoke_cleanup(
+            ["skills/my-tool/"],
+            artifacts,
+            warehouse,
+            confirm=True,
+            project_root=project_root,
+        )
+
+        assert result.exit_code == 0
+        assert not (staging_skill / "SKILL.md").exists(), (
+            "staging copy should be deleted"
+        )
+        assert not (opencode_skill / "SKILL.md").exists(), (
+            ".opencode live copy should be deleted"
+        )
+        assert not (claudecode_skill / "SKILL.md").exists(), (
+            ".claude live copy should be deleted"
+        )
