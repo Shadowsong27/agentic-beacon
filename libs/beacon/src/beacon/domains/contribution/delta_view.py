@@ -209,6 +209,20 @@ def show_delta_summary(
         if tracked_diffs:
             console.rule(style="dim")
 
+        # Partition untracked into skills and non-skills
+        untracked_skill_groups: dict[str, list[tuple[str, list[str]]]] = {}
+        untracked_non_skill: list[tuple[str, list[str]]] = []
+
+        for rel_path, agents in untracked:
+            parts = Path(rel_path).parts
+            if len(parts) >= 2 and parts[0] == "skills":
+                skill_dir = f"{parts[0]}/{parts[1]}"
+                untracked_skill_groups.setdefault(skill_dir, []).append(
+                    (rel_path, agents)
+                )
+            else:
+                untracked_non_skill.append((rel_path, agents))
+
         # Collect all agent names present across untracked skill rows
         untracked_agents: list[str] = []
         for _rel_path, agents in untracked:
@@ -216,19 +230,48 @@ def show_delta_summary(
                 if a not in untracked_agents:
                     untracked_agents.append(a)
 
-        rows = []
-        for rel_path, agents in untracked:
-            agent_cells = {a: "[green]added[/green]" for a in agents}
-            rows.append(("[green]added[/green]", rel_path, agent_cells))
-
         console.print()
         console.print(
-            render_delta_table(
-                rows,
-                "Untracked Artifacts [dim](not in beacon.yaml)[/dim]",
-                untracked_agents,
-            )
+            "[bold]Untracked Artifacts[/bold] [dim](not in beacon.yaml)[/dim]"
         )
+
+        # Render non-skill untracked items in a table
+        if untracked_non_skill:
+            rows = []
+            for rel_path, agents in untracked_non_skill:
+                agent_cells = {a: "[green]added[/green]" for a in agents}
+                rows.append(("[green]added[/green]", rel_path, agent_cells))
+            console.print()
+            console.print(render_delta_table(rows, "", untracked_agents))
+
+        # Render skill groups
+        for skill_dir in sorted(untracked_skill_groups.keys()):
+            console.print()
+            skill_items = untracked_skill_groups[skill_dir]
+            badge = f"  [dim][{len(skill_items)} added][/dim]"
+            console.print(f"[bold]{skill_dir}/[/bold]{badge}")
+
+            table = Table(
+                show_header=True,
+                header_style="dim",
+                box=None,
+                padding=(0, 2, 0, 2),
+            )
+            table.add_column("Status", no_wrap=True)
+            table.add_column("File")
+            for agent in untracked_agents:
+                table.add_column(agent, no_wrap=True)
+
+            for rel_path, agents in sorted(skill_items, key=lambda x: x[0]):
+                prefix = skill_dir + "/"
+                file_name = rel_path.removeprefix(prefix)
+                agent_cells = [
+                    "[green]added[/green]" if a in agents else ""
+                    for a in untracked_agents
+                ]
+                table.add_row("[green]added[/green]", file_name, *agent_cells)
+
+            console.print(table)
 
     # --- Agents section — only show when there are diffs ---
     if has_agent_diffs:
