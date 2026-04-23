@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.6.2](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v2.6.1...agentic-beacon@v2.6.2) (2026-04-23)
+
+
+### Bug Fixes
+
+* **delta:** group skill files as single entries in output ([7bd48c4](https://github.com/Shadowsong27/agentic-beacon/commit/7bd48c4f10d77f34ca66704bbe102a7341b635ce)), closes [#94](https://github.com/Shadowsong27/agentic-beacon/issues/94)
+* force release for agentic-beacon ([53fd832](https://github.com/Shadowsong27/agentic-beacon/commit/53fd832774f7b0349204319e5a9e444cd04b4faf))
+
 ## [2.6.1](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v2.6.0...agentic-beacon@v2.6.1) (2026-04-22)
 
 
