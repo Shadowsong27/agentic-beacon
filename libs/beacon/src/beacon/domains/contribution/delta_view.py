@@ -148,15 +148,17 @@ def show_delta_summary(
                     if a not in tracked_agents:
                         tracked_agents.append(a)
 
-        # Group knowledge node file results separately from standalone entries
+        # Group knowledge node file results and skill results separately from standalone entries
         node_entries = knowledge_node_entries(
             beacon_settings, comparator.warehouse_path
         )
-        node_file_groups, standalone_results = partition_tracked_diffs(
+        node_file_groups, skill_groups, standalone_results = partition_tracked_diffs(
             tracked_diffs, node_entries
         )
 
         console.print()
+
+        has_grouped = bool(skill_groups or node_file_groups)
 
         if standalone_results:
             rows: list[tuple[str, str, dict[str, str]]] = []
@@ -168,8 +170,18 @@ def show_delta_summary(
                         agent_cells[a] = _AGENT_STATUS_MARKUP.get(s, s.value)
                 rows.append((sm, result.path, agent_cells))
             console.print(render_delta_table(rows, "Tracked Artifacts", tracked_agents))
-        elif node_file_groups:
+        elif has_grouped:
             console.print("[bold]Tracked Artifacts[/bold]")
+
+        for skill_dir in sorted(skill_groups.keys()):
+            console.print()
+            render_skill_group(
+                skill_dir,
+                skill_groups[skill_dir],
+                _STATUS_MARKUP,
+                _AGENT_STATUS_MARKUP,
+                tracked_agents,
+            )
 
         for node_path in sorted(node_file_groups.keys()):
             console.print()
@@ -492,22 +504,53 @@ def knowledge_node_entries(
     return sorted(nodes, key=len, reverse=True)
 
 
+def skill_entries(tracked_diffs: list[ComparisonResult]) -> list[str]:
+    """Return skill directory paths present in tracked diffs.
+
+    Extracts the skill directory (e.g. "skills/my-skill") from each skill result
+    and returns unique entries longest-first so nested paths match correctly.
+    """
+    dirs: set[str] = set()
+    for result in tracked_diffs:
+        if result.is_skill:
+            parts = Path(result.path).parts
+            if len(parts) >= 2 and parts[0] == "skills":
+                dirs.add(f"{parts[0]}/{parts[1]}")
+    return sorted(dirs, key=len, reverse=True)
+
+
 def partition_tracked_diffs(
     tracked_diffs: list[ComparisonResult],
     node_entries: list[str],
-) -> tuple[dict[str, list[ComparisonResult]], list[ComparisonResult]]:
-    """Split tracked diffs into per-node file groups and standalone results.
+) -> tuple[
+    dict[str, list[ComparisonResult]],
+    dict[str, list[ComparisonResult]],
+    list[ComparisonResult],
+]:
+    """Split tracked diffs into per-node file groups, skill groups, and standalone results.
 
-    Returns (node_file_groups, standalone_results).
+    Returns (node_file_groups, skill_groups, standalone_results).
     node_file_groups maps node_path → list of file-level ComparisonResults that live
     under that node (path starts with node + "/").
+    skill_groups maps skill_dir → list of file-level ComparisonResults for that skill.
     standalone_results contains everything else — including single-node MISSING results
     whose path equals the node path exactly (not a sub-file).
     """
+    skill_dirs = skill_entries(tracked_diffs)
     node_file_groups: dict[str, list[ComparisonResult]] = {}
+    skill_groups: dict[str, list[ComparisonResult]] = {}
     standalone_results: list[ComparisonResult] = []
 
     for result in tracked_diffs:
+        matched_skill = None
+        for skill_dir in skill_dirs:
+            if result.path.startswith(skill_dir + "/"):
+                matched_skill = skill_dir
+                break
+        if matched_skill:
+            skill_groups.setdefault(matched_skill, []).append(result)
+            continue
+
         matched_node = None
         for node in node_entries:
             if result.path.startswith(node + "/"):
@@ -518,7 +561,7 @@ def partition_tracked_diffs(
         else:
             standalone_results.append(result)
 
-    return node_file_groups, standalone_results
+    return node_file_groups, skill_groups, standalone_results
 
 
 def render_knowledge_node_group(
@@ -577,6 +620,63 @@ def render_knowledge_node_group(
         rel = result.path.removeprefix(prefix)
         sm = status_markup.get(result.status, result.status.value)
         table.add_row(sm, rel)
+
+    console.print(table)
+
+
+def render_skill_group(
+    skill_dir: str,
+    results: list[ComparisonResult],
+    status_markup: dict[DeltaStatus, str],
+    agent_status_markup: dict[DeltaStatus, str],
+    agents: list[str],
+) -> None:
+    """Render a skill group: a header line + indented file table with per-agent columns.
+
+    The header shows the skill directory and a breakdown badge.
+    """
+    _STATUS_ORDER = [
+        (DeltaStatus.MODIFIED, "modified", "[yellow]", "[/yellow]"),
+        (DeltaStatus.MISSING, "missing", "[red]", "[/red]"),
+        (DeltaStatus.ADDED, "added", "[green]", "[/green]"),
+        (DeltaStatus.STALE, "stale", "[dim cyan]", "[/dim cyan]"),
+    ]
+
+    counts: dict[DeltaStatus, int] = {}
+    for r in results:
+        counts[r.status] = counts.get(r.status, 0) + 1
+
+    badge_parts = []
+    for status, label, open_tag, close_tag in _STATUS_ORDER:
+        n = counts.get(status, 0)
+        if n:
+            badge_parts.append(f"{open_tag}{n} {label}{close_tag}")
+
+    badge = "  [dim][" + " · ".join(badge_parts) + "][/dim]" if badge_parts else ""
+    console.print(f"[bold]{skill_dir}/[/bold]{badge}")
+
+    prefix = skill_dir + "/"
+    table = Table(
+        show_header=True,
+        header_style="dim",
+        box=None,
+        padding=(0, 2, 0, 2),
+    )
+    table.add_column("Status", no_wrap=True)
+    table.add_column("File")
+    for agent in agents:
+        table.add_column(agent, no_wrap=True)
+
+    for result in sorted(results, key=lambda r: r.path):
+        rel = result.path.removeprefix(prefix)
+        sm = status_markup.get(result.status, result.status.value)
+        agent_cells = [
+            agent_status_markup.get(result.agent_statuses.get(a), "")
+            if result.agent_statuses
+            else ""
+            for a in agents
+        ]
+        table.add_row(sm, rel, *agent_cells)
 
     console.print(table)
 

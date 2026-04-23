@@ -390,7 +390,7 @@ def test_e2e_delta_skill_detects_live_modification(e2e_project):
 
     assert result.exit_code == 0
     assert "Modified" in result.output
-    assert "skills/code-review/SKILL.md" in result.output
+    assert "skills/code-review/" in result.output
 
 
 def test_e2e_delta_skill_snapshot_identical_but_live_modified(e2e_project):

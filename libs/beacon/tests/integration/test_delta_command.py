@@ -275,7 +275,7 @@ def test_delta_skill_modified_live_shows_modified(
 
     assert result.exit_code == 0
     assert "modified" in result.output
-    assert "skills/my-skill/SKILL.md" in result.output
+    assert "skills/my-skill/" in result.output
 
 
 def test_delta_skill_snapshot_identical_but_live_modified_shows_modified(
@@ -301,7 +301,7 @@ def test_delta_skill_snapshot_identical_but_live_modified_shows_modified(
 
     assert result.exit_code == 0
     assert "modified" in result.output
-    assert "skills/my-skill/SKILL.md" in result.output
+    assert "skills/my-skill/" in result.output
 
 
 def test_delta_skill_shows_per_agent_breakdown_in_output(
@@ -373,7 +373,7 @@ def test_delta_skill_no_live_dir_reports_missing(
 
     assert result.exit_code == 0
     assert "missing" in result.output
-    assert "skills/my-skill/SKILL.md" in result.output
+    assert "skills/my-skill/" in result.output
 
 
 def test_delta_skill_detailed_diff_uses_live_path(
@@ -440,7 +440,7 @@ def test_delta_summary_shows_per_agent_breakdown_for_missing_skill(
 
     assert result.exit_code == 0
     assert "missing" in result.output
-    assert "skills/my-skill/SKILL.md" in result.output
+    assert "skills/my-skill/" in result.output
     # Per-agent breakdown should appear
     assert "opencode" in result.output
     assert "claudecode" in result.output
@@ -481,7 +481,7 @@ def test_delta_summary_shows_per_agent_breakdown_for_added_skill(
 
     assert result.exit_code == 0
     assert "added" in result.output
-    assert "skills/my-skill/SKILL.md" in result.output
+    assert "skills/my-skill/" in result.output
     # Per-agent breakdown should appear
     assert "opencode" in result.output
     assert "claudecode" in result.output
