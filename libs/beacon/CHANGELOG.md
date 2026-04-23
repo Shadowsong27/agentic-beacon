@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.6.3](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v2.6.2...agentic-beacon@v2.6.3) (2026-04-23)
+
+
+### Bug Fixes
+
+* **delta:** group untracked skills as single entries ([46a7c61](https://github.com/Shadowsong27/agentic-beacon/commit/46a7c61ac477d7f12e47bc2b769b6516ba3f512a)), closes [#95](https://github.com/Shadowsong27/agentic-beacon/issues/95)
+* force release for agentic-beacon ([45d6ca1](https://github.com/Shadowsong27/agentic-beacon/commit/45d6ca13cd190e86778878bfa04c515e556fbf9e))
+
 ## [2.6.2](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v2.6.1...agentic-beacon@v2.6.2) (2026-04-23)
 
 
