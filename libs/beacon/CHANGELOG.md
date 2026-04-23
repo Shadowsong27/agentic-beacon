@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.6.1](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v2.6.0...agentic-beacon@v2.6.1) (2026-04-22)
+
+
+### Bug Fixes
+
+* **adopt:** unadopting a skill also removes live agent copies ([32864f8](https://github.com/Shadowsong27/agentic-beacon/commit/32864f879b1c3790d70aeb83c832caca668631b2))
+
 ## [2.6.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v2.5.0...agentic-beacon@v2.6.0) (2026-04-20)
 
 
