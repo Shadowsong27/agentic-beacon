@@ -45,3 +45,4 @@ uv.lock
 
 # Agentic Beacon
 .agentic-beacon/
+.claude/scheduled_tasks.lock
