@@ -1,6 +1,6 @@
 # Fact: Release Workflow
 
-**Last Updated:** 2026-03-07
+**Last Updated:** 2026-04-24
 **Context:** Agentic Beacon Framework
 
 ---
@@ -13,9 +13,18 @@ Automated release workflow using Release-Please and GitHub Actions.
 
 1. **Push conventional commits** to main branch
 2. **Release-Please creates PR** with version bump and changelog
-3. **Review and merge PR** to main
-4. **Create release branch** (`release/vX.X.X`) - triggers PyPI publish
-5. **Package published** to PyPI automatically
+3. **Merge the Release-Please PR** — creates the GitHub release and version tag
+4. **Create the release branch** from the tag — this triggers PyPI publish:
+   ```bash
+   git fetch origin
+   git push origin refs/tags/agentic-beacon@vX.X.X:refs/heads/release/vX.X.X
+   ```
+5. **Package published** to PyPI automatically (plus platform bundles on the GitHub release)
+6. **Verify on PyPI:**
+   ```bash
+   curl -s https://pypi.org/pypi/agentic-beacon/json | python3 -c \
+     "import sys,json; d=json.load(sys.stdin); print(d['info']['version'])"
+   ```
 
 ## Conventional Commits
 

@@ -104,6 +104,21 @@ The `beacon` package uses a four-layer architecture: `cli/` → `domains/` → `
 
 **Workflow:** Conventional commits → Release-Please PR → Merge → Create release branch → Auto-publish to PyPI
 
+**Steps:**
+1. Merge the Release-Please PR on GitHub (it bumps the version and creates the tag)
+2. Create the release branch from the tag to trigger PyPI publish:
+   ```bash
+   git fetch origin
+   git push origin refs/tags/agentic-beacon@vX.X.X:refs/heads/release/vX.X.X
+   ```
+3. Verify on PyPI once the publish workflow completes:
+   ```bash
+   curl -s https://pypi.org/pypi/agentic-beacon/json | python3 -c \
+     "import sys,json; d=json.load(sys.stdin); print(d['info']['version'])"
+   ```
+
+**Note:** Release branches are permanent snapshots — never delete them.
+
 **Read:** [Release Workflow](knowledge/facts/release-workflow.md)
 
 ---
@@ -182,4 +197,4 @@ Follow the global Python standards from the user's AGENTS.md context:
 
 ---
 
-**Last Updated:** 2026-04-20
+**Last Updated:** 2026-04-24
