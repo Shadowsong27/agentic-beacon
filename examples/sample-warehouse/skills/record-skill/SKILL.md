@@ -1,211 +1,194 @@
 ---
 name: record-skill
-description: Pattern for extracting operational scripts from hosts/ into dedicated skills. Use when you encounter scripts embedded in infrastructure directories that should be reusable, atomic skill operations.
+description: Scaffold new Beacon skills with proper frontmatter, section structure, and optional PEP 723 Python scripts.
+license: MIT
+compatibility: opencode
 ---
 
-# SKILL: Record Skill — Extract Scripts into Dedicated Skills
+# SKILL: Record Skill — Scaffold New Skills
 
-## Philosophy
+## Purpose
 
-Operational scripts belong in **skills**, not in `hosts/<host>/services/<service>/scripts/`. Skills are:
+Create properly structured Beacon skills from an interactive prompt. Generates:
 
-- **Atomic** — one concern per skill
-- **Reusable** — callable from any context without coupling to a specific host
-- **Self-contained** — dependencies declared inline (PEP 723 for Python) or clearly documented
-- **Versioned with intent** — the skill captures the *operation*, not the *location*
+- `SKILL.md` with frontmatter (`name`, `description`, `license`, `compatibility`)
+- Standard section structure (Purpose / When to Use / Invocation / Process / Examples / Checklist)
+- Optional PEP 723 Python script under `scripts/`
 
-## When to Apply This Pattern
+## When to Use
 
-Apply when you find scripts in these locations:
-
-- `hosts/<host>/services/<service>/scripts/`
-- `hosts/<host>/scripts/`
-- Ad-hoc scripts committed next to docker-compose files
-
-**Do NOT extract:**
-- One-time migration scripts
-- Host-specific configuration files (SSH keys, systemd units)
-- Scripts that are literally part of the service image build
-
-## Decision Tree
-
-```
-Script found in hosts/
-    |
-    +-- Is it an operational tool? (create bucket, clean disk, manage user)
-    |       +-- YES → Extract to skill
-    |       +-- NO  → Leave in place
-    |
-    +-- Is it coupled to a specific host path?
-    |       +-- YES → Parameterize it, then extract
-    |       +-- NO  → Extract as-is
-    |
-    +-- Does it need to run as part of service startup?
-            +-- YES → Leave in hosts/ or move to image
-            +-- NO  → Extract to skill
-```
-
-## Workflow
-
-### Step 1: Identify the Script(s)
-
-```bash
-find hosts/ -name "*.sh" -o -name "*.py" | grep -E "scripts/|bin/"
-```
-
-### Step 2: Choose Skill Location
-
-| Scope | Location | Example |
-|-------|----------|---------|
-| Project-specific | `.opencode/skills/<skill-name>/` | `minio-ops`, `runner-disk-cleanup` |
-| Global (cross-project) | `~/.config/opencode/skills/<skill-name>/` | `record-knowledge` |
-
-Use **project-specific** when the script targets project infrastructure (e.g., homelab MinIO). Use **global** when the pattern itself is reusable.
-
-### Step 3: Create Skill Structure
-
-```bash
-mkdir -p <skill-dir>/scripts
-touch <skill-dir>/SKILL.md
-```
-
-For **Python scripts** — convert to PEP 723 inline scripts:
-
-```python
-# /// script
-# requires-python = ">=3.11"
-# dependencies = [
-#   "minio>=7.2.0",
-#   "click>=8.1.0",
-#   "loguru>=0.7.0",
-# ]
-# ///
-```
-
-For **bash scripts** — keep as `.sh` with clear headers:
-
-```bash
-#!/bin/bash
-# Script: <name>
-# Purpose: <one-line description>
-# Host: <target host>
-# Usage: <how to invoke>
-```
-
-### Step 4: Move and Adapt
-
-1. Copy script to `<skill-dir>/scripts/`
-2. Remove host-specific hardcoding (URLs, paths) if possible
-3. Parameterize via CLI flags or environment variables
-4. Update comments to reference `${SKILL_DIR}` instead of hard paths
-
-### Step 5: Write SKILL.md
-
-Template:
-
-```markdown
----
-name: <skill-name>
-description: <one-line purpose>
----
-
-# SKILL: <Skill Name>
-
-## Role & Purpose
-
-<what this skill does>
+- You want to create a new skill for your team or project
+- You need a PEP 723-headed Python script as part of a skill
+- You want consistent skill structure across your warehouse
 
 ## Scripts
 
 | Script | Purpose |
 |--------|---------|
-| `${SKILL_DIR}/scripts/<script>` | <description> |
+| `${SKILL_DIR}/scripts/create_skill.py` | Interactive skill scaffolder |
 
 ## Usage
 
 ```bash
-<command examples using ${SKILL_DIR}>
+# Run the interactive scaffolder
+uv run ${SKILL_DIR}/scripts/create_skill.py
 ```
 
-## Prerequisites
+The tool prompts for:
 
-<env vars, ssh access, etc.>
+1. **Skill name** (auto-normalized to kebab-case)
+2. **One-line description** (→ frontmatter `description`)
+3. **Invocation form** (e.g. `/my-skill <args>`, defaults to `/<name>`)
+4. **Include Python script?** (yes/no — generates PEP 723 inline script)
 
-## Important Notes
+## Process
 
-<critical warnings>
-```
-
-### Step 6: Update References
-
-Remove script from `hosts/` and update all references:
+### Step 1: Run the Scaffolder
 
 ```bash
-# Find references
-grep -r "hosts/.*/scripts/<script>" .
-
-# Update docs, READMEs, other skills
-grep -r "<old-path>" . --include="*.md" --include="*.sh"
+uv run ${SKILL_DIR}/scripts/create_skill.py
 ```
 
-### Step 7: Test
+### Step 2: Fill in Generated Content
 
-For Python (PEP 723):
+The scaffolder creates `.agentic-beacon/artifacts/skills/<name>/` with:
+
+```
+skills/<name>/
+├── SKILL.md
+└── scripts/
+    └── <name>.py          # only if you requested a script
+```
+
+Edit `SKILL.md` to complete:
+- **When to Use** — specific situations
+- **Process** — step-by-step workflow
+- **Examples** — concrete usage
+
+### Step 3: Implement the Script (if included)
+
+The generated `.py` file has a PEP 723 header:
+
+```python
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
+```
+
+Add dependencies as you implement:
+
+```python
+# dependencies = [
+#   "requests>=2.31.0",
+#   "pydantic>=2.0.0",
+# ]
+```
+
+Test without any `pyproject.toml`:
+
 ```bash
-uv run ${SKILL_DIR}/scripts/script.py --help
+uv run .agentic-beacon/artifacts/skills/<name>/scripts/<name>.py
 ```
 
-For bash:
-```bash
-bash -n ${SKILL_DIR}/scripts/script.sh
-ssh root@<host> "bash -s" < ${SKILL_DIR}/scripts/script.sh
+### Step 4: Register and Sync
+
+Add to `beacon.yaml`:
+
+```yaml
+artifacts:
+  skills:
+    - skills/<name>/
 ```
+
+Run `abc sync` to distribute.
 
 ## Examples
 
-### Example 1: MinIO Operations (Python)
+### Example 1: Markdown-Only Skill
 
-**Before:** `hosts/truenas/services/minio/scripts/minio_admin.py`
-
-**After:** `.opencode/skills/minio-ops/scripts/minio_admin.py` (PEP 723 inline)
-
-**Usage change:**
 ```bash
-# Before
-uv run --with "minio>=7.2.0,..." python hosts/truenas/services/minio/scripts/minio_admin.py ...
+$ uv run ${SKILL_DIR}/scripts/create_skill.py
+============================================================
+Beacon Skill Scaffolder
+============================================================
 
-# After
-uv run ${SKILL_DIR}/scripts/minio_admin.py ...
+Skill name (kebab-case): deploy-check
+One-line description: Validate deployment readiness checklist
+Invocation form [/deploy-check]:
+Include PEP 723 Python script [y/N]: n
+
+Scaffolding...
+
+============================================================
+✓ Created skill: deploy-check
+============================================================
+
+  Location: /path/to/project/.agentic-beacon/artifacts/skills/deploy-check
+  SKILL.md: /path/to/project/.agentic-beacon/artifacts/skills/deploy-check/SKILL.md
+
+Next steps:
+  1. Edit .../SKILL.md to fill in Process and Examples
+  4. Add to beacon.yaml: skills/deploy-check/
+  5. Run 'abc sync' to distribute
 ```
 
-### Example 2: Runner Disk Cleanup (Bash)
+### Example 2: Skill with PEP 723 Script
 
-**Before:** `hosts/prod-github-runner/scripts/disk-cleanup.sh`
-
-**After:** `.opencode/skills/runner-disk-cleanup/scripts/disk-cleanup.sh`
-
-**Usage change:**
 ```bash
-# Before
-ssh root@192.168.88.7 "bash -s" < hosts/prod-github-runner/scripts/setup-cleanup-cron.sh
+$ uv run ${SKILL_DIR}/scripts/create_skill.py
+Skill name (kebab-case): s3-cleanup
+One-line description: Clean old S3 buckets with configurable retention
+Include PEP 723 Python script [y/N]: y
 
-# After
-ssh root@192.168.88.7 "cat > /usr/local/bin/runner-disk-cleanup.sh" < ${SKILL_DIR}/scripts/disk-cleanup.sh
-ssh root@192.168.88.7 "bash -s" < ${SKILL_DIR}/scripts/setup-cleanup-cron.sh
+Scaffolding...
+
+============================================================
+✓ Created skill: s3-cleanup
+============================================================
+
+  Location: .../.agentic-beacon/artifacts/skills/s3-cleanup
+  SKILL.md: .../.agentic-beacon/artifacts/skills/s3-cleanup/SKILL.md
+  Script:   .../.agentic-beacon/artifacts/skills/s3-cleanup/scripts/s3-cleanup.py
+
+Next steps:
+  1. Edit .../SKILL.md to fill in Process and Examples
+  2. Implement logic in .../scripts/s3-cleanup.py
+  3. Test: uv run .../scripts/s3-cleanup.py
+  4. Add to beacon.yaml: skills/s3-cleanup/
+  5. Run 'abc sync' to distribute
 ```
 
-## Anti-Patterns
+## Checklist
 
-❌ **Leaving scripts in hosts/ because "that's where they run"** — Skills can target any host; the skill is the operation, the host is the parameter.
+- [ ] Skill name is kebab-case and descriptive
+- [ ] Description is one line and clear
+- [ ] SKILL.md sections are filled in (not left as stubs)
+- [ ] Scripts run without errors (`uv run ...`)
+- [ ] beacon.yaml entry added before syncing
+- [ ] Skill tested in a real project before sharing
 
-❌ **Bundling unrelated operations into one skill** — Disk cleanup and runner setup are orthogonal; they deserve separate skills.
+## PEP 723 Pattern
 
-❌ **Duplicating requirements.txt** — Use PEP 723 inline metadata for Python scripts instead.
+PEP 723 (uv inline script metadata) lets Python scripts declare their own dependencies without a `pyproject.toml`:
 
-❌ **Hardcoding host paths in skills** — Use CLI args or env vars; document defaults in SKILL.md.
+```python
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#   "requests>=2.31.0",
+# ]
+# ///
+```
+
+**Benefits:**
+- No `venv/` or `pyproject.toml` needed per skill
+- Dependencies are version-pinned and explicit
+- Scripts are self-contained and portable
+- Runs with `uv run script.py` anywhere
+
+**Reference:** [PEP 723 – Inline script metadata](https://peps.python.org/pep-0723/)
 
 ## Related
 
-- `minio-ops` — Example of a Python PEP 723 skill
-- `runner-disk-cleanup` — Example of a bash skill
-- `record-knowledge` — Global skill for capturing decisions and lessons
+- `record-knowledge` — Capture decisions and lessons into the knowledge base
