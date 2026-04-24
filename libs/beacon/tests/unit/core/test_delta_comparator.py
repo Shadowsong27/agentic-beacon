@@ -687,7 +687,7 @@ def test_compare_skill_multi_agent_all_identical(valid_warehouse, temp_dir):
 
 def test_compare_skill_multi_agent_added_in_one_not_other(valid_warehouse, temp_dir):
     """When a skill file is added in one agent but not present in another (and not in warehouse),
-    the agent without the file should show IDENTICAL, not MISSING."""
+    the agent without the file should show PENDING, not MISSING."""
     # Skill file exists only in opencode, not in warehouse, not in claudecode
     opencode_skills = temp_dir / ".opencode" / "skills"
     (opencode_skills / "my-skill").mkdir(parents=True)
@@ -707,10 +707,10 @@ def test_compare_skill_multi_agent_added_in_one_not_other(valid_warehouse, temp_
     )
     result = comparator.compare_file("skills/my-skill/SKILL.md")
 
-    # Aggregate should be ADDED (since opencode has it and claudecode doesn't need it)
+    # Aggregate should be ADDED (since opencode has it and claudecode is pending)
     assert result.status == DeltaStatus.ADDED
     assert result.agent_statuses["opencode"] == DeltaStatus.ADDED
-    assert result.agent_statuses["claudecode"] == DeltaStatus.IDENTICAL
+    assert result.agent_statuses["claudecode"] == DeltaStatus.PENDING
 
 
 def test_compare_skill_multi_agent_missing_beats_identical(valid_warehouse, temp_dir):

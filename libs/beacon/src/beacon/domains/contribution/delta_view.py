@@ -129,6 +129,7 @@ def show_delta_summary(
         DeltaStatus.ADDED: "[green]added[/green]",
         DeltaStatus.MISSING: "[red]missing[/red]",
         DeltaStatus.STALE: "[dim cyan]stale[/dim cyan]",
+        DeltaStatus.PENDING: "[dim]pending[/dim]",
     }
     _AGENT_STATUS_MARKUP: dict[DeltaStatus, str] = {
         DeltaStatus.MODIFIED: "[yellow]modified[/yellow]",
@@ -136,6 +137,7 @@ def show_delta_summary(
         DeltaStatus.MISSING: "[red]missing[/red]",
         DeltaStatus.IDENTICAL: "[dim]synced[/dim]",
         DeltaStatus.STALE: "[dim cyan]stale[/dim cyan]",
+        DeltaStatus.PENDING: "[dim]pending[/dim]",
     }
 
     # --- Tracked Artifacts section ---

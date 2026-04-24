@@ -26,6 +26,7 @@ class DeltaStatus(Enum):
     ADDED = "added"  # Exists locally but not in warehouse
     MISSING = "missing"  # In beacon.yaml but not synced locally
     STALE = "stale"  # Installed content matches last snapshot but warehouse HEAD has advanced
+    PENDING = "pending"  # Skill file not yet distributed to this agent (not in warehouse, not in agent)
     # Note: STALE is NOT in the _compare_skill_file priority map — it is enriched
     # post-comparison at the CLI layer after reading sync-state.
 
@@ -358,7 +359,7 @@ class DeltaComparator:
             live_exists = live_file.is_file()
 
             if not live_exists and not warehouse_exists:
-                agent_statuses[agent] = DeltaStatus.IDENTICAL
+                agent_statuses[agent] = DeltaStatus.PENDING
             elif live_exists and not warehouse_exists:
                 agent_statuses[agent] = DeltaStatus.ADDED
             elif not live_exists and warehouse_exists:
@@ -371,11 +372,12 @@ class DeltaComparator:
                     agent_statuses[agent] = DeltaStatus.MODIFIED
 
         # Roll up: worst status across all agents
-        # Priority: MODIFIED > MISSING > ADDED > IDENTICAL
+        # Priority: MODIFIED > MISSING > ADDED > PENDING > IDENTICAL
         priority = {
-            DeltaStatus.MODIFIED: 3,
-            DeltaStatus.MISSING: 2,
-            DeltaStatus.ADDED: 1,
+            DeltaStatus.MODIFIED: 4,
+            DeltaStatus.MISSING: 3,
+            DeltaStatus.ADDED: 2,
+            DeltaStatus.PENDING: 1,
             DeltaStatus.IDENTICAL: 0,
         }
         aggregate = max(agent_statuses.values(), key=lambda s: priority[s])
