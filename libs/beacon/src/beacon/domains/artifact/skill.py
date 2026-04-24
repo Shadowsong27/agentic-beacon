@@ -96,15 +96,14 @@ def install_bundled_skills_globally() -> tuple[list[str], list[str]]:
 
     Returns (installed, errors) where each entry is '<skill> (<agent>)'.
     """
-    bundled_skills_dir = BUNDLED_SKILLS_DIR
-    if not bundled_skills_dir.exists():
+    if not BUNDLED_SKILLS_DIR.exists():
         return [], []
 
     global_dirs = bundled_global_skill_dirs()
     installed: list[str] = []
     errors: list[str] = []
 
-    for skill_dir in sorted(bundled_skills_dir.iterdir()):
+    for skill_dir in sorted(BUNDLED_SKILLS_DIR.iterdir()):
         if not skill_dir.is_dir():
             continue
         skill_md = skill_dir / "SKILL.md"
@@ -138,19 +137,16 @@ def wire_bundled_skills_per_project(
 
     Returns (installed, errors) where each entry is '<skill> (<agent>)'.
     """
-    bundled_skills_dir = BUNDLED_SKILLS_DIR
-    if not bundled_skills_dir.exists():
+    if not BUNDLED_SKILLS_DIR.exists():
         return [], []
 
     if agents is None:
-        from beacon.domains.artifact.agent import detect_agents
-
         agents = detect_agents(project_root, fallback_to_all=True)
 
     installed: list[str] = []
     errors: list[str] = []
 
-    for skill_dir in sorted(bundled_skills_dir.iterdir()):
+    for skill_dir in sorted(BUNDLED_SKILLS_DIR.iterdir()):
         if not skill_dir.is_dir():
             continue
         if not (skill_dir / "SKILL.md").exists():
@@ -186,13 +182,12 @@ def show_bundled_skills_status() -> None:
     Checks global agent skill dirs — bundled skills are user-level,
     not per-project.
     """
-    bundled_skills_dir = BUNDLED_SKILLS_DIR
-    if not bundled_skills_dir.exists():
+    if not BUNDLED_SKILLS_DIR.exists():
         return
 
     skill_names = sorted(
         d.name
-        for d in bundled_skills_dir.iterdir()
+        for d in BUNDLED_SKILLS_DIR.iterdir()
         if d.is_dir() and (d / "SKILL.md").exists()
     )
     if not skill_names:
@@ -284,18 +279,29 @@ def skill_name_from_entry(entry: str) -> str:
     return Path(normalize_skill_entry(entry)).name
 
 
-def _extract_skill_description(content: str) -> str:
-    """Extract description value from SKILL.md YAML frontmatter."""
+def _extract_skill_description(content: str, skill_name: str = "") -> str:
+    """Extract description value from SKILL.md YAML frontmatter.
+
+    Falls back to a generic description using the skill name when frontmatter
+    is missing or the description field is empty.
+    """
     if not content.startswith("---"):
-        return ""
+        return f"Use the {skill_name} skill" if skill_name else ""
     try:
         end = content.index("---", 3)
         for line in content[3:end].splitlines():
             if line.startswith("description:"):
-                return line.split(":", 1)[1].strip()
+                desc = line.split(":", 1)[1].strip()
+                return (
+                    desc
+                    if desc
+                    else f"Use the {skill_name} skill"
+                    if skill_name
+                    else ""
+                )
     except ValueError:
         pass
-    return ""
+    return f"Use the {skill_name} skill" if skill_name else ""
 
 
 def wire_single_skill(
@@ -341,7 +347,7 @@ def wire_single_skill(
         skill_md = skill_src_dir / "SKILL.md"
         if skill_md.exists():
             description = _extract_skill_description(
-                skill_md.read_text(encoding="utf-8")
+                skill_md.read_text(encoding="utf-8"), skill_name
             )
             stub = (
                 f"---\ndescription: {description}\n---\n\n"
