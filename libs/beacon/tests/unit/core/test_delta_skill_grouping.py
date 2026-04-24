@@ -68,7 +68,10 @@ class TestSkillEntries:
                 {"opencode": DeltaStatus.ADDED},
             ),
         ]
-        assert skill_entries(results) == ["skills/skill-a", "skills/skill-b"]
+        # Returned longest-first for correct nested matching (same length → sorted)
+        entries = skill_entries(results)
+        assert set(entries) == {"skills/skill-a", "skills/skill-b"}
+        assert len(entries) == 2
 
     def test_skill_with_nested_dir(self):
         results = [

@@ -685,6 +685,34 @@ def test_compare_skill_multi_agent_all_identical(valid_warehouse, temp_dir):
     assert result.agent_statuses["claudecode"] == DeltaStatus.IDENTICAL
 
 
+def test_compare_skill_multi_agent_added_in_one_not_other(valid_warehouse, temp_dir):
+    """When a skill file is added in one agent but not present in another (and not in warehouse),
+    the agent without the file should show IDENTICAL, not MISSING."""
+    # Skill file exists only in opencode, not in warehouse, not in claudecode
+    opencode_skills = temp_dir / ".opencode" / "skills"
+    (opencode_skills / "my-skill").mkdir(parents=True)
+    (opencode_skills / "my-skill" / "SKILL.md").write_text("# Local only\n")
+
+    # claudecode: agent dir exists but skill file not installed
+    claude_skills = temp_dir / ".claude" / "skills"
+    (claude_skills / "my-skill").mkdir(parents=True)  # dir exists but empty
+
+    artifacts_dir = temp_dir / "artifacts"
+    artifacts_dir.mkdir()
+
+    comparator = DeltaComparator(
+        valid_warehouse,
+        artifacts_dir,
+        skills_paths={"opencode": opencode_skills, "claudecode": claude_skills},
+    )
+    result = comparator.compare_file("skills/my-skill/SKILL.md")
+
+    # Aggregate should be ADDED (since opencode has it and claudecode doesn't need it)
+    assert result.status == DeltaStatus.ADDED
+    assert result.agent_statuses["opencode"] == DeltaStatus.ADDED
+    assert result.agent_statuses["claudecode"] == DeltaStatus.IDENTICAL
+
+
 def test_compare_skill_multi_agent_missing_beats_identical(valid_warehouse, temp_dir):
     """MISSING beats IDENTICAL in the aggregate rollup for multi-agent."""
     content = "# Warehouse\n"

@@ -358,7 +358,7 @@ class DeltaComparator:
             live_exists = live_file.is_file()
 
             if not live_exists and not warehouse_exists:
-                agent_statuses[agent] = DeltaStatus.MISSING
+                agent_statuses[agent] = DeltaStatus.IDENTICAL
             elif live_exists and not warehouse_exists:
                 agent_statuses[agent] = DeltaStatus.ADDED
             elif not live_exists and warehouse_exists:
