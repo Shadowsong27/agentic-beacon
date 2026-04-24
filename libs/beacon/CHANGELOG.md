@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.6.4](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v2.6.3...agentic-beacon@v2.6.4) (2026-04-24)
+
+
+### Bug Fixes
+
+* **delta:** show added skill files as added, not missing ([447a8d2](https://github.com/Shadowsong27/agentic-beacon/commit/447a8d2698b0020152f71cc9451741fa36e0addf)), closes [#96](https://github.com/Shadowsong27/agentic-beacon/issues/96)
+* force release for agentic-beacon ([69a2b82](https://github.com/Shadowsong27/agentic-beacon/commit/69a2b82134c2829b8f7abeedf210344b909f8378))
+
 ## [2.6.3](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v2.6.2...agentic-beacon@v2.6.3) (2026-04-23)
 
 
