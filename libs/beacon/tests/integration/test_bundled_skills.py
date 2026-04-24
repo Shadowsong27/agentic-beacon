@@ -268,8 +268,10 @@ def test_sync_installs_bundled_skills_globally(valid_warehouse, temp_dir, monkey
     assert (fake_dirs["claudecode"] / BUNDLED_SKILL_NAME / "SKILL.md").exists()
 
 
-def test_sync_does_not_install_to_project_dir(valid_warehouse, temp_dir, monkeypatch):
-    """abc sync does NOT write bundled skills to per-project .opencode/skills/."""
+def test_sync_installs_bundled_skills_to_project_dir(
+    valid_warehouse, temp_dir, monkeypatch
+):
+    """abc sync writes bundled skills to per-project .opencode/skills/ with command stubs."""
     fake_dirs = _fake_global_dirs(temp_dir)
     runner = CliRunner()
 
@@ -290,8 +292,11 @@ def test_sync_does_not_install_to_project_dir(valid_warehouse, temp_dir, monkeyp
     ):
         runner.invoke(main, ["sync", "--skip-git-check"])
 
-    assert not (
+    assert (
         project_dir / ".opencode" / "skills" / BUNDLED_SKILL_NAME / "SKILL.md"
+    ).exists()
+    assert (
+        project_dir / ".opencode" / "command" / f"abc-{BUNDLED_SKILL_NAME}.md"
     ).exists()
 
 

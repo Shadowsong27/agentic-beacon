@@ -337,10 +337,12 @@ def unwire_skill(project_root: Path, skill_name: str) -> None:
         shutil.rmtree(opencode_skill, ignore_errors=True)
         logger.debug("Removed OpenCode skill dir: {}", opencode_skill)
 
-    opencode_cmd = project_root / ".opencode" / "command" / f"{skill_name}.md"
-    if opencode_cmd.exists():
-        opencode_cmd.unlink(missing_ok=True)
-        logger.debug("Removed OpenCode command stub: {}", opencode_cmd)
+    # Remove legacy command stub (without abc- prefix) and current stub (with prefix)
+    for cmd_name in (f"{skill_name}.md", f"abc-{skill_name}.md"):
+        opencode_cmd = project_root / ".opencode" / "command" / cmd_name
+        if opencode_cmd.exists():
+            opencode_cmd.unlink(missing_ok=True)
+            logger.debug("Removed OpenCode command stub: {}", opencode_cmd)
 
     claude_skill = project_root / ".claude" / "skills" / skill_name
     if claude_skill.exists():

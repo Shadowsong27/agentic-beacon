@@ -27,6 +27,7 @@ EXPECTED_FILES = [
     "README.md",
     ".gitignore",
     "skills/record-knowledge/SKILL.md",
+    "skills/record-skill/SKILL.md",
 ]
 
 

@@ -100,6 +100,11 @@ def test_e2e_warehouse_init_installs_record_knowledge(e2e_warehouse):
     assert (e2e_warehouse / "skills" / "record-knowledge" / "SKILL.md").exists()
 
 
+def test_e2e_warehouse_init_installs_record_skill(e2e_warehouse):
+    """warehouse init bundles record-skill as a distributable warehouse skill."""
+    assert (e2e_warehouse / "skills" / "record-skill" / "SKILL.md").exists()
+
+
 # ---------------------------------------------------------------------------
 # Step 2 — abc warehouse list shows all three sections including Contexts
 # ---------------------------------------------------------------------------

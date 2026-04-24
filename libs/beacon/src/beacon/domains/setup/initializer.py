@@ -23,6 +23,7 @@ TEMPLATE_FILES: list[str] = [
     "knowledge/README.md",
     "skills/README.md",
     "skills/record-knowledge/SKILL.md",
+    "skills/record-skill/SKILL.md",
 ]
 
 

@@ -127,6 +127,47 @@ def install_bundled_skills_globally() -> tuple[list[str], list[str]]:
     return installed, errors
 
 
+def wire_bundled_skills_per_project(
+    project_root: Path,
+    agents: list[str] | None = None,
+) -> tuple[list[str], list[str]]:
+    """Wire abc-bundled skills into the project's agent directories.
+
+    Creates per-project skill copies and OpenCode command stubs so bundled
+    skills are available as slash commands (e.g. /abc-record-knowledge).
+
+    Returns (installed, errors) where each entry is '<skill> (<agent>)'.
+    """
+    bundled_skills_dir = BUNDLED_SKILLS_DIR
+    if not bundled_skills_dir.exists():
+        return [], []
+
+    if agents is None:
+        from beacon.domains.artifact.agent import detect_agents
+
+        agents = detect_agents(project_root, fallback_to_all=True)
+
+    installed: list[str] = []
+    errors: list[str] = []
+
+    for skill_dir in sorted(bundled_skills_dir.iterdir()):
+        if not skill_dir.is_dir():
+            continue
+        if not (skill_dir / "SKILL.md").exists():
+            continue
+        name = skill_dir.name
+
+        for agent in agents:
+            try:
+                changed = wire_single_skill(project_root, name, skill_dir, agent)
+                if changed:
+                    installed.append(f"{name} ({agent})")
+            except Exception as e:
+                errors.append(f"{name} ({agent}): {e}")
+
+    return installed, errors
+
+
 def print_bundled_install_result(installed: list[str], errors: list[str]) -> None:
     """Print the result of a bundled skill install to the console."""
     if installed:
@@ -309,7 +350,7 @@ def wire_single_skill(
             )
             command_dir = project_root / ".opencode" / "command"
             command_dir.mkdir(parents=True, exist_ok=True)
-            stub_file = command_dir / f"{skill_name}.md"
+            stub_file = command_dir / f"abc-{skill_name}.md"
             if not stub_file.exists() or stub_file.read_text(encoding="utf-8") != stub:
                 stub_file.write_text(stub, encoding="utf-8")
 
@@ -440,7 +481,7 @@ def _install_skill_opencode(
     )
     command_dir = project_root / ".opencode" / "command"
     command_dir.mkdir(parents=True, exist_ok=True)
-    stub_file = command_dir / f"{skill_name}.md"
+    stub_file = command_dir / f"abc-{skill_name}.md"
 
     skill_unchanged = (
         skill_file.exists() and skill_file.read_text(encoding="utf-8") == content

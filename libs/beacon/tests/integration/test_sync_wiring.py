@@ -216,7 +216,7 @@ def test_wire_skills_post_sync_installs_for_opencode(project_with_skill):
     assert errors == []
     assert any("test-skill" in entry and "opencode" in entry for entry in installed)
     assert (project / ".opencode" / "skills" / "test-skill" / "SKILL.md").exists()
-    assert (project / ".opencode" / "command" / "test-skill.md").exists()
+    assert (project / ".opencode" / "command" / "abc-test-skill.md").exists()
 
 
 def test_wire_skills_post_sync_installs_for_claudecode(project_with_skill):
@@ -365,7 +365,7 @@ def test_install_skill_opencode_returns_true_on_first_install(tmp_path):
 
     assert changed is True
     assert (tmp_path / ".opencode" / "skills" / "my-skill" / "SKILL.md").exists()
-    assert (tmp_path / ".opencode" / "command" / "my-skill.md").exists()
+    assert (tmp_path / ".opencode" / "command" / "abc-my-skill.md").exists()
 
 
 def test_install_skill_opencode_returns_false_when_unchanged(tmp_path):
@@ -500,7 +500,7 @@ def test_sync_installs_skills(full_sync_project, monkeypatch):
 
     assert result.exit_code == 0
     assert (project / ".opencode" / "skills" / "my-skill" / "SKILL.md").exists()
-    assert (project / ".opencode" / "command" / "my-skill.md").exists()
+    assert (project / ".opencode" / "command" / "abc-my-skill.md").exists()
     assert "installed" in result.output.lower()
     opencode_gitignore = (project / ".opencode" / ".gitignore").read_text()
     assert "skills/" in opencode_gitignore
@@ -1146,7 +1146,7 @@ class TestWireSingleSkill:
 
         wire_single_skill(tmp_path, "my-skill", skill_src, "opencode")
 
-        stub = tmp_path / ".opencode" / "command" / "my-skill.md"
+        stub = tmp_path / ".opencode" / "command" / "abc-my-skill.md"
         assert stub.exists()
         assert "Pipeline helper skill" in stub.read_text()
 
