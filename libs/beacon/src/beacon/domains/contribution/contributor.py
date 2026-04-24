@@ -29,11 +29,10 @@ def resolve_skill_contribute_source(
 
     Rules:
     - No agents configured → fall back to artifact snapshot (backward compat).
-    - One agent modified → use that agent's copy.
-    - Multiple agents modified with identical content → use any (they agree).
-    - Multiple agents modified with different content → call ``chooser`` to pick.
-    - No agent has a modified copy (IDENTICAL/MISSING/ADDED) → return None,
-      letting the caller decide (IDENTICAL means nothing to contribute).
+    - One agent modified/added → use that agent's copy.
+    - Multiple agents modified/added with identical content → use any (they agree).
+    - Multiple agents modified/added with different content → call ``chooser`` to pick.
+    - No agent has a modified or added copy → return None.
 
     ``chooser`` receives a dict of {agent_name: path} and must return the chosen
     agent name. Defaults to picking the first candidate (non-interactive).
@@ -46,20 +45,20 @@ def resolve_skill_contribute_source(
 
     result = comparator.compare_file(relative_path)
 
-    # Collect agents whose live copy differs from warehouse
-    modified_agents = [
+    # Collect agents whose live copy differs from warehouse (modified or added)
+    changed_agents = [
         agent
         for agent, status in result.agent_statuses.items()
-        if status == DeltaStatus.MODIFIED
+        if status in (DeltaStatus.MODIFIED, DeltaStatus.ADDED)
     ]
 
-    if not modified_agents:
-        # Nothing modified in any live dir — nothing to contribute
+    if not changed_agents:
+        # Nothing changed in any live dir — nothing to contribute
         return None
 
-    # Build the candidate paths for modified agents
+    # Build the candidate paths for changed agents
     candidates: dict[str, Path] = {}
-    for agent in modified_agents:
+    for agent in changed_agents:
         live_path = comparator.skill_live_path(agent, relative_path)
         if live_path.exists():
             candidates[agent] = live_path
@@ -70,14 +69,14 @@ def resolve_skill_contribute_source(
     if len(candidates) == 1:
         return next(iter(candidates.values()))
 
-    # Multiple agents have modified versions — check if they are identical
+    # Multiple agents have changed versions — check if they are identical
     hashes = {
         agent: comparator.compute_hash(path) for agent, path in candidates.items()
     }
     unique_hashes = set(hashes.values())
 
     if len(unique_hashes) == 1:
-        # All modified copies are identical — pick the first one
+        # All changed copies are identical — pick the first one
         return next(iter(candidates.values()))
 
     # Genuinely different versions across agents.
@@ -104,6 +103,14 @@ def resolve_skill_contribute_source(
     chosen_agent = _chooser(candidates)
     console.print(f"  Using [bold]{chosen_agent}[/bold] version.\n")
     return candidates[chosen_agent]
+
+
+def _get_skill_dir_from_path(relative_path: str) -> str:
+    """Extract skill directory from a path like 'skills/foo/SKILL.md'."""
+    parts = Path(relative_path).parts
+    if len(parts) >= 2 and parts[0] == "skills":
+        return f"{parts[0]}/{parts[1]}"
+    return relative_path
 
 
 def propagate_skill_to_agents(
@@ -361,57 +368,135 @@ def contribute_all(
 
     contributed: list[tuple[str, str]] = []
 
+    # Separate skill and non-skill results
+    skill_results = []
+    non_skill_results = []
     for result in contributable:
-        is_skill = result.path.startswith("skills/") and bool(comparator.skills_paths)
-
-        if is_skill:
-            local_path = resolve_skill_contribute_source(
-                comparator, result.path, artifacts_dir, dry_run=dry_run, chooser=chooser
-            )
-            if local_path is None:
-                console.print(
-                    f"  [yellow]Skipping[/yellow] {result.path} "
-                    "(no modified live copy found)"
-                )
-                continue
+        if result.path.startswith("skills/") and comparator.skills_paths:
+            skill_results.append(result)
         else:
-            local_path = artifacts_dir / result.path
-            if not local_path.exists():
-                console.print(
-                    f"  [yellow]Skipping[/yellow] {result.path} (not found locally — run 'abc sync')"
+            non_skill_results.append(result)
+
+    # Group skill results by skill directory and contribute as whole units
+    skill_dirs: dict[str, list] = {}
+    for result in skill_results:
+        skill_dir = _get_skill_dir_from_path(result.path)
+        skill_dirs.setdefault(skill_dir, []).append(result)
+
+    for skill_dir, results in skill_dirs.items():
+        # Use the first file to resolve which agent to contribute from
+        first_file = results[0].path
+        local_path = resolve_skill_contribute_source(
+            comparator, first_file, artifacts_dir, dry_run=dry_run, chooser=chooser
+        )
+        if local_path is None:
+            console.print(
+                f"  [yellow]Skipping[/yellow] {skill_dir}/ "
+                "(no modified live copy found)"
+            )
+            continue
+
+        # Determine the source skill directory from the chosen file
+        skill_name = Path(skill_dir).name
+        source_dir = local_path.parent
+        # Walk up to find the skill root directory
+        while source_dir.name != skill_name and source_dir.parent != source_dir:
+            source_dir = source_dir.parent
+
+        if source_dir.name != skill_name:
+            console.print(
+                f"  [yellow]Skipping[/yellow] {skill_dir}/ "
+                "(could not find skill directory)"
+            )
+            continue
+
+        dest_dir = warehouse_path / skill_dir
+
+        # Determine if this is a modification or addition based on warehouse state
+        dest_existed = dest_dir.exists()
+        status_label = "modified" if dest_existed else "added"
+
+        # Copy entire skill directory
+        if not dry_run:
+            if dest_dir.exists():
+                shutil.rmtree(dest_dir)
+            shutil.copytree(source_dir, dest_dir)
+        else:
+            console.print(f"  Would contribute: {skill_dir}/ ({status_label})")
+
+        # Propagate to all agents
+        if not dry_run:
+            skill_md = dest_dir / "SKILL.md"
+            if skill_md.exists():
+                propagate_skill_to_agents(
+                    project_root, f"{skill_dir}/SKILL.md", skill_md
                 )
-                continue
+
+        contributed.append((f"{skill_dir}/", status_label))
+
+    # Handle non-skill results individually
+    for result in non_skill_results:
+        local_path = artifacts_dir / result.path
+        if not local_path.exists():
+            console.print(
+                f"  [yellow]Skipping[/yellow] {result.path} (not found locally — run 'abc sync')"
+            )
+            continue
 
         copy_to_warehouse(
             local_path, warehouse_path / result.path, result.path, dry_run
         )
-        if is_skill and not dry_run:
-            propagate_skill_to_agents(project_root, result.path, local_path)
         status_label = "modified" if result.status == DeltaStatus.MODIFIED else "added"
         contributed.append((result.path, status_label))
 
+    # Handle unregistered paths
+    unregistered_skill_dirs: set[str] = set()
+    unregistered_non_skill: list[str] = []
+
     for rel_path in unregistered_paths:
-        is_skill = rel_path.startswith("skills/") and bool(comparator.skills_paths)
-        if is_skill:
-            # Skills live in live agent dirs, not in artifacts_dir.
-            # Pick the first agent copy that exists on disk.
-            local_path = None
-            for _agent, skills_root in comparator.skills_paths.items():
-                parts = Path(rel_path).parts
-                skill_relative = (
-                    Path(*parts[1:]) if parts[0] == "skills" else Path(rel_path)
-                )
-                candidate = skills_root / skill_relative
-                if candidate.exists():
-                    local_path = candidate
-                    break
-            if local_path is None:
-                console.print(
-                    f"  [yellow]Skipping[/yellow] {rel_path} (not found in any agent dir)"
-                )
-                continue
+        if rel_path.startswith("skills/") and comparator.skills_paths:
+            skill_dir = _get_skill_dir_from_path(rel_path)
+            unregistered_skill_dirs.add(skill_dir)
         else:
-            local_path = artifacts_dir / rel_path
+            unregistered_non_skill.append(rel_path)
+
+    # Contribute unregistered skills as whole directories
+    for skill_dir in sorted(unregistered_skill_dirs):
+        skill_name = Path(skill_dir).name
+        # Pick the first agent that has this skill
+        source_dir = None
+        for _agent, skills_root in comparator.skills_paths.items():
+            candidate = skills_root / skill_name
+            if candidate.exists():
+                source_dir = candidate
+                break
+        if source_dir is None:
+            console.print(
+                f"  [yellow]Skipping[/yellow] {skill_dir}/ (not found in any agent dir)"
+            )
+            continue
+
+        dest_dir = warehouse_path / skill_dir
+
+        if not dry_run:
+            if dest_dir.exists():
+                shutil.rmtree(dest_dir)
+            shutil.copytree(source_dir, dest_dir)
+        else:
+            console.print(f"  Would contribute: {skill_dir}/ (added)")
+
+        if not dry_run:
+            skill_md = dest_dir / "SKILL.md"
+            if skill_md.exists():
+                propagate_skill_to_agents(
+                    project_root, f"{skill_dir}/SKILL.md", skill_md
+                )
+
+        contributed.append((f"{skill_dir}/", "added"))
+
+    # Contribute unregistered non-skill files individually
+    for rel_path in unregistered_non_skill:
+        local_path = artifacts_dir / rel_path
         copy_to_warehouse(local_path, warehouse_path / rel_path, rel_path, dry_run)
         contributed.append((rel_path, "added"))
 

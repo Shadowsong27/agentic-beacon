@@ -1083,6 +1083,41 @@ def test_contribute_all_skills_propagates_to_other_agents(
     )
 
 
+def test_contribute_skill_with_new_script_contributes_whole_directory(
+    project_with_skill_setup,
+):
+    """When a skill has a new script file, contributing the skill copies the entire directory."""
+    tmp_path, warehouse = project_with_skill_setup
+
+    # Set up claudecode agent with a new script file
+    (tmp_path / ".claude").mkdir()
+    cc_skill_dir = tmp_path / ".claude" / "skills" / "my-skill"
+    cc_skill_dir.mkdir(parents=True)
+    (cc_skill_dir / "SKILL.md").write_text(SKILL_MODIFIED_CONTENT)
+    (cc_skill_dir / "scripts").mkdir(parents=True)
+    (cc_skill_dir / "scripts" / "helper.py").write_text("# helper script\n")
+
+    # opencode live copy still has the old warehouse content
+    oc_skill_dir = tmp_path / ".opencode" / "skills" / "my-skill"
+    oc_skill_dir.mkdir(parents=True)
+    (oc_skill_dir / "SKILL.md").write_text(SKILL_WAREHOUSE_CONTENT)
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["contribute"], input="y\n")
+
+    assert result.exit_code == 0, result.output
+    # Warehouse updated with both SKILL.md and the new script
+    assert (
+        warehouse / "skills" / "my-skill" / "SKILL.md"
+    ).read_text() == SKILL_MODIFIED_CONTENT
+    assert (
+        warehouse / "skills" / "my-skill" / "scripts" / "helper.py"
+    ).read_text() == "# helper script\n"
+    # opencode live copy must also get the new script
+    assert (oc_skill_dir / "SKILL.md").read_text() == SKILL_MODIFIED_CONTENT
+    assert (oc_skill_dir / "scripts" / "helper.py").read_text() == "# helper script\n"
+
+
 # ---------------------------------------------------------------------------
 # --exclude-unregistered flag
 # ---------------------------------------------------------------------------

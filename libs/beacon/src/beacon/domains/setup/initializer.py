@@ -23,6 +23,7 @@ TEMPLATE_FILES: list[str] = [
     "knowledge/README.md",
     "skills/README.md",
     "skills/record-knowledge/SKILL.md",
+    "skills/record-skill/SKILL.md",
 ]
 
 
@@ -177,10 +178,17 @@ class WarehouseInitializer:
             skill_md = skill_dir / "SKILL.md"
             if not skill_md.exists():
                 continue
-            content = skill_md.read_text(encoding="utf-8")
             dest_dir = self.warehouse_path / "skills" / skill_dir.name
             dest_dir.mkdir(parents=True, exist_ok=True)
-            self._write_if_missing(dest_dir / "SKILL.md", content)
+            for src_file in sorted(skill_dir.rglob("*")):
+                if not src_file.is_file():
+                    continue
+                if "__pycache__" in src_file.parts:
+                    continue
+                rel = src_file.relative_to(skill_dir)
+                dest_file = dest_dir / rel
+                dest_file.parent.mkdir(parents=True, exist_ok=True)
+                self._write_if_missing(dest_file, src_file.read_text(encoding="utf-8"))
 
         logger.info("Bundled skills installed")
 

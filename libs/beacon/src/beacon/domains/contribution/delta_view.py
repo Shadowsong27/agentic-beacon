@@ -241,7 +241,7 @@ def show_delta_summary(
         if untracked_non_skill:
             rows = []
             for rel_path, agents in untracked_non_skill:
-                agent_cells = {a: "[green]added[/green]" for a in agents}
+                agent_cells = dict.fromkeys(agents, "[green]added[/green]")
                 rows.append(("[green]added[/green]", rel_path, agent_cells))
             console.print()
             console.print(render_delta_table(rows, "", untracked_agents))
@@ -876,6 +876,9 @@ def find_untracked_local_files(
     # Scan live agent skill directories — the canonical location for installed skills.
     # Group by rel_path so a skill present in multiple agent dirs is reported once
     # with all agents listed.
+    from beacon.domains.artifact.skill import bundled_skill_names
+
+    bundled = bundled_skill_names()
     skill_agents: dict[str, list[str]] = {}
     for agent, skills_root in comparator.skills_paths.items():
         if skills_root.exists():
@@ -888,6 +891,9 @@ def find_untracked_local_files(
                         skill_name = (
                             Path(rel).parts[1] if len(Path(rel).parts) > 1 else ""
                         )
+                        # Skip abc-bundled skills — they are package-managed, not user content
+                        if skill_name in bundled:
+                            continue
                         if patterns and any(
                             fnmatch.fnmatch(skill_name, p) for p in patterns
                         ):
