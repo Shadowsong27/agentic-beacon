@@ -477,7 +477,6 @@ def contribute_all(
             continue
 
         dest_dir = warehouse_path / skill_dir
-        dest_existed = dest_dir.exists()
 
         if not dry_run:
             if dest_dir.exists():

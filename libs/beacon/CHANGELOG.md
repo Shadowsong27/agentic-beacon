@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.7.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v2.6.4...agentic-beacon@v2.7.0) (2026-04-24)
+
+
+### Features
+
+* bundled skills with abc- prefixed command stubs and record-skill ([#98](https://github.com/Shadowsong27/agentic-beacon/issues/98)) ([88f4a5b](https://github.com/Shadowsong27/agentic-beacon/commit/88f4a5be3c7768f26cb2274ee4d3c669fa729ea9))
+
+
+### Bug Fixes
+
+* **delta:** show pending status for skill files not yet distributed ([21b9f02](https://github.com/Shadowsong27/agentic-beacon/commit/21b9f0240b46c956498a3e713e8f60832327046e))
+
 ## [2.6.4](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v2.6.3...agentic-beacon@v2.6.4) (2026-04-24)
 
 

@@ -26,6 +26,7 @@ from beacon.domains.artifact.skill import (
     normalize_skill_entry,
     skill_name_from_entry,
     validate_skill_entries,
+    wire_bundled_skills_per_project,
     wire_skills_post_sync,
 )
 from beacon.domains.distribution.state import read_sync_sha, write_sync_state
@@ -147,6 +148,12 @@ def run_sync(
 
     if total_artifacts == 0:
         bundled_installed, bundled_skipped = install_bundled_skills_globally()
+        if not dry_run:
+            bundled_wired, bundled_wire_errors = wire_bundled_skills_per_project(
+                project_root
+            )
+        else:
+            bundled_wired, bundled_wire_errors = [], []
         sync_agents_from_warehouse(warehouse_path, force=force, preserve=preserve)
         return SyncOrchestrationResult(
             dry_run=dry_run,
@@ -157,8 +164,8 @@ def run_sync(
             confirmed_prune=[],
             oc_added=[],
             cc_added=[],
-            wired_skills=[],
-            wire_errors=[],
+            wired_skills=list(bundled_wired),
+            wire_errors=list(bundled_wire_errors),
             bundled_installed=list(bundled_installed),
             bundled_skipped=list(bundled_skipped),
             adoption_notification=None,
@@ -291,6 +298,12 @@ def run_sync(
             update_agent_gitignores(project_root)
 
     bundled_installed, bundled_skipped = install_bundled_skills_globally()
+    if not dry_run:
+        bundled_wired, bundled_wire_errors = wire_bundled_skills_per_project(
+            project_root
+        )
+        wired_skills = wired_skills + bundled_wired
+        wire_errors = wire_errors + bundled_wire_errors
 
     sync_agents_from_warehouse(warehouse_path, force=force, preserve=preserve)
 

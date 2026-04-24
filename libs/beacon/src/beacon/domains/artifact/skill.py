@@ -96,15 +96,14 @@ def install_bundled_skills_globally() -> tuple[list[str], list[str]]:
 
     Returns (installed, errors) where each entry is '<skill> (<agent>)'.
     """
-    bundled_skills_dir = BUNDLED_SKILLS_DIR
-    if not bundled_skills_dir.exists():
+    if not BUNDLED_SKILLS_DIR.exists():
         return [], []
 
     global_dirs = bundled_global_skill_dirs()
     installed: list[str] = []
     errors: list[str] = []
 
-    for skill_dir in sorted(bundled_skills_dir.iterdir()):
+    for skill_dir in sorted(BUNDLED_SKILLS_DIR.iterdir()):
         if not skill_dir.is_dir():
             continue
         skill_md = skill_dir / "SKILL.md"
@@ -121,6 +120,44 @@ def install_bundled_skills_globally() -> tuple[list[str], list[str]]:
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 dest.write_text(content, encoding="utf-8")
                 installed.append(f"{name} ({agent})")
+            except Exception as e:
+                errors.append(f"{name} ({agent}): {e}")
+
+    return installed, errors
+
+
+def wire_bundled_skills_per_project(
+    project_root: Path,
+    agents: list[str] | None = None,
+) -> tuple[list[str], list[str]]:
+    """Wire abc-bundled skills into the project's agent directories.
+
+    Creates per-project skill copies and OpenCode command stubs so bundled
+    skills are available as slash commands (e.g. /abc-record-knowledge).
+
+    Returns (installed, errors) where each entry is '<skill> (<agent>)'.
+    """
+    if not BUNDLED_SKILLS_DIR.exists():
+        return [], []
+
+    if agents is None:
+        agents = detect_agents(project_root, fallback_to_all=True)
+
+    installed: list[str] = []
+    errors: list[str] = []
+
+    for skill_dir in sorted(BUNDLED_SKILLS_DIR.iterdir()):
+        if not skill_dir.is_dir():
+            continue
+        if not (skill_dir / "SKILL.md").exists():
+            continue
+        name = skill_dir.name
+
+        for agent in agents:
+            try:
+                changed = wire_single_skill(project_root, name, skill_dir, agent)
+                if changed:
+                    installed.append(f"{name} ({agent})")
             except Exception as e:
                 errors.append(f"{name} ({agent}): {e}")
 
@@ -145,13 +182,12 @@ def show_bundled_skills_status() -> None:
     Checks global agent skill dirs — bundled skills are user-level,
     not per-project.
     """
-    bundled_skills_dir = BUNDLED_SKILLS_DIR
-    if not bundled_skills_dir.exists():
+    if not BUNDLED_SKILLS_DIR.exists():
         return
 
     skill_names = sorted(
         d.name
-        for d in bundled_skills_dir.iterdir()
+        for d in BUNDLED_SKILLS_DIR.iterdir()
         if d.is_dir() and (d / "SKILL.md").exists()
     )
     if not skill_names:
@@ -243,18 +279,29 @@ def skill_name_from_entry(entry: str) -> str:
     return Path(normalize_skill_entry(entry)).name
 
 
-def _extract_skill_description(content: str) -> str:
-    """Extract description value from SKILL.md YAML frontmatter."""
+def _extract_skill_description(content: str, skill_name: str = "") -> str:
+    """Extract description value from SKILL.md YAML frontmatter.
+
+    Falls back to a generic description using the skill name when frontmatter
+    is missing or the description field is empty.
+    """
     if not content.startswith("---"):
-        return ""
+        return f"Use the {skill_name} skill" if skill_name else ""
     try:
         end = content.index("---", 3)
         for line in content[3:end].splitlines():
             if line.startswith("description:"):
-                return line.split(":", 1)[1].strip()
+                desc = line.split(":", 1)[1].strip()
+                return (
+                    desc
+                    if desc
+                    else f"Use the {skill_name} skill"
+                    if skill_name
+                    else ""
+                )
     except ValueError:
         pass
-    return ""
+    return f"Use the {skill_name} skill" if skill_name else ""
 
 
 def wire_single_skill(
@@ -300,7 +347,7 @@ def wire_single_skill(
         skill_md = skill_src_dir / "SKILL.md"
         if skill_md.exists():
             description = _extract_skill_description(
-                skill_md.read_text(encoding="utf-8")
+                skill_md.read_text(encoding="utf-8"), skill_name
             )
             stub = (
                 f"---\ndescription: {description}\n---\n\n"
@@ -309,7 +356,7 @@ def wire_single_skill(
             )
             command_dir = project_root / ".opencode" / "command"
             command_dir.mkdir(parents=True, exist_ok=True)
-            stub_file = command_dir / f"{skill_name}.md"
+            stub_file = command_dir / f"abc-{skill_name}.md"
             if not stub_file.exists() or stub_file.read_text(encoding="utf-8") != stub:
                 stub_file.write_text(stub, encoding="utf-8")
 
@@ -440,7 +487,7 @@ def _install_skill_opencode(
     )
     command_dir = project_root / ".opencode" / "command"
     command_dir.mkdir(parents=True, exist_ok=True)
-    stub_file = command_dir / f"{skill_name}.md"
+    stub_file = command_dir / f"abc-{skill_name}.md"
 
     skill_unchanged = (
         skill_file.exists() and skill_file.read_text(encoding="utf-8") == content
