@@ -133,7 +133,7 @@ def wire_bundled_skills_per_project(
     """Wire abc-bundled skills into the project's agent directories.
 
     Creates per-project skill copies and OpenCode command stubs so bundled
-    skills are available as slash commands (e.g. /abc-record-knowledge).
+    skills are available as slash commands (e.g. /record-knowledge).
 
     Returns (installed, errors) where each entry is '<skill> (<agent>)'.
     """
@@ -356,7 +356,7 @@ def wire_single_skill(
             )
             command_dir = project_root / ".opencode" / "command"
             command_dir.mkdir(parents=True, exist_ok=True)
-            stub_file = command_dir / f"abc-{skill_name}.md"
+            stub_file = command_dir / f"{skill_name}.md"
             if not stub_file.exists() or stub_file.read_text(encoding="utf-8") != stub:
                 stub_file.write_text(stub, encoding="utf-8")
 
@@ -487,7 +487,7 @@ def _install_skill_opencode(
     )
     command_dir = project_root / ".opencode" / "command"
     command_dir.mkdir(parents=True, exist_ok=True)
-    stub_file = command_dir / f"abc-{skill_name}.md"
+    stub_file = command_dir / f"{skill_name}.md"
 
     skill_unchanged = (
         skill_file.exists() and skill_file.read_text(encoding="utf-8") == content

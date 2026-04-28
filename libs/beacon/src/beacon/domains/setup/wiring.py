@@ -337,7 +337,7 @@ def unwire_skill(project_root: Path, skill_name: str) -> None:
         shutil.rmtree(opencode_skill, ignore_errors=True)
         logger.debug("Removed OpenCode skill dir: {}", opencode_skill)
 
-    # Remove legacy command stub (without abc- prefix) and current stub (with prefix)
+    # Remove current stub and legacy stub (old abc- prefix) for migration
     for cmd_name in (f"{skill_name}.md", f"abc-{skill_name}.md"):
         opencode_cmd = project_root / ".opencode" / "command" / cmd_name
         if opencode_cmd.exists():

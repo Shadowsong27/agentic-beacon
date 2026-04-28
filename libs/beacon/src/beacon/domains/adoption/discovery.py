@@ -78,30 +78,45 @@ def collect_knowledge_nodes(
 ) -> None:
     """Recursively collect knowledge node paths (warehouse-relative) into nodes.
 
-    Recursion always continues — a directory can be both a node and a parent of
-    child nodes (e.g. data-platform/ has its own decisions/ AND sub-nodes clickhouse/, dbt/)."""
-    if is_knowledge_node(current):
+    Only *leaf* nodes are collected — a directory that directly contains
+    decisions/, lessons/, or facts/ AND has no child directories that are
+    themselves knowledge nodes.  Grouping/parent folders are skipped; only
+    their leaf descendants are recorded.
+    """
+    child_dirs = [
+        child
+        for child in sorted(current.iterdir())
+        if child.is_dir()
+        and not child.name.startswith(".")
+        and child.name not in KNOWLEDGE_SUBTYPES
+    ]
+    if is_knowledge_node(current) and not any(
+        is_knowledge_node(child) for child in child_dirs
+    ):
         nodes.append(str(current.relative_to(warehouse_path)).replace("\\", "/"))
-    for child in sorted(current.iterdir()):
-        if (
-            child.is_dir()
-            and not child.name.startswith(".")
-            and child.name not in KNOWLEDGE_SUBTYPES
-        ):
-            collect_knowledge_nodes(child, warehouse_path, nodes)
+        return  # leaf node — don't recurse further
+    for child in child_dirs:
+        collect_knowledge_nodes(child, warehouse_path, nodes)
 
 
 def list_knowledge_nodes(warehouse_path: Path) -> list[str]:
     """Return all warehouse-relative knowledge node paths.
 
     Only directories that directly contain decisions/, lessons/, or facts/ are nodes.
-    Grouping/parent folders are excluded.
+    Grouping/parent folders are excluded.  The knowledge/ root itself is never a node
+    (it has no display name and would produce blank labels in the TUI).
     """
     knowledge_dir = warehouse_path / "knowledge"
     if not knowledge_dir.exists():
         return []
     nodes: list[str] = []
-    collect_knowledge_nodes(knowledge_dir, warehouse_path, nodes)
+    for child in sorted(knowledge_dir.iterdir()):
+        if (
+            child.is_dir()
+            and not child.name.startswith(".")
+            and child.name not in KNOWLEDGE_SUBTYPES
+        ):
+            collect_knowledge_nodes(child, warehouse_path, nodes)
     return nodes
 
 

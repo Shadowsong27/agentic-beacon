@@ -295,9 +295,7 @@ def test_sync_installs_bundled_skills_to_project_dir(
     assert (
         project_dir / ".opencode" / "skills" / BUNDLED_SKILL_NAME / "SKILL.md"
     ).exists()
-    assert (
-        project_dir / ".opencode" / "command" / f"abc-{BUNDLED_SKILL_NAME}.md"
-    ).exists()
+    assert (project_dir / ".opencode" / "command" / f"{BUNDLED_SKILL_NAME}.md").exists()
 
 
 def test_sync_reports_bundled_skill_installation(

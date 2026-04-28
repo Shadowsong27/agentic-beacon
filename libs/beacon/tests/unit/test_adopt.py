@@ -216,10 +216,12 @@ class TestListKnowledgeNodes:
         nodes = list_knowledge_nodes(warehouse)
         assert set(nodes) == {"knowledge/global", "knowledge/domains/web-services"}
 
-    def test_dual_role_node_and_parent(self, tmp_path):
-        """A directory with its own decisions/ AND child nodes is discovered at both levels."""
+    def test_parent_with_child_nodes_excluded(self, tmp_path):
+        """A directory that has its own decisions/ but also child knowledge nodes is
+        treated as a grouping folder — only the leaf children are collected, not the
+        parent itself."""
         warehouse = _make_warehouse(tmp_path)
-        # data-platform is itself a node (has decisions/) AND has child nodes
+        # data-platform has its own decisions/ but also child knowledge nodes
         (warehouse / "knowledge" / "data-platform" / "decisions").mkdir(parents=True)
         (warehouse / "knowledge" / "data-platform" / "clickhouse" / "facts").mkdir(
             parents=True
@@ -229,10 +231,20 @@ class TestListKnowledgeNodes:
         )
         nodes = list_knowledge_nodes(warehouse)
         assert set(nodes) == {
-            "knowledge/data-platform",
             "knowledge/data-platform/clickhouse",
             "knowledge/data-platform/dbt",
         }
+
+    def test_flat_root_knowledge_dir_excluded(self, tmp_path):
+        """knowledge/ root with top-level decisions/facts/lessons must NOT produce a
+        blank-named node — the root dir has no display name and would render as '[ ]  [N commits ago]'."""
+        warehouse = _make_warehouse(tmp_path)
+        # Flat structure: knowledge/decisions/, knowledge/facts/ directly
+        (warehouse / "knowledge" / "decisions").mkdir(parents=True)
+        (warehouse / "knowledge" / "facts").mkdir(parents=True)
+        (warehouse / "knowledge" / "decisions" / "foo.md").write_text("# Foo")
+        nodes = list_knowledge_nodes(warehouse)
+        assert nodes == []
 
 
 # ---------------------------------------------------------------------------

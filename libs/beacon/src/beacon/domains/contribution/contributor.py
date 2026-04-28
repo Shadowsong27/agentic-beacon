@@ -586,38 +586,49 @@ def auto_git_contribute(
         )
 
     def _fallback(reason: str, detail: str = "") -> None:
-        console.print(
-            f"[yellow]Warning:[/yellow] {reason} — falling back to manual git."
-        )
+        console.print(f"\n[yellow]Auto-git failed:[/yellow] {reason}")
         if detail:
-            console.print(f"  [dim]{detail}[/dim]")
+            console.print(f"  [red]{detail}[/red]")
+        console.print("[dim]Falling back to manual git steps.[/dim]")
         print_contribute_next_steps(warehouse_path, paths)
 
     try:
         r = _git(["checkout", "-b", branch])
         if r.returncode != 0:
-            _fallback("Could not create branch", r.stderr.strip())
+            _fallback("Could not create branch", r.stderr.strip() or r.stdout.strip())
             return
     except FileNotFoundError:
-        _fallback("git not found")
+        _fallback("git not found in PATH")
         return
     except subprocess.TimeoutExpired:
-        _fallback("git timed out")
+        _fallback("git checkout timed out")
         return
 
-    r = _git(["add", "--", *paths])
-    if r.returncode != 0:
-        _fallback("git add failed", r.stderr.strip())
+    try:
+        r = _git(["add", "--", *paths])
+        if r.returncode != 0:
+            _fallback("git add failed", r.stderr.strip() or r.stdout.strip())
+            return
+    except subprocess.TimeoutExpired:
+        _fallback("git add timed out")
         return
 
-    r = _git(["commit", "-m", "feat: contribute warehouse artifacts"])
-    if r.returncode != 0:
-        _fallback("git commit failed", r.stderr.strip())
+    try:
+        r = _git(["commit", "-m", "feat: contribute warehouse artifacts"])
+        if r.returncode != 0:
+            _fallback("git commit failed", r.stderr.strip() or r.stdout.strip())
+            return
+    except subprocess.TimeoutExpired:
+        _fallback("git commit timed out")
         return
 
-    r = _git(["push", "-u", "origin", branch])
-    if r.returncode != 0:
-        _fallback("git push failed", r.stderr.strip())
+    try:
+        r = _git(["push", "-u", "origin", branch])
+        if r.returncode != 0:
+            _fallback("git push failed", r.stderr.strip() or r.stdout.strip())
+            return
+    except subprocess.TimeoutExpired:
+        _fallback("git push timed out")
         return
 
     pr_body = build_pr_body(contributed)

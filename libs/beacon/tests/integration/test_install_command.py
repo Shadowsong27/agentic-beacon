@@ -94,9 +94,7 @@ def test_install_skill_wires_opencode(connected_project):
     assert (
         connected_project / ".opencode" / "skills" / "code-reviewer" / "SKILL.md"
     ).exists()
-    assert (
-        connected_project / ".opencode" / "command" / "abc-code-reviewer.md"
-    ).exists()
+    assert (connected_project / ".opencode" / "command" / "code-reviewer.md").exists()
     opencode_gitignore = (connected_project / ".opencode" / ".gitignore").read_text()
     assert "skills/" in opencode_gitignore
     assert "command/" in opencode_gitignore

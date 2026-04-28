@@ -31,6 +31,57 @@ def iter_selectable_leaves(node):
             yield from iter_selectable_leaves(child)
 
 
+def _folder_label(name: str, all_selected: bool, any_selected: bool) -> str:
+    """Render a grouping folder label with a checkbox reflecting child selection state.
+
+    - all selected  → [x] name/
+    - some selected → [-] name/
+    - none selected → [ ] name/
+    """
+    if all_selected:
+        checkbox = "[bold cyan]\\[x][/bold cyan]"
+    elif any_selected:
+        checkbox = "[bold yellow]\\[-][/bold yellow]"
+    else:
+        checkbox = "[dim]\\[ ][/dim]"
+    return f"{checkbox} [dim white]{name}/[/dim white]"
+
+
+def _refresh_ancestor_folders(node) -> None:
+    """Walk up the tree from node, refreshing every pure grouping-folder ancestor.
+
+    A pure grouping folder has ``data={"folder": name}`` (no ``"selected"`` key).
+    Its label is recomputed from the selection state of all its selectable descendants.
+    """
+    parent = node.parent
+    while parent is not None:
+        data = parent.data
+        if data is not None and "folder" in data and "selected" not in data:
+            leaves = list(iter_selectable_leaves(parent))
+            if leaves:
+                any_sel = any(lf.data.get("selected", False) for lf in leaves)
+                all_sel = all(lf.data.get("selected", False) for lf in leaves)
+                parent.set_label(_folder_label(data["folder"], all_sel, any_sel))
+        parent = parent.parent
+
+
+def _refresh_all_folders(node) -> None:
+    """Recursively refresh every grouping-folder label in a subtree (bottom-up).
+
+    Used after bulk select-all / select-none operations where every folder
+    needs to be updated at once.
+    """
+    for child in node.children:
+        _refresh_all_folders(child)
+    data = node.data
+    if data is not None and "folder" in data and "selected" not in data:
+        leaves = list(iter_selectable_leaves(node))
+        if leaves:
+            any_sel = any(lf.data.get("selected", False) for lf in leaves)
+            all_sel = all(lf.data.get("selected", False) for lf in leaves)
+            node.set_label(_folder_label(data["folder"], all_sel, any_sel))
+
+
 # ─────────────────────────────────────────────────────────────
 # Textual TUI
 # ─────────────────────────────────────────────────────────────
@@ -244,11 +295,9 @@ class AdoptApp:
                 ) -> None:
                     """Recursively build nested knowledge subtree.
 
-                    Non-node parent folders become expandable branches.
-                    Only nodes get checkboxes. A node that is also a parent folder
-                    (dual-role, e.g. data-platform/ that has its own decisions/ AND
-                    child nodes clickhouse/, dbt/) renders its checkbox on the folder
-                    label so it is selectable in-place.
+                    Grouping folders are pure containers — they are never selectable.
+                    Only leaf nodes (no knowledge-node children) get checkboxes.
+                    Folder labels show [x]/[-]/[ ] to reflect child selection state.
                     """
                     direct: list[tuple] = []
                     subgroups: dict[str, list[tuple]] = {}
@@ -285,13 +334,6 @@ class AdoptApp:
                                     orig_adopted,
                                 )
                             )
-                    # direct items that are also group keys (dual-role nodes)
-                    dual_role: dict[str, tuple] = {
-                        name: item
-                        for item in direct
-                        for name in [item[1]]
-                        if name in subgroups
-                    }
                     for (
                         full_path,
                         name,
@@ -300,8 +342,6 @@ class AdoptApp:
                         commits_ago_val,
                         orig_adopted,
                     ) in sorted(direct, key=lambda x: x[1]):
-                        if name in dual_role:
-                            continue  # rendered as a folder-node below
                         parent_node.add_leaf(
                             _leaf_label(
                                 name,
@@ -324,33 +364,13 @@ class AdoptApp:
                             if not depth_prefix
                             else f"{depth_prefix}/{group_name}"
                         )
-                        dual = dual_role.get(group_name)
-                        if dual:
-                            # Folder is also a node — give it a checkbox
-                            fp, _, d_desc, d_sel, d_cago, d_orig = dual
-                            sub_node = parent_node.add(
-                                _leaf_label(
-                                    f"{group_name}/",
-                                    d_sel,
-                                    d_cago,
-                                    d_orig and self_inner._show_all,
-                                ),
-                                expand=True,
-                                data={
-                                    "path": fp,
-                                    "display_name": f"{group_name}/",
-                                    "desc": d_desc,
-                                    "selected": d_sel,
-                                    "originally_adopted": d_orig,
-                                    "commits_ago": d_cago,
-                                },
-                            )
-                        else:
-                            sub_node = parent_node.add(
-                                f"[dim white]{group_name}/[/dim white]",
-                                expand=True,
-                                data={"folder": group_name},
-                            )
+                        sub_node = parent_node.add(
+                            _folder_label(
+                                group_name, all_selected=False, any_selected=False
+                            ),
+                            expand=True,
+                            data={"folder": group_name},
+                        )
                         _build_knowledge_subtree(
                             sub_node, subgroups[group_name], sub_prefix
                         )
@@ -428,11 +448,17 @@ class AdoptApp:
                     )
 
             def _toggle_node_selection(self_inner, node) -> None:  # noqa: N805
-                """Toggle a leaf node's selection state, or expand/collapse a folder."""
+                """Toggle a leaf node's selection state.
+
+                For pure grouping folders (data has ``"folder"`` key), toggle all
+                descendant leaves instead: if any are unselected, select all; if all
+                are already selected, deselect all.
+                """
                 if node is None:
                     return
                 data = node.data
                 if data is not None and "selected" in data:
+                    # Leaf node — toggle it and refresh ancestor folder labels.
                     data["selected"] = not data["selected"]
                     node.set_label(
                         _leaf_label(
@@ -443,6 +469,27 @@ class AdoptApp:
                             and self_inner._show_all,
                         )
                     )
+                    _refresh_ancestor_folders(node)
+                elif data is not None and "folder" in data:
+                    # Grouping folder — toggle all descendant leaves.
+                    leaves = list(iter_selectable_leaves(node))
+                    new_state = not all(lf.data.get("selected", False) for lf in leaves)
+                    for lf in leaves:
+                        lf.data["selected"] = new_state
+                        lf.set_label(
+                            _leaf_label(
+                                lf.data.get("display_name") or lf.data["path"],
+                                new_state,
+                                lf.data.get("commits_ago"),
+                                lf.data.get("originally_adopted", False)
+                                and self_inner._show_all,
+                            )
+                        )
+                    # Refresh this folder and its ancestors.
+                    any_sel = new_state
+                    all_sel = new_state
+                    node.set_label(_folder_label(data["folder"], all_sel, any_sel))
+                    _refresh_ancestor_folders(node)
                 else:
                     node.toggle()
 
@@ -500,6 +547,7 @@ class AdoptApp:
                                 and self_inner._show_all,
                             )
                         )
+                    _refresh_all_folders(section_node)
 
             def action_select_none(self_inner) -> None:  # noqa: N805
                 tree = self_inner.query_one("#tree", Tree)
@@ -515,6 +563,7 @@ class AdoptApp:
                                 and self_inner._show_all,
                             )
                         )
+                    _refresh_all_folders(section_node)
 
         result = _InnerApp().run()
         return result if result is not None else AdoptResult()
