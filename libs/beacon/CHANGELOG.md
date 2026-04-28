@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.7.1](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v2.7.0...agentic-beacon@v2.7.1) (2026-04-28)
+
+
+### Bug Fixes
+
+* **skill:** remove abc- prefix from bundled skill command stubs ([8f89827](https://github.com/Shadowsong27/agentic-beacon/commit/8f8982718e2af4c2ba04ef9b90e213434d2380a0))
+
 ## [2.7.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v2.6.4...agentic-beacon@v2.7.0) (2026-04-24)
 
 
