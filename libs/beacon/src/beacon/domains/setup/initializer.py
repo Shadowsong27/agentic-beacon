@@ -6,6 +6,7 @@ from typing import Any
 
 from loguru import logger
 
+from beacon.core.file_filter import is_skill_file
 from beacon.domains.artifact.checksums import compute_sha256, write_checksums
 
 _DATA_DIR = Path(__file__).parent.parent.parent / "data"
@@ -181,7 +182,7 @@ class WarehouseInitializer:
             dest_dir = self.warehouse_path / "skills" / skill_dir.name
             dest_dir.mkdir(parents=True, exist_ok=True)
             for src_file in sorted(skill_dir.rglob("*")):
-                if not src_file.is_file():
+                if not is_skill_file(src_file):
                     continue
                 if "__pycache__" in src_file.parts:
                     continue

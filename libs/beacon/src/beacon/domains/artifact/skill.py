@@ -7,6 +7,7 @@ from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 
+from beacon.core.file_filter import is_skill_file
 from beacon.core.manifest.beacon import ArtifactsConfig, BeaconManifest
 from beacon.domains.artifact.agent import detect_agents
 from beacon.utils.interaction import ConflictResolution, resolve_conflict
@@ -332,7 +333,7 @@ def wire_single_skill(
 
     any_written = False
     for src_file in sorted(skill_src_dir.rglob("*")):
-        if not src_file.is_file():
+        if not is_skill_file(src_file):
             continue
         rel = src_file.relative_to(skill_src_dir)
         dest_file = dest_root / rel
@@ -393,7 +394,7 @@ def wire_skills_post_sync(
     for skill_dir in skill_dirs:
         name = skill_dir.name
         for src_file in sorted(skill_dir.rglob("*")):
-            if not src_file.is_file():
+            if not is_skill_file(src_file):
                 continue
             rel_within_skill = src_file.relative_to(skill_dir)
             content = src_file.read_text(encoding="utf-8")

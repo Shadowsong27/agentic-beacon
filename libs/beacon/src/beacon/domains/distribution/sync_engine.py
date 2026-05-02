@@ -14,6 +14,8 @@ from typing import Literal
 from loguru import logger
 from pydantic import BaseModel
 
+from beacon.core.file_filter import is_skill_file
+
 
 class SyncResult(BaseModel):
     """Result of a sync operation."""
@@ -417,7 +419,7 @@ class SyncEngine:
                 skill_dir = self.warehouse_path / pattern.rstrip("/")
                 if skill_dir.is_dir():
                     for f in skill_dir.rglob("*"):
-                        if f.is_file():
+                        if is_skill_file(f):
                             expanded.append(str(f.relative_to(self.warehouse_path)))
             elif (self.warehouse_path / pattern).is_dir():
                 for f in (self.warehouse_path / pattern).rglob("*.md"):

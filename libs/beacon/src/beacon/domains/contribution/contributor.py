@@ -9,6 +9,7 @@ from pathlib import Path
 from rich.console import Console
 
 from beacon.core.exceptions import ContributeError
+from beacon.core.file_filter import SKILL_IGNORE_PATTERNS
 from beacon.core.manifest.beacon import BeaconManifest
 from beacon.domains.distribution.delta import DeltaComparator, DeltaStatus
 
@@ -420,7 +421,11 @@ def contribute_all(
         if not dry_run:
             if dest_dir.exists():
                 shutil.rmtree(dest_dir)
-            shutil.copytree(source_dir, dest_dir)
+            shutil.copytree(
+                source_dir,
+                dest_dir,
+                ignore=shutil.ignore_patterns(*SKILL_IGNORE_PATTERNS),
+            )
         else:
             console.print(f"  Would contribute: {skill_dir}/ ({status_label})")
 
@@ -481,7 +486,11 @@ def contribute_all(
         if not dry_run:
             if dest_dir.exists():
                 shutil.rmtree(dest_dir)
-            shutil.copytree(source_dir, dest_dir)
+            shutil.copytree(
+                source_dir,
+                dest_dir,
+                ignore=shutil.ignore_patterns(*SKILL_IGNORE_PATTERNS),
+            )
         else:
             console.print(f"  Would contribute: {skill_dir}/ (added)")
 

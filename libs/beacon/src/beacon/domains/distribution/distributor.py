@@ -6,6 +6,8 @@ from typing import Any
 
 from loguru import logger
 
+from beacon.core.file_filter import SKILL_IGNORE_PATTERNS
+
 
 class WarehouseDistributor:
     """Handles distribution of warehouse content to project .opencode folder."""
@@ -285,7 +287,11 @@ class WarehouseDistributor:
                 # Copy entire directory tree
                 if dst_dir.exists():
                     shutil.rmtree(dst_dir)
-                shutil.copytree(src_dir, dst_dir)
+                shutil.copytree(
+                    src_dir,
+                    dst_dir,
+                    ignore=shutil.ignore_patterns(*SKILL_IGNORE_PATTERNS),
+                )
 
                 # Count files
                 files = list(dst_dir.rglob("*.md"))
@@ -310,7 +316,11 @@ class WarehouseDistributor:
                 # Copy entire skill directory
                 if dst_dir.exists():
                     shutil.rmtree(dst_dir)
-                shutil.copytree(src_dir, dst_dir)
+                shutil.copytree(
+                    src_dir,
+                    dst_dir,
+                    ignore=shutil.ignore_patterns(*SKILL_IGNORE_PATTERNS),
+                )
 
                 logger.debug(f"Copied skill: {skill_name}")
                 count += 1
