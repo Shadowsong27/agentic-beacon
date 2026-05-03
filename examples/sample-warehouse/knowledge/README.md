@@ -1,42 +1,31 @@
-# Knowledge Directory
+# Knowledge
 
-Atomic, reusable knowledge organized by scope and type.
+This directory holds atomic knowledge units for your team.
 
 ## Structure
 
+Organise however suits your team. A common starting point:
+
 ```
 knowledge/
-├── global/              # Universal knowledge (all projects)
-│   ├── decisions/
-│   ├── lessons/
-│   └── facts/
-├── languages/          # Language-specific knowledge
-│   ├── python/
-│   ├── typescript/
-│   └── ...
-└── domains/            # Domain-specific knowledge
-    ├── data-platform/
-    ├── web-services/
-    └── ...
+├── decisions/    # Technical choices and their rationale
+├── lessons/      # Learnings from failures and successes
+└── facts/        # Established configurations and references
 ```
 
-## Knowledge Types
+## Example Entry
 
-### Decisions
-Technical choices made and their rationale.
+```markdown
+---
+type: decision
+---
 
-### Lessons
-Patterns where agents commonly fail or get distracted.
+# Use Pydantic for Data Validation
 
-### Facts
-Established technical information and configurations.
+We use Pydantic BaseModel for all data carriers.
 
-## Selective Installation
-
-When projects select contexts during setup, only relevant knowledge is copied:
-
-```bash
-abc setup --context python --knowledge global --knowledge languages/python
+**Why:** Strong typing, automatic validation, and great IDE support.
+**Alternatives considered:** dataclasses (no validation), attrs (less ecosystem support).
 ```
 
-This copies only global and Python-specific knowledge to the project.
+Add entries here as your team accumulates knowledge. Reference them from context files using `**Read:** [link]` pointers.

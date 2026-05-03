@@ -14,13 +14,24 @@ Project-level instructions for AI agents working on the Agentic Beacon framework
 - Usage guides (`guides/`)
 - Example warehouse (`examples/sample-warehouse/`)
 
-**This is NOT a warehouse** - it's the framework itself. Users create warehouses with `abc init`.
+**This is NOT a warehouse** - it's the framework itself. Users create warehouses with `abc warehouse init`.
 
 **Read:** [Repository Structure](knowledge/facts/repository-structure.md)
 
 ---
 
 ## Development Guidelines
+
+### Artifact Distribution Model
+
+**Decision:** The locally-cloned warehouse is the single write entrypoint for every harness artifact on a machine. Projects reference it via per-file symlinks under `.agentic-beacon/artifacts/`.
+
+- `abc sync` creates symlinks, not copies. One logical artifact = one physical file per machine.
+- `abc warehouse contribute` is a thin wrapper around `git add` + `git commit` inside the warehouse clone — it is the **only** supported write path back to the warehouse.
+- Cross-project visibility of harness edits on a single machine is **intended**, not a leak: editing a skill through Project A's symlink is editing the warehouse working tree, so Project B's agent sees the edit immediately.
+- Platform: macOS / Linux only. Windows is rejected.
+
+**Read:** [Decision: Single Warehouse Write Entrypoint](knowledge/decisions/single-warehouse-write-entrypoint.md)
 
 ### Configuration Management Patterns
 
@@ -63,7 +74,7 @@ uv sync --group dev
 # OR activate venv first:
 source .venv/bin/activate
 abc --version
-abc init test-warehouse
+abc warehouse init test-warehouse
 ```
 
 **Read:** [CLI Development Workflow](knowledge/facts/cli-development-workflow.md)
@@ -72,12 +83,11 @@ abc init test-warehouse
 
 The `beacon` package uses a four-layer architecture: `cli/` → `domains/` → `core/`, `utils/`.
 
-**Six domains** (each in `libs/beacon/src/beacon/domains/<name>/`):
-- `warehouse` — warehouse connect / validate / catalog; git health checks
-- `setup` — `abc init` / `abc setup` flows; CLAUDE.md / opencode wiring
+**Five domains** (each in `libs/beacon/src/beacon/domains/<name>/`):
+- `warehouse` — warehouse connect / validate / catalog; git health; `abc warehouse status` / `abc warehouse contribute`
+- `setup` — `abc warehouse init` / `abc setup` flows; CLAUDE.md / opencode wiring
 - `adoption` — `abc adopt` flow
-- `distribution` — warehouse→project sync, upgrades, sync-state bookkeeping
-- `contribution` — project→warehouse contribute flow
+- `distribution` — warehouse→project symlink sync, migration from copy-based trees, upgrades
 - `artifact` — agent / skill / rule artifact operations
 
 **Dependency rule:** `cli → domains → core, utils`. Cross-domain imports are allowed; `core/` and `utils/` must never import from `domains/` or `cli/`.
@@ -162,7 +172,7 @@ Follow the global Python standards from the user's AGENTS.md context:
 
 ### Updating Warehouse Structure
 
-**Brief:** Update `domains/setup/initializer.py` → Regenerate `examples/sample-warehouse/` → Update docs → Test `abc init` and `abc setup`
+**Brief:** Update `domains/setup/initializer.py` → Regenerate `examples/sample-warehouse/` → Update docs → Test `abc warehouse init` and `abc setup`
 
 **Read:** [Lesson: Updating Warehouse Structure](knowledge/lessons/updating-warehouse-structure.md)
 
@@ -189,7 +199,7 @@ Follow the global Python standards from the user's AGENTS.md context:
 ## Critical Safeguards
 
 - **Never commit secrets** - PyPI tokens, API keys stay in GitHub Secrets
-- **Keep examples updated** - `examples/sample-warehouse/` must match `abc init` output
+- **Keep examples updated** - `examples/sample-warehouse/` must match `abc warehouse init` output (and the public starter warehouse)
 - **Test before release** - Always test CLI commands locally before pushing
 - **Document breaking changes** - Use `feat!:` or `fix!:` commits for breaking changes
 
@@ -197,4 +207,4 @@ Follow the global Python standards from the user's AGENTS.md context:
 
 ---
 
-**Last Updated:** 2026-04-24
+**Last Updated:** 2026-05-03

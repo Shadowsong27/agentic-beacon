@@ -1,8 +1,22 @@
 """Tests for abc list and abc warehouse list commands."""
 
+import os
+import subprocess
+
 import pytest
 from beacon.cli.main import main
 from click.testing import CliRunner
+
+
+def _git_env():
+    return {
+        **os.environ,
+        "GIT_AUTHOR_NAME": "Test",
+        "GIT_AUTHOR_EMAIL": "t@t.local",
+        "GIT_COMMITTER_NAME": "Test",
+        "GIT_COMMITTER_EMAIL": "t@t.local",
+    }
+
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -34,6 +48,20 @@ def warehouse_with_artifacts(tmp_path):
     skill_dir = wh / "skills" / "code-review"
     skill_dir.mkdir()
     (skill_dir / "SKILL.md").write_text("# Skill: Code Review")
+
+    # Init git and commit files (required by sync)
+    env = _git_env()
+    subprocess.run(["git", "init"], cwd=wh, env=env, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "add", "."], cwd=wh, env=env, check=True, capture_output=True
+    )
+    subprocess.run(
+        ["git", "commit", "-m", "init"],
+        cwd=wh,
+        env=env,
+        check=True,
+        capture_output=True,
+    )
 
     return wh
 

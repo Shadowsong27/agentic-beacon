@@ -152,7 +152,7 @@ def check_warehouse_on_main_branch(warehouse_path: Path) -> GitHealthResult:
                 f"  This usually means you have a contribution in progress.\n"
                 f"  Before switching branches, make sure your work is published:\n"
                 f"    - Open a PR or push your branch so the work isn't lost\n"
-                f"    - Or run 'abc contribute' to package it up first\n\n"
+                f"    - Or run 'abc warehouse contribute -m \"…\" --push' to commit and push\n\n"
                 f"  Then switch to main:\n"
                 f"    cd {short_path}\n"
                 f"    git checkout main"

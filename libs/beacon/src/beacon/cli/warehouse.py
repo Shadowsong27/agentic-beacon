@@ -13,9 +13,10 @@ from beacon.core.gitignore import GitignoreManager
 from beacon.core.manifest.workspace import WorkspaceConfig
 from beacon.domains.artifact.agent import update_agent_gitignores
 from beacon.domains.distribution.distributor import WarehouseDistributor
-from beacon.domains.distribution.state import relink_global_sync_state
 from beacon.domains.distribution.upgrader import WarehouseUpgrader
 from beacon.domains.setup.initializer import WarehouseInitializer, ensure_beacon_dir
+from beacon.domains.warehouse.contribute import contribute
+from beacon.domains.warehouse.status import status as warehouse_status
 from beacon.domains.warehouse.validator import WarehouseValidator
 
 console = Console()
@@ -23,7 +24,7 @@ console = Console()
 
 @click.group()
 def warehouse() -> None:
-    """Warehouse management commands (init, connect, list)."""
+    """Warehouse management commands (init, connect, list, contribute, status)."""
     pass
 
 
@@ -197,6 +198,7 @@ def connect(*, path: Path | None) -> None:
 
     Creates .agentic-beacon/config.toml with warehouse connection.
     The warehouse is validated before accepting the connection.
+    Only existing local filesystem paths are accepted.
 
     Example:
         abc warehouse connect --path ~/org-warehouse
@@ -212,11 +214,25 @@ def connect(*, path: Path | None) -> None:
         )
         path = Path(path_str)
 
+    raw_path = str(path)
+
+    # Reject URLs and non-local paths
+    if raw_path.startswith(("http://", "https://", "git://", "file://")):
+        console.print(
+            f"\n[red]Error:[/red] Local path required. URLs are not supported: {raw_path}"
+        )
+        sys.exit(1)
+
+    if raw_path.startswith("git@"):
+        console.print(
+            f"\n[red]Error:[/red] Local path required. Git SSH URLs are not supported: {raw_path}"
+        )
+        sys.exit(1)
+
     warehouse_path = path.expanduser().resolve()
 
     if not warehouse_path.exists():
-        console.print(f"\n[red]Error:[/red] Path not found: {warehouse_path}")
-        console.print("Please check the path and try again.")
+        console.print(f"\n[red]Error:[/red] Path does not exist: {warehouse_path}")
         sys.exit(1)
 
     if not warehouse_path.is_dir():
@@ -250,14 +266,12 @@ def connect(*, path: Path | None) -> None:
             console.print("[green]✓[/green] Updated .gitignore")
         update_agent_gitignores(Path.cwd())
 
-        relink_global_sync_state(warehouse_path)
-
         console.print("\n[bold green]✓ Connected to warehouse[/bold green]")
         console.print(f"  [blue]Location:[/blue] {warehouse_path}")
 
         console.print("\n[bold]Next Steps:[/bold]")
         console.print("  1. Run 'abc setup' to configure artifacts")
-        console.print("  2. Run 'abc sync' to download artifacts")
+        console.print("  2. Run 'abc sync' to sync artifacts")
 
     except Exception as e:
         console.print(f"\n[red]Error:[/red] Failed to save connection: {e}")
@@ -346,6 +360,120 @@ def warehouse_list(*, artifact_type: str | None) -> None:
     if not any_shown:
         label = artifact_type or "artifacts"
         console.print(f"[yellow]No {label} found in warehouse.[/yellow]")
+
+
+@warehouse.command(name="contribute")
+@click.option(
+    "-m",
+    "--message",
+    type=str,
+    required=True,
+    help="Commit message",
+)
+@click.option(
+    "--push",
+    is_flag=True,
+    help="Push the commit to the remote after committing",
+)
+def warehouse_contribute(*, message: str, push: bool) -> None:
+    """Commit changes in the warehouse working tree.
+
+    Stages and commits files tracked by beacon.yaml that have uncommitted
+    changes in the warehouse clone.
+
+    Example:
+        abc warehouse contribute -m "Update python standards"
+        abc warehouse contribute -m "Fix typo" --push
+    """
+    try:
+        result = contribute(
+            project_root=Path.cwd(),
+            message=message,
+            push=push,
+        )
+    except ValueError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        logger.exception("Contribute failed")
+        sys.exit(1)
+
+    if result.status == "no_changes":
+        console.print("[yellow]No uncommitted changes to contribute.[/yellow]")
+        return
+
+    if result.status == "committed":
+        console.print(f"[green]✓ Committed:[/green] {result.committed_sha}")
+        console.print(f"  [blue]Message:[/blue] {result.message}")
+        return
+
+    if result.status == "push_failed":
+        console.print(f"[yellow]⚠ Push failed:[/yellow] {result.message}")
+        console.print(f"  [dim]Commit preserved locally: {result.committed_sha}[/dim]")
+        sys.exit(1)
+
+
+@warehouse.command(name="status")
+@click.argument("path", required=False, type=str)
+@click.option(
+    "--all",
+    "all_paths",
+    is_flag=True,
+    help="Show unfiltered warehouse working-tree status",
+)
+def warehouse_status_cmd(*, path: str | None, all_paths: bool) -> None:
+    """Show warehouse working tree status.
+
+    Without arguments: lists modified files tracked by beacon.yaml.
+    With PATH: shows unified diff for that single file.
+
+    Example:
+        abc warehouse status
+        abc warehouse status knowledge/python/standards.md
+        abc warehouse status --all
+    """
+    try:
+        result = warehouse_status(
+            project_root=Path.cwd(),
+            path=path,
+            all_paths=all_paths,
+        )
+    except ValueError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        logger.exception("Status failed")
+        sys.exit(1)
+
+    if path:
+        if result.diff:
+            console.print(result.diff)
+        else:
+            console.print("[dim]No diff for the specified path.[/dim]")
+        return
+
+    if not result.modifications:
+        console.print("[green]✓ Working tree is clean.[/green]")
+    else:
+        console.print("[bold]Modified files:[/bold]")
+        for entry in result.modifications:
+            status_label = {
+                "M": "[yellow]modified[/yellow]",
+                "A": "[green]added[/green]",
+                "D": "[red]deleted[/red]",
+                "??": "[cyan]untracked[/cyan]",
+            }.get(entry.status, f"[{entry.status}]")
+            console.print(f"  {status_label} {entry.path}")
+
+    if result.has_upstream:
+        if result.ahead or result.behind:
+            console.print(
+                f"\n[dim]Branch is {result.ahead or 0} ahead, {result.behind or 0} behind upstream[/dim]"
+            )
+    else:
+        console.print("\n[yellow]No upstream configured for this branch.[/yellow]")
 
 
 @warehouse.command(name="template-upgrade")

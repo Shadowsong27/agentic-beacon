@@ -1,10 +1,10 @@
 """Unit tests for cleanup_unadopted_artifacts.
 
 Test Cases:
-- TC1: clean files (identical to warehouse) → listed as 'clean', prompt shown, deleted on confirm
-- TC2: locally modified file → listed with '⚠ locally modified' warning
-- TC3: file not in warehouse (locally added) → treated as modified
-- TC4: user declines confirmation → files kept, no deletion
+- TC1: clean file listed and removed on confirm
+- TC2: locally modified file still listed and removed (no special flag shown)
+- TC3: file not in warehouse still listed and removed
+- TC4: user declines confirmation → files kept
 - TC5: directory-level unadoption (skill dir) → all files collected and listed
 - TC6: no local files for unadopted entry → no prompt shown (nothing to do)
 - TC7: skill unadoption with project_root → live agent copies are also deleted
@@ -32,8 +32,8 @@ def _invoke_cleanup(
 
 
 class TestCleanupUnadoptedArtifacts:
-    def test_tc1_clean_file_listed_and_deleted_on_confirm(self, tmp_path):
-        """TC1: clean file shows as 'clean', deleted on confirm."""
+    def test_tc1_clean_file_listed_and_removed_on_confirm(self, tmp_path):
+        """TC1: file is listed and removed on confirm."""
         artifacts = tmp_path / "artifacts"
         warehouse = tmp_path / "warehouse"
         (artifacts / "contexts").mkdir(parents=True)
@@ -49,12 +49,10 @@ class TestCleanupUnadoptedArtifacts:
 
         assert result.exit_code == 0
         assert "foo.md" in result.output
-        assert "clean" in result.output
-        assert "⚠" not in result.output
         assert not (artifacts / "contexts" / "foo.md").exists()
 
-    def test_tc2_modified_file_shows_warning(self, tmp_path):
-        """TC2: locally modified file is flagged with ⚠ warning."""
+    def test_tc2_modified_file_listed_and_removed(self, tmp_path):
+        """TC2: locally modified file is listed and removed without special flag."""
         artifacts = tmp_path / "artifacts"
         warehouse = tmp_path / "warehouse"
         (artifacts / "contexts").mkdir(parents=True)
@@ -67,12 +65,12 @@ class TestCleanupUnadoptedArtifacts:
             ["contexts/foo.md"], artifacts, warehouse, confirm=True
         )
 
-        assert "⚠" in result.output
-        assert "locally modified" in result.output
+        assert result.exit_code == 0
+        assert "foo.md" in result.output
         assert not (artifacts / "contexts" / "foo.md").exists()
 
-    def test_tc3_file_not_in_warehouse_treated_as_modified(self, tmp_path):
-        """TC3: file exists locally but not in warehouse → shown as modified."""
+    def test_tc3_file_not_in_warehouse_still_listed(self, tmp_path):
+        """TC3: file exists locally but not in warehouse → still listed."""
         artifacts = tmp_path / "artifacts"
         warehouse = tmp_path / "warehouse"
         (artifacts / "contexts").mkdir(parents=True)
@@ -84,11 +82,11 @@ class TestCleanupUnadoptedArtifacts:
             ["contexts/local-only.md"], artifacts, warehouse, confirm=True
         )
 
-        assert "⚠" in result.output
-        assert "locally modified" in result.output
+        assert result.exit_code == 0
+        assert "local-only.md" in result.output
 
     def test_tc4_user_declines_files_kept(self, tmp_path):
-        """TC4: user answers 'n' → files are not deleted."""
+        """TC4: user answers 'n' → files are not removed."""
         artifacts = tmp_path / "artifacts"
         warehouse = tmp_path / "warehouse"
         (artifacts / "contexts").mkdir(parents=True)
@@ -136,6 +134,7 @@ class TestCleanupUnadoptedArtifacts:
         result = _invoke_cleanup(["contexts/nonexistent.md"], artifacts, warehouse)
 
         assert result.exit_code == 0
+        assert "Unlink" not in result.output
         assert "Delete" not in result.output
 
     def test_tc7_skill_unadoption_also_deletes_live_agent_copies(self, tmp_path):
@@ -151,18 +150,18 @@ class TestCleanupUnadoptedArtifacts:
         staging_skill.mkdir(parents=True)
         (staging_skill / "SKILL.md").write_text(content)
 
-        # Warehouse copy (for hash comparison → classify as clean)
+        # Warehouse copy
         warehouse_skill = warehouse / "skills" / "my-tool"
         warehouse_skill.mkdir(parents=True)
         (warehouse_skill / "SKILL.md").write_text(content)
 
-        # Live opencode copy — opencode.json sentinel triggers detect_agents for opencode
+        # Live opencode copy
         (project_root / "opencode.json").write_text("{}")
         opencode_skill = project_root / ".opencode" / "skills" / "my-tool"
         opencode_skill.mkdir(parents=True)
         (opencode_skill / "SKILL.md").write_text(content)
 
-        # Live claudecode copy — .claude dir acts as sentinel for claudecode detection
+        # Live claudecode copy
         claudecode_skill = project_root / ".claude" / "skills" / "my-tool"
         claudecode_skill.mkdir(parents=True)
         (claudecode_skill / "SKILL.md").write_text(content)
@@ -177,11 +176,11 @@ class TestCleanupUnadoptedArtifacts:
 
         assert result.exit_code == 0
         assert not (staging_skill / "SKILL.md").exists(), (
-            "staging copy should be deleted"
+            "staging copy should be removed"
         )
         assert not (opencode_skill / "SKILL.md").exists(), (
-            ".opencode live copy should be deleted"
+            ".opencode live copy should be removed"
         )
         assert not (claudecode_skill / "SKILL.md").exists(), (
-            ".claude live copy should be deleted"
+            ".claude live copy should be removed"
         )

@@ -11,7 +11,7 @@ from rich.table import Table
 from beacon.core.file_filter import SKILL_IGNORE_PATTERNS, is_skill_file
 from beacon.core.manifest.beacon import ArtifactsConfig, BeaconManifest
 from beacon.domains.artifact.agent import detect_agents
-from beacon.utils.interaction import ConflictResolution, resolve_conflict
+from beacon.utils.interaction import OverwriteDecision, resolve_conflict
 
 _BUNDLED_DATA_DIR = Path(__file__).parent.parent.parent / "data"
 BUNDLED_SKILLS_DIR = _BUNDLED_DATA_DIR / "skills"
@@ -46,9 +46,9 @@ def bundled_skill_names() -> set[str]:
 def build_skills_paths(project_root: Path) -> dict[str, Path]:
     """Return a mapping of agent name → live skills directory for detected agents.
 
-    This is the shared detection logic used by both `abc delta` and
-    `abc contribute` so both commands always compare/read from the same
-    live agent locations.
+    Shared detection logic used by `abc install` (and historically by
+    per-project skill-drift tooling) so writes/reads hit the same live agent
+    locations.
     """
     skills_paths: dict[str, Path] = {}
     for agent in detect_agents(project_root):
@@ -426,9 +426,9 @@ def wire_skills_post_sync(
         resolution = resolve_conflict(
             force=force, preserve=preserve, has_conflicts=True
         )
-        if resolution == ConflictResolution.SKIP:
+        if resolution == OverwriteDecision.SKIP:
             preserve = True  # skip conflicting live skill files
-        elif resolution == ConflictResolution.NEEDS_CONFIRMATION:
+        elif resolution == OverwriteDecision.NEEDS_CONFIRMATION:
             # Without an interactive prompt, skip conflicts conservatively
             preserve = True
 

@@ -148,8 +148,8 @@ def main():
             [(7, OVERLAY), (48, OVERLAY)],
         ),
         (
-            "       └──────────── abc contribute ◄───────────┘",
-            [(7, SUBTEXT), (21, CYAN), (36, SUBTEXT)],
+            "       └─── abc warehouse contribute ◄──────────┘",
+            [(7, SUBTEXT), (12, CYAN), (37, SUBTEXT)],
         ),
     ]
 

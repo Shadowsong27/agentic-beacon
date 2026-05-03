@@ -37,21 +37,23 @@ def _is_docstring_node(node: ast.AST) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def test_six_domains_exist():
-    """Exactly six domain directories shall exist."""
+def test_expected_domains_exist():
+    """Exactly five domain directories shall exist (contribution removed)."""
     domains_dir = BEACON_SRC / "domains"
     expected = {
         "warehouse",
         "setup",
         "adoption",
         "distribution",
-        "contribution",
         "artifact",
     }
     actual = {
         d.name
         for d in domains_dir.iterdir()
-        if d.is_dir() and not d.name.startswith("_")
+        if d.is_dir()
+        and not d.name.startswith("_")
+        # Ignore stale pycache-only leftovers of deleted domain packages.
+        and any(d.glob("*.py"))
     }
     assert actual == expected, (
         f"Missing or extra domain dirs: {expected.symmetric_difference(actual)}"
@@ -353,6 +355,72 @@ def test_cli_has_no_free_functions():
 
 
 # ---------------------------------------------------------------------------
+# TC9b: cli/warehouse.py handlers have at most ONE domain call
+# ---------------------------------------------------------------------------
+
+
+def test_warehouse_cli_handlers_have_one_domain_call():
+    """
+    Each top-level click command function in cli/warehouse.py shall contain
+    at most ONE call into a domains.* module (plus argument parsing and
+    output formatting).
+    """
+    cli_file = BEACON_SRC / "cli" / "warehouse.py"
+    tree = _parse_file(cli_file)
+    assert tree is not None, f"Could not parse {cli_file}"
+
+    def _is_click_command_decorator(node: ast.expr) -> bool:
+        """Heuristic: is this decorator a click command registration?"""
+        if isinstance(node, ast.Call):
+            func = node.func
+            if isinstance(func, ast.Attribute):
+                return func.attr == "command"
+            if isinstance(func, ast.Name):
+                return func.id == "command"
+        return False
+
+    failures: list[str] = []
+
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.FunctionDef):
+            continue
+        is_handler = any(_is_click_command_decorator(d) for d in node.decorator_list)
+        if not is_handler:
+            continue
+
+        domain_calls = 0
+        for child in ast.walk(node):
+            if isinstance(child, ast.Call):
+                # Check for module.function pattern where module starts with domains
+                func = child.func
+                if isinstance(func, ast.Attribute):
+                    # e.g. some_module.some_function()
+                    # Walk up the attribute chain to find the module name
+                    attr_chain = []
+                    obj = func
+                    while isinstance(obj, ast.Attribute):
+                        attr_chain.append(obj.attr)
+                        obj = obj.value
+                    if isinstance(obj, ast.Name):
+                        attr_chain.append(obj.id)
+                    attr_chain.reverse()
+                    # Check if it's a domains import: domains.X.Y or beacon.domains.X.Y
+                    if len(attr_chain) >= 2:
+                        mod_name = ".".join(attr_chain[:-1])
+                        if "domains" in mod_name:
+                            domain_calls += 1
+
+        if domain_calls > 1:
+            failures.append(
+                f"{cli_file}::{node.name}: has {domain_calls} domain calls, "
+                f"max allowed is 1"
+            )
+
+    if failures:
+        pytest.fail("\n" + "\n".join(failures))
+
+
+# ---------------------------------------------------------------------------
 # TC10: domains/ and core/ are Click/Rich/sys.exit-free
 #
 # Waivers below document known violations pending cleanup.
@@ -369,9 +437,6 @@ _TC10_WAIVERS: dict[str, set[str]] = {
     "domains/adoption/apply.py": {"click", "rich"},
     "domains/artifact/agent.py": {"click", "rich", "sys.exit"},
     "domains/artifact/skill.py": {"rich", "sys.exit"},
-    "domains/contribution/contributor.py": {"rich"},
-    "domains/contribution/delta_view.py": {"rich", "sys.exit"},
-    "domains/distribution/state.py": {"click", "rich"},
     "domains/distribution/upgrader.py": {"click"},
     "domains/setup/wiring.py": {"click", "rich"},
     "domains/warehouse/catalog.py": {"rich"},

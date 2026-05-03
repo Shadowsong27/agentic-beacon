@@ -621,8 +621,8 @@ Connect the project to a warehouse and declare which artifacts to use:
 
 ```bash
 abc warehouse connect --path ~/org-warehouse
-abc setup --manual   # or --agent-assisted
-# Edit .agentic-beacon/beacon.yaml to choose contexts, knowledge, and skills
+abc setup
+abc adopt            # choose contexts, knowledge, and skills
 abc sync
 ```
 
@@ -637,22 +637,25 @@ Agents automatically load all configured contexts on session start. Developers d
 
 ### 3. Update (Periodic sync)
 
-Pull the latest warehouse changes and re-sync:
+Pull the latest warehouse changes:
 
 ```bash
 cd ~/org-warehouse && git pull
-cd ~/my-project && abc sync    # or abc update to force overwrite
+# No `abc sync` needed per-project unless beacon.yaml changed — projects read
+# warehouse files through symlinks, so the new warehouse content is visible
+# immediately after the pull.
+cd ~/my-project && abc sync    # run only if beacon.yaml was modified or symlinks drifted
 ```
 
-Version conflicts (files you've edited locally) are flagged by `abc delta` before syncing.
+Uncommitted warehouse edits (files you've modified via project symlinks) are surfaced by `abc warehouse status` before you pull.
 
 ### 4. Contribute (Give back improvements)
 
 When you improve a context, knowledge file, or skill:
-- Test locally in your project
-- Review local vs warehouse changes with `abc delta`
-- Submit a PR to the warehouse repository
-- Once merged, available to all teams via their next sync
+- Test locally in your project (edits via `.agentic-beacon/artifacts/<path>` land directly in the warehouse working tree)
+- Review uncommitted changes with `abc warehouse status`
+- Commit with `abc warehouse contribute -m "…"` (optionally `--push`), or open a PR in the warehouse repository
+- Once pushed and pulled by teammates, the updated content is immediately visible across their projects
 
 ### Technical Notes
 

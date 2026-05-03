@@ -1,25 +1,21 @@
 """Tests for abc agents sync command.
 
 abc agents sync reads the connected warehouse, finds every agent definition
-under agents/, and installs them into global tool directories. It operates
-at the user level (global agent dirs), not the project level.
+under agents/, and links them into global tool directories. It operates at
+the user level (global agent dirs), not the project level.
 
 Test Cases:
-- TC1: Installs agent to opencode global dir
-- TC2: Installs agent to claudecode global dir
+- TC1: Links agent to opencode global dir
+- TC2: Links agent to claudecode global dir
 - TC3: Both tools present → both get the agent
 - TC4: No agents/ dir in warehouse → silent no-op
 - TC5: Already up-to-date → idempotent
 - TC6: --force overwrites conflicting agent without prompting
-- TC7: --preserve skips conflicting agent
-- TC8: Non-interactive mode with conflict → skipped automatically
-- TC9: No .agentic-beacon → error
-- TC10: --force and --preserve are mutually exclusive
-- TC11: Sync updates sync-state HEAD even when agent content is already identical
+- TC7: Non-interactive mode with conflict → skipped automatically
+- TC8: No .agentic-beacon → error
+- TC9: Unknown --preserve flag is rejected
+- TC10: Warehouse edits are visible through global agent symlink
 """
-
-import json
-import subprocess
 
 import pytest
 from beacon.cli.main import main
@@ -63,7 +59,7 @@ def connected_project(tmp_path, warehouse_with_agents, monkeypatch):
 
 
 def test_agents_sync_installs_to_opencode(connected_project, isolated_home):
-    """TC1: abc agents sync writes agent to ~/.config/opencode/agents/."""
+    """TC1: abc agents sync links agent to ~/.config/opencode/agents/."""
     (isolated_home / ".config" / "opencode").mkdir(parents=True)
     project, wh = connected_project
 
@@ -72,7 +68,8 @@ def test_agents_sync_installs_to_opencode(connected_project, isolated_home):
 
     assert result.exit_code == 0, result.output
     dest = isolated_home / ".config" / "opencode" / "agents" / "code-reviewer.md"
-    assert dest.exists()
+    assert dest.is_symlink()
+    assert dest.resolve() == (wh / "agents" / "code-reviewer.md").resolve()
     assert dest.read_text() == SAMPLE_AGENT_MD
 
 
@@ -82,7 +79,7 @@ def test_agents_sync_installs_to_opencode(connected_project, isolated_home):
 
 
 def test_agents_sync_installs_to_claudecode(connected_project, isolated_home):
-    """TC2: abc agents sync writes agent to ~/.claude/agents/."""
+    """TC2: abc agents sync links agent to ~/.claude/agents/."""
     (isolated_home / ".claude").mkdir(parents=True)
     project, wh = connected_project
 
@@ -91,7 +88,8 @@ def test_agents_sync_installs_to_claudecode(connected_project, isolated_home):
 
     assert result.exit_code == 0, result.output
     dest = isolated_home / ".claude" / "agents" / "code-reviewer.md"
-    assert dest.exists()
+    assert dest.is_symlink()
+    assert dest.resolve() == (wh / "agents" / "code-reviewer.md").resolve()
     assert dest.read_text() == SAMPLE_AGENT_MD
 
 
@@ -110,10 +108,14 @@ def test_agents_sync_installs_to_both_tools(connected_project, isolated_home):
     result = runner.invoke(main, ["agents", "sync", "--skip-git-check"])
 
     assert result.exit_code == 0, result.output
-    assert (
+    opencode_dest = (
         isolated_home / ".config" / "opencode" / "agents" / "code-reviewer.md"
-    ).exists()
-    assert (isolated_home / ".claude" / "agents" / "code-reviewer.md").exists()
+    )
+    claude_dest = isolated_home / ".claude" / "agents" / "code-reviewer.md"
+    assert opencode_dest.is_symlink()
+    assert claude_dest.is_symlink()
+    assert opencode_dest.resolve() == (wh / "agents" / "code-reviewer.md").resolve()
+    assert claude_dest.resolve() == (wh / "agents" / "code-reviewer.md").resolve()
     assert "code-reviewer" in result.output
 
 
@@ -154,17 +156,23 @@ def test_agents_sync_no_agents_dir_is_noop(tmp_path, monkeypatch, isolated_home)
 
 
 def test_agents_sync_idempotent(connected_project, isolated_home):
-    """TC5: Running agents sync twice does not re-write already-current agent files."""
+    """TC5: Running agents sync twice does not re-link already-current agents."""
     opencode_agents = isolated_home / ".config" / "opencode" / "agents"
     opencode_agents.mkdir(parents=True)
-    (opencode_agents / "code-reviewer.md").write_text(SAMPLE_AGENT_MD)
-    mtime_before = (opencode_agents / "code-reviewer.md").stat().st_mtime
-
     project, wh = connected_project
-    runner = CliRunner()
-    runner.invoke(main, ["agents", "sync", "--skip-git-check"])
+    dest = opencode_agents / "code-reviewer.md"
 
-    mtime_after = (opencode_agents / "code-reviewer.md").stat().st_mtime
+    runner = CliRunner()
+    result = runner.invoke(main, ["agents", "sync", "--skip-git-check"])
+    assert result.exit_code == 0, result.output
+
+    assert dest.is_symlink()
+    mtime_before = dest.lstat().st_mtime
+
+    result = runner.invoke(main, ["agents", "sync", "--skip-git-check"])
+    assert result.exit_code == 0, result.output
+
+    mtime_after = dest.lstat().st_mtime
     assert mtime_before == mtime_after
 
 
@@ -184,23 +192,26 @@ def test_agents_sync_force_overwrites_conflict(connected_project, isolated_home)
     result = runner.invoke(main, ["agents", "sync", "--force", "--skip-git-check"])
 
     assert result.exit_code == 0, result.output
-    assert (opencode_agents / "code-reviewer.md").read_text() == SAMPLE_AGENT_MD
+    dest = opencode_agents / "code-reviewer.md"
+    assert dest.is_symlink()
+    assert dest.resolve() == (wh / "agents" / "code-reviewer.md").resolve()
+    assert dest.read_text() == SAMPLE_AGENT_MD
 
 
 # ---------------------------------------------------------------------------
-# TC7: --preserve skips conflicting agent
+# TC7: Non-interactive mode with conflict → skipped automatically
 # ---------------------------------------------------------------------------
 
 
-def test_agents_sync_preserve_skips_conflict(connected_project, isolated_home):
-    """TC7: --preserve leaves diverged local agent files untouched."""
+def test_agents_sync_non_interactive_skips_conflict(connected_project, isolated_home):
+    """TC7: In non-interactive mode, conflicts are skipped without prompting."""
     opencode_agents = isolated_home / ".config" / "opencode" / "agents"
     opencode_agents.mkdir(parents=True)
     (opencode_agents / "code-reviewer.md").write_text(SAMPLE_AGENT_MD_LOCAL)
 
     project, wh = connected_project
     runner = CliRunner()
-    result = runner.invoke(main, ["agents", "sync", "--preserve", "--skip-git-check"])
+    result = runner.invoke(main, ["agents", "sync", "--skip-git-check"])
 
     assert result.exit_code == 0, result.output
     assert (opencode_agents / "code-reviewer.md").read_text() == SAMPLE_AGENT_MD_LOCAL
@@ -208,32 +219,12 @@ def test_agents_sync_preserve_skips_conflict(connected_project, isolated_home):
 
 
 # ---------------------------------------------------------------------------
-# TC8: Non-interactive mode with conflict → skipped automatically
-# ---------------------------------------------------------------------------
-
-
-def test_agents_sync_non_interactive_skips_conflict(connected_project, isolated_home):
-    """TC8: In non-interactive mode, conflicts are skipped without prompting."""
-    opencode_agents = isolated_home / ".config" / "opencode" / "agents"
-    opencode_agents.mkdir(parents=True)
-    (opencode_agents / "code-reviewer.md").write_text(SAMPLE_AGENT_MD_LOCAL)
-
-    project, wh = connected_project
-    runner = CliRunner()
-    # CliRunner uses non-interactive stdin by default
-    result = runner.invoke(main, ["agents", "sync", "--skip-git-check"])
-
-    assert result.exit_code == 0, result.output
-    assert (opencode_agents / "code-reviewer.md").read_text() == SAMPLE_AGENT_MD_LOCAL
-
-
-# ---------------------------------------------------------------------------
-# TC9: No .agentic-beacon → error
+# TC8: No .agentic-beacon → error
 # ---------------------------------------------------------------------------
 
 
 def test_agents_sync_no_beacon_dir_errors(tmp_path, monkeypatch, isolated_home):
-    """TC9: Running agents sync outside a connected project exits with an error."""
+    """TC8: Running agents sync outside a connected project exits with an error."""
     project = tmp_path / "project"
     project.mkdir()
     monkeypatch.chdir(project)
@@ -246,98 +237,85 @@ def test_agents_sync_no_beacon_dir_errors(tmp_path, monkeypatch, isolated_home):
 
 
 # ---------------------------------------------------------------------------
-# TC11: Sync updates sync-state HEAD even when agent content is already identical
+# TC9: Unknown --preserve flag is rejected
 # ---------------------------------------------------------------------------
 
 
-def test_agents_sync_updates_sync_state_when_content_unchanged(
-    connected_project, isolated_home
-):
-    """TC11: sync updates sync-state HEAD even when agent file is already up-to-date.
-
-    Regression test for: warehouse advances (e.g. a commit that doesn't touch agents),
-    content stays identical, but 'abc delta' keeps reporting agents as stale because
-    agents sync skipped writing the file and never bumped the recorded HEAD.
-    """
-
+def test_agents_sync_preserve_flag_is_rejected(connected_project, isolated_home):
+    """TC9: --preserve is no longer accepted on abc agents sync."""
     project, wh = connected_project
+    runner = CliRunner()
+    result = runner.invoke(main, ["agents", "sync", "--preserve", "--skip-git-check"])
 
-    # Make wh a real git repo so we can get a HEAD SHA
-    subprocess.run(["git", "init", str(wh)], check=True, capture_output=True)
-    subprocess.run(
-        ["git", "-C", str(wh), "config", "user.email", "test@test.com"],
-        check=True,
-        capture_output=True,
-    )
-    subprocess.run(
-        ["git", "-C", str(wh), "config", "user.name", "Test"],
-        check=True,
-        capture_output=True,
-    )
-    subprocess.run(["git", "-C", str(wh), "add", "."], check=True, capture_output=True)
-    subprocess.run(
-        ["git", "-C", str(wh), "commit", "-m", "init"],
-        check=True,
-        capture_output=True,
-    )
-    current_head = subprocess.run(
-        ["git", "-C", str(wh), "rev-parse", "HEAD"],
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.strip()
+    assert result.exit_code != 0
+    assert "No such option: --preserve" in result.output
 
-    # Pre-install the agent with the correct content (no write needed on sync)
-    opencode_agents = isolated_home / ".config" / "opencode" / "agents"
-    opencode_agents.mkdir(parents=True)
-    (opencode_agents / "code-reviewer.md").write_text(SAMPLE_AGENT_MD)
 
-    # Pre-populate sync-state with a stale (old) warehouse HEAD
-    state_file = isolated_home / ".config" / "agentic-beacon" / "sync-state.json"
-    state_file.parent.mkdir(parents=True, exist_ok=True)
-    state_file.write_text(
-        json.dumps(
-            {
-                "version": 1,
-                "warehouses": {
-                    str(wh): {
-                        "agents/code-reviewer.md": {
-                            "content_hash": "oldhash",
-                            "warehouse_head": "old_sha_before_advance",
-                            "installed_at": "2026-01-01T00:00:00+00:00",
-                        }
-                    }
-                },
-            }
-        )
-    )
+# ---------------------------------------------------------------------------
+# TC10: Warehouse edits are visible through global agent symlink
+# ---------------------------------------------------------------------------
+
+
+def test_agents_sync_reflects_warehouse_edits(connected_project, isolated_home):
+    """TC10: global agent symlink reads the warehouse file directly."""
+    project, wh = connected_project
+    (isolated_home / ".config" / "opencode").mkdir(parents=True)
 
     runner = CliRunner()
     result = runner.invoke(main, ["agents", "sync", "--skip-git-check"])
     assert result.exit_code == 0, result.output
 
-    # Sync-state HEAD must be updated to the current warehouse HEAD
-    updated_state = json.loads(state_file.read_text())
-    entry = updated_state["warehouses"][str(wh)]["agents/code-reviewer.md"]
-    assert entry["warehouse_head"] == current_head, (
-        f"Expected sync-state HEAD to be updated to {current_head!r}, "
-        f"got {entry['warehouse_head']!r}. "
-        "'abc delta' would still report this agent as stale."
-    )
+    dest = isolated_home / ".config" / "opencode" / "agents" / "code-reviewer.md"
+    (wh / "agents" / "code-reviewer.md").write_text("Updated in warehouse.\n")
+
+    assert dest.is_symlink()
+    assert dest.read_text() == "Updated in warehouse.\n"
 
 
-# ---------------------------------------------------------------------------
-# TC10: --force and --preserve are mutually exclusive
-# ---------------------------------------------------------------------------
-
-
-def test_agents_sync_force_and_preserve_are_exclusive(connected_project, isolated_home):
-    """TC10: Passing both --force and --preserve is rejected."""
+def test_agents_sync_replaces_identical_regular_file_with_symlink(
+    connected_project, isolated_home
+):
+    """Existing copy with matching content is migrated to a warehouse symlink."""
     project, wh = connected_project
-    runner = CliRunner()
-    result = runner.invoke(
-        main, ["agents", "sync", "--force", "--preserve", "--skip-git-check"]
-    )
+    opencode_agents = isolated_home / ".config" / "opencode" / "agents"
+    opencode_agents.mkdir(parents=True)
+    dest = opencode_agents / "code-reviewer.md"
+    dest.write_text(SAMPLE_AGENT_MD)
 
-    assert result.exit_code != 0
-    assert "mutually exclusive" in result.output
+    runner = CliRunner()
+    result = runner.invoke(main, ["agents", "sync", "--skip-git-check"])
+
+    assert result.exit_code == 0, result.output
+    assert dest.is_symlink()
+    assert dest.resolve() == (wh / "agents" / "code-reviewer.md").resolve()
+
+
+def test_agents_sync_repairs_broken_symlink(connected_project, isolated_home):
+    """Broken global agent symlinks are repaired to the warehouse file."""
+    project, wh = connected_project
+    opencode_agents = isolated_home / ".config" / "opencode" / "agents"
+    opencode_agents.mkdir(parents=True)
+    dest = opencode_agents / "code-reviewer.md"
+    dest.symlink_to(wh / "agents" / "missing.md")
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["agents", "sync", "--skip-git-check"])
+
+    assert result.exit_code == 0, result.output
+    assert dest.is_symlink()
+    assert dest.resolve() == (wh / "agents" / "code-reviewer.md").resolve()
+
+
+def test_agents_sync_ignores_agents_readme(connected_project, isolated_home):
+    """The warehouse agents/README.md scaffold is not an agent definition."""
+    project, wh = connected_project
+    (wh / "agents" / "README.md").write_text("# Agents docs\n")
+    (isolated_home / ".config" / "opencode").mkdir(parents=True)
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["agents", "sync", "--skip-git-check"])
+
+    assert result.exit_code == 0, result.output
+    assert not (
+        isolated_home / ".config" / "opencode" / "agents" / "README.md"
+    ).exists()

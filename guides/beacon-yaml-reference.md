@@ -25,7 +25,7 @@ artifacts:
   contexts:
     - <pattern-or-path>
 
-# Optional — suppress skills from abc delta and abc contribute
+# Optional — suppress skills from warehouse-scoped status reports
 ignore:
   skills:
     - "openspec-*"        # fnmatch glob patterns
@@ -83,7 +83,7 @@ artifacts:
 
 ## `ignore`
 
-Suppress skills from appearing in `abc delta` and `abc contribute`. Useful for skills installed by external tools (e.g. OpenSpec) that you don't want to track through the warehouse.
+Suppress skills from appearing in warehouse-scoped status reports (e.g. `abc warehouse status`) and from contribute-path selection. Useful for skills installed by external tools (e.g. OpenSpec) that you don't want to track through the warehouse.
 
 ```yaml
 ignore:
@@ -170,13 +170,12 @@ An empty `knowledge` or `skills` list is valid — those artifact types simply w
 
 | Command | Effect on `beacon.yaml` |
 |---------|------------------------|
-| `abc setup --manual` | Creates an empty template |
-| `abc setup --agent-assisted` | Creates template + `warehouse-catalog.md` to help fill it |
-| `abc install <artifact>` | Copies and wires one artifact, then adds it to `beacon.yaml` |
-| `abc sync` | Reads `beacon.yaml`, copies and wires all matching artifacts |
-| `abc sync --prune` | Reads `beacon.yaml`, removes files no longer listed |
-| `abc delta` | Reads `beacon.yaml` to determine which files to compare |
-| `abc update` | Reads `beacon.yaml`, force-overwrites all files |
+| `abc setup` | Creates an empty commented template |
+| `abc adopt` | Lets you select warehouse artifacts and adds them to `beacon.yaml` |
+| `abc sync` | Reads `beacon.yaml`, creates symlinks into the warehouse clone for every matching artifact |
+| `abc sync --dry-run` | Reads `beacon.yaml`, prints the symlink operations that would be performed |
+| `abc warehouse status` | Reads `beacon.yaml` to scope its git-status/diff report to declared paths |
+| `abc warehouse contribute` | Reads `beacon.yaml` to scope the commit's staged paths |
 
 ---
 
@@ -184,7 +183,7 @@ An empty `knowledge` or `skills` list is valid — those artifact types simply w
 
 `abc sync` validates `beacon.yaml` before proceeding. It will error if:
 
-- The file does not exist → run `abc setup --manual`
+- The file does not exist → run `abc setup`
 - The YAML is malformed (syntax error)
 - The `artifacts` key is missing
 - Any of `knowledge`, `skills`, or `contexts` is not a list
@@ -205,7 +204,6 @@ A warning (not an error) is shown for:
 ```
 .agentic-beacon/config.toml
 .agentic-beacon/artifacts/
-.agentic-beacon/warehouse-catalog.md
 ```
 
 The `.gitignore` entries are added automatically when you run `abc warehouse connect` and `abc sync`.
@@ -216,19 +214,19 @@ The `.gitignore` entries are added automatically when you run `abc warehouse con
 
 ```bash
 # Create beacon.yaml
-abc setup --manual
+abc setup
 
-# Populate it with agent assistance
-abc setup --agent-assisted
+# Add artifacts from the warehouse
+abc adopt
 
 # Apply the configuration
 abc sync
 
-# Preview differences between local and warehouse
-abc delta
+# See uncommitted warehouse edits (scoped by beacon.yaml)
+abc warehouse status
 
-# Check what's configured and synced
-abc status
+# Commit edits back to the warehouse
+abc warehouse contribute -m "…" --push
 ```
 
 ---
@@ -236,5 +234,4 @@ abc status
 ## Next Steps
 
 - **[Advanced Patterns](./advanced-patterns.md)** — Glob syntax, sync flags, delta workflow
-- **[Agent-Assisted Setup](./agent-assisted-setup.md)** — Let an AI agent help fill in `beacon.yaml`
 - **[Creating Skills](./creating-skills.md)** — Build and add skills to your warehouse
