@@ -618,7 +618,11 @@ def test_sync_does_not_report_installed_skills_on_second_run(
 def test_sync_reports_installed_skills_again_after_warehouse_update(
     full_sync_project, monkeypatch, valid_warehouse
 ):
-    """Skills should be re-installed (and reported) when warehouse content changes."""
+    """After warehouse skill edits, the live .opencode/skills/ copy must reflect
+    the update. Under the symlink-based wiring model the live skill file is a
+    symlink into the warehouse, so warehouse edits are visible immediately
+    without needing sync to rewrite anything — but sync must remain idempotent
+    and the live content must match the warehouse."""
     project, runner = full_sync_project
     monkeypatch.chdir(project)
     (project / "opencode.json").write_text(json.dumps({}))
@@ -648,9 +652,10 @@ def test_sync_reports_installed_skills_again_after_warehouse_update(
     result_second = runner.invoke(main, ["sync", "--force"])
 
     assert result_second.exit_code == 0
-    assert "installed" in result_second.output.lower()
-    # Verify the updated content was actually propagated
+    # Verify the updated content is visible through the live skill file (symlink).
     installed_skill = project / ".opencode" / "skills" / "my-skill" / "SKILL.md"
+    assert installed_skill.exists()
+    assert installed_skill.is_symlink()
     assert "New Section" in installed_skill.read_text()
 
 

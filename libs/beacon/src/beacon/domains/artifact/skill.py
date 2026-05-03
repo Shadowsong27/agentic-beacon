@@ -1,6 +1,7 @@
 """Skill operations for the artifact domain."""
 
 import fnmatch
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -319,28 +320,92 @@ def _extract_skill_description(content: str, skill_name: str = "") -> str:
     return f"Use the {skill_name} skill" if skill_name else ""
 
 
+def _resolve_skill_source(src_file: Path) -> tuple[Path, bool]:
+    """Resolve the true warehouse source for a skill file under artifacts/skills/.
+
+    Returns (target_path, is_warehouse_symlink).
+
+    - If src_file is a symlink, read its target (the warehouse file) and return
+      (warehouse_path, True). artifacts/skills/ symlinks use absolute targets,
+      so the returned path is absolute and stable.
+    - If src_file is a regular file (bundled skill inside the installed
+      agentic-beacon package), return (src_file, False).
+    """
+    if src_file.is_symlink():
+        target = os.readlink(src_file)
+        return Path(target), True
+    return src_file, False
+
+
+def _write_skill_file(dest_file: Path, target: Path, use_symlink: bool) -> bool:
+    """Install a single skill file at dest_file.
+
+    Warehouse skills are installed as symlinks pointing at target (the warehouse
+    source) so edits propagate without re-sync. Bundled skills are installed as
+    regular-file copies because their source path (site-packages) is unstable
+    across package upgrades.
+
+    Returns True if dest_file was created or changed, False if already correct.
+    Cleans obstacles (wrong type, stale symlink, differing content) before writing.
+    """
+    dest_file.parent.mkdir(parents=True, exist_ok=True)
+
+    if use_symlink:
+        target_str = str(target)
+        if dest_file.is_symlink():
+            if os.readlink(dest_file) == target_str:
+                return False
+            dest_file.unlink()
+        elif dest_file.exists():
+            # Regular file from a previous copy-based install — replace with symlink.
+            dest_file.unlink()
+        dest_file.symlink_to(target_str)
+        return True
+
+    # Bundled skill path: copy content (bytes — skills may ship binary helpers).
+    # Replace any pre-existing symlink.
+    content = target.read_bytes()
+    if dest_file.is_symlink():
+        dest_file.unlink()
+    elif dest_file.exists():
+        if dest_file.read_bytes() == content:
+            return False
+        # Fall through to overwrite.
+    dest_file.write_bytes(content)
+    return True
+
+
 def wire_single_skill(
     project_root: Path,
     skill_name: str,
     skill_src_dir: Path,
     agent: str,
 ) -> bool:
-    """Copy all files from skill_src_dir into the agent's live skill directory.
+    """Install a skill into the agent's live skill directory.
 
-    Handles both Claude Code (.claude/skills/<name>/) and OpenCode
-    (.opencode/skills/<name>/), regenerating the OpenCode command stub from
-    SKILL.md frontmatter when present.
+    For warehouse-backed skills (skill_src_dir inside .agentic-beacon/artifacts/
+    containing symlinks to the warehouse clone), creates per-file symlinks
+    pointing directly at the warehouse source. This means edits in the
+    warehouse propagate to every project instantly without re-running abc sync.
 
-    Returns True if any file was written or updated.
+    For abc-bundled skills (skill_src_dir inside the installed agentic-beacon
+    package containing regular files), copies content instead of symlinking,
+    because site-packages paths are unstable across package upgrades.
+
+    Always regenerates the OpenCode command stub from SKILL.md frontmatter so
+    each skill is available as a slash command. Runs unconditionally per call
+    so the stub stays current with the source description.
+
+    Returns True if any file was written, updated, or relinked.
     """
     if agent == "opencode":
         dest_root = project_root / ".opencode" / "skills" / skill_name
     else:
         dest_root = project_root / ".claude" / "skills" / skill_name
 
-    # A broken symlink (or non-directory) at dest_root causes mkdir(exist_ok=True)
-    # to raise EEXIST because os.path.isdir() returns False for non-directories.
-    # Remove the obstacle so we always create a real directory.
+    # A symlink or non-directory at dest_root blocks mkdir(exist_ok=True) because
+    # os.path.isdir() returns False for non-directories. Clear any obstacle so
+    # dest_root is always a real directory.
     if dest_root.is_symlink() or (dest_root.exists() and not dest_root.is_dir()):
         dest_root.unlink()
     dest_root.mkdir(parents=True, exist_ok=True)
@@ -351,13 +416,12 @@ def wire_single_skill(
             continue
         rel = src_file.relative_to(skill_src_dir)
         dest_file = dest_root / rel
-        dest_file.parent.mkdir(parents=True, exist_ok=True)
-        content = src_file.read_text(encoding="utf-8")
-        if not dest_file.exists() or dest_file.read_text(encoding="utf-8") != content:
-            dest_file.write_text(content, encoding="utf-8")
+        target, use_symlink = _resolve_skill_source(src_file)
+        if _write_skill_file(dest_file, target, use_symlink):
             any_written = True
 
-    # OpenCode: regenerate command stub from SKILL.md frontmatter
+    # OpenCode: regenerate command stub from SKILL.md frontmatter every call so
+    # the stub description stays in sync with the source SKILL.md.
     if agent == "opencode":
         skill_md = skill_src_dir / "SKILL.md"
         if skill_md.exists():
@@ -403,7 +467,12 @@ def wire_skills_post_sync(
     if not skill_dirs:
         return [], []
 
-    # Compute wiring conflicts: any live skill file that differs from what we'd write
+    # Compute wiring conflicts: any live regular file (not a symlink) that
+    # differs from the warehouse source. Existing symlinks are never conflicts:
+    # a wrong-target symlink is just a repair, which wire_single_skill handles
+    # idempotently. Regular files at the destination indicate the user (or a
+    # pre-symlink version of abc) wrote content locally, and the user should
+    # decide whether to overwrite.
     wiring_conflicts: list[tuple[str, str, str]] = []  # (agent, skill_name, dest_path)
     for skill_dir in skill_dirs:
         name = skill_dir.name
@@ -411,7 +480,6 @@ def wire_skills_post_sync(
             if not is_skill_file(src_file):
                 continue
             rel_within_skill = src_file.relative_to(skill_dir)
-            content = src_file.read_text(encoding="utf-8")
             for agent in agents:
                 if agent == "opencode":
                     dest = (
@@ -419,7 +487,20 @@ def wire_skills_post_sync(
                     )
                 else:
                     dest = project_root / ".claude" / "skills" / name / rel_within_skill
-                if dest.exists() and dest.read_text(encoding="utf-8") != content:
+                # Skip if dest doesn't exist, or is a symlink (symlinks are
+                # repaired idempotently in wire_single_skill).
+                if dest.is_symlink() or not dest.exists():
+                    continue
+                # Regular file at dest — conflict only if content differs from warehouse.
+                # Binary files (no UTF-8 content) are treated as non-conflicts for the
+                # prompt and left to wire_single_skill to resolve idempotently; this
+                # avoids failing the whole wiring pass on a single binary script.
+                try:
+                    warehouse_content = src_file.read_text(encoding="utf-8")
+                    local_content = dest.read_text(encoding="utf-8")
+                except (OSError, UnicodeDecodeError):
+                    continue
+                if local_content != warehouse_content:
                     wiring_conflicts.append((agent, name, str(dest)))
 
     if wiring_conflicts:
