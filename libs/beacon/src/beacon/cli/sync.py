@@ -88,6 +88,17 @@ def sync(
     def log_fn(msg: str) -> None:
         console.print(f"  {msg}")
 
+    def _resolve(rel_path: str, diff: str) -> str:
+        console.print(f"\nModified file: {rel_path}")
+        if diff:
+            console.print(diff)
+        choice = click.prompt(
+            "[c]ontribute / [d]iscard / [s]kip",
+            type=click.Choice(["c", "d", "s"], case_sensitive=False),
+            default="s",
+        )
+        return {"c": "contribute", "d": "discard", "s": "skip"}[choice.lower()]
+
     try:
         result = run_sync(
             force=force,
@@ -97,6 +108,7 @@ def sync(
             contribute_local=contribute_local,
             discard_local=discard_local,
             log_fn=log_fn if (verbose_flag or dry_run) else None,
+            resolve_callback=_resolve if is_interactive() else None,
         )
     except BeaconSyncError as e:
         console.print(f"[red]Error:[/red] {e}")

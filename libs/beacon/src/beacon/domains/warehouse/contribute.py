@@ -11,7 +11,7 @@ from pathlib import Path
 from loguru import logger
 
 from beacon.core.preconditions import ensure_sync_ready
-from beacon.domains.warehouse._tracked_paths import _get_tracked_paths
+from beacon.domains.warehouse._tracked_paths import get_tracked_paths
 
 
 @dataclass
@@ -60,7 +60,7 @@ def contribute(
     warehouse_path = ensure_sync_ready(project_root)
 
     beacon_yaml = project_root / ".agentic-beacon" / "beacon.yaml"
-    tracked_paths = _get_tracked_paths(warehouse_path, beacon_yaml)
+    tracked_paths = get_tracked_paths(warehouse_path, beacon_yaml)
 
     if not tracked_paths:
         return ContributeResult(status="no_changes")

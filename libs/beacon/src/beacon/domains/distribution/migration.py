@@ -1,26 +1,27 @@
 """Migration from copy-based artifact trees to symlink-based trees.
 
-Inline migration runs inside abc sync.  When regular files are detected under
-.agentic-beacon/artifacts/ at paths that should be symlinks, the user is prompted
-to contribute or discard local changes.
+Inline migration runs inside abc sync. When regular files are detected under
+.agentic-beacon/artifacts/ at paths that should be symlinks, the caller is
+asked to resolve each modified file via a resolver callback.
 """
 
 import difflib
 import shutil
-import sys
+from collections.abc import Callable
 from pathlib import Path
-
-import click
+from typing import Literal
 
 from beacon.domains.distribution.sync_engine import SyncEngine
 
+# Callback signature: given (relative path, unified diff string), return the resolution.
+# "contribute" — write local content into warehouse, then symlink
+# "discard"    — delete local file, create symlink pointing at warehouse
+# "skip"       — leave as-is (file remains a regular file, will be reported unresolved)
+Resolution = Literal["contribute", "discard", "skip"]
+ResolveCallback = Callable[[str, str], Resolution]
 
-def _is_tty() -> bool:
-    """Return True if stdin appears to be a TTY."""
-    return sys.stdin.isatty()
 
-
-def _diff_preview(local_file: Path, warehouse_file: Path) -> str:
+def diff_preview(local_file: Path, warehouse_file: Path) -> str:
     """Return a unified diff string between local and warehouse files."""
     try:
         local_lines = local_file.read_text().splitlines()
@@ -38,33 +39,23 @@ def _diff_preview(local_file: Path, warehouse_file: Path) -> str:
     return "\n".join(diff)
 
 
-def _prompt_resolution(rel_path: str, diff: str) -> str:
-    """Prompt the user to contribute, discard, or skip a modified file.
-
-    Returns one of: "contribute", "discard", "skip".
-    """
-    click.echo(f"\nModified file: {rel_path}")
-    if diff:
-        click.echo(diff)
-    choice = click.prompt(
-        "[c]ontribute / [d]iscard / [s]kip",
-        type=click.Choice(["c", "d", "s"], case_sensitive=False),
-        default="s",
-    )
-    return choice.lower()
-
-
 def migrate_entries(
     engine: SyncEngine,
     classification: dict[str, str],
     *,
     contribute_local: bool = False,
     discard_local: bool = False,
+    resolve_callback: ResolveCallback | None = None,
 ) -> dict[str, str]:
     """Run migration for classified entries.
 
-    Returns a dict of resolved entries -> resolution action.
-    Entries that are skipped remain as regular files.
+    Resolution precedence for regular_file_modified entries:
+      1. If contribute_local is set, always contribute.
+      2. Else if discard_local is set, always discard.
+      3. Else if resolve_callback is provided, call it per file.
+      4. Else mark "skipped" (caller will report as unresolved).
+
+    Returns dict of rel_path -> resolution action string.
     """
     resolved: dict[str, str] = {}
 
@@ -112,25 +103,23 @@ def migrate_entries(
                 resolved[rel_path] = "discarded"
                 continue
 
-            if not _is_tty():
-                # Non-TTY without a flag — skip, will be reported later
-                resolved[rel_path] = "skipped"
+            if resolve_callback is not None:
+                diff = diff_preview(local_file, warehouse_file)
+                choice = resolve_callback(rel_path, diff)
+                if choice == "contribute":
+                    warehouse_file.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(local_file, warehouse_file)
+                    local_file.unlink()
+                    engine.create_symlink(rel_path)
+                    resolved[rel_path] = "contributed"
+                elif choice == "discard":
+                    local_file.unlink()
+                    engine.create_symlink(rel_path)
+                    resolved[rel_path] = "discarded"
+                else:
+                    resolved[rel_path] = "skipped"
                 continue
 
-            diff = _diff_preview(local_file, warehouse_file)
-            choice = _prompt_resolution(rel_path, diff)
-
-            if choice == "c":
-                warehouse_file.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(local_file, warehouse_file)
-                local_file.unlink()
-                engine.create_symlink(rel_path)
-                resolved[rel_path] = "contributed"
-            elif choice == "d":
-                local_file.unlink()
-                engine.create_symlink(rel_path)
-                resolved[rel_path] = "discarded"
-            else:
-                resolved[rel_path] = "skipped"
+            resolved[rel_path] = "skipped"
 
     return resolved

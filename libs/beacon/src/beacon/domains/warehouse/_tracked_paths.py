@@ -6,7 +6,7 @@ from pathlib import Path
 from beacon.core.manifest.beacon import BeaconManifest
 
 
-def _get_tracked_paths(warehouse_path: Path, beacon_yaml: Path) -> list[str]:
+def get_tracked_paths(warehouse_path: Path, beacon_yaml: Path) -> list[str]:
     """Return the list of beacon.yaml-matched paths relative to warehouse root."""
     if not beacon_yaml.exists():
         return []

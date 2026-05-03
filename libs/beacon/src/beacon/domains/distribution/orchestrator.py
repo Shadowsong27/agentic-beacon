@@ -6,7 +6,6 @@ argument parsing + one orchestrator call + output formatting.
 
 from __future__ import annotations
 
-import sys
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -95,6 +94,7 @@ def run_sync(
     contribute_local: bool = False,
     discard_local: bool = False,
     log_fn: Callable[[str], None] | None = None,
+    resolve_callback: Callable[[str, str], str] | None = None,
 ) -> SyncOrchestrationResult:
     """Run the full sync pipeline.
 
@@ -214,8 +214,8 @@ def run_sync(
     unresolved_files: list[str] = []
 
     if regular_files and not dry_run:
-        if not _is_tty() and not contribute_local and not discard_local:
-            # Non-TTY without flag — collect unresolved and fail
+        if not contribute_local and not discard_local and resolve_callback is None:
+            # No resolution strategy — collect unresolved and fail
             unresolved_files = list(regular_files.keys())
         else:
             migration_resolved = migrate_entries(
@@ -223,6 +223,7 @@ def run_sync(
                 classification,
                 contribute_local=contribute_local,
                 discard_local=discard_local,
+                resolve_callback=resolve_callback,
             )
             # Any regular files still remaining are unresolved
             post_classification = sync_engine.classify_entries(artifact_paths)
@@ -355,7 +356,3 @@ def run_sync(
         migration_resolved=migration_resolved,
         unresolved_files=unresolved_files,
     )
-
-
-def _is_tty() -> bool:
-    return sys.stdin.isatty()

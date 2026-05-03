@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from beacon.core.preconditions import ensure_sync_ready
-from beacon.domains.warehouse._tracked_paths import _get_tracked_paths
+from beacon.domains.warehouse._tracked_paths import get_tracked_paths
 
 
 @dataclass
@@ -82,7 +82,7 @@ def status(
         # Single-file diff mode
         if not all_paths:
             beacon_yaml = project_root / ".agentic-beacon" / "beacon.yaml"
-            tracked = _get_tracked_paths(warehouse_path, beacon_yaml)
+            tracked = get_tracked_paths(warehouse_path, beacon_yaml)
             if path not in tracked:
                 raise ValueError(f"Path '{path}' is not tracked by beacon.yaml")
 
@@ -95,7 +95,7 @@ def status(
         status_result = _run_git(warehouse_path, ["status", "--porcelain"])
     else:
         beacon_yaml = project_root / ".agentic-beacon" / "beacon.yaml"
-        tracked = _get_tracked_paths(warehouse_path, beacon_yaml)
+        tracked = get_tracked_paths(warehouse_path, beacon_yaml)
         if tracked:
             status_result = _run_git(
                 warehouse_path, ["status", "--porcelain", "--", *tracked]

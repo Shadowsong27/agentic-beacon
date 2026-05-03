@@ -2,10 +2,8 @@
 
 import sys
 
-from beacon.core.exceptions import BeaconError
 
-
-class UnsupportedPlatformError(BeaconError):
+class UnsupportedPlatformError(Exception):
     """Raised when the current platform is not supported."""
 
     pass
