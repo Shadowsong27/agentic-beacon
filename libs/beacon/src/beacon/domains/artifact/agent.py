@@ -74,9 +74,9 @@ def detect_agents(project_root: Path, *, fallback_to_all: bool = False) -> list[
 def build_agents_paths() -> dict[str, Path]:
     """Return a mapping of tool name → global agents directory for detected tools.
 
-    This is the shared detection logic used by both `abc delta` and
-    `abc contribute` so both commands always compare/read from the same
-    global agent locations.
+    Shared detection logic used by `abc install` (and historically by
+    per-project agent-drift tooling) so writes/reads hit the same global
+    agent locations.
     """
     agents_paths: dict[str, Path] = {}
     for tool in detect_agents_global():
@@ -272,8 +272,9 @@ def sync_agents_from_warehouse(
 
             written = install_agent_global(tool, agent_name, content)
             # Always update sync-state HEAD, even when content is unchanged.
-            # Without this, 'abc delta' keeps reporting agents as stale after a
-            # sync that found nothing to write (warehouse advanced, content same).
+            # Without this, global-agent state tracking keeps reporting agents as
+            # stale after a sync that found nothing to write (warehouse advanced,
+            # content same).
             write_agent_sync_state(warehouse_path, rel, hash_content(content))
             if written:
                 installed.append(agent_name)
@@ -374,8 +375,9 @@ def handle_install_agent(
 
         written = install_agent_global(tool, agent_name, content)
         # Always update sync-state HEAD, even when content is unchanged.
-        # Without this, 'abc delta' keeps reporting the agent as stale after
-        # install finds nothing to write (warehouse advanced, content same).
+        # Without this, global-agent state tracking keeps reporting the agent as
+        # stale after install finds nothing to write (warehouse advanced, content
+        # same).
         write_agent_sync_state(warehouse_path, artifact, hash_content(content))
         if written:
             console.print(f"[green]Installed[/green] {artifact} → {dest}")

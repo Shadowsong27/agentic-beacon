@@ -1,4 +1,4 @@
-# Contributing to Example Corp Warehouse
+# Contributing to Starter Org Warehouse
 
 ## How to Contribute
 

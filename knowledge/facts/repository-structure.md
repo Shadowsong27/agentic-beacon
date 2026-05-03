@@ -21,19 +21,18 @@ agentic-beacon/
 ├── libs/beacon/          # CLI source code
 │   └── src/beacon/
 │       ├── cli/          # Click handlers (thin layer: parse + call + format)
-│       │   ├── main.py       # Click group + registration only
+│       │   ├── main.py       # Click group + registration (includes deprecation stubs for removed commands)
 │       │   ├── setup.py      # abc init, abc setup handlers
 │       │   ├── sync.py       # abc sync, abc doctor, abc upgrade handlers
-│       │   ├── contribute.py # abc contribute handlers
 │       │   ├── adoption.py   # abc adopt handlers
 │       │   ├── agent.py      # abc agent handlers
-│       │   └── warehouse.py  # abc warehouse handlers
+│       │   ├── diagnostics.py # abc doctor and related diagnostic handlers
+│       │   └── warehouse.py  # abc warehouse connect / status / contribute handlers
 │       ├── domains/      # Application / domain logic per bounded context
-│       │   ├── warehouse/    # Warehouse connect, validate, catalog, git health
+│       │   ├── warehouse/    # Warehouse connect, validate, catalog, git health, contribute, status
 │       │   ├── setup/        # abc init/setup flows; CLAUDE.md/opencode wiring
 │       │   ├── adoption/     # abc adopt flow
-│       │   ├── distribution/ # Warehouse→project sync, upgrades, sync-state
-│       │   ├── contribution/ # Project→warehouse contribute flow
+│       │   ├── distribution/ # Warehouse→project symlink sync, migration from copy-based trees, upgrades
 │       │   └── artifact/     # Agent/skill/rule artifact operations
 │       ├── core/         # Cross-domain primitives (models, settings, exceptions)
 │       │   ├── manifest/     # Pydantic domain models

@@ -25,13 +25,13 @@ from pathlib import Path
 # Update this dict whenever the starter warehouse is re-generated.
 STARTER_WAREHOUSE_PINNED_TEMPLATE_HASHES: dict[str, str] = {
     ".gitignore": "84eeaf600db2a2b5aaa963c05e4ea13af92dc973a6b63740554212fec1701cb7",
-    "agents/README.md": "5ffded083242776b0016aabbfe66baa01798892ea17c0a7da1bf551707df4b1c",
-    "README.md": "3c1c02ce7df7161a4f6286638b9d4b12fb462c08e8bba12aa2d1b720de6d5856",
+    "agents/README.md": "db6db08eef486e4dbf5713474262ff2f1caa6d3680df053b17c4b695d2274122",
+    "README.md": "ec91ea5f824620bd4b8c8f0aba84758bcf8af61738aae6af5c032f2ae6cdf020",
     "contexts/README.md": "90dfeb30f5844e16596302291d9f9770e2f714a35733d525ab7fe913be49912b",
-    "docs/architecture.md": "965c303c69da4de6774677c84eff345287414a5937c196ad14f3404867791f4f",
-    "docs/contribution-guide.md": "62d8af6eecb71ff0c29d5179fe59637ad18aff71455ba149cff3f3aea3d12945",
+    "docs/architecture.md": "73e93f5e3cd19dcf692a4e2b5465bdcdbc40f0677362e16bf6805bd9beb2c8ba",
+    "docs/contribution-guide.md": "a5f8e97d09c4b114d099ffef569c2f0d9a37cc9efad8b6704a4f7ec550057a18",
     "knowledge/README.md": "fb2fa6a609bc234b37f87268c2322b66b529aabd5cdf41b5ccd88dab5ed026fc",
-    "skills/README.md": "abbf8a13d85ec87c77cc164673ab7924de6b44ead33482bedcf9765c88837179",
+    "skills/README.md": "be570d20bec7563e77762095c45af6aff2367bcf122cc46514ead6265b0af6fb",
 }
 
 _TEMPLATES_DIR = Path(__file__).parent.parent.parent / "src/beacon/data/templates"

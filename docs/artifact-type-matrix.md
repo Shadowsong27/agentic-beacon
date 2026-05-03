@@ -50,7 +50,7 @@ Skills are reusable procedures available as slash commands during a session. To 
   - OpenCode: `.opencode/skills/<name>/` and `.opencode/command/<name>.md`
   - Claude Code: `.claude/skills/<name>/` and `.claude/commands/<name>.md`
 
-  The skill directory must be copied into each tool's location for the tool to discover it.
+  The skill directory must be present in each tool's location for the tool to discover it. Under the symlink-based sync model, this is achieved by symlinking individual skill files into the project's `.agentic-beacon/artifacts/skills/` tree and wiring each tool's live skill directory via per-tool installation.
 
 ### Agents — global, tool-specific
 
@@ -71,12 +71,14 @@ Agent definitions are sub-agent profiles (e.g. a "code reviewer" agent that can 
 
 | Artifact | What sync does |
 |---|---|
-| Contexts | Copies files into `.agentic-beacon/artifacts/contexts/`; adds path references to `opencode.json` / `AGENTS.md` |
-| Knowledge | Copies files into `.agentic-beacon/artifacts/knowledge/`; no automatic wiring (referenced from contexts) |
-| Skills | Copies skill directories into `.agentic-beacon/artifacts/skills/`; then installs into each detected tool's live skill and command directories |
-| Agents | Reads `agents/` from the warehouse; installs directly into global tool directories; no project artifact copy needed |
+| Contexts | Creates symlinks at `.agentic-beacon/artifacts/contexts/<path>` pointing into the warehouse clone; adds path references to `opencode.json` / `AGENTS.md` |
+| Knowledge | Creates symlinks at `.agentic-beacon/artifacts/knowledge/<path>`; no automatic wiring (referenced from contexts) |
+| Skills | Creates symlinks at `.agentic-beacon/artifacts/skills/<path>`; then wires each detected tool's live skill and command directories |
+| Agents | Reads `agents/` from the warehouse; installs real files directly into global tool directories (copies, not symlinks — see note below); no project artifact entry created |
 
-The asymmetry between knowledge and skills is intentional: knowledge does not need to be in a tool-specific location because agents read it via a path reference in the context. Skills need to be installed because agents discover them by scanning a directory.
+The asymmetry between knowledge and skills is intentional: knowledge does not need to be in a tool-specific location because agents read it via a path reference in the context. Skills need to be wired into tool-specific directories because agents discover them by scanning those directories.
+
+**Why agents are still copied, not symlinked:** global agent directories (`~/.claude/agents/`, `~/.config/opencode/agents/`) live **outside** the warehouse tree. Symlinks into those locations would cross the warehouse boundary in a way that would also leak every non-agent warehouse file onto the user's machine-wide agent path. Agents therefore remain file-copy installs tracked by `~/.config/agentic-beacon/sync-state.json`.
 
 ### `abc agents sync`
 
@@ -84,32 +86,30 @@ Because agents are **project-agnostic**, syncing them does not require `beacon.y
 
 This command exists separately from `abc sync` precisely because the global install has no project-scoped configuration to gate it.
 
-### `abc delta`
+### `abc warehouse status`
 
-`abc delta` compares local state against the warehouse. The matrix determines what "local" means for each type:
+`abc warehouse status` reports uncommitted and unpushed state of the warehouse clone, scoped by the current project's `beacon.yaml`. Because symlinks collapse project-vs-warehouse duplication into a single physical file, there is no project-vs-warehouse delta to compute — the question "what did I change in this project?" becomes "what's unstaged/uncommitted in the warehouse?".
 
-- **Contexts / Knowledge**: compare `.agentic-beacon/artifacts/` against the warehouse source.
-- **Skills**: compare the per-tool installed directories against the warehouse source (since the live install is the canonical local copy).
-- **Agents (global)**: compare `~/.claude/agents/` and `~/.config/opencode/agents/` against the warehouse. A separate section flags agents found only in the project-local agent directories (`.claude/agents/` or `.opencode/agents/` at the project root) as candidates to promote — because project-local agent files should live in the global directory.
+- **Contexts / Knowledge / Skills**: runs `git status` / `git diff` in the warehouse working tree, filtered to paths matched by `beacon.yaml`.
+- **Agents (global)**: NOT surfaced by `abc warehouse status` — agents live outside the warehouse tree. Divergence between global agent directories and the warehouse is a separate concern handled by `abc install` conflict detection (see [`install-flags`](../openspec/specs/install-flags/spec.md) and [`sync-soft-block`](../openspec/specs/sync-soft-block/spec.md)).
 
-### `abc contribute`
+### `abc warehouse contribute`
 
-`abc contribute` copies a local artifact back to the warehouse. The matrix determines where the source is found:
+`abc warehouse contribute` commits modifications inside the warehouse clone. The matrix determines what is committed:
 
-- **Contexts / Knowledge**: source is `.agentic-beacon/artifacts/`.
-- **Skills**: source is the live tool install directory (the installed copy is what was modified during a session). After contributing, the updated skill is re-propagated to all detected tool directories.
-- **Agents**: source is the global agent directory (`~/.claude/agents/` or `~/.config/opencode/agents/`), not a project-local path. An agent that exists only in a project-local directory (ADDED status, never contributed before) is also included — it is contributed as a new warehouse entry.
+- **Contexts / Knowledge / Skills**: any warehouse working-tree modifications to paths matched by the project's `beacon.yaml`. The source is the warehouse file itself — editing via a project symlink is writing to the warehouse.
+- **Agents**: NOT auto-contributed by this command. Agents live outside the warehouse tree. To contribute an agent edit, edit the file inside the warehouse clone directly (e.g. `~/team-warehouse/agents/reviewer.md`) and commit it.
 
 ### `abc install <artifact>`
 
 `abc install` handles a single artifact path and applies the same type-specific logic as `abc sync`:
 
-- `abc install contexts/python.md` — copies and wires into agent config.
-- `abc install skills/code-review/` — copies and installs into tool directories.
-- `abc install agents/reviewer.md` — installs directly into global agent directories.
+- `abc install contexts/python.md` — creates symlink and wires into agent config.
+- `abc install skills/code-review/` — creates symlinks and wires each detected tool directory.
+- `abc install agents/reviewer.md` — installs real file directly into global agent directories (respects `--force` / `--preserve`).
 
 ---
 
 ## Summary
 
-The two-axis model keeps the framework internally consistent: knowing an artifact's scope and tool-specificity tells you exactly where it lives, how it is installed, where `abc delta` looks for it, and where `abc contribute` reads it from. Adding a new artifact type only requires deciding where it sits in the matrix — the rest of the command behavior follows.
+The two-axis model keeps the framework internally consistent: knowing an artifact's scope and tool-specificity tells you exactly where it lives, how it is installed, where `abc warehouse status` looks for it, and what `abc warehouse contribute` commits. Adding a new artifact type only requires deciding where it sits in the matrix — the rest of the command behavior follows.

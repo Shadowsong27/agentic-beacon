@@ -57,8 +57,16 @@ Guide agents through safe production deployment.
 
 ## Installation
 
-Teams install skills to their projects:
+Declare the skill in your project's `beacon.yaml` and sync:
+
+```yaml
+artifacts:
+  skills:
+    - skills/deploy-production/**/*
+```
 
 ```bash
-abc install skills/deploy-production
+abc sync
 ```
+
+`abc sync` creates symlinks under `.agentic-beacon/artifacts/skills/deploy-production/` pointing into the warehouse clone, then wires the skill into each detected tool's live skill directory (`.opencode/skills/`, `.claude/skills/`).

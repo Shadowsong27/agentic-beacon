@@ -46,9 +46,9 @@ def bundled_skill_names() -> set[str]:
 def build_skills_paths(project_root: Path) -> dict[str, Path]:
     """Return a mapping of agent name → live skills directory for detected agents.
 
-    This is the shared detection logic used by both `abc delta` and
-    `abc contribute` so both commands always compare/read from the same
-    live agent locations.
+    Shared detection logic used by `abc install` (and historically by
+    per-project skill-drift tooling) so writes/reads hit the same live agent
+    locations.
     """
     skills_paths: dict[str, Path] = {}
     for agent in detect_agents(project_root):

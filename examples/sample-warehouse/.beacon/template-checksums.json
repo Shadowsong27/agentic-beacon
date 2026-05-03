@@ -2,12 +2,11 @@
   "beacon_version": "2.0.2",
   "files": {
     ".gitignore": "2a2ea65bc817582bf992ebc0ffe919774635173f138ab35dc6c68f237ec2c15e",
-    "README.md": "65ff1f47fdfcda00906520dabd9bcc865d3da67ec742c99c017598125e1503b2",
+    "README.md": "8640d224a2daa4a943405852aa7bc600aa6cb1fb8093c7bb8e5b7eb4cebf4a6c",
     "contexts/README.md": "90dfeb30f5844e16596302291d9f9770e2f714a35733d525ab7fe913be49912b",
-    "docs/architecture.md": "e6d69c0fd3fe90423b4079c5e0a365e2a24deeae5f09dab2b381a8c313413207",
-    "docs/contribution-guide.md": "4a1a05e405b0bf6549f8ff2657ea25fed52ee1a7ea63bb13ad3f6cdaf2abed5f",
-    "knowledge/README.md": "13bc99de00186750b2e89e5988899571c7feddbadc0a714a048d09072d45cad3",
-    "skills/README.md": "abbf8a13d85ec87c77cc164673ab7924de6b44ead33482bedcf9765c88837179",
-    "skills/record-knowledge/SKILL.md": "59b57f9ccfc4c31630acf55f5a2b636e97a47b76670ef284392a688d07cd2275"
+    "docs/architecture.md": "b8432ac465d92f0d4be8ae7692e8ca63cd3d947f274b257bb5435d62dea6fbdb",
+    "docs/contribution-guide.md": "b6c1ee2e50f12fdabe45054005b79c0d79978051bc96dba846f05642cf103061",
+    "knowledge/README.md": "fb2fa6a609bc234b37f87268c2322b66b529aabd5cdf41b5ccd88dab5ed026fc",
+    "skills/README.md": "abbf8a13d85ec87c77cc164673ab7924de6b44ead33482bedcf9765c88837179"
   }
 }

@@ -40,7 +40,7 @@ artifacts:
     # - contexts/teams/backend/README.md
 
 # ignore: Suppress skills installed by external tools (e.g. openspec) from
-#   appearing in 'abc delta' and 'abc contribute'. Supports fnmatch patterns.
+#   appearing in warehouse-status reports. Supports fnmatch patterns.
 #
 # ignore:
 #   skills:

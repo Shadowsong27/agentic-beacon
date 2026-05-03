@@ -23,7 +23,7 @@ cd ~/test-project
 abc warehouse connect --path ~/path/to/this-warehouse
 abc setup --manual
 abc sync
-abc status
+abc warehouse status
 ```
 
 ### 4. Submit PR

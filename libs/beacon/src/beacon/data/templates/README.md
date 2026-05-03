@@ -2,41 +2,47 @@
 
 Centralized repository for coding standards, knowledge, and skills used by AI agents across {org_name}.
 
+Under the current Agentic Beacon model, this warehouse clone is the **single write entrypoint** for every harness artifact on a developer's machine. Projects reference it via per-file symlinks under `.agentic-beacon/artifacts/`. See [single-warehouse-write-entrypoint](knowledge/decisions/single-warehouse-write-entrypoint.md) if this document is scaffolded with that decision.
+
 ## Quick Start
 
 ### For Developers
 
 ```bash
-# 1. Install the Agentic Beacon CLI (once per machine)
+# 1. Install the Agentic Beacon CLI (once per machine; macOS/Linux only)
 uv tool install agentic-beacon
 
-# 2. In your project, connect to this warehouse
+# 2. Clone this warehouse locally (stays on disk; projects symlink into it)
+git clone <this-repo-url> ~/path/to/this-warehouse
+
+# 3. In your project, connect to this warehouse
 cd ~/my-project
 abc warehouse connect --path ~/path/to/this-warehouse
 
-# 3. Create your artifact config and sync
-abc setup --manual   # then edit .agentic-beacon/beacon.yaml
-abc sync
+# 4. Create your artifact config and sync
+abc setup --manual    # then edit .agentic-beacon/beacon.yaml
+abc sync              # creates symlinks into the warehouse clone
 
-# 4. (Optional) Register skills as agent slash commands
-abc install skills/<skill-name>
+# 5. (Optional) Install global agents from this warehouse
+abc agents sync
 ```
 
 ### For Contributors
 
 ```bash
-# Clone warehouse
-git clone <this-repo-url>
+# Edit an artifact through any project's symlink (writes land in the warehouse working tree)
+$EDITOR ~/my-project/.agentic-beacon/artifacts/knowledge/python/type-hints.md
 
-# Make changes
-# - Add contexts, knowledge, or skills
-# - Follow the contribution guide in docs/
+# See what changed (scoped to your project's beacon.yaml)
+abc warehouse status
 
-# Submit PR
-
-# After your changes are merged, teammates can pull them in with:
-abc update
+# Commit and optionally push
+abc warehouse contribute -m "python: clarify type hints" --push
 ```
+
+Alternatively, edit files directly in the warehouse clone and commit with plain `git`.
+
+After your changes are pushed, teammates pull the warehouse and the content is immediately visible through their existing project symlinks — no per-project `abc sync` required (unless `beacon.yaml` itself changed).
 
 ### Offline / Private Install
 
@@ -49,29 +55,29 @@ uv tool install agentic-beacon --no-index --find-links ./abc-bundle/
 
 ## Structure
 
-- **`contexts/`** - Boot instructions loaded by agents at session start
-- **`knowledge/`** - Atomic decisions, lessons, and facts organized by scope
-- **`skills/`** - Reusable workflows and procedures (agent slash commands)
-- **`docs/`** - Warehouse documentation and contribution guides
+- **`contexts/`** — Boot instructions loaded by agents at session start
+- **`knowledge/`** — Atomic decisions, lessons, and facts organized by scope
+- **`skills/`** — Reusable workflows and procedures (agent slash commands)
+- **`agents/`** — Global sub-agent profiles installed per-machine
+- **`docs/`** — Warehouse documentation and contribution guides
 
 ## CLI Reference
 
 | Command | Description |
 |---------|-------------|
-| `abc warehouse connect` | Connect a project to this warehouse |
+| `abc warehouse connect --path <path>` | Connect a project to this warehouse clone |
 | `abc setup` | Create `beacon.yaml` for a project |
-| `abc sync` | Sync declared artifacts to the project |
-| `abc install` | Register synced skills as agent slash commands |
-| `abc list` | Show available content in the warehouse |
-| `abc status` | Show connection and sync status |
-| `abc delta` | Find local changes not yet contributed back |
-| `abc contribute` | Copy local improvements back to the warehouse |
-| `abc update` | Re-sync and overwrite local artifacts from warehouse |
-| `abc clean` | Remove synced artifacts from the project |
+| `abc sync` | Create symlinks into the warehouse clone for every declared artifact |
+| `abc sync --dry-run` | Preview the sync operations without touching the filesystem |
+| `abc agents sync` | Install every agent definition from the warehouse into global tool directories |
+| `abc warehouse status` | Show uncommitted warehouse edits (scoped by `beacon.yaml`) |
+| `abc warehouse contribute -m "…" [--push]` | Commit warehouse edits and optionally push |
+
+**Platform support:** macOS and Linux only. Windows is not supported by `abc sync`.
 
 ## Documentation
 
-- [Contribution Guide](./docs/contribution-guide.md) - How to add content
+- [Contribution Guide](./docs/contribution-guide.md) — How to add content
 
 ## Maintenance
 

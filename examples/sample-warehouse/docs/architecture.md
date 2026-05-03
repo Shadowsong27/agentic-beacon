@@ -1,8 +1,8 @@
-# Example Corp Warehouse Architecture
+# Starter Org Warehouse Architecture
 
 ## Overview
 
-This warehouse contains centralized knowledge, contexts, and skills for Example Corp's agentic development practices.
+This warehouse contains centralized knowledge, contexts, and skills for Starter Org's agentic development practices.
 
 ## Structure
 

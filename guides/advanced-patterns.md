@@ -1,6 +1,8 @@
 # Advanced Patterns
 
-This guide covers advanced usage of Agentic Beacon: glob pattern syntax, sync flags, the delta workflow, and artifact lifecycle management.
+This guide covers advanced usage of Agentic Beacon: glob pattern syntax, the `--dry-run` sync preview, and the `abc warehouse` command surface.
+
+> Under the current symlink-based sync model, a project's `.agentic-beacon/artifacts/` tree is symlinks into the warehouse clone — there is no project-local copy to "preserve" or "force-overwrite". See [`single-warehouse-write-entrypoint`](../knowledge/decisions/single-warehouse-write-entrypoint.md).
 
 ## Glob Pattern Syntax
 
@@ -34,7 +36,7 @@ artifacts:
     - contexts/teams/*/AGENTS.md
 
   skills:
-    # Skills are typically directories; use /** /* to get all files
+    # Skills are typically directories; use /**/* to get all files
     - skills/code-review/**/*
     - skills/generate-tests/**/*
 
@@ -59,260 +61,95 @@ ls /path/to/warehouse/knowledge/python/
 find /path/to/warehouse/knowledge/python/ -name "*.md"
 ```
 
-Then adjust your pattern to match the actual structure.
+---
+
+## `abc sync --dry-run` — Preview Before Linking
+
+```bash
+abc sync --dry-run
+```
+
+Prints the intended symlink operations (create / update / remove) without touching the filesystem:
+
+```
+Dry run — no filesystem changes will be made.
+
+would create  .agentic-beacon/artifacts/knowledge/python/type-hints.md  → /Users/me/team-warehouse/knowledge/python/type-hints.md
+would create  .agentic-beacon/artifacts/skills/code-review/SKILL.md      → /Users/me/team-warehouse/skills/code-review/SKILL.md
+would remove  .agentic-beacon/artifacts/knowledge/python/old-removed.md  (no longer in beacon.yaml)
+```
+
+Use this to confirm a `beacon.yaml` edit does what you expect before applying it.
 
 ---
 
-## Sync Flags
+## Inspecting the Current State
 
-### Default Sync (No Flags)
-
-```bash
-abc sync
-```
-
-- Copies new and changed files from warehouse
-- **Overwrites** local modifications (SHA256 comparison — same content = skip, different = overwrite)
-- Does not remove artifacts that were removed from `beacon.yaml`
-
-### `--preserve` — Protect Local Changes
+### Warehouse working tree (what you've edited)
 
 ```bash
-abc sync --preserve
+abc warehouse status
 ```
 
-Skips files that exist locally and differ from the warehouse version, preserving your local edits.
+Reports uncommitted and unpushed state of the warehouse clone, scoped by your project's `beacon.yaml`:
 
 ```
-✓ Sync complete
-  Copied: 5 files
-  Unchanged: 10 files
-  Preserved: 2 locally modified files
+Warehouse: /Users/me/team-warehouse (branch: main, 2 ahead, 0 behind)
+
+Modified:
+  M  knowledge/python/type-hints.md
+  M  skills/code-review/SKILL.md
 ```
 
-Use `abc delta` to see what you've changed before deciding whether to preserve or overwrite:
+Scope flags:
 
 ```bash
-abc delta                           # Summary of all local changes
-abc delta knowledge/python/type-hints.md  # Detailed diff for one file
+abc warehouse status knowledge/python/type-hints.md   # unified diff for one file
+abc warehouse status --all                            # entire warehouse working tree, unfiltered
 ```
 
-**Note:** `--preserve` only skips files that already exist locally. New files from the warehouse are always copied.
-
-### `--prune` — Remove Stale Artifacts
+### Confirming a project's symlinks
 
 ```bash
-abc sync --prune
+find .agentic-beacon/artifacts -type l | wc -l       # count symlinks
+find .agentic-beacon/artifacts -type f -not -type l  # any stray regular files?
 ```
 
-After syncing, removes any file in `.agentic-beacon/artifacts/` that is no longer listed in `beacon.yaml`. Also removes empty directories.
-
-```
-✓ Sync complete
-  Copied: 3 files
-  Unchanged: 8 files
-  Pruned: 4 artifacts no longer in beacon.yaml
-```
-
-Use this when you've removed entries from `beacon.yaml` and want to clean up.
-
-### `--verbose` — Per-File Output
-
-```bash
-abc sync --verbose
-```
-
-Shows a line for each file processed:
-
-```
-Syncing: knowledge/python/type-hints.md
-Copied: knowledge/python/type-hints.md
-Syncing: knowledge/python/async-patterns.md
-Unchanged: knowledge/python/async-patterns.md
-Preserved (local changes): knowledge/python/error-handling.md
-```
-
-### Combining Flags
-
-```bash
-# Preserve local changes and remove stale files
-abc sync --preserve --prune
-
-# Full verbose output with pruning
-abc sync --prune --verbose
-```
+A healthy post-sync tree has every `beacon.yaml`-matched path as a symlink and zero regular files at leaf positions.
 
 ---
 
-## The Delta Workflow
-
-`abc delta` compares your local artifacts against the current warehouse versions. This is useful when:
-
-- You've edited a synced artifact and want to review your changes
-- You want to contribute a local change back to the warehouse
-- You're diagnosing why a sync is behaving unexpectedly
-
-### Summary View
+## Contributing Changes Back
 
 ```bash
-abc delta
+abc warehouse contribute -m "python: clarify Optional vs None"
+abc warehouse contribute -m "…" --push                 # commit and push in one step
 ```
 
-Shows all files that differ from the warehouse:
+Because edits through `.agentic-beacon/artifacts/<path>` land directly in the warehouse working tree, there is no manual copy step. The commit's scope is automatic — `beacon.yaml`-matched modifications in the warehouse working tree become the staged set.
 
-```
-Delta Summary
-──────────────────────────────────────
-MODIFIED  knowledge/python/type-hints.md
-MODIFIED  knowledge/python/async-patterns.md
-ADDED     knowledge/python/local-experiments.md
-MISSING   skills/new-skill/SKILL.md
-
-  Modified: 2  Added: 1  Missing: 1
-```
-
-**Status meanings:**
-- `MODIFIED` — File exists locally and in warehouse, but content differs
-- `ADDED` — File exists locally but is not in the warehouse (you created it)
-- `MISSING` — File is in `beacon.yaml` but has not been synced yet
-
-### Detailed Diff
-
-```bash
-abc delta knowledge/python/type-hints.md
-```
-
-Shows a line-by-line diff using `git diff`:
-
-```diff
---- warehouse/knowledge/python/type-hints.md
-+++ local/.agentic-beacon/artifacts/knowledge/python/type-hints.md
-@@ -12,6 +12,10 @@
- ## Best Practices
- - Always use type hints for function signatures
-+- Prefer `str | None` over `Optional[str]` in Python 3.10+
-+- Use `list[str]` not `List[str]`
- - Use Union for multiple types
-```
-
-To suppress colors (useful for piping or logging):
-
-```bash
-abc delta knowledge/python/type-hints.md --no-color
-```
-
-### Contribute Changes Back to Warehouse
-
-If you've improved an artifact locally and want to share it:
-
-```bash
-# 1. Review your changes
-abc delta knowledge/python/type-hints.md
-
-# 2. Copy your version back to the warehouse
-cp .agentic-beacon/artifacts/knowledge/python/type-hints.md \
-   /path/to/warehouse/knowledge/python/type-hints.md
-
-# 3. Commit it in the warehouse
-cd /path/to/warehouse
-git add knowledge/python/type-hints.md
-git commit -m "docs: improve type hints guide with Python 3.10+ syntax"
-git push
-
-# 4. Re-sync your project
-cd -
-abc sync
-```
+See [Contributing Back to the Warehouse](./warehouse-contribution-guide.md) for the full workflow.
 
 ---
 
-## `abc status` — Inspect Your Setup
+## Migration from the Copy Model
+
+If you had a project created under the previous copy-based CLI version, the first `abc sync` on the new version will detect regular files under `.agentic-beacon/artifacts/` and run a migration pass:
+
+- Identical files (byte-equal to the warehouse) are silently replaced with symlinks.
+- Modified files trigger an interactive prompt per file, showing a unified diff and offering:
+  - `c` — contribute the local content into the warehouse working tree, then replace with a symlink
+  - `d` — discard local content, symlink to warehouse
+  - `s` — skip for now (resume on the next `abc sync`)
+
+Non-interactive bulk resolution:
 
 ```bash
-abc status
+abc sync --contribute-local   # contribute every modified file, no prompts
+abc sync --discard-local      # discard every modified file, no prompts
 ```
 
-Shows a quick health check of your current project:
-
-```
-Warehouse: /Users/you/team-warehouse
-
-Configured Contexts
-  ✓ teams/backend/AGENTS.md
-  ✗ teams/frontend/AGENTS.md (not synced)
-
-Configured Knowledge Patterns
-  • knowledge/languages/python/**/*.md
-  • knowledge/best-practices/testing.md
-
-Configured Skills
-  ✓ code-review
-  ✗ generate-tests (not synced)
-
-Artifacts: .agentic-beacon/artifacts/ (34 files)
-```
-
-The `✓`/`✗` marks show whether a context or skill directory actually exists in your local artifacts folder. Use this to verify a sync worked as expected.
-
----
-
-## `abc update` — Force Overwrite All Artifacts
-
-```bash
-abc update
-```
-
-Unlike `abc sync` (which skips unchanged files), `abc update` **deletes and re-copies every artifact**, ignoring local modifications and SHA256 comparisons.
-
-Use this when:
-- The warehouse had in-place edits to files without content changes (e.g., metadata only)
-- You want to fully reset all artifacts to the current warehouse state
-- You suspect a sync got into a bad state
-
-**Warning:** Any local edits to artifacts will be overwritten. Run `abc delta` first if you want to review local changes before losing them.
-
----
-
-## `abc clean` — Remove All Artifacts
-
-```bash
-abc clean
-```
-
-Prompts for confirmation, then removes `.agentic-beacon/artifacts/` entirely.
-
-```
-Are you sure you want to remove synced artifacts? [y/N]: y
-✓ Cleaned .agentic-beacon/artifacts/
-```
-
-After cleaning, run `abc sync` to re-download from the warehouse.
-
-Use this to start fresh or free up disk space.
-
----
-
-## Keeping Artifacts Up to Date
-
-The recommended workflow for staying current with a team warehouse:
-
-```bash
-# 1. Pull warehouse updates
-cd ~/team-warehouse
-git pull
-
-# 2. Sync your project
-cd ~/my-project
-abc sync
-```
-
-If you want to check what changed before syncing:
-
-```bash
-abc delta              # Preview differences
-abc sync               # Apply updates (won't touch modified files by default)
-abc sync --preserve    # Apply updates, protecting local edits
-```
+In a non-TTY environment (CI, scripted upgrade) without either flag, `abc sync` refuses to proceed and lists the files that need resolution.
 
 ---
 
@@ -321,3 +158,4 @@ abc sync --preserve    # Apply updates, protecting local edits
 - **[beacon.yaml Reference](./beacon-yaml-reference.md)** — All configuration options
 - **[Creating Skills](./creating-skills.md)** — Build your own skills
 - **[Team Collaboration](./team-collaboration.md)** — Share configurations across teams
+- **[Contributing Back](./warehouse-contribution-guide.md)** — Full contribute workflow

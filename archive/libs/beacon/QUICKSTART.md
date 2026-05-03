@@ -1,5 +1,9 @@
 # Agentic Beacon Quick Start
 
+> **Superseded by** the [root `README.md`](../../../README.md) (install + quickstart) and [`guides/getting-started.md`](../../../guides/getting-started.md). The commands below reference a pre-symlink CLI surface (`abc delta`, `abc setup --warehouse`, `abc list`) that no longer exists in this shape. Retained for historical context only.
+
+---
+
 ## Installation
 
 ```bash

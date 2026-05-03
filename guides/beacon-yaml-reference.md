@@ -25,7 +25,7 @@ artifacts:
   contexts:
     - <pattern-or-path>
 
-# Optional — suppress skills from abc delta and abc contribute
+# Optional — suppress skills from warehouse-scoped status reports
 ignore:
   skills:
     - "openspec-*"        # fnmatch glob patterns
@@ -83,7 +83,7 @@ artifacts:
 
 ## `ignore`
 
-Suppress skills from appearing in `abc delta` and `abc contribute`. Useful for skills installed by external tools (e.g. OpenSpec) that you don't want to track through the warehouse.
+Suppress skills from appearing in warehouse-scoped status reports (e.g. `abc warehouse status`) and from contribute-path selection. Useful for skills installed by external tools (e.g. OpenSpec) that you don't want to track through the warehouse.
 
 ```yaml
 ignore:
@@ -172,11 +172,11 @@ An empty `knowledge` or `skills` list is valid — those artifact types simply w
 |---------|------------------------|
 | `abc setup --manual` | Creates an empty template |
 | `abc setup --agent-assisted` | Creates template + `warehouse-catalog.md` to help fill it |
-| `abc install <artifact>` | Copies and wires one artifact, then adds it to `beacon.yaml` |
-| `abc sync` | Reads `beacon.yaml`, copies and wires all matching artifacts |
-| `abc sync --prune` | Reads `beacon.yaml`, removes files no longer listed |
-| `abc delta` | Reads `beacon.yaml` to determine which files to compare |
-| `abc update` | Reads `beacon.yaml`, force-overwrites all files |
+| `abc install <artifact>` | Materializes one artifact into global/tool dirs, then adds it to `beacon.yaml` |
+| `abc sync` | Reads `beacon.yaml`, creates symlinks into the warehouse clone for every matching artifact |
+| `abc sync --dry-run` | Reads `beacon.yaml`, prints the symlink operations that would be performed |
+| `abc warehouse status` | Reads `beacon.yaml` to scope its git-status/diff report to declared paths |
+| `abc warehouse contribute` | Reads `beacon.yaml` to scope the commit's staged paths |
 
 ---
 
@@ -224,11 +224,11 @@ abc setup --agent-assisted
 # Apply the configuration
 abc sync
 
-# Preview differences between local and warehouse
-abc delta
+# See uncommitted warehouse edits (scoped by beacon.yaml)
+abc warehouse status
 
-# Check what's configured and synced
-abc status
+# Commit edits back to the warehouse
+abc warehouse contribute -m "…" --push
 ```
 
 ---

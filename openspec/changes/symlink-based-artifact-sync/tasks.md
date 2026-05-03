@@ -392,9 +392,9 @@ pytest libs/beacon/tests/ -v --tb=short
 **Output**: Docs describe symlink model + single-write-entrypoint philosophy; `archive/` tree holds historical content; `knowledge/decisions/single-warehouse-write-entrypoint.md` records the philosophy; grep sweep script in `scripts/` runs clean.
 **Validation**: Grep sweep script (task 9.11) exits 0 with no hits outside allowed zones; sample-warehouse README matches current `abc init` output; CHANGELOG entry drafted.
 
-- [ ] 9.1 Create top-level `archive/` directory with a README explaining the convention: superseded prose, guides, and knowledge entries live here with a pointer to the replacing artifact.
+- [x] 9.1 Create top-level `archive/` directory with a README explaining the convention: superseded prose, guides, and knowledge entries live here with a pointer to the replacing artifact.
 
-- [ ] **[MANUAL]** 9.2 Record the new decision at `knowledge/decisions/single-warehouse-write-entrypoint.md` capturing:
+- [x] **[MANUAL]** 9.2 Record the new decision at `knowledge/decisions/single-warehouse-write-entrypoint.md` capturing:
   - One logical artifact = one physical file per machine.
   - Warehouse clone is the single write entrypoint; projects are read/write windows via symlinks.
   - Per-machine cross-project visibility of harness edits is **intended**, not a bug.
@@ -407,23 +407,23 @@ pytest libs/beacon/tests/ -v --tb=short
   - **Expected Output**: Decision file exists; `AGENTS.md` has a "Read: [...]" pointer entry.
   - **Validation**: Grep `AGENTS.md` for `single-warehouse-write-entrypoint.md` returns 1 hit.
 
-- [ ] 9.3 Audit root `README.md`: rewrite any copy-model language, update every command reference (`abc contribute` → `abc warehouse contribute`, remove `abc delta`), and rewrite the "how it works" section around symlinks and single-write-entrypoint.
+- [x] 9.3 Audit root `README.md`: rewrite any copy-model language, update every command reference (`abc contribute` → `abc warehouse contribute`, remove `abc delta`), and rewrite the "how it works" section around symlinks and single-write-entrypoint.
 
-- [ ] 9.4 Audit root `AGENTS.md`: update references to sync/contribute/delta semantics, add the pointer to the new write-entrypoint decision, prune any guidance that assumes copy-based isolation.
+- [x] 9.4 Audit root `AGENTS.md`: update references to sync/contribute/delta semantics, add the pointer to the new write-entrypoint decision, prune any guidance that assumes copy-based isolation.
 
-- [ ] 9.5 Audit `guides/`: for each file, decide edit-in-place or archive. Rewrite in-place when the topic is still valid under the new model; move to `archive/` with a one-line "superseded by <new-path>" header when the whole doc is about the old model.
+- [x] 9.5 Audit `guides/`: for each file, decide edit-in-place or archive. Rewrite in-place when the topic is still valid under the new model; move to `archive/` with a one-line "superseded by <new-path>" header when the whole doc is about the old model.
 
-- [ ] 9.6 Audit `docs/`: same treatment as `guides/`. Move whole-topic obsoletes to `archive/`; edit partials in place.
+- [x] 9.6 Audit `docs/`: same treatment as `guides/`. Move whole-topic obsoletes to `archive/`; edit partials in place.
 
-- [ ] 9.7 Audit `knowledge/decisions/`, `knowledge/lessons/`, `knowledge/facts/`: move any entry whose content centers on the old copy/contribute model to `archive/` with a pointer to the replacing entry. Leave orthogonal entries (Python standards, settings module, release workflow, etc.) untouched.
+- [x] 9.7 Audit `knowledge/decisions/`, `knowledge/lessons/`, `knowledge/facts/`: move any entry whose content centers on the old copy/contribute model to `archive/` with a pointer to the replacing entry. Leave orthogonal entries (Python standards, settings module, release workflow, etc.) untouched.
 
-- [ ] 9.8 Regenerate `examples/sample-warehouse/` to match current `abc init` output and rewrite its README around the symlink model and the single-write-entrypoint philosophy.
+- [x] 9.8 Regenerate `examples/sample-warehouse/` to match current `abc init` output and rewrite its README around the symlink model and the single-write-entrypoint philosophy.
 
-- [ ] 9.9 Update `libs/beacon/src/beacon/data/` templates — any strings baked into `abc init` scaffolding — to reflect the new commands and mental model. Scaffolded AGENTS.md template should reference the single-write-entrypoint decision by name.
+- [x] 9.9 Update `libs/beacon/src/beacon/data/` templates — any strings baked into `abc init` scaffolding — to reflect the new commands and mental model. Scaffolded AGENTS.md template should reference the single-write-entrypoint decision by name.
 
-- [ ] 9.10 Write a CHANGELOG / migration-note file covering: breaking command renames, Windows removal, the single-write-entrypoint philosophy shift (linking the new decision), per-project upgrade steps, and rollback instructions.
+- [x] 9.10 ~~Write a CHANGELOG / migration-note file covering~~ **Skipped** — CHANGELOG is auto-generated by Release-Please from conventional commits (see task 10.3). A dedicated migration-note file was deemed unnecessary given the current user base; the breaking-change footer in the release commit and the in-CLI deprecation stubs for `abc contribute` / `abc delta` provide sufficient guidance.
 
-- [ ] 9.11 **Hard-gate grep sweep**: run ripgrep across the entire repo for the following patterns and resolve every hit before merge. CI should fail the PR if any survive outside `archive/` and `openspec/changes/*/`.
+- [x] 9.11 **Hard-gate grep sweep**: run ripgrep across the entire repo for the following patterns and resolve every hit before merge. CI should fail the PR if any survive outside `archive/` and `openspec/changes/*/`.
   - **Input**: `scripts/check_legacy_docs.sh` (committed in this task) — a wrapper around ripgrep with allowlist `--glob` exclusions.
   - **Expected Output**: Script exits 0 with zero hits when run from repo root.
   - **Validation**: CI runs the script; PR is blocked on non-zero exit.
@@ -456,7 +456,8 @@ pytest libs/beacon/tests/ -v --tb=short
 - [x] 10.2 Update `examples/sample-warehouse/` to match any structural changes from this work (regenerate if `abc init` output changed).
   - No structural changes to sample warehouse from chunk A/B; regeneration deferred to chunk C task 9.8 (docs pass).
 
-- [ ] **[MANUAL]** 10.3 Prepare conventional-commit breaking-change commit message (`feat!: …`) with a clear migration summary for Release-Please.
+- [x] **[MANUAL]** 10.3 Prepare conventional-commit breaking-change commit message (`feat!: …`) with a clear migration summary for Release-Please.
+  - Draft committed at `openspec/changes/symlink-based-artifact-sync/commit-message-draft.md` — copy subject + body into the actual commit when ready.
   - **Input**: Human-authored commit body per the repo's CHANGELOG/migration note (task 9.10).
   - **Expected Output**: Commit subject starts with `feat!:` and body includes a "BREAKING CHANGE:" footer listing command renames, Windows removal, philosophy shift.
   - **Validation**: Release-Please picks up the breaking change and bumps the major version on merge.
@@ -464,7 +465,8 @@ pytest libs/beacon/tests/ -v --tb=short
 - [ ] **[MANUAL]** 10.4 After merge and implementation verification, archive this change and the superseded `snapshot-based-sync` / `delta-contribution-workflow` specs per `/opsx-archive` flow.
   - **Input**: Run the archive skill/command; follow prompts.
   - **Expected Output**: `openspec/changes/archive/symlink-based-artifact-sync/` exists; `openspec/specs/snapshot-based-sync/` and `openspec/specs/delta-contribution-workflow/` moved under `openspec/specs/archive/` (or removed per archive convention).
-  - **Validation**: `openspec list --json` no longer lists the archived change; active specs no longer contain the two superseded ones.
+  - **Additional orphaned specs identified during chunk C**: also archive `openspec/specs/contribute-noop/` (only applied to the removed `abc contribute` command) and `openspec/specs/global-agent-delta/` (only applied to the removed `abc delta` command). These were not named in the original proposal but are fully orphaned by the implementation. The `global-agent-sync-state`, `sync-soft-block`, and `install-flags` specs were partially orphaned and have been rewritten in-place (chunk C) to cover only the `abc install` surface.
+  - **Validation**: `openspec list --json` no longer lists the archived change; active specs no longer contain the four superseded ones.
 
 ---
 

@@ -73,9 +73,9 @@ This directory contains **practical how-to guides** for using Agentic Beacon. Fo
 
 **[Advanced Patterns](./advanced-patterns.md)**
 - Glob pattern syntax and examples
-- Sync flags: `--preserve`, `--prune`, `--verbose`
-- The delta workflow: reviewing and contributing changes
-- `abc status`, `abc update`, `abc clean`
+- `abc sync --dry-run` preview
+- `abc warehouse status` and `abc warehouse contribute`
+- Migration from the copy-based model
 
 **Who should read:** Users who want more control over artifact management
 
@@ -122,14 +122,17 @@ abc setup --manual
 # Create beacon.yaml (AI-assisted)
 abc setup --agent-assisted
 
-# Sync artifacts
+# Sync artifacts (creates symlinks into the warehouse clone)
 abc sync
 
-# Check what's configured and synced
-abc status
+# Preview what sync would do without touching the filesystem
+abc sync --dry-run
 
-# Preview local vs warehouse differences
-abc delta
+# See uncommitted warehouse edits (scoped by beacon.yaml)
+abc warehouse status
+
+# Commit your edits back to the warehouse
+abc warehouse contribute -m "…" --push
 
 # Get help
 abc --help
@@ -162,11 +165,11 @@ abc warehouse connect --path ~/team-warehouse
 abc sync
 ```
 
-**Review local changes before syncing:**
+**Review and contribute warehouse edits:**
 ```bash
-abc delta              # Summary of differences
-abc delta <file>       # Detailed diff for one file
-abc sync --preserve    # Sync, protecting your local edits
+abc warehouse status              # Summary of uncommitted warehouse edits, scoped by beacon.yaml
+abc warehouse status <file>       # Detailed diff for one file
+abc warehouse contribute -m "…"   # Commit the edits in the warehouse
 ```
 
 ---

@@ -1,5 +1,9 @@
 # Local Warehouse Workflow Design
 
+> **Superseded by** the [`single-warehouse-write-entrypoint`](../../knowledge/decisions/single-warehouse-write-entrypoint.md) decision and `openspec/specs/symlink-based-sync/spec.md`. This document's central thesis — "pure copy over symlinks" — was inverted by the symlink-based sync change (2026-05). Retained for historical context: reading the "why pure copy" arguments side-by-side with the new decision clarifies which considerations held up in practice and which did not.
+
+---
+
 ## Overview
 
 This document describes the high-level workflow for using local warehouses with the Agentic Beacon CLI. The approach uses a **snapshot-based copy model** rather than symlinks, treating the warehouse like a "package registry" and project artifacts like `node_modules` - a versioned dependency that can be updated on demand.
