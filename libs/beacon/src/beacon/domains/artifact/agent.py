@@ -14,7 +14,7 @@ from beacon.domains.distribution.state import (
 )
 from beacon.utils.display import is_interactive
 from beacon.utils.git import hash_content
-from beacon.utils.interaction import ConflictResolution, resolve_conflict
+from beacon.utils.interaction import OverwriteDecision, resolve_conflict
 
 console = Console()
 
@@ -348,9 +348,9 @@ def handle_install_agent(
     resolution = resolve_conflict(
         force=force, preserve=preserve, has_conflicts=bool(conflicts)
     )
-    if resolution == ConflictResolution.SKIP:
+    if resolution == OverwriteDecision.SKIP:
         preserve = True  # skip conflicting files
-    elif resolution == ConflictResolution.NEEDS_CONFIRMATION:
+    elif resolution == OverwriteDecision.NEEDS_CONFIRMATION:
         # Non-interactive mode with conflicts — cannot prompt; refuse to proceed.
         conflict_list = "\n".join(f"  • {p}" for p in conflicts)
         console.print(

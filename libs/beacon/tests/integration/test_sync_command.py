@@ -41,7 +41,7 @@ def test_sync_with_valid_configuration(valid_warehouse, temp_dir, monkeypatch):
     )
 
     # Run sync
-    result = runner.invoke(main, ["sync"])
+    result = runner.invoke(main, ["sync", "--skip-git-check"])
 
     assert result.exit_code == 0
     assert "sync" in result.output.lower() or "✓" in result.output
@@ -72,7 +72,7 @@ def test_sync_is_idempotent(valid_warehouse, temp_dir, monkeypatch):
     )
 
     # First sync
-    result1 = runner.invoke(main, ["sync"])
+    result1 = runner.invoke(main, ["sync", "--skip-git-check"])
     assert result1.exit_code == 0
 
     synced_file = (
@@ -81,7 +81,7 @@ def test_sync_is_idempotent(valid_warehouse, temp_dir, monkeypatch):
     mtime1 = synced_file.stat().st_mtime
 
     # Second sync - should be idempotent
-    result2 = runner.invoke(main, ["sync"])
+    result2 = runner.invoke(main, ["sync", "--skip-git-check"])
     assert result2.exit_code == 0
 
     # File should not have been re-copied
@@ -109,7 +109,7 @@ def test_sync_with_glob_patterns(valid_warehouse, temp_dir, monkeypatch):
         "artifacts:\n  knowledge:\n    - knowledge/python/*.md\n  skills: []\n  contexts: []\n"
     )
 
-    result = runner.invoke(main, ["sync"])
+    result = runner.invoke(main, ["sync", "--skip-git-check"])
 
     assert result.exit_code == 0
 
@@ -138,7 +138,7 @@ def test_sync_without_warehouse_connection(temp_dir, monkeypatch):
 
     monkeypatch.chdir(project_dir)
 
-    result = runner.invoke(main, ["sync"])
+    result = runner.invoke(main, ["sync", "--skip-git-check"])
 
     assert result.exit_code == 1
     assert "warehouse" in result.output.lower()
@@ -159,7 +159,7 @@ def test_sync_without_beacon_yaml(valid_warehouse, temp_dir, monkeypatch):
     # Connect warehouse but don't create beacon.yaml
     runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
 
-    result = runner.invoke(main, ["sync"])
+    result = runner.invoke(main, ["sync", "--skip-git-check"])
 
     assert result.exit_code == 1
     assert "beacon.yaml" in result.output.lower()
@@ -186,7 +186,7 @@ def test_sync_with_empty_beacon_yaml(valid_warehouse, temp_dir, monkeypatch):
         "artifacts:\n  knowledge: []\n  skills: []\n  contexts: []\n"
     )
 
-    result = runner.invoke(main, ["sync"])
+    result = runner.invoke(main, ["sync", "--skip-git-check"])
 
     assert result.exit_code == 0
     assert (
@@ -370,6 +370,31 @@ class TestSyncSkillEntryValidation:
         (wh / "README.md").write_text("# WH")
         (wh / "skills" / "my-skill").mkdir()
         (wh / "skills" / "my-skill" / "SKILL.md").write_text("# Skill\n")
+
+        # Init git (required by sync)
+        import os
+        import subprocess
+
+        env = {
+            **os.environ,
+            "GIT_AUTHOR_NAME": "Test",
+            "GIT_AUTHOR_EMAIL": "t@t.local",
+            "GIT_COMMITTER_NAME": "Test",
+            "GIT_COMMITTER_EMAIL": "t@t.local",
+        }
+        subprocess.run(
+            ["git", "init"], cwd=wh, env=env, check=True, capture_output=True
+        )
+        subprocess.run(
+            ["git", "add", "."], cwd=wh, env=env, check=True, capture_output=True
+        )
+        subprocess.run(
+            ["git", "commit", "-m", "init"],
+            cwd=wh,
+            env=env,
+            check=True,
+            capture_output=True,
+        )
 
         project = tmp_path / "project"
         project.mkdir()

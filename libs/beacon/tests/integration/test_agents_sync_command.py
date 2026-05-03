@@ -11,11 +11,10 @@ Test Cases:
 - TC4: No agents/ dir in warehouse → silent no-op
 - TC5: Already up-to-date → idempotent
 - TC6: --force overwrites conflicting agent without prompting
-- TC7: --preserve skips conflicting agent
-- TC8: Non-interactive mode with conflict → skipped automatically
-- TC9: No .agentic-beacon → error
-- TC10: --force and --preserve are mutually exclusive
-- TC11: Sync updates sync-state HEAD even when agent content is already identical
+- TC7: Non-interactive mode with conflict → skipped automatically
+- TC8: No .agentic-beacon → error
+- TC9: Unknown --preserve flag is rejected
+- TC10: Sync updates sync-state HEAD even when agent content is already identical
 """
 
 import json
@@ -188,19 +187,19 @@ def test_agents_sync_force_overwrites_conflict(connected_project, isolated_home)
 
 
 # ---------------------------------------------------------------------------
-# TC7: --preserve skips conflicting agent
+# TC7: Non-interactive mode with conflict → skipped automatically
 # ---------------------------------------------------------------------------
 
 
-def test_agents_sync_preserve_skips_conflict(connected_project, isolated_home):
-    """TC7: --preserve leaves diverged local agent files untouched."""
+def test_agents_sync_non_interactive_skips_conflict(connected_project, isolated_home):
+    """TC7: In non-interactive mode, conflicts are skipped without prompting."""
     opencode_agents = isolated_home / ".config" / "opencode" / "agents"
     opencode_agents.mkdir(parents=True)
     (opencode_agents / "code-reviewer.md").write_text(SAMPLE_AGENT_MD_LOCAL)
 
     project, wh = connected_project
     runner = CliRunner()
-    result = runner.invoke(main, ["agents", "sync", "--preserve", "--skip-git-check"])
+    result = runner.invoke(main, ["agents", "sync", "--skip-git-check"])
 
     assert result.exit_code == 0, result.output
     assert (opencode_agents / "code-reviewer.md").read_text() == SAMPLE_AGENT_MD_LOCAL
@@ -208,32 +207,12 @@ def test_agents_sync_preserve_skips_conflict(connected_project, isolated_home):
 
 
 # ---------------------------------------------------------------------------
-# TC8: Non-interactive mode with conflict → skipped automatically
-# ---------------------------------------------------------------------------
-
-
-def test_agents_sync_non_interactive_skips_conflict(connected_project, isolated_home):
-    """TC8: In non-interactive mode, conflicts are skipped without prompting."""
-    opencode_agents = isolated_home / ".config" / "opencode" / "agents"
-    opencode_agents.mkdir(parents=True)
-    (opencode_agents / "code-reviewer.md").write_text(SAMPLE_AGENT_MD_LOCAL)
-
-    project, wh = connected_project
-    runner = CliRunner()
-    # CliRunner uses non-interactive stdin by default
-    result = runner.invoke(main, ["agents", "sync", "--skip-git-check"])
-
-    assert result.exit_code == 0, result.output
-    assert (opencode_agents / "code-reviewer.md").read_text() == SAMPLE_AGENT_MD_LOCAL
-
-
-# ---------------------------------------------------------------------------
-# TC9: No .agentic-beacon → error
+# TC8: No .agentic-beacon → error
 # ---------------------------------------------------------------------------
 
 
 def test_agents_sync_no_beacon_dir_errors(tmp_path, monkeypatch, isolated_home):
-    """TC9: Running agents sync outside a connected project exits with an error."""
+    """TC8: Running agents sync outside a connected project exits with an error."""
     project = tmp_path / "project"
     project.mkdir()
     monkeypatch.chdir(project)
@@ -246,14 +225,29 @@ def test_agents_sync_no_beacon_dir_errors(tmp_path, monkeypatch, isolated_home):
 
 
 # ---------------------------------------------------------------------------
-# TC11: Sync updates sync-state HEAD even when agent content is already identical
+# TC9: Unknown --preserve flag is rejected
+# ---------------------------------------------------------------------------
+
+
+def test_agents_sync_preserve_flag_is_rejected(connected_project, isolated_home):
+    """TC9: --preserve is no longer accepted on abc agents sync."""
+    project, wh = connected_project
+    runner = CliRunner()
+    result = runner.invoke(main, ["agents", "sync", "--preserve", "--skip-git-check"])
+
+    assert result.exit_code != 0
+    assert "No such option: --preserve" in result.output
+
+
+# ---------------------------------------------------------------------------
+# TC10: Sync updates sync-state HEAD even when agent content is already identical
 # ---------------------------------------------------------------------------
 
 
 def test_agents_sync_updates_sync_state_when_content_unchanged(
     connected_project, isolated_home
 ):
-    """TC11: sync updates sync-state HEAD even when agent file is already up-to-date.
+    """TC10: sync updates sync-state HEAD even when agent file is already up-to-date.
 
     Regression test for: warehouse advances (e.g. a commit that doesn't touch agents),
     content stays identical, but 'abc delta' keeps reporting agents as stale because
@@ -324,20 +318,3 @@ def test_agents_sync_updates_sync_state_when_content_unchanged(
         f"got {entry['warehouse_head']!r}. "
         "'abc delta' would still report this agent as stale."
     )
-
-
-# ---------------------------------------------------------------------------
-# TC10: --force and --preserve are mutually exclusive
-# ---------------------------------------------------------------------------
-
-
-def test_agents_sync_force_and_preserve_are_exclusive(connected_project, isolated_home):
-    """TC10: Passing both --force and --preserve is rejected."""
-    project, wh = connected_project
-    runner = CliRunner()
-    result = runner.invoke(
-        main, ["agents", "sync", "--force", "--preserve", "--skip-git-check"]
-    )
-
-    assert result.exit_code != 0
-    assert "mutually exclusive" in result.output

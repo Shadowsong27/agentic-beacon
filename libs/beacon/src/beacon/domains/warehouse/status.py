@@ -105,7 +105,7 @@ def status(
                 args=[], returncode=0, stdout="", stderr=""
             )
 
-    for line in status_result.stdout.strip().splitlines():
+    for line in status_result.stdout.splitlines():
         if len(line) >= 3:
             code = line[:2].strip()
             file_path = line[3:]
