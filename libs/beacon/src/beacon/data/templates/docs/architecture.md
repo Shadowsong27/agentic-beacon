@@ -36,10 +36,11 @@ cd ~/my-project
 abc warehouse connect --path ~/path/to/this-warehouse
 
 # Create artifact config and sync
-abc setup --manual   # then edit .agentic-beacon/beacon.yaml
+abc setup            # creates .agentic-beacon/beacon.yaml
+abc adopt            # select relevant warehouse artifacts
 abc sync
 
-# Content is copied to .agentic-beacon/ (gitignored)
+# Content is symlinked under .agentic-beacon/artifacts/ (gitignored)
 ```
 
 ## Contribution

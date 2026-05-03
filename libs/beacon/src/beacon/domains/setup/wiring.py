@@ -50,38 +50,6 @@ artifacts:
     path.write_text(template)
 
 
-def install_project_setup_skill(beacon_dir: Path) -> None:
-    """Install project-setup skill and generate warehouse catalog.
-
-    This generates a warehouse catalog file that AI agents can read
-    to understand what artifacts are available and populate beacon.yaml.
-    """
-    from beacon.core.manifest.workspace import WorkspaceConfig
-    from beacon.domains.warehouse.catalog import generate_warehouse_catalog
-
-    try:
-        config_file = beacon_dir / "config.toml"
-        if not config_file.exists():
-            return
-
-        settings = WorkspaceConfig()
-        warehouse_path = Path(settings.warehouse.local_path)
-
-        if not warehouse_path.exists():
-            console.print(
-                "[yellow]Warning:[/yellow] Warehouse path not found, skipping catalog generation"
-            )
-            return
-
-        # Generate warehouse catalog
-        catalog = generate_warehouse_catalog(warehouse_path)
-        catalog_path = beacon_dir / "warehouse-catalog.md"
-        catalog_path.write_text(catalog, encoding="utf-8")
-
-    except Exception as e:
-        console.print(f"[yellow]Warning:[/yellow] Could not generate catalog: {e}")
-
-
 def wire_contexts_opencode(project_root: Path, artifacts_dir: Path) -> list[str]:
     """Append synced context paths to opencode.json instructions.
 

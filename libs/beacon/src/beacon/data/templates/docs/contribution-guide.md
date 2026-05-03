@@ -21,7 +21,8 @@
 # Test distribution
 cd ~/test-project
 abc warehouse connect --path ~/path/to/this-warehouse
-abc setup --manual
+abc setup
+abc adopt
 abc sync
 abc warehouse status
 ```

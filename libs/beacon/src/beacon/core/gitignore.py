@@ -2,7 +2,7 @@
 
 Automatically manages .gitignore entries to ensure:
 - .agentic-beacon/config.toml is excluded (local config)
-- .agentic-beacon/artifacts/ is excluded (synced copies)
+- .agentic-beacon/artifacts/ is excluded (warehouse symlinks)
 - .agentic-beacon/beacon.yaml is NOT excluded (team config)
 """
 
@@ -14,7 +14,6 @@ from loguru import logger
 GITIGNORE_ENTRIES = [
     ".agentic-beacon/config.toml",
     ".agentic-beacon/artifacts/",
-    ".agentic-beacon/warehouse-catalog.md",
 ]
 
 # Section header for our entries

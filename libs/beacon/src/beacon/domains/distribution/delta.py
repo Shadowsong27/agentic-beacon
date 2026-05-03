@@ -25,10 +25,8 @@ class DeltaStatus(Enum):
     MODIFIED = "modified"
     ADDED = "added"  # Exists locally but not in warehouse
     MISSING = "missing"  # In beacon.yaml but not synced locally
-    STALE = "stale"  # Installed content matches last snapshot but warehouse HEAD has advanced
+    STALE = "stale"  # Historical status retained for compatibility.
     PENDING = "pending"  # Skill file not yet distributed to this agent (not in warehouse, not in agent)
-    # Note: STALE is NOT in the _compare_skill_file priority map — it is enriched
-    # post-comparison at the CLI layer after reading sync-state.
 
 
 class ComparisonResult(BaseModel):
@@ -215,7 +213,7 @@ class DeltaComparator:
         - IDENTICAL — file matches warehouse exactly
         - MISSING  — file is in warehouse but absent from this tool's global dir
 
-        STALE is not returned here — it is enriched at the CLI layer after reading sync-state.
+        STALE is not returned here; symlinked global agents read warehouse files directly.
 
         Args:
             relative_path: Warehouse-relative path, e.g. "agents/code-reviewer.md".
