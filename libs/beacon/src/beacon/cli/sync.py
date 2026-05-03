@@ -99,6 +99,24 @@ def sync(
         )
         return {"c": "contribute", "d": "discard", "s": "skip"}[choice.lower()]
 
+    def _resolve_skill_conflicts(conflict_paths: list[str]) -> bool:
+        """Prompt the user when live skill files differ from the warehouse.
+
+        Returns True to overwrite (install warehouse symlinks), False to
+        preserve local copies. Used by run_sync when neither --force nor
+        --preserve are supplied and an interactive terminal is attached.
+        """
+        files_list = "\n".join(f"    • {p}" for p in conflict_paths)
+        console.print(
+            f"\n[yellow]Warning:[/yellow] {len(conflict_paths)} live skill "
+            f"file(s) differ from the warehouse (typically leftover copies "
+            f"from an older abc version):\n{files_list}\n"
+        )
+        return click.confirm(
+            "Overwrite local skill file(s) with warehouse symlinks?",
+            default=True,
+        )
+
     try:
         result = run_sync(
             force=force,
@@ -109,6 +127,9 @@ def sync(
             discard_local=discard_local,
             log_fn=log_fn if (verbose_flag or dry_run) else None,
             resolve_callback=_resolve if is_interactive() else None,
+            skill_conflict_callback=(
+                _resolve_skill_conflicts if is_interactive() else None
+            ),
         )
     except BeaconSyncError as e:
         console.print(f"[red]Error:[/red] {e}")

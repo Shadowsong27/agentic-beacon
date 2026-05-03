@@ -499,3 +499,160 @@ class TestWireSkillsPostSync:
 
         assert installed == []
         assert errors == []
+
+
+# ---------------------------------------------------------------------------
+# Migration from pre-symlink copy-based installs
+# ---------------------------------------------------------------------------
+
+
+class TestCopyToSymlinkMigration:
+    """Regression tests for the upgrade path from the old copy-based skill
+    install to the new symlink-based model. Before this fix, divergent regular
+    files at skill destinations were silently skipped by wire_skills_post_sync
+    because resolve_conflict returned NEEDS_CONFIRMATION in non-interactive
+    mode and the code defaulted to preserve=True."""
+
+    def _setup_stale_copy(
+        self, tmp_path: Path, stale_content: str = "stale copy from old abc"
+    ) -> tuple[Path, Path, Path, Path]:
+        warehouse = tmp_path / "warehouse"
+        warehouse.mkdir()
+        warehouse_skill = _make_warehouse_skill(warehouse, "review")
+        artifacts_dir = tmp_path / "project" / ".agentic-beacon" / "artifacts"
+        _make_artifact_skill(artifacts_dir, warehouse_skill)
+        project_root = tmp_path / "project"
+        # Plant a divergent regular file at the live destination (simulating an
+        # older abc that copied content here instead of symlinking).
+        live_dir = project_root / ".opencode" / "skills" / "review"
+        live_dir.mkdir(parents=True)
+        stale_file = live_dir / "SKILL.md"
+        stale_file.write_text(stale_content, encoding="utf-8")
+        assert not stale_file.is_symlink()
+        return warehouse, artifacts_dir, project_root, stale_file
+
+    def test_non_interactive_default_overwrites_stale_copies(self, tmp_path):
+        """When no callback is provided (non-interactive sync, no --force/--preserve),
+        stale regular-file copies must be replaced with warehouse symlinks.
+        Regression for silent-skip bug."""
+        warehouse, artifacts_dir, project_root, stale_file = self._setup_stale_copy(
+            tmp_path
+        )
+
+        installed, errors = wire_skills_post_sync(project_root, artifacts_dir)
+
+        assert errors == []
+        assert stale_file.is_symlink()
+        assert os.readlink(stale_file) == str(
+            (warehouse / "skills" / "review" / "SKILL.md").resolve()
+        )
+        assert any("review" in e and "opencode" in e for e in installed)
+
+    def test_interactive_callback_accepting_overwrites(self, tmp_path):
+        warehouse, artifacts_dir, project_root, stale_file = self._setup_stale_copy(
+            tmp_path
+        )
+        captured: dict[str, list[str]] = {}
+
+        def callback(paths: list[str]) -> bool:
+            captured["paths"] = paths
+            return True
+
+        wire_skills_post_sync(
+            project_root, artifacts_dir, skill_conflict_callback=callback
+        )
+
+        assert captured.get("paths") is not None
+        assert any(str(stale_file) in p for p in captured["paths"])
+        assert stale_file.is_symlink()
+
+    def test_interactive_callback_rejecting_preserves_local(self, tmp_path):
+        warehouse, artifacts_dir, project_root, stale_file = self._setup_stale_copy(
+            tmp_path, stale_content="my precious local edit"
+        )
+
+        def callback(paths: list[str]) -> bool:
+            return False
+
+        wire_skills_post_sync(
+            project_root, artifacts_dir, skill_conflict_callback=callback
+        )
+
+        # Local file preserved; still a regular file with the user's content.
+        assert not stale_file.is_symlink()
+        assert stale_file.read_text(encoding="utf-8") == "my precious local edit"
+
+    def test_preserve_flag_skips_without_calling_callback(self, tmp_path):
+        warehouse, artifacts_dir, project_root, stale_file = self._setup_stale_copy(
+            tmp_path, stale_content="keep me"
+        )
+        callback_called = False
+
+        def callback(paths: list[str]) -> bool:
+            nonlocal callback_called
+            callback_called = True
+            return True
+
+        wire_skills_post_sync(
+            project_root,
+            artifacts_dir,
+            preserve=True,
+            skill_conflict_callback=callback,
+        )
+
+        assert callback_called is False
+        assert not stale_file.is_symlink()
+        assert stale_file.read_text(encoding="utf-8") == "keep me"
+
+    def test_force_overwrites_without_calling_callback(self, tmp_path):
+        warehouse, artifacts_dir, project_root, stale_file = self._setup_stale_copy(
+            tmp_path
+        )
+        callback_called = False
+
+        def callback(paths: list[str]) -> bool:
+            nonlocal callback_called
+            callback_called = True
+            return False  # would reject if called
+
+        wire_skills_post_sync(
+            project_root,
+            artifacts_dir,
+            force=True,
+            skill_conflict_callback=callback,
+        )
+
+        assert callback_called is False
+        assert stale_file.is_symlink()
+
+    def test_identical_content_is_not_a_conflict(self, tmp_path):
+        """A regular file whose content happens to match the warehouse is not a
+        conflict — no callback needed, just silently upgrade to symlink."""
+        warehouse = tmp_path / "warehouse"
+        warehouse.mkdir()
+        warehouse_skill = _make_warehouse_skill(warehouse, "review")
+        artifacts_dir = tmp_path / "project" / ".agentic-beacon" / "artifacts"
+        _make_artifact_skill(artifacts_dir, warehouse_skill)
+        project_root = tmp_path / "project"
+        live_dir = project_root / ".opencode" / "skills" / "review"
+        live_dir.mkdir(parents=True)
+        # Copy the warehouse content byte-for-byte.
+        warehouse_content = (warehouse / "skills" / "review" / "SKILL.md").read_text(
+            encoding="utf-8"
+        )
+        stale_file = live_dir / "SKILL.md"
+        stale_file.write_text(warehouse_content, encoding="utf-8")
+
+        callback_called = False
+
+        def callback(paths: list[str]) -> bool:
+            nonlocal callback_called
+            callback_called = True
+            return True
+
+        wire_skills_post_sync(
+            project_root, artifacts_dir, skill_conflict_callback=callback
+        )
+
+        assert callback_called is False
+        assert stale_file.is_symlink()

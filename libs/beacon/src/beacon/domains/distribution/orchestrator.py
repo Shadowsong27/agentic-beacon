@@ -96,6 +96,7 @@ def run_sync(
     discard_local: bool = False,
     log_fn: Callable[[str], None] | None = None,
     resolve_callback: Callable[[str, str], str] | None = None,
+    skill_conflict_callback: Callable[[list[str]], bool] | None = None,
 ) -> SyncOrchestrationResult:
     """Run the full sync pipeline.
 
@@ -333,7 +334,10 @@ def run_sync(
 
     if beacon_settings.artifacts.skills and not dry_run:
         wired_skills, wire_errors = wire_skills_post_sync(
-            project_root, artifacts_dir, force=force
+            project_root,
+            artifacts_dir,
+            force=force,
+            skill_conflict_callback=skill_conflict_callback,
         )
         update_agent_gitignores(project_root)
 

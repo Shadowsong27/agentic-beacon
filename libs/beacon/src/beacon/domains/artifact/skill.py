@@ -4,6 +4,7 @@ import fnmatch
 import os
 import shutil
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 from rich.console import Console
@@ -447,11 +448,25 @@ def wire_skills_post_sync(
     artifacts_dir: Path,
     force: bool = False,
     preserve: bool = False,
+    skill_conflict_callback: Callable[[list[str]], bool] | None = None,
 ) -> tuple[list[str], list[str]]:
     """Install all synced skills for detected agents.
 
     Respects soft-block flags: --force overwrites without prompt, --preserve skips
     conflicting live skill files.
+
+    When neither flag is supplied and conflicts exist:
+    - If skill_conflict_callback is provided, it is called with the list of
+      conflicting destination paths and must return True to overwrite or False
+      to preserve. The CLI wires this to an interactive `click.confirm`.
+    - Otherwise (non-interactive, no callback), emits a visible warning listing
+      the files and proceeds with overwrite. This preserves the pre-symlink
+      default of replacing out-of-date skill copies without blocking CI or
+      scripted flows. Use --preserve to keep local edits.
+
+    .opencode/skills/ and .claude/skills/ are abc-managed gitignored state,
+    not user-editable content, so the default-overwrite policy is correct for
+    the common "upgrade from copy-based install to symlink-based install" path.
 
     Returns (installed, errors) where each entry is '<skill> (<agent>)'.
     Uses fallback_to_all so skills are always wired regardless of whether agent
@@ -510,8 +525,28 @@ def wire_skills_post_sync(
         if resolution == OverwriteDecision.SKIP:
             preserve = True  # skip conflicting live skill files
         elif resolution == OverwriteDecision.NEEDS_CONFIRMATION:
-            # Without an interactive prompt, skip conflicts conservatively
-            preserve = True
+            conflict_paths = sorted({path for _, _, path in wiring_conflicts})
+            if skill_conflict_callback is not None:
+                if skill_conflict_callback(conflict_paths) is False:
+                    preserve = True
+                # else: proceed with overwrite
+            else:
+                # Non-interactive, no callback — proceed with overwrite (matches
+                # pre-symlink default) but print a visible migration notice so
+                # the user isn't surprised. .opencode/skills/ and
+                # .claude/skills/ are abc-managed gitignored state; overwriting
+                # diverged copies with warehouse content is the expected
+                # upgrade path.
+                console.print(
+                    f"\n[yellow]Migrating [bold]{len(conflict_paths)}[/bold] "
+                    "legacy skill file(s) to warehouse symlinks:[/yellow]"
+                )
+                for path in conflict_paths:
+                    console.print(f"    • {path}", overflow="ellipsis", no_wrap=True)
+                console.print(
+                    "[dim]These files diverged from the warehouse and have "
+                    "been replaced. Use --force to silence this notice.[/dim]"
+                )
 
     installed: list[str] = []
     errors: list[str] = []
