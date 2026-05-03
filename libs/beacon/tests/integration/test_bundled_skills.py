@@ -169,6 +169,34 @@ def test_install_bundled_skills_globally_updates_on_content_change(tmp_path):
         assert content == _real_bundled_skill_content()
 
 
+def test_install_bundled_skills_globally_replaces_symlinked_skill_dir(tmp_path):
+    """Global bundled skill installs use real copies, not symlinked directories."""
+    fake_dirs = _fake_global_dirs(tmp_path)
+    external_dir = tmp_path / "external" / BUNDLED_SKILL_NAME
+    external_dir.mkdir(parents=True)
+    (external_dir / "SKILL.md").write_text(_real_bundled_skill_content())
+
+    symlink_path = fake_dirs["claudecode"] / BUNDLED_SKILL_NAME
+    symlink_path.parent.mkdir(parents=True)
+    symlink_path.symlink_to(external_dir, target_is_directory=True)
+
+    with patch(
+        "beacon.domains.artifact.skill.bundled_global_skill_dirs",
+        return_value=fake_dirs,
+    ):
+        installed, errors = install_bundled_skills_globally()
+
+    assert errors == []
+    assert any(
+        BUNDLED_SKILL_NAME in entry and "claudecode" in entry for entry in installed
+    )
+    assert not symlink_path.is_symlink()
+    assert symlink_path.is_dir()
+    assert (symlink_path / "SKILL.md").read_text(
+        encoding="utf-8"
+    ) == _real_bundled_skill_content()
+
+
 def test_install_bundled_skills_globally_no_agent_detection_required(tmp_path):
     """Global install does not require any agent config in the project."""
     fake_dirs = _fake_global_dirs(tmp_path)

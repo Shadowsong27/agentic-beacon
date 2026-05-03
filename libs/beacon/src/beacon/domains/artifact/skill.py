@@ -1,13 +1,14 @@
 """Skill operations for the artifact domain."""
 
 import fnmatch
+import shutil
 import sys
 from pathlib import Path
 
 from rich.console import Console
 from rich.table import Table
 
-from beacon.core.file_filter import is_skill_file
+from beacon.core.file_filter import SKILL_IGNORE_PATTERNS, is_skill_file
 from beacon.core.manifest.beacon import ArtifactsConfig, BeaconManifest
 from beacon.domains.artifact.agent import detect_agents
 from beacon.utils.interaction import ConflictResolution, resolve_conflict
@@ -115,11 +116,24 @@ def install_bundled_skills_globally() -> tuple[list[str], list[str]]:
 
         for agent, skills_root in global_dirs.items():
             try:
-                dest = skills_root / name / "SKILL.md"
-                if dest.exists() and dest.read_text(encoding="utf-8") == content:
+                dest_dir = skills_root / name
+                dest = dest_dir / "SKILL.md"
+                if (
+                    not dest_dir.is_symlink()
+                    and dest.exists()
+                    and dest.read_text(encoding="utf-8") == content
+                ):
                     continue
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                dest.write_text(content, encoding="utf-8")
+                if dest_dir.is_symlink():
+                    dest_dir.unlink()
+                elif dest_dir.exists():
+                    shutil.rmtree(dest_dir)
+                dest_dir.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copytree(
+                    skill_dir,
+                    dest_dir,
+                    ignore=shutil.ignore_patterns(*SKILL_IGNORE_PATTERNS),
+                )
                 installed.append(f"{name} ({agent})")
             except Exception as e:
                 errors.append(f"{name} ({agent}): {e}")
