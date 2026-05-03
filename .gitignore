@@ -46,3 +46,7 @@ uv.lock
 # Agentic Beacon
 .agentic-beacon/
 .claude/scheduled_tasks.lock
+
+.agentic-beacon/config.toml
+.agentic-beacon/artifacts/
+.agentic-beacon/warehouse-catalog.md

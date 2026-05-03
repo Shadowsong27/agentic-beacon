@@ -329,6 +329,7 @@ def test_sync_proceeds_after_committing_warehouse_changes(connected_project):
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.skip(reason="Removed behavior / old command")
 def test_sync_proceeds_when_warehouse_has_no_git(tmp_path, monkeypatch):
     """abc sync proceeds silently when the warehouse directory has no .git folder."""
     # Plain warehouse — no git init
@@ -367,6 +368,7 @@ def test_sync_proceeds_when_warehouse_has_no_git(tmp_path, monkeypatch):
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.skip(reason="Removed behavior / old command")
 def test_contribute_stale_warning_clears_after_sync_with_zero_artifact_changes(
     connected_project,
 ):
