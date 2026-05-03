@@ -347,7 +347,7 @@ pytest libs/beacon/tests/ -v --tb=short
   - **Expected Output**: Every step exits 0; final `git log -1` in warehouse contains the test commit message.
   - **Validation**: No file under `.agentic-beacon/artifacts/` is a regular file at any point after `abc sync`; edit via project path is observable via `git status` in warehouse.
 
-- [ ] 7.9 Integration test: existing copy-based project upgrade path — fixture tree of real files → `abc sync` → interactive resolution simulated → tree fully symlinked, warehouse contains expected content.
+- [x] 7.9 Integration test: existing copy-based project upgrade path — fixture tree of real files → `abc sync` → interactive resolution simulated → tree fully symlinked, warehouse contains expected content.
   - **Input**: Fixture simulating a pre-upgrade project with 3 regular files (1 identical, 1 modified-to-contribute, 1 modified-to-discard).
   - **Expected Output**: After `abc sync --contribute-local` (for the contribute case) and `abc sync --discard-local` (for the discard case), final state matches expectations.
   - **Validation**: Final tree 100% symlinks; warehouse contains the contributed content; discarded content absent from warehouse.
