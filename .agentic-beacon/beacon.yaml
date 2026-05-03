@@ -1,6 +1,7 @@
 artifacts:
   knowledge: []
-  skills: []
+  skills:
+  - skills/opsx-enhance-tasks/
   contexts:
   - contexts/python-standards.md
   - contexts/openspec-workflow.md
