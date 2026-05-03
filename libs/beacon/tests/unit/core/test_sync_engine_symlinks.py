@@ -7,7 +7,11 @@ import os
 from pathlib import Path
 
 import pytest
-from beacon.domains.distribution.sync_engine import OutOfWarehouseError, SyncEngine
+from beacon.domains.distribution.sync_engine import (
+    DestinationOutsideArtifactsError,
+    OutOfWarehouseError,
+    SyncEngine,
+)
 
 
 @pytest.fixture
@@ -139,8 +143,7 @@ class TestIdempotencyRepairRemoval:
         paths = ["knowledge/standards.md"]
         summary = engine.sync_all(paths)
 
-        # Production code returns "created" when repairing (unlinks wrong target then creates)
-        assert summary.created == 1
+        assert summary.updated == 1
         resolved = Path(link).resolve()
         assert resolved == (fake_warehouse / "knowledge" / "standards.md").resolve()
 
@@ -153,8 +156,7 @@ class TestIdempotencyRepairRemoval:
         paths = ["knowledge/standards.md"]
         summary = engine.sync_all(paths)
 
-        # Production code returns "created" when repairing (unlinks dangling then creates)
-        assert summary.created == 1
+        assert summary.updated == 1
         resolved = Path(link).resolve()
         assert resolved == (fake_warehouse / "knowledge" / "standards.md").resolve()
 
@@ -234,6 +236,23 @@ class TestOutOfWarehouseGuard:
         # No symlinks should have been created
         assert not (engine.artifacts_path / "knowledge" / "standards.md").exists()
         assert not (engine.artifacts_path / "contexts" / "team.md").exists()
+
+    def test_relative_path_escape_aborts_before_writing(self, engine):
+        """Relative paths that would write outside artifacts are rejected."""
+        paths = ["knowledge/standards.md", "../escaped.md"]
+
+        with pytest.raises(OutOfWarehouseError):
+            engine.sync_all(paths)
+
+        assert not (engine.artifacts_path / "knowledge" / "standards.md").exists()
+
+    def test_destination_escape_guard_rejects_absolute_dest(self, engine, tmp_path):
+        """Destination guard rejects paths outside artifacts even if source resolves inside."""
+        # Simulate a path that passes source validation by constructing a source
+        # under the warehouse but an absolute destination path under tmp_path.
+        outside_dest = tmp_path / "outside.md"
+        with pytest.raises(DestinationOutsideArtifactsError):
+            engine.verify_destination_in_artifacts(str(outside_dest))
 
     def test_warehouse_path_is_symlink_entry_inside_target_accepted(
         self, tmp_path, fake_warehouse

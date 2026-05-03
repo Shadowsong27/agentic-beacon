@@ -98,6 +98,9 @@ def migrate_entries(
 
             if discard_local:
                 # Delete local file, create symlink
+                if not warehouse_file.exists():
+                    resolved[rel_path] = "skipped"
+                    continue
                 local_file.unlink()
                 engine.create_symlink(rel_path)
                 resolved[rel_path] = "discarded"
@@ -113,6 +116,9 @@ def migrate_entries(
                     engine.create_symlink(rel_path)
                     resolved[rel_path] = "contributed"
                 elif choice == "discard":
+                    if not warehouse_file.exists():
+                        resolved[rel_path] = "skipped"
+                        continue
                     local_file.unlink()
                     engine.create_symlink(rel_path)
                     resolved[rel_path] = "discarded"

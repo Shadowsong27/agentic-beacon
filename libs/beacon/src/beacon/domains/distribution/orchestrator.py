@@ -31,6 +31,7 @@ from beacon.domains.artifact.skill import (
 )
 from beacon.domains.distribution.migration import migrate_entries
 from beacon.domains.distribution.sync_engine import (
+    DestinationOutsideArtifactsError,
     OutOfWarehouseError,
     SyncEngine,
     SyncSummary,
@@ -137,14 +138,15 @@ def run_sync(
     )
 
     if total_artifacts == 0:
-        bundled_installed, bundled_skipped = install_bundled_skills_globally()
         if not dry_run:
+            bundled_installed, bundled_skipped = install_bundled_skills_globally()
             bundled_wired, bundled_wire_errors = wire_bundled_skills_per_project(
                 project_root
             )
+            sync_agents_from_warehouse(warehouse_path, force=force)
         else:
+            bundled_installed, bundled_skipped = [], []
             bundled_wired, bundled_wire_errors = [], []
-        sync_agents_from_warehouse(warehouse_path, force=force)
         return SyncOrchestrationResult(
             dry_run=dry_run,
             summary=SyncSummary(),
@@ -204,6 +206,19 @@ def run_sync(
             else:
                 artifact_paths.append(pattern)
 
+    try:
+        sync_engine.validate_paths(artifact_paths)
+    except OutOfWarehouseError as e:
+        raise BeaconSyncError(
+            f"Sync aborted: {e}\n"
+            f"Entry '{e.entry}' resolves to {e.resolved_path} which is outside the warehouse."
+        ) from e
+    except DestinationOutsideArtifactsError as e:
+        raise BeaconSyncError(
+            f"Sync aborted: {e}\n"
+            f"Entry '{e.entry}' would write to {e.resolved_path}, outside the project artifacts directory."
+        ) from e
+
     # Detect and handle migration from copy-based trees
     classification = sync_engine.classify_entries(artifact_paths)
     regular_files = {
@@ -261,6 +276,11 @@ def run_sync(
             f"Sync aborted: {e}\n"
             f"Entry '{e.entry}' resolves to {e.resolved_path} which is outside the warehouse."
         ) from e
+    except DestinationOutsideArtifactsError as e:
+        raise BeaconSyncError(
+            f"Sync aborted: {e}\n"
+            f"Entry '{e.entry}' would write to {e.resolved_path}, outside the project artifacts directory."
+        ) from e
 
     if not dry_run:
         gitignore_mgr = GitignoreManager(project_root)
@@ -277,7 +297,7 @@ def run_sync(
     if summary.pruned_paths and not dry_run:
         unwire_pruned_artifacts(project_root, summary.pruned_paths, artifacts_dir)
 
-    if beacon_settings.artifacts.contexts:
+    if beacon_settings.artifacts.contexts and not dry_run:
         oc_added = wire_contexts_opencode(project_root, artifacts_dir)
         cc_added = wire_contexts_claudecode(project_root, artifacts_dir)
 
@@ -302,22 +322,31 @@ def run_sync(
                         "    @.agentic-beacon/artifacts/contexts/<name>.md"
                     )
 
-    if beacon_settings.artifacts.skills:
+    if beacon_settings.artifacts.contexts and dry_run:
+        wiring_notes.append(
+            "  Contexts would be synced — wire them into your agent config if needed:\n"
+            '  [bold]opencode.json[/bold] → add to "instructions" array:\n'
+            '    ".agentic-beacon/artifacts/contexts/<name>.md"\n'
+            "  [bold]CLAUDE.md[/bold] → add a line per context:\n"
+            "    @.agentic-beacon/artifacts/contexts/<name>.md"
+        )
+
+    if beacon_settings.artifacts.skills and not dry_run:
         wired_skills, wire_errors = wire_skills_post_sync(
             project_root, artifacts_dir, force=force
         )
-        if not dry_run:
-            update_agent_gitignores(project_root)
+        update_agent_gitignores(project_root)
 
-    bundled_installed, bundled_skipped = install_bundled_skills_globally()
     if not dry_run:
+        bundled_installed, bundled_skipped = install_bundled_skills_globally()
         bundled_wired, bundled_wire_errors = wire_bundled_skills_per_project(
             project_root
         )
         wired_skills = wired_skills + bundled_wired
         wire_errors = wire_errors + bundled_wire_errors
-
-    sync_agents_from_warehouse(warehouse_path, force=force)
+        sync_agents_from_warehouse(warehouse_path, force=force)
+    else:
+        bundled_installed, bundled_skipped = [], []
 
     adoption_notification = None
     if not dry_run:

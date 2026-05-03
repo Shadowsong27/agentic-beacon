@@ -229,6 +229,23 @@ class TestMigrationResolution:
         wh_file = migration_warehouse / rel
         assert "original content" in wh_file.read_text()
 
+    def test_discard_local_preserves_file_when_warehouse_missing(
+        self, migration_engine
+    ):
+        """Discard cannot delete local-only content when no warehouse source exists."""
+        rel = "knowledge/local-only.md"
+        dest = migration_engine.artifacts_path / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text("# Local only\nimportant content\n")
+
+        classification = migration_engine.classify_entries([rel])
+        resolved = migrate_entries(migration_engine, classification, discard_local=True)
+
+        assert resolved[rel] == "skipped"
+        assert dest.exists()
+        assert not dest.is_symlink()
+        assert "important content" in dest.read_text()
+
 
 class TestResumability:
     """TCs from task 3.6."""

@@ -63,17 +63,11 @@ class TestGlobExpansion:
         matches = glob_engine.expand_glob("skills/review/SKILL.md")
         assert matches == ["skills/review/SKILL.md"]
 
-    def test_glob_includes_git_internal(self, glob_engine, glob_warehouse):
-        """TC4: Current expand_glob does NOT filter .git/ — document actual behavior.
-
-        Note: The spec says globs should skip .git/, but the current production
-        implementation does not filter it. This test documents actual behavior.
-        """
+    def test_glob_skips_git_internal(self, glob_engine, glob_warehouse):
+        """TC4: Glob expansion skips warehouse-internal paths like .git/."""
         # Create a file inside .git/ that would match a broad pattern
         (glob_warehouse / ".git" / "notes.md").write_text("# Git notes\n")
 
         matches = glob_engine.expand_glob("**/*.md")
-        # Document current behavior: .git/ is included
-        # If filtering is added in the future, this assertion should change
         git_matches = [m for m in matches if ".git" in m]
-        assert len(git_matches) == 1
+        assert git_matches == []

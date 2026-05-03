@@ -56,6 +56,17 @@ class OutOfWarehouseError(Exception):
         )
 
 
+class DestinationOutsideArtifactsError(Exception):
+    """Raised when a sync destination would escape the artifacts directory."""
+
+    def __init__(self, entry: str, resolved_path: Path) -> None:
+        self.entry = entry
+        self.resolved_path = resolved_path
+        super().__init__(
+            f"Entry '{entry}' would write outside the artifacts directory: {resolved_path}"
+        )
+
+
 @dataclass
 class SyncEngine:
     """Engine for syncing artifacts from warehouse to project via symlinks."""
@@ -87,6 +98,29 @@ class SyncEngine:
             raise OutOfWarehouseError(relative_path, resolved) from None
         return resolved
 
+    def verify_destination_in_artifacts(self, relative_path: str) -> Path:
+        """Resolve a destination path and verify it lives inside artifacts_path.
+
+        Raises DestinationOutsideArtifactsError if the destination escapes the
+        project artifacts tree (for example via absolute or ../ paths).
+        """
+        candidate = self.artifacts_path / relative_path
+        # Resolve parent directories (to catch parent symlinks escaping artifacts)
+        # but do not resolve the leaf itself: existing artifact leaves are often
+        # symlinks to the warehouse and are still valid destinations to repair/skip.
+        dest = candidate.parent.resolve(strict=False) / candidate.name
+        try:
+            dest.relative_to(self.artifacts_path)
+        except ValueError:
+            raise DestinationOutsideArtifactsError(relative_path, dest) from None
+        return dest
+
+    def validate_paths(self, artifact_paths: list[str]) -> None:
+        """Validate all source and destination paths before filesystem mutation."""
+        for path in artifact_paths:
+            self.verify_in_warehouse(path)
+            self.verify_destination_in_artifacts(path)
+
     def create_symlink(self, relative_path: str) -> SyncResult:
         """Create or repair a symlink for a single artifact.
 
@@ -101,6 +135,15 @@ class SyncEngine:
                 error_message=str(e),
             )
 
+        try:
+            dest = self.verify_destination_in_artifacts(relative_path)
+        except DestinationOutsideArtifactsError as e:
+            return SyncResult(
+                success=False,
+                action="error",
+                error_message=str(e),
+            )
+
         if not source.exists():
             return SyncResult(
                 success=False,
@@ -108,7 +151,6 @@ class SyncEngine:
                 error_message=f"Source file not found: {source}",
             )
 
-        dest = self.artifacts_path / relative_path
         target = str(source)
 
         # Ensure parent directories exist (real directories, not symlinks)
@@ -127,6 +169,7 @@ class SyncEngine:
                     )
                 # Wrong target or broken — remove and recreate
                 dest.unlink()
+                action = "updated"
             else:
                 # Regular file exists — this is a migration case, handled separately
                 return SyncResult(
@@ -135,13 +178,15 @@ class SyncEngine:
                     source_path=source,
                     dest_path=dest,
                 )
+        else:
+            action = "created"
 
         # Create the symlink
         try:
             dest.symlink_to(target)
             return SyncResult(
                 success=True,
-                action="created",
+                action=action,
                 source_path=source,
                 dest_path=dest,
             )
@@ -156,7 +201,7 @@ class SyncEngine:
 
     def remove_symlink(self, relative_path: str) -> SyncResult:
         """Remove a symlink (only if it's a symlink, not a regular file)."""
-        dest = self.artifacts_path / relative_path
+        dest = self.verify_destination_in_artifacts(relative_path)
         if dest.is_symlink():
             try:
                 dest.unlink()
@@ -205,13 +250,8 @@ class SyncEngine:
             if log_fn:
                 log_fn(msg)
 
-        # First, validate all paths are inside the warehouse
-        for path in artifact_paths:
-            try:
-                self.verify_in_warehouse(path)
-            except OutOfWarehouseError:
-                # Re-raise to abort the entire sync
-                raise
+        # First, validate all source and destination paths before any mutation.
+        self.validate_paths(artifact_paths)
 
         # Create symlinks
         for path in artifact_paths:
@@ -280,6 +320,15 @@ class SyncEngine:
                 error_message=str(e),
             )
 
+        try:
+            dest = self.verify_destination_in_artifacts(relative_path)
+        except DestinationOutsideArtifactsError as e:
+            return SyncResult(
+                success=False,
+                action="error",
+                error_message=str(e),
+            )
+
         if not source.exists():
             return SyncResult(
                 success=False,
@@ -287,7 +336,6 @@ class SyncEngine:
                 error_message=f"Source file not found: {source}",
             )
 
-        dest = self.artifacts_path / relative_path
         target = str(source)
 
         if dest.exists() or dest.is_symlink():
@@ -327,6 +375,8 @@ class SyncEngine:
         for match in matches:
             if match.is_file():
                 rel_path = match.relative_to(self.warehouse_path)
+                if ".git" in rel_path.parts:
+                    continue
                 relative_paths.append(str(rel_path))
         return relative_paths
 

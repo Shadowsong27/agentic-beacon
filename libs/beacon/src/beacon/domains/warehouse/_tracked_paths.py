@@ -34,6 +34,7 @@ def _expand_pattern(warehouse_path: Path, pattern: str) -> list[str]:
             str(Path(m).relative_to(warehouse_path))
             for m in matches
             if Path(m).is_file()
+            and ".git" not in Path(m).relative_to(warehouse_path).parts
         ]
 
     p = warehouse_path / pattern
@@ -43,6 +44,7 @@ def _expand_pattern(warehouse_path: Path, pattern: str) -> list[str]:
             str(Path(m).relative_to(warehouse_path))
             for m in matches
             if Path(m).is_file()
+            and ".git" not in Path(m).relative_to(warehouse_path).parts
         ]
 
     if p.is_file():

@@ -219,3 +219,42 @@ class TestContribute:
             check=True,
         )
         assert "untracked.md" not in log.stdout
+
+    def test_pre_staged_unrelated_file_not_committed(self, contrib_project):
+        """Pre-staged unrelated changes are left staged, not included in commit."""
+        project, wh = contrib_project
+        env = _git_env()
+
+        (wh / "knowledge" / "test.md").write_text("# Test\ntracked change\n")
+        (wh / "unrelated.md").write_text("# Unrelated\n")
+        subprocess.run(
+            ["git", "add", "unrelated.md"],
+            cwd=wh,
+            env=env,
+            check=True,
+            capture_output=True,
+        )
+
+        result = contribute(project, message="Commit tracked only", push=False)
+
+        assert result.status == "committed"
+        committed_files = subprocess.run(
+            ["git", "show", "--name-only", "--format=", "HEAD"],
+            cwd=wh,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert "knowledge/test.md" in committed_files.stdout
+        assert "unrelated.md" not in committed_files.stdout
+
+        staged_files = subprocess.run(
+            ["git", "diff", "--cached", "--name-only"],
+            cwd=wh,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert "unrelated.md" in staged_files.stdout

@@ -76,7 +76,9 @@ def contribute(
     _run_git(warehouse_path, ["add", "--", *tracked_paths])
 
     # Commit
-    commit_result = _run_git(warehouse_path, ["commit", "-m", message])
+    commit_result = _run_git(
+        warehouse_path, ["commit", "-m", message, "--", *tracked_paths]
+    )
     if commit_result.returncode != 0:
         logger.error("Git commit failed: {}", commit_result.stderr)
         raise RuntimeError(
