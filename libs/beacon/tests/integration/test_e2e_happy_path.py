@@ -177,7 +177,7 @@ def test_e2e_warehouse_connect(e2e_project):
 
 
 # ---------------------------------------------------------------------------
-# Step 4 — setup --manual produces clean beacon.yaml template
+# Step 4 — setup produces clean beacon.yaml template
 # ---------------------------------------------------------------------------
 
 
@@ -185,7 +185,7 @@ def test_e2e_setup_manual_template(e2e_project):
     project_dir, warehouse, runner = e2e_project
     runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
 
-    result = runner.invoke(main, ["setup", "--manual"])
+    result = runner.invoke(main, ["setup"])
 
     assert result.exit_code == 0
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"

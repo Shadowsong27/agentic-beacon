@@ -34,7 +34,7 @@ def test_sync_with_valid_configuration(valid_warehouse, temp_dir, monkeypatch):
     runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
 
     # Create beacon.yaml
-    runner.invoke(main, ["setup", "--manual"])
+    runner.invoke(main, ["setup"])
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
     beacon_yaml.write_text(
         "artifacts:\n  knowledge:\n    - knowledge/test.md\n  skills: []\n  contexts: []\n"
@@ -65,7 +65,7 @@ def test_sync_is_idempotent(valid_warehouse, temp_dir, monkeypatch):
     # Setup
     (valid_warehouse / "knowledge" / "test.md").write_text("# Test")
     runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
-    runner.invoke(main, ["setup", "--manual"])
+    runner.invoke(main, ["setup"])
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
     beacon_yaml.write_text(
         "artifacts:\n  knowledge:\n    - knowledge/test.md\n  skills: []\n  contexts: []\n"
@@ -103,7 +103,7 @@ def test_sync_with_glob_patterns(valid_warehouse, temp_dir, monkeypatch):
     (valid_warehouse / "knowledge" / "python" / "file2.md").write_text("# File 2")
 
     runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
-    runner.invoke(main, ["setup", "--manual"])
+    runner.invoke(main, ["setup"])
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
     beacon_yaml.write_text(
         "artifacts:\n  knowledge:\n    - knowledge/python/*.md\n  skills: []\n  contexts: []\n"
@@ -178,7 +178,7 @@ def test_sync_with_empty_beacon_yaml(valid_warehouse, temp_dir, monkeypatch):
     monkeypatch.chdir(project_dir)
 
     runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
-    runner.invoke(main, ["setup", "--manual"])
+    runner.invoke(main, ["setup"])
 
     # beacon.yaml with empty lists
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
@@ -209,7 +209,7 @@ def test_sync_dry_run_does_not_copy_files(valid_warehouse, temp_dir, monkeypatch
     (valid_warehouse / "knowledge" / "tip.md").write_text("# Tip")
 
     runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
-    runner.invoke(main, ["setup", "--manual"])
+    runner.invoke(main, ["setup"])
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
     beacon_yaml.write_text(
         "artifacts:\n  knowledge:\n    - knowledge/tip.md\n  skills: []\n  contexts: []\n"
@@ -238,7 +238,7 @@ def test_sync_dry_run_reports_would_copy_count(valid_warehouse, temp_dir, monkey
     (knowledge / "b.md").write_text("B")
 
     runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
-    runner.invoke(main, ["setup", "--manual"])
+    runner.invoke(main, ["setup"])
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
     beacon_yaml.write_text(
         "artifacts:\n  knowledge:\n    - knowledge/a.md\n    - knowledge/b.md\n"
@@ -265,7 +265,7 @@ def test_sync_dry_run_reports_would_remove(valid_warehouse, temp_dir, monkeypatc
     (valid_warehouse / "knowledge" / "stale.md").write_text("stale")
 
     runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
-    runner.invoke(main, ["setup", "--manual"])
+    runner.invoke(main, ["setup"])
 
     # Set up beacon.yaml tracking only "keep.md" — stale.md intentionally omitted
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
@@ -527,7 +527,7 @@ def test_sync_knowledge_node_path_expands_to_files(
     (node_dir / "lessons" / "async.md").write_text("# Async Lessons")
 
     runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
-    runner.invoke(main, ["setup", "--manual"])
+    runner.invoke(main, ["setup"])
 
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
     beacon_yaml.write_text(
@@ -556,7 +556,7 @@ def test_sync_knowledge_nested_node_path_expands(
     (node_dir / "facts" / "schema.md").write_text("# Schema Facts")
 
     runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
-    runner.invoke(main, ["setup", "--manual"])
+    runner.invoke(main, ["setup"])
 
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
     beacon_yaml.write_text(

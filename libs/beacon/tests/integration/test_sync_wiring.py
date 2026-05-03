@@ -1032,7 +1032,7 @@ class TestSyncAgentsFromWarehouse:
     def test_installs_agent_to_opencode_global_dir(
         self, tmp_path, monkeypatch, isolated_home
     ):
-        """abc sync installs warehouse agents into ~/.config/opencode/agents/."""
+        """abc sync links warehouse agents into ~/.config/opencode/agents/."""
         (isolated_home / ".config" / "opencode").mkdir(parents=True)
         wh, project = _make_agent_project(tmp_path, monkeypatch)
 
@@ -1041,13 +1041,14 @@ class TestSyncAgentsFromWarehouse:
 
         assert result.exit_code == 0, result.output
         dest = isolated_home / ".config" / "opencode" / "agents" / "code-reviewer.md"
-        assert dest.exists()
+        assert dest.is_symlink()
+        assert dest.resolve() == (wh / "agents" / "code-reviewer.md").resolve()
         assert dest.read_text() == SAMPLE_AGENT_MD
 
     def test_installs_agent_to_claudecode_global_dir(
         self, tmp_path, monkeypatch, isolated_home
     ):
-        """abc sync installs warehouse agents into ~/.claude/agents/."""
+        """abc sync links warehouse agents into ~/.claude/agents/."""
         (isolated_home / ".claude").mkdir(parents=True)
         wh, project = _make_agent_project(tmp_path, monkeypatch)
 
@@ -1056,7 +1057,8 @@ class TestSyncAgentsFromWarehouse:
 
         assert result.exit_code == 0, result.output
         dest = isolated_home / ".claude" / "agents" / "code-reviewer.md"
-        assert dest.exists()
+        assert dest.is_symlink()
+        assert dest.resolve() == (wh / "agents" / "code-reviewer.md").resolve()
         assert dest.read_text() == SAMPLE_AGENT_MD
 
     def test_installs_to_both_tools_when_both_present(
@@ -1071,10 +1073,14 @@ class TestSyncAgentsFromWarehouse:
         result = runner.invoke(main, ["sync", "--skip-git-check"])
 
         assert result.exit_code == 0, result.output
-        assert (
+        opencode_dest = (
             isolated_home / ".config" / "opencode" / "agents" / "code-reviewer.md"
-        ).exists()
-        assert (isolated_home / ".claude" / "agents" / "code-reviewer.md").exists()
+        )
+        claude_dest = isolated_home / ".claude" / "agents" / "code-reviewer.md"
+        assert opencode_dest.is_symlink()
+        assert claude_dest.is_symlink()
+        assert opencode_dest.resolve() == (wh / "agents" / "code-reviewer.md").resolve()
+        assert claude_dest.resolve() == (wh / "agents" / "code-reviewer.md").resolve()
         assert "code-reviewer" in result.output
 
     def test_skips_agents_when_warehouse_has_no_agents_dir(
@@ -1122,17 +1128,23 @@ class TestSyncAgentsFromWarehouse:
     def test_idempotent_when_already_up_to_date(
         self, tmp_path, monkeypatch, isolated_home
     ):
-        """Running sync twice does not re-write agent files that are already current."""
+        """Running sync twice does not re-link agent files that are already current."""
         agents_dir = isolated_home / ".config" / "opencode" / "agents"
         agents_dir.mkdir(parents=True)
-        (agents_dir / "code-reviewer.md").write_text(SAMPLE_AGENT_MD)
-        mtime_before = (agents_dir / "code-reviewer.md").stat().st_mtime
 
         wh, project = _make_agent_project(tmp_path, monkeypatch)
         runner = CliRunner()
-        runner.invoke(main, ["sync", "--skip-git-check"])
+        result = runner.invoke(main, ["sync", "--skip-git-check"])
+        assert result.exit_code == 0, result.output
 
-        mtime_after = (agents_dir / "code-reviewer.md").stat().st_mtime
+        dest = agents_dir / "code-reviewer.md"
+        assert dest.is_symlink()
+        mtime_before = dest.lstat().st_mtime
+
+        result = runner.invoke(main, ["sync", "--skip-git-check"])
+        assert result.exit_code == 0, result.output
+
+        mtime_after = dest.lstat().st_mtime
         assert mtime_before == mtime_after
 
     def test_force_overwrites_conflicting_agent(
@@ -1148,7 +1160,10 @@ class TestSyncAgentsFromWarehouse:
         result = runner.invoke(main, ["sync", "--force", "--skip-git-check"])
 
         assert result.exit_code == 0, result.output
-        assert (agents_dir / "code-reviewer.md").read_text() == SAMPLE_AGENT_MD
+        dest = agents_dir / "code-reviewer.md"
+        assert dest.is_symlink()
+        assert dest.resolve() == (wh / "agents" / "code-reviewer.md").resolve()
+        assert dest.read_text() == SAMPLE_AGENT_MD
 
     def test_non_interactive_conflict_skips_without_prompt(
         self, tmp_path, monkeypatch, isolated_home

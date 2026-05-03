@@ -437,7 +437,6 @@ _TC10_WAIVERS: dict[str, set[str]] = {
     "domains/adoption/apply.py": {"click", "rich"},
     "domains/artifact/agent.py": {"click", "rich", "sys.exit"},
     "domains/artifact/skill.py": {"rich", "sys.exit"},
-    "domains/distribution/state.py": {"click", "rich"},
     "domains/distribution/upgrader.py": {"click"},
     "domains/setup/wiring.py": {"click", "rich"},
     "domains/warehouse/catalog.py": {"rich"},

@@ -103,7 +103,7 @@ class TestSymlinkE2E:
         assert result.exit_code == 0, f"connect failed:\n{result.output}"
 
         # Step 2: Setup
-        result = runner.invoke(main, ["setup", "--manual"])
+        result = runner.invoke(main, ["setup"])
         assert result.exit_code == 0, f"setup failed:\n{result.output}"
 
         # Step 3: Edit beacon.yaml
@@ -203,7 +203,7 @@ class TestCrossProjectSingleSourceOfTruth:
             )
             assert result.exit_code == 0
 
-            result = runner.invoke(main, ["setup", "--manual"])
+            result = runner.invoke(main, ["setup"])
             assert result.exit_code == 0
 
             beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"

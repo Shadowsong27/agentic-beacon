@@ -90,7 +90,7 @@ class TestMigrationUpgrade:
         assert result.exit_code == 0
 
         # Setup
-        result = runner.invoke(main, ["setup", "--manual"])
+        result = runner.invoke(main, ["setup"])
         assert result.exit_code == 0
 
         beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
@@ -144,7 +144,7 @@ class TestMigrationUpgrade:
         assert result.exit_code == 0
 
         # Setup
-        result = runner.invoke(main, ["setup", "--manual"])
+        result = runner.invoke(main, ["setup"])
         assert result.exit_code == 0
 
         beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
@@ -199,7 +199,7 @@ class TestMigrationUpgrade:
         assert result.exit_code == 0
 
         # Setup
-        result = runner.invoke(main, ["setup", "--manual"])
+        result = runner.invoke(main, ["setup"])
         assert result.exit_code == 0
 
         beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"

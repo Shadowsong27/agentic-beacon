@@ -399,7 +399,7 @@ def test_sync_empty_beacon_yaml_still_installs_bundled_skills(
     monkeypatch.chdir(project_dir)
 
     runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
-    runner.invoke(main, ["setup", "--manual"])
+    runner.invoke(main, ["setup"])
 
     with patch(
         "beacon.domains.artifact.skill.bundled_global_skill_dirs",
