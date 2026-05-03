@@ -50,7 +50,10 @@ def test_expected_domains_exist():
     actual = {
         d.name
         for d in domains_dir.iterdir()
-        if d.is_dir() and not d.name.startswith("_")
+        if d.is_dir()
+        and not d.name.startswith("_")
+        # Ignore stale pycache-only leftovers of deleted domain packages.
+        and any(d.glob("*.py"))
     }
     assert actual == expected, (
         f"Missing or extra domain dirs: {expected.symmetric_difference(actual)}"
