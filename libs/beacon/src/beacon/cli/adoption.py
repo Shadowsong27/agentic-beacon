@@ -9,7 +9,11 @@ from rich.table import Table
 
 from beacon.core.manifest.beacon import BeaconManifest
 from beacon.core.manifest.workspace import WorkspaceConfig
-from beacon.domains.adoption.apply import apply_adoption, cleanup_unadopted_artifacts
+from beacon.domains.adoption.apply import (
+    apply_adoption,
+    cleanup_unadopted_artifacts,
+    warehouse_uncommitted_paths,
+)
 from beacon.domains.adoption.discovery import discover_adoptable, is_agent_installed
 from beacon.domains.adoption.models import AdoptCandidate
 from beacon.domains.adoption.tui import AdoptApp
@@ -164,12 +168,11 @@ def adopt(*, dry_run: bool) -> None:
         installed_count = 0
         for agent_path in agent_adoptions:
             agent_file = warehouse_path / agent_path
-            content = read_agent_definition(agent_file)
-            if content is None:
+            if read_agent_definition(agent_file) is None:
                 continue
             agent_name = agent_file.name
             for tool in tools:
-                install_agent_global(tool, agent_name, content)
+                install_agent_global(tool, agent_name, agent_file)
             installed_count += 1
         if installed_count:
             console.print(
@@ -212,13 +215,17 @@ def adopt(*, dry_run: bool) -> None:
             if expanded:
                 sync_engine.sync_all(
                     artifact_paths=expanded,
-                    preserve=False,
                     dry_run=False,
                 )
-                console.print(
-                    f"[green]✓[/green] Synced and wired: "
-                    f"{', '.join(c.path for c in non_agent_selections)}"
-                )
+                dirty = warehouse_uncommitted_paths(warehouse_path)
+                for c in non_agent_selections:
+                    rel = c.path.rstrip("/")
+                    note = (
+                        " [yellow](has local edits in warehouse)[/yellow]"
+                        if rel in dirty
+                        else ""
+                    )
+                    console.print(f"[green]✓[/green] Symlink created: {c.path}{note}")
 
                 for c in non_agent_selections:
                     if c.artifact_type == "contexts":
