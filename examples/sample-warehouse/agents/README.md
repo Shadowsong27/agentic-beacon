@@ -40,13 +40,13 @@ Team members install agents from the warehouse to their machine:
 abc agents sync
 ```
 
-This installs agents to the globally detected tool directories:
+This links agents to the globally detected tool directories:
 - OpenCode: `~/.config/opencode/agents/<name>.md`
 - Claude Code: `~/.claude/agents/<name>.md`
 
 ## Notes
 
 - Agents are **not** tracked in `beacon.yaml` (they are globally installed)
-- Agents are **not** symlinked by `abc sync` because global tool directories live outside the warehouse tree — they remain real copies, tracked by `~/.config/agentic-beacon/sync-state.json`
+- Global agent files are per-file symlinks to this warehouse, so edits land in the warehouse working tree
 - View installed agents: `abc list agents`
 - View available warehouse agents: `abc warehouse list agents`

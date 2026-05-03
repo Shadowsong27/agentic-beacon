@@ -4,7 +4,7 @@
 
 Expose `--preserve` and `--force` flags on `abc install` so users can control conflict behavior non-interactively (CI pipelines, scripted installs, bulk operations).
 
-> Historical context: earlier versions of this spec also covered `abc sync --preserve` and `abc sync --force`. Under the symlink-based sync model (see `openspec/specs/symlink-based-sync/spec.md`), `abc sync` no longer overwrites files — it creates or repairs symlinks into the warehouse clone — so the conflict flags were removed from `abc sync`. The flags remain on `abc install`, which still materializes real files.
+> Historical context: earlier versions of this spec also covered `abc sync --preserve` and `abc sync --force`. Under the symlink-based sync model (see `openspec/specs/symlink-based-sync/spec.md`), `abc sync` no longer overwrites files — it creates or repairs symlinks into the warehouse clone — so the conflict flags were removed from `abc sync`. The flags remain on `abc install` for target paths that may already contain user-managed regular files.
 
 ## Requirements
 

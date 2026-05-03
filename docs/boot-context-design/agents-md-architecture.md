@@ -139,8 +139,8 @@ Warehouse contexts are distributed via CLI:
 ```bash
 # Connect to your warehouse and declare which contexts to use
 abc warehouse connect --path ~/your-warehouse
-abc setup --manual
-# Edit .agentic-beacon/beacon.yaml to list contexts/skills/knowledge
+abc setup
+abc adopt
 abc sync
 
 # Result: Artifacts copied to .agentic-beacon/artifacts/

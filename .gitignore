@@ -44,7 +44,6 @@ libs/beacon/uv.lock
 uv.lock
 
 # Agentic Beacon
-.agentic-beacon/
 .claude/scheduled_tasks.lock
 
 .agentic-beacon/config.toml

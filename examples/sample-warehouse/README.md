@@ -38,7 +38,8 @@ abc warehouse connect --path ~/agentic-beacon-starter-warehouse
 ### 4. Declare what you want and sync
 
 ```bash
-abc setup --manual   # creates .agentic-beacon/beacon.yaml — edit to pick contexts, knowledge, skills
+abc setup            # creates .agentic-beacon/beacon.yaml
+abc adopt            # select contexts, knowledge, and skills
 abc sync             # creates symlinks into the warehouse clone and wires your agent config
 ```
 

@@ -74,11 +74,11 @@ Agent definitions are sub-agent profiles (e.g. a "code reviewer" agent that can 
 | Contexts | Creates symlinks at `.agentic-beacon/artifacts/contexts/<path>` pointing into the warehouse clone; adds path references to `opencode.json` / `AGENTS.md` |
 | Knowledge | Creates symlinks at `.agentic-beacon/artifacts/knowledge/<path>`; no automatic wiring (referenced from contexts) |
 | Skills | Creates symlinks at `.agentic-beacon/artifacts/skills/<path>`; then wires each detected tool's live skill and command directories |
-| Agents | Reads `agents/` from the warehouse; installs real files directly into global tool directories (copies, not symlinks — see note below); no project artifact entry created |
+| Agents | Reads `agents/` from the warehouse; creates per-file symlinks in global tool directories; no project artifact entry created |
 
 The asymmetry between knowledge and skills is intentional: knowledge does not need to be in a tool-specific location because agents read it via a path reference in the context. Skills need to be wired into tool-specific directories because agents discover them by scanning those directories.
 
-**Why agents are still copied, not symlinked:** global agent directories (`~/.claude/agents/`, `~/.config/opencode/agents/`) live **outside** the warehouse tree. Symlinks into those locations would cross the warehouse boundary in a way that would also leak every non-agent warehouse file onto the user's machine-wide agent path. Agents therefore remain file-copy installs tracked by `~/.config/agentic-beacon/sync-state.json`.
+Global agent directories (`~/.claude/agents/`, `~/.config/opencode/agents/`) live outside project trees, but they still use the same single-source-of-truth model: each installed agent file is a symlink to the corresponding file under `<warehouse>/agents/`. Only selected agent files are linked; the rest of the warehouse is never exposed through the global tool directories.
 
 ### `abc agents sync`
 
@@ -91,14 +91,14 @@ This command exists separately from `abc sync` precisely because the global inst
 `abc warehouse status` reports uncommitted and unpushed state of the warehouse clone, scoped by the current project's `beacon.yaml`. Because symlinks collapse project-vs-warehouse duplication into a single physical file, there is no project-vs-warehouse delta to compute — the question "what did I change in this project?" becomes "what's unstaged/uncommitted in the warehouse?".
 
 - **Contexts / Knowledge / Skills**: runs `git status` / `git diff` in the warehouse working tree, filtered to paths matched by `beacon.yaml`.
-- **Agents (global)**: NOT surfaced by `abc warehouse status` — agents live outside the warehouse tree. Divergence between global agent directories and the warehouse is a separate concern handled by `abc install` conflict detection (see [`install-flags`](../openspec/specs/install-flags/spec.md) and [`sync-soft-block`](../openspec/specs/sync-soft-block/spec.md)).
+- **Agents (global)**: NOT surfaced by project-scoped `abc warehouse status` filtering because agents are not declared in `beacon.yaml`; edit warehouse agent files directly and commit from the warehouse clone.
 
 ### `abc warehouse contribute`
 
 `abc warehouse contribute` commits modifications inside the warehouse clone. The matrix determines what is committed:
 
 - **Contexts / Knowledge / Skills**: any warehouse working-tree modifications to paths matched by the project's `beacon.yaml`. The source is the warehouse file itself — editing via a project symlink is writing to the warehouse.
-- **Agents**: NOT auto-contributed by this command. Agents live outside the warehouse tree. To contribute an agent edit, edit the file inside the warehouse clone directly (e.g. `~/team-warehouse/agents/reviewer.md`) and commit it.
+- **Agents**: NOT auto-contributed by this command because agents are not project-scoped through `beacon.yaml`. To contribute an agent edit, edit the file inside the warehouse clone directly (or through its global symlink) and commit it.
 
 ### `abc install <artifact>`
 
@@ -106,7 +106,7 @@ This command exists separately from `abc sync` precisely because the global inst
 
 - `abc install contexts/python.md` — creates symlink and wires into agent config.
 - `abc install skills/code-review/` — creates symlinks and wires each detected tool directory.
-- `abc install agents/reviewer.md` — installs real file directly into global agent directories (respects `--force` / `--preserve`).
+- `abc install agents/reviewer.md` — creates symlinks in global agent directories (respects `--force` / `--preserve`).
 
 ---
 

@@ -1,0 +1,6 @@
+artifacts:
+  knowledge: []
+  skills: []
+  contexts:
+  - contexts/python-standards.md
+  - contexts/openspec-workflow.md

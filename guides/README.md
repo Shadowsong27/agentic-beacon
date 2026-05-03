@@ -79,13 +79,6 @@ This directory contains **practical how-to guides** for using Agentic Beacon. Fo
 
 **Who should read:** Users who want more control over artifact management
 
-**[Agent-Assisted Setup](./agent-assisted-setup.md)**
-- Using `abc setup --agent-assisted`
-- How the warehouse catalog works
-- Prompting your AI agent to populate `beacon.yaml`
-
-**Who should read:** Users new to a warehouse who want AI help choosing artifacts
-
 **[Creating Skills](./creating-skills.md)**
 - What a skill is and how agents use it
 - Writing `SKILL.md`
@@ -116,11 +109,11 @@ This directory contains **practical how-to guides** for using Agentic Beacon. Fo
 # Connect to warehouse
 abc warehouse connect --path /path/to/warehouse
 
-# Create beacon.yaml (manual)
-abc setup --manual
+# Create beacon.yaml
+abc setup
 
-# Create beacon.yaml (AI-assisted)
-abc setup --agent-assisted
+# Select artifacts from the warehouse
+abc adopt
 
 # Sync artifacts (creates symlinks into the warehouse clone)
 abc sync
@@ -146,8 +139,8 @@ abc sync --help
 ```bash
 cd my-project
 abc warehouse connect --path ~/team-warehouse
-abc setup --manual
-# Edit .agentic-beacon/beacon.yaml
+abc setup
+abc adopt
 abc sync
 ```
 

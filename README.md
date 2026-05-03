@@ -46,11 +46,11 @@ contexts/    ── abc sync (symlink) ──►  .agentic-beacon/artifacts/cont
 skills/      ── abc sync (symlink) ──►  .agentic-beacon/artifacts/skills/
                                         .opencode/skills/<name>/  (wired)
                                         .claude/skills/<name>/    (wired)
-agents/      ── abc agents sync  ───►   ~/.claude/agents/<name>.md       (copied, outside warehouse)
+agents/      ── abc agents sync (symlink) ─► ~/.claude/agents/<name>.md
                                         ~/.config/opencode/agents/<name>.md
 ```
 
-`abc sync` reads `beacon.yaml` and creates per-file **symlinks** from `.agentic-beacon/artifacts/` into your local warehouse clone, then wires skills into each detected tool's live directories. One logical artifact, one physical file per machine — no duplicate copies, no merge-back cycle. Agents, which live outside the warehouse tree in machine-wide tool directories, are still installed as copies via `abc agents sync`.
+`abc sync` reads `beacon.yaml` and creates per-file **symlinks** from `.agentic-beacon/artifacts/` into your local warehouse clone, then wires skills into each detected tool's live directories. One logical artifact, one physical file per machine — no duplicate copies, no merge-back cycle. Agents, which live outside the project tree in machine-wide tool directories, are also installed as per-file symlinks via `abc agents sync`.
 
 When a session produces something worth sharing, you edit the file in place — the edit lands directly in the warehouse working tree through the symlink — and commit it with `abc warehouse contribute -m "…"`. Teammates pull the warehouse and the new content is visible through their existing project symlinks with no per-project resync.
 

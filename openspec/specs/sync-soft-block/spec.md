@@ -4,7 +4,7 @@
 
 Prevent silent overwrites of user-modified artifact files during installation by presenting a soft block (interactive prompt) when `abc install` would otherwise clobber locally-modified content. The soft block extends to skill live-dir wiring.
 
-> Historical context: earlier versions of this spec also covered `abc sync`. `abc sync` no longer copies files — it creates symlinks into the warehouse clone (see `openspec/specs/symlink-based-sync/spec.md` and `knowledge/decisions/single-warehouse-write-entrypoint.md`), so the overwrite-collision model does not apply. The soft block remains relevant for `abc install`, which still materializes real files in target locations outside the warehouse tree (global agent dirs, opencode/claude skill dirs).
+> Historical context: earlier versions of this spec also covered `abc sync`. `abc sync` no longer copies files — it creates symlinks into the warehouse clone (see `openspec/specs/symlink-based-sync/spec.md` and `knowledge/decisions/single-warehouse-write-entrypoint.md`), so the overwrite-collision model does not apply. The soft block remains relevant for install/wiring paths that replace existing regular files with warehouse-managed symlinks or package-managed files.
 
 ## Requirements
 

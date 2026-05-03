@@ -465,7 +465,7 @@ pytest libs/beacon/tests/ -v --tb=short
 - [ ] **[MANUAL]** 10.4 After merge and implementation verification, archive this change and the superseded `snapshot-based-sync` / `delta-contribution-workflow` specs per `/opsx-archive` flow.
   - **Input**: Run the archive skill/command; follow prompts.
   - **Expected Output**: `openspec/changes/archive/symlink-based-artifact-sync/` exists; `openspec/specs/snapshot-based-sync/` and `openspec/specs/delta-contribution-workflow/` moved under `openspec/specs/archive/` (or removed per archive convention).
-  - **Additional orphaned specs identified during chunk C**: also archive `openspec/specs/contribute-noop/` (only applied to the removed `abc contribute` command) and `openspec/specs/global-agent-delta/` (only applied to the removed `abc delta` command). These were not named in the original proposal but are fully orphaned by the implementation. The `global-agent-sync-state`, `sync-soft-block`, and `install-flags` specs were partially orphaned and have been rewritten in-place (chunk C) to cover only the `abc install` surface.
+  - **Additional orphaned specs identified during chunk C**: also archive `openspec/specs/contribute-noop/` (only applied to the removed `abc contribute` command) and `openspec/specs/global-agent-delta/` (only applied to the removed `abc delta` command). These were not named in the original proposal but are fully orphaned by the implementation. The `global-agent-sync-state` spec was removed after global agents moved to symlinks; `sync-soft-block` and `install-flags` have been rewritten in-place to cover only the `abc install` surface.
   - **Validation**: `openspec list --json` no longer lists the archived change; active specs no longer contain the four superseded ones.
 
 ---

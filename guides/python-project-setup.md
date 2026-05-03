@@ -12,7 +12,7 @@ This guide shows how to configure Agentic Beacon for a Python project. The speci
 ```bash
 cd my-python-project
 abc warehouse connect --path ~/team-warehouse
-abc setup --manual
+abc setup
 ```
 
 This creates `.agentic-beacon/beacon.yaml` with an empty template.

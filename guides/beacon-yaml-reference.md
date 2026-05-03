@@ -170,9 +170,8 @@ An empty `knowledge` or `skills` list is valid — those artifact types simply w
 
 | Command | Effect on `beacon.yaml` |
 |---------|------------------------|
-| `abc setup --manual` | Creates an empty template |
-| `abc setup --agent-assisted` | Creates template + `warehouse-catalog.md` to help fill it |
-| `abc install <artifact>` | Materializes one artifact into global/tool dirs, then adds it to `beacon.yaml` |
+| `abc setup` | Creates an empty commented template |
+| `abc adopt` | Lets you select warehouse artifacts and adds them to `beacon.yaml` |
 | `abc sync` | Reads `beacon.yaml`, creates symlinks into the warehouse clone for every matching artifact |
 | `abc sync --dry-run` | Reads `beacon.yaml`, prints the symlink operations that would be performed |
 | `abc warehouse status` | Reads `beacon.yaml` to scope its git-status/diff report to declared paths |
@@ -184,7 +183,7 @@ An empty `knowledge` or `skills` list is valid — those artifact types simply w
 
 `abc sync` validates `beacon.yaml` before proceeding. It will error if:
 
-- The file does not exist → run `abc setup --manual`
+- The file does not exist → run `abc setup`
 - The YAML is malformed (syntax error)
 - The `artifacts` key is missing
 - Any of `knowledge`, `skills`, or `contexts` is not a list
@@ -205,7 +204,6 @@ A warning (not an error) is shown for:
 ```
 .agentic-beacon/config.toml
 .agentic-beacon/artifacts/
-.agentic-beacon/warehouse-catalog.md
 ```
 
 The `.gitignore` entries are added automatically when you run `abc warehouse connect` and `abc sync`.
@@ -216,10 +214,10 @@ The `.gitignore` entries are added automatically when you run `abc warehouse con
 
 ```bash
 # Create beacon.yaml
-abc setup --manual
+abc setup
 
-# Populate it with agent assistance
-abc setup --agent-assisted
+# Add artifacts from the warehouse
+abc adopt
 
 # Apply the configuration
 abc sync
@@ -236,5 +234,4 @@ abc warehouse contribute -m "…" --push
 ## Next Steps
 
 - **[Advanced Patterns](./advanced-patterns.md)** — Glob syntax, sync flags, delta workflow
-- **[Agent-Assisted Setup](./agent-assisted-setup.md)** — Let an AI agent help fill in `beacon.yaml`
 - **[Creating Skills](./creating-skills.md)** — Build and add skills to your warehouse

@@ -621,8 +621,8 @@ Connect the project to a warehouse and declare which artifacts to use:
 
 ```bash
 abc warehouse connect --path ~/org-warehouse
-abc setup --manual   # or --agent-assisted
-# Edit .agentic-beacon/beacon.yaml to choose contexts, knowledge, and skills
+abc setup
+abc adopt            # choose contexts, knowledge, and skills
 abc sync
 ```
 

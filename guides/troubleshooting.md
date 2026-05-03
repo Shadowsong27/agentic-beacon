@@ -44,7 +44,7 @@ local_path = "/absolute/path/to/warehouse"
 
 **Solution:**
 ```bash
-abc setup --manual
+abc setup
 # Then edit .agentic-beacon/beacon.yaml
 abc sync
 ```
@@ -441,7 +441,7 @@ When reporting issues, include:
 | Problem | Quick Fix |
 |---------|-----------|
 | No warehouse connected | `abc warehouse connect --path <warehouse>` |
-| No beacon.yaml | `abc setup --manual` |
+| No beacon.yaml | `abc setup` |
 | Files not syncing | Check paths in beacon.yaml match warehouse |
 | Slow sync | Use more specific glob patterns |
 | Wrong version | `pip install --upgrade agentic-beacon` |

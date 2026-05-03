@@ -119,7 +119,7 @@ artifacts:
 # New team member starting Python API project
 cd new-api-project
 abc warehouse connect --path ~/team-warehouse
-abc setup --manual
+abc setup
 cp ~/team-warehouse/examples/beacon.yaml.python-api .agentic-beacon/beacon.yaml
 abc sync
 ```
@@ -478,7 +478,7 @@ abc warehouse connect --path ~/our-team-warehouse
 
 **3. Create beacon.yaml:**
 ```bash
-abc setup --manual
+abc setup
 # Copy from example or create custom
 abc sync
 ```

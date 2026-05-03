@@ -1,7 +1,9 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "instructions": [
-    "AGENTS.md"
+    "AGENTS.md",
+    ".agentic-beacon/artifacts/contexts/python-standards.md",
+    ".agentic-beacon/artifacts/contexts/openspec-workflow.md"
   ],
   "permission": {
     "skill": "allow"
