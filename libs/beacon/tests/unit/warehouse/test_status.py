@@ -106,10 +106,10 @@ class TestStatus:
         (wh / "knowledge" / "test.md").write_text("# Test\nmodified\n")
 
         result = status(project)
-        # Production code strips leading space from git status --porcelain,
-        # causing the first character of the path to be lost.
-        # We assert that at least one modification with status "M" exists.
-        assert any(m.status == "M" for m in result.modifications)
+        assert any(
+            m.status == "M" and m.path == "knowledge/test.md"
+            for m in result.modifications
+        )
 
     def test_modified_untracked_files_not_listed(self, status_project):
         """Modified files NOT tracked by beacon.yaml -> NOT listed."""
@@ -127,9 +127,46 @@ class TestStatus:
         (wh / "untracked.md").write_text("# Untracked\nmodified\n")
 
         result = status(project, all_paths=True)
-        paths = [m.path for m in result.modifications]
-        # With --all, untracked file should appear (path may be truncated due to strip bug)
-        assert any("ntracked" in p for p in paths)
+        assert any(m.path == "untracked.md" for m in result.modifications)
+
+    def test_filenames_are_complete_with_leading_space_status(self, status_project):
+        """Leading-space porcelain codes keep the full filename intact."""
+        project, wh = status_project
+        filename = "knowledge/full-filename-regression.md"
+        target = wh / filename
+        target.write_text("# Full filename\n")
+
+        env = _git_env()
+        subprocess.run(
+            ["git", "add", filename],
+            cwd=wh,
+            env=env,
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "commit", "-m", "Add regression file"],
+            cwd=wh,
+            env=env,
+            check=True,
+            capture_output=True,
+        )
+
+        target.write_text("# Full filename\nmodified\n")
+
+        beacon_yaml = project / ".agentic-beacon" / "beacon.yaml"
+        beacon_yaml.write_text(
+            "artifacts:\n"
+            "  knowledge:\n"
+            "    - knowledge/test.md\n"
+            "    - knowledge/other.md\n"
+            f"    - {filename}\n"
+            "  skills: []\n"
+            "  contexts: []\n"
+        )
+
+        result = status(project)
+        assert any(m.path == filename for m in result.modifications)
 
     def test_ahead_behind_with_upstream(self, status_project, tmp_path):
         """TC3: Warehouse branch 3 commits ahead of upstream -> ahead=3."""

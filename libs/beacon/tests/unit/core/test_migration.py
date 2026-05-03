@@ -229,13 +229,6 @@ class TestMigrationResolution:
         wh_file = migration_warehouse / rel
         assert "original content" in wh_file.read_text()
 
-    def test_contribute_and_discard_mutually_exclusive(self, migration_engine):
-        """TC from 3.5: Both flags passed -> command errors out (checked in orchestrator)."""
-        # This is actually tested in the orchestrator / CLI layer.
-        # The migrate_entries function itself doesn't check this.
-        # Mark as tested elsewhere.
-        pytest.skip("Mutual exclusivity checked in orchestrator, not migrate_entries")
-
 
 class TestResumability:
     """TCs from task 3.6."""

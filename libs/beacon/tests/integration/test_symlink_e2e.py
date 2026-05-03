@@ -262,3 +262,22 @@ class TestCrossProjectSingleSourceOfTruth:
             check=True,
         )
         assert "Cross-project edit" in log.stdout
+
+
+def test_install_shim_redirects_to_beacon_yaml(e2e_warehouse, tmp_path, monkeypatch):
+    """abc install exits 1 and points users at beacon.yaml + abc sync."""
+    project_dir = tmp_path / "project"
+    project_dir.mkdir()
+    monkeypatch.chdir(project_dir)
+
+    runner = CliRunner()
+    connect_result = runner.invoke(
+        main, ["warehouse", "connect", "--path", str(e2e_warehouse)]
+    )
+    assert connect_result.exit_code == 0
+
+    result = runner.invoke(main, ["install", "foo"])
+
+    assert result.exit_code == 1
+    assert "has been removed" in result.output
+    assert "beacon.yaml" in result.output

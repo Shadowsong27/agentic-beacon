@@ -8,7 +8,7 @@ from __future__ import annotations
 from enum import StrEnum
 
 
-class ConflictResolution(StrEnum):
+class OverwriteDecision(StrEnum):
     """Result of resolving a file-overwrite conflict."""
 
     PROCEED = "proceed"
@@ -21,7 +21,7 @@ def resolve_conflict(
     force: bool = False,
     preserve: bool = False,
     has_conflicts: bool = False,
-) -> ConflictResolution:
+) -> OverwriteDecision:
     """Determine what to do when local files conflict with warehouse copies.
 
     Args:
@@ -30,14 +30,14 @@ def resolve_conflict(
         has_conflicts: Whether any conflicting files exist.
 
     Returns:
-        ConflictResolution.PROCEED if safe to overwrite.
-        ConflictResolution.SKIP if caller should skip conflicts.
-        ConflictResolution.NEEDS_CONFIRMATION if user input is required.
+        OverwriteDecision.PROCEED if safe to overwrite.
+        OverwriteDecision.SKIP if caller should skip conflicts.
+        OverwriteDecision.NEEDS_CONFIRMATION if user input is required.
     """
     if not has_conflicts:
-        return ConflictResolution.PROCEED
+        return OverwriteDecision.PROCEED
     if preserve:
-        return ConflictResolution.SKIP
+        return OverwriteDecision.SKIP
     if force:
-        return ConflictResolution.PROCEED
-    return ConflictResolution.NEEDS_CONFIRMATION
+        return OverwriteDecision.PROCEED
+    return OverwriteDecision.NEEDS_CONFIRMATION

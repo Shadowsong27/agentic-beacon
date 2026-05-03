@@ -11,7 +11,7 @@ from rich.table import Table
 from beacon.core.file_filter import SKILL_IGNORE_PATTERNS, is_skill_file
 from beacon.core.manifest.beacon import ArtifactsConfig, BeaconManifest
 from beacon.domains.artifact.agent import detect_agents
-from beacon.utils.interaction import ConflictResolution, resolve_conflict
+from beacon.utils.interaction import OverwriteDecision, resolve_conflict
 
 _BUNDLED_DATA_DIR = Path(__file__).parent.parent.parent / "data"
 BUNDLED_SKILLS_DIR = _BUNDLED_DATA_DIR / "skills"
@@ -426,9 +426,9 @@ def wire_skills_post_sync(
         resolution = resolve_conflict(
             force=force, preserve=preserve, has_conflicts=True
         )
-        if resolution == ConflictResolution.SKIP:
+        if resolution == OverwriteDecision.SKIP:
             preserve = True  # skip conflicting live skill files
-        elif resolution == ConflictResolution.NEEDS_CONFIRMATION:
+        elif resolution == OverwriteDecision.NEEDS_CONFIRMATION:
             # Without an interactive prompt, skip conflicts conservatively
             preserve = True
 

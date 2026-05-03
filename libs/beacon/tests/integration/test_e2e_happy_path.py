@@ -2,7 +2,7 @@
 
 Runs the complete user workflow in a single chained test:
   warehouse init → list → warehouse connect → setup → sync →
-  status → delta → sync --preserve → sync --prune → update → clean
+  status → warehouse status → sync → sync --prune → update → clean
 
 This test is the automated equivalent of the manual e2e walkthrough done
 before each release. If this test passes, the core user journey works.
@@ -312,12 +312,22 @@ def test_e2e_status_shows_check_marks_for_synced(e2e_project):
 
 
 # ---------------------------------------------------------------------------
-# Step 7 — delta detects no changes, then detects a local modification
+# Step 7 — warehouse status and delta shim behavior
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skip(reason="abc delta removed in symlink-based-artifact-sync")
-def test_e2e_delta_clean(e2e_project, isolated_home):
+def test_e2e_delta_shim_redirects_to_warehouse_status(e2e_project):
+    project_dir, warehouse, runner = e2e_project
+    runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
+
+    result = runner.invoke(main, ["delta"])
+
+    assert result.exit_code == 1
+    assert "has been removed" in result.output
+    assert "warehouse status" in result.output
+
+
+def test_e2e_warehouse_status_clean(e2e_project):
     project_dir, warehouse, runner = e2e_project
     runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
 
@@ -331,14 +341,13 @@ def test_e2e_delta_clean(e2e_project, isolated_home):
     )
     runner.invoke(main, ["sync"])
 
-    result = runner.invoke(main, ["delta"])
+    result = runner.invoke(main, ["warehouse", "status"])
 
     assert result.exit_code == 0
-    assert "No differences" in result.output
+    assert "Working tree is clean" in result.output
 
 
-@pytest.mark.skip(reason="abc delta removed in symlink-based-artifact-sync")
-def test_e2e_delta_detects_modification(e2e_project):
+def test_e2e_warehouse_status_detects_modification(e2e_project):
     project_dir, warehouse, runner = e2e_project
     runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
 
@@ -363,10 +372,10 @@ def test_e2e_delta_detects_modification(e2e_project):
     )
     synced.write_text(synced.read_text() + "- Local addition\n")
 
-    result = runner.invoke(main, ["delta"])
+    result = runner.invoke(main, ["warehouse", "status"])
 
     assert result.exit_code == 0
-    assert "Modified" in result.output
+    assert "modified" in result.output.lower()
     assert "knowledge/python/standards.md" in result.output
 
 
@@ -375,9 +384,8 @@ def test_e2e_delta_detects_modification(e2e_project):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skip(reason="abc delta removed in symlink-based-artifact-sync")
 def test_e2e_delta_skill_clean_after_sync(e2e_project, isolated_home):
-    """After abc sync, delta reports skill as identical (live dir matches warehouse)."""
+    """After abc sync, warehouse status reports the live skill as clean."""
     project_dir, warehouse, runner = e2e_project
     runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
 
@@ -398,15 +406,14 @@ def test_e2e_delta_skill_clean_after_sync(e2e_project, isolated_home):
     # Verify the live skill was installed
     assert (project_dir / ".opencode" / "skills" / "code-review" / "SKILL.md").exists()
 
-    result = runner.invoke(main, ["delta"])
+    result = runner.invoke(main, ["warehouse", "status"])
 
     assert result.exit_code == 0
-    assert "No differences" in result.output
+    assert "Working tree is clean" in result.output
 
 
-@pytest.mark.skip(reason="abc delta removed in symlink-based-artifact-sync")
 def test_e2e_delta_skill_detects_live_modification(e2e_project):
-    """abc delta detects a modification made directly to the live agent skill file."""
+    """warehouse status detects a modification made directly in the warehouse skill file."""
     project_dir, warehouse, runner = e2e_project
     runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
 
@@ -422,132 +429,40 @@ def test_e2e_delta_skill_detects_live_modification(e2e_project):
     )
     runner.invoke(main, ["sync"])
 
-    # Edit the live agent copy (simulates a user adding a guardrail locally)
-    live_skill = project_dir / ".opencode" / "skills" / "code-review" / "SKILL.md"
-    live_skill.write_text(live_skill.read_text() + "\n## Local Guardrail\nNo foo.\n")
+    warehouse_skill = warehouse / "skills" / "code-review" / "SKILL.md"
+    warehouse_skill.write_text(
+        warehouse_skill.read_text() + "\n## Warehouse Guardrail\nNo foo.\n"
+    )
 
-    result = runner.invoke(main, ["delta"])
+    result = runner.invoke(main, ["warehouse", "status"])
 
     assert result.exit_code == 0
-    assert "Modified" in result.output
-    assert "skills/code-review/" in result.output
+    assert "modified" in result.output.lower()
+    assert "skills/code-review/SKILL.md" in result.output
 
 
-@pytest.mark.skip(reason="abc delta removed in symlink-based-artifact-sync")
 def test_e2e_delta_skill_snapshot_identical_but_live_modified(e2e_project):
-    """Regression: delta catches live skill drift even when snapshot still matches warehouse.
-
-    This is the exact bug scenario: snapshot == warehouse but live != warehouse.
-    The old code would report 'No differences'. The fix makes it report Modified.
-    """
+    """abc delta now redirects users to abc warehouse status."""
     project_dir, warehouse, runner = e2e_project
     runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
 
-    (project_dir / "opencode.json").write_text("{}")
-
-    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
-    beacon_yaml.write_text(
-        "artifacts:\n"
-        "  knowledge: []\n"
-        "  skills:\n"
-        "    - skills/code-review/\n"
-        "  contexts: []\n"
-    )
-    runner.invoke(main, ["sync"])
-
-    # Corrupt the live skill but leave the snapshot untouched
-    live_skill = project_dir / ".opencode" / "skills" / "code-review" / "SKILL.md"
-    live_skill.write_text("# Completely replaced\n")
-
-    # Confirm snapshot is still identical to warehouse
-    snapshot = (
-        project_dir
-        / ".agentic-beacon"
-        / "artifacts"
-        / "skills"
-        / "code-review"
-        / "SKILL.md"
-    )
-    warehouse_content = (warehouse / "skills" / "code-review" / "SKILL.md").read_text()
-    assert snapshot.read_text() == warehouse_content
-
     result = runner.invoke(main, ["delta"])
 
-    assert result.exit_code == 0
-    assert "Modified" in result.output, (
-        "Expected 'Modified' — delta should detect live drift, not just snapshot drift"
-    )
+    assert result.exit_code == 1
+    assert "has been removed" in result.output
+    assert "warehouse status" in result.output
 
 
-@pytest.mark.skip(reason="abc delta removed in symlink-based-artifact-sync")
 def test_e2e_delta_skill_per_agent_detail_in_output(e2e_project):
-    """With both opencode and claudecode present, delta shows per-agent breakdown."""
+    """abc delta no longer exposes per-agent live-dir detail and redirects instead."""
     project_dir, warehouse, runner = e2e_project
     runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
-
-    # Both agents configured
-    (project_dir / "opencode.json").write_text("{}")
-    (project_dir / ".claude").mkdir()
-
-    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
-    beacon_yaml.write_text(
-        "artifacts:\n"
-        "  knowledge: []\n"
-        "  skills:\n"
-        "    - skills/code-review/\n"
-        "  contexts: []\n"
-    )
-    runner.invoke(main, ["sync"])
-
-    # Edit only the opencode live copy
-    oc_skill = project_dir / ".opencode" / "skills" / "code-review" / "SKILL.md"
-    oc_skill.write_text(oc_skill.read_text() + "\n## Extra\n")
 
     result = runner.invoke(main, ["delta"])
 
-    assert result.exit_code == 0
-    assert "Modified" in result.output
-    # Per-agent breakdown should appear
-    assert "opencode" in result.output
-    assert "claudecode" in result.output
-
-
-# ---------------------------------------------------------------------------
-# Step 8 — sync --preserve skips locally modified file
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.skip(reason="--preserve flag removed in symlink-based-artifact-sync")
-def test_e2e_sync_preserve(e2e_project):
-    project_dir, warehouse, runner = e2e_project
-    runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
-
-    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
-    beacon_yaml.write_text(
-        "artifacts:\n"
-        "  knowledge:\n"
-        "    - knowledge/python/standards.md\n"
-        "  skills: []\n"
-        "  contexts: []\n"
-    )
-    runner.invoke(main, ["sync"])
-
-    synced = (
-        project_dir
-        / ".agentic-beacon"
-        / "artifacts"
-        / "knowledge"
-        / "python"
-        / "standards.md"
-    )
-    synced.write_text(synced.read_text() + "- Local addition\n")
-    original_content = synced.read_text()
-
-    result = runner.invoke(main, ["sync", "--preserve"])
-
-    assert result.exit_code == 0
-    assert "Preserved: 1" in result.output
-    assert synced.read_text() == original_content  # unchanged
+    assert result.exit_code == 1
+    assert "has been removed" in result.output
+    assert "warehouse status" in result.output
 
 
 # ---------------------------------------------------------------------------
@@ -678,18 +593,10 @@ def test_e2e_clean(e2e_project):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.skip(reason="old abc contribute removed in symlink-based-artifact-sync")
 def test_e2e_contribute_skill_live_modification_goes_to_warehouse(e2e_project):
-    """Full workflow: sync → edit live skill → contribute → warehouse updated.
-
-    This is the core scenario: user syncs, tweaks the installed skill in
-    their agent folder, then contributes it back. Without the fix, contribute
-    would copy the stale snapshot (identical to warehouse) and silently do nothing.
-    """
+    """abc warehouse contribute commits warehouse working-tree changes."""
     project_dir, warehouse, runner = e2e_project
     runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
-
-    (project_dir / "opencode.json").write_text("{}")
 
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
     beacon_yaml.write_text(
@@ -701,105 +608,43 @@ def test_e2e_contribute_skill_live_modification_goes_to_warehouse(e2e_project):
     )
     runner.invoke(main, ["sync"])
 
-    # Edit the live agent copy
-    live_skill = project_dir / ".opencode" / "skills" / "code-review" / "SKILL.md"
-    original = live_skill.read_text()
-    live_skill.write_text(original + "\n## Local Guardrail\nNo foo.\n")
-
-    result = runner.invoke(
-        main, ["contribute", "skills/code-review/SKILL.md"], input="y\n"
+    warehouse_skill = warehouse / "skills" / "code-review" / "SKILL.md"
+    warehouse_skill.write_text(
+        warehouse_skill.read_text() + "\n## Local Guardrail\nNo foo.\n"
     )
 
+    result = runner.invoke(main, ["warehouse", "contribute", "-m", "skill update"])
+
     assert result.exit_code == 0, result.output
-    # Warehouse now contains the live version
-    warehouse_skill = warehouse / "skills" / "code-review" / "SKILL.md"
     assert "Local Guardrail" in warehouse_skill.read_text()
 
 
-@pytest.mark.skip(reason="old abc contribute removed in symlink-based-artifact-sync")
 def test_e2e_contribute_skill_regression_stale_snapshot(e2e_project):
-    """Regression: contribute does not silently skip when snapshot matches warehouse.
-
-    Snapshot == warehouse (unchanged) but live dir has edits.
-    Old behaviour: reported 'Nothing to contribute'. Fix: reads live dir.
-    """
+    """Old abc contribute redirects users to abc warehouse contribute."""
     project_dir, warehouse, runner = e2e_project
     runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
 
-    (project_dir / "opencode.json").write_text("{}")
+    result = runner.invoke(main, ["contribute"])
 
-    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
-    beacon_yaml.write_text(
-        "artifacts:\n"
-        "  knowledge: []\n"
-        "  skills:\n"
-        "    - skills/code-review/\n"
-        "  contexts: []\n"
-    )
-    runner.invoke(main, ["sync"])
-
-    # Edit only the live dir, leave the snapshot alone
-    live_skill = project_dir / ".opencode" / "skills" / "code-review" / "SKILL.md"
-    live_skill.write_text("# Completely replaced\n")
-
-    # Confirm snapshot still matches warehouse
-    snapshot = (
-        project_dir
-        / ".agentic-beacon"
-        / "artifacts"
-        / "skills"
-        / "code-review"
-        / "SKILL.md"
-    )
-    warehouse_content = (warehouse / "skills" / "code-review" / "SKILL.md").read_text()
-    assert snapshot.read_text() == warehouse_content
-
-    result = runner.invoke(
-        main, ["contribute", "skills/code-review/SKILL.md"], input="y\n"
-    )
-
-    assert result.exit_code == 0, result.output
-    assert "nothing to contribute" not in result.output.lower(), (
-        "Should not skip — live dir has changes"
-    )
-    assert (warehouse / "skills" / "code-review" / "SKILL.md").read_text() == (
-        "# Completely replaced\n"
-    )
+    assert result.exit_code == 1
+    assert "has been removed" in result.output
+    assert "warehouse contribute" in result.output
 
 
-@pytest.mark.skip(reason="old abc contribute removed in symlink-based-artifact-sync")
 def test_e2e_contribute_all_skill_live_modification(e2e_project):
-    """abc contribute (no file) picks up live-dir skill changes."""
+    """Old fileless abc contribute also redirects users to abc warehouse contribute."""
     project_dir, warehouse, runner = e2e_project
     runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
 
-    (project_dir / "opencode.json").write_text("{}")
+    result = runner.invoke(main, ["contribute"])
 
-    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
-    beacon_yaml.write_text(
-        "artifacts:\n"
-        "  knowledge:\n"
-        "    - knowledge/python/standards.md\n"
-        "  skills:\n"
-        "    - skills/code-review/\n"
-        "  contexts: []\n"
-    )
-    runner.invoke(main, ["sync"])
-
-    # Edit the live skill only (knowledge snapshot left alone)
-    live_skill = project_dir / ".opencode" / "skills" / "code-review" / "SKILL.md"
-    live_skill.write_text(live_skill.read_text() + "\n## Extra\n")
-
-    result = runner.invoke(main, ["contribute", "--manual-git"], input="y\n")
-
-    assert result.exit_code == 0, result.output
-    assert "code-review" in result.output or "✓" in result.output
-    assert "Extra" in (warehouse / "skills" / "code-review" / "SKILL.md").read_text()
+    assert result.exit_code == 1
+    assert "has been removed" in result.output
+    assert "warehouse contribute" in result.output
 
 
-@pytest.mark.skip(reason="old abc contribute removed in symlink-based-artifact-sync")
 def test_e2e_contribute_skill_identical_live_is_noop(e2e_project):
-    """abc contribute <skill> reports nothing to contribute when live matches warehouse."""
+    """abc warehouse contribute reports nothing to contribute when live matches warehouse."""
     project_dir, warehouse, runner = e2e_project
     runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
 
@@ -816,50 +661,18 @@ def test_e2e_contribute_skill_identical_live_is_noop(e2e_project):
     runner.invoke(main, ["sync"])
     # Live dir is untouched after sync — identical to warehouse
 
-    result = runner.invoke(
-        main, ["contribute", "skills/code-review/SKILL.md"], input="y\n"
-    )
+    result = runner.invoke(main, ["warehouse", "contribute", "-m", "noop contribute"])
 
     assert result.exit_code == 0
-    assert "nothing to contribute" in result.output.lower()
+    assert "no uncommitted changes to contribute" in result.output.lower()
 
 
-@pytest.mark.skip(reason="old abc contribute removed in symlink-based-artifact-sync")
 def test_e2e_contribute_skill_multi_agent_conflict_prompts(e2e_project):
-    """With two agents holding different edits, contribute prompts the user."""
+    """Old abc contribute shim redirects users to abc warehouse contribute."""
     project_dir, warehouse, runner = e2e_project
     runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
+    result = runner.invoke(main, ["contribute"])
 
-    # Both agents configured
-    (project_dir / "opencode.json").write_text("{}")
-    (project_dir / ".claude").mkdir()
-
-    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
-    beacon_yaml.write_text(
-        "artifacts:\n"
-        "  knowledge: []\n"
-        "  skills:\n"
-        "    - skills/code-review/\n"
-        "  contexts: []\n"
-    )
-    runner.invoke(main, ["sync"])
-
-    # Each agent has a different edit
-    oc_skill = project_dir / ".opencode" / "skills" / "code-review" / "SKILL.md"
-    oc_skill.write_text(oc_skill.read_text() + "\n## OpenCode edit\n")
-
-    cc_skill = project_dir / ".claude" / "skills" / "code-review" / "SKILL.md"
-    cc_skill.write_text(cc_skill.read_text() + "\n## Claude edit\n")
-
-    # Proceed confirm comes first, then conflict choice for the real run
-    result = runner.invoke(
-        main, ["contribute", "skills/code-review/SKILL.md"], input="y\n1\n"
-    )
-
-    assert result.exit_code == 0, result.output
-    assert "conflict" in result.output.lower()
-    # Warehouse gets the opencode version
-    assert (
-        "OpenCode edit"
-        in (warehouse / "skills" / "code-review" / "SKILL.md").read_text()
-    )
+    assert result.exit_code == 1
+    assert "has been removed" in result.output
+    assert "warehouse contribute" in result.output

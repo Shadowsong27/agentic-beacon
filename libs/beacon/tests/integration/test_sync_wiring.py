@@ -1150,23 +1150,6 @@ class TestSyncAgentsFromWarehouse:
         assert result.exit_code == 0, result.output
         assert (agents_dir / "code-reviewer.md").read_text() == SAMPLE_AGENT_MD
 
-    @pytest.mark.skip(reason="--preserve flag removed in symlink-based-artifact-sync")
-    def test_preserve_skips_conflicting_agent(
-        self, tmp_path, monkeypatch, isolated_home
-    ):
-        """--preserve leaves diverged local agent files untouched."""
-        agents_dir = isolated_home / ".config" / "opencode" / "agents"
-        agents_dir.mkdir(parents=True)
-        (agents_dir / "code-reviewer.md").write_text("old local content\n")
-
-        wh, project = _make_agent_project(tmp_path, monkeypatch)
-        runner = CliRunner()
-        result = runner.invoke(main, ["sync", "--preserve", "--skip-git-check"])
-
-        assert result.exit_code == 0, result.output
-        assert (agents_dir / "code-reviewer.md").read_text() == "old local content\n"
-        assert "Skipped" in result.output
-
     def test_non_interactive_conflict_skips_without_prompt(
         self, tmp_path, monkeypatch, isolated_home
     ):
