@@ -161,18 +161,10 @@ Next Steps:
 ### Step 3: Create your artifact configuration
 
 ```bash
-abc setup --manual
+abc setup
 ```
 
 This creates `.agentic-beacon/beacon.yaml` — an empty template.
-
-Or use agent-assisted mode to let your AI agent help pick artifacts:
-
-```bash
-abc setup --agent-assisted
-```
-
-See [Agent-Assisted Setup](./agent-assisted-setup.md) for how this works.
 
 ### Step 4: Declare which artifacts you need
 
@@ -199,24 +191,18 @@ Paths are relative to the warehouse root. Glob patterns are supported. See [beac
 abc sync
 ```
 
-Artifacts are copied into `.agentic-beacon/artifacts/` and wired into your agent config automatically.
+Artifacts are symlinked into `.agentic-beacon/artifacts/` and wired into your agent config automatically.
 
 `abc sync` does the full job in one step:
 - **Contexts** — appended to `opencode.json` instructions or `CLAUDE.md` (whichever exists)
 - **Skills** — installed into `.opencode/skills/` + `.opencode/command/` (or `.claude/skills/`)
-- **Knowledge** — copied to artifacts, no further wiring needed
+- **Knowledge** — symlinked to artifacts, no further wiring needed
 
 > **First run on a new project?** If you don't have an `opencode.json` or `CLAUDE.md` yet, create one first — even an empty `opencode.json` (`{}`) is enough for sync to wire contexts into it automatically.
 
 ### Step 6: Invoke skills
 
-After syncing, any skill declared in `beacon.yaml` is available as a slash command immediately. To install a single skill without a full sync:
-
-```bash
-abc install skills/code-review
-```
-
-This copies the skill from the warehouse, wires it for your agent, and adds it to `beacon.yaml` so future syncs stay idempotent.
+After syncing, any skill declared in `beacon.yaml` is available as a slash command immediately.
 
 ### Step 7: Commit your config changes
 
@@ -227,7 +213,7 @@ Commit these changes so teammates get the same contexts automatically after runn
 ```
 ✅  .agentic-beacon/beacon.yaml    — your artifact dependencies
 ❌  .agentic-beacon/config.toml   — gitignored (local warehouse path)
-❌  .agentic-beacon/artifacts/    — gitignored (downloaded snapshot)
+❌  .agentic-beacon/artifacts/    — gitignored (warehouse symlinks)
 ```
 
 Your teammates run `abc warehouse connect` + `abc sync` to get the same artifacts on their machines.
@@ -296,7 +282,7 @@ abc warehouse connect --path /path/to/warehouse
 ### "No beacon.yaml found"
 
 ```bash
-abc setup --manual
+abc setup
 # Then edit .agentic-beacon/beacon.yaml
 ```
 
@@ -313,7 +299,6 @@ abc warehouse connect --path /new/path/to/warehouse
 - **[Creating a Warehouse](./warehouse-creation.md)** — Full warehouse setup walkthrough
 - **[beacon.yaml Reference](./beacon-yaml-reference.md)** — Full configuration reference
 - **[Advanced Patterns](./advanced-patterns.md)** — Glob patterns, sync flags, delta workflow
-- **[Agent-Assisted Setup](./agent-assisted-setup.md)** — Let AI help populate `beacon.yaml`
 - **[Team Collaboration](./team-collaboration.md)** — Sharing across projects and teams
 
 ---

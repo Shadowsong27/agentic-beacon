@@ -34,14 +34,14 @@ def test_sync_with_valid_configuration(valid_warehouse, temp_dir, monkeypatch):
     runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
 
     # Create beacon.yaml
-    runner.invoke(main, ["setup", "--manual"])
+    runner.invoke(main, ["setup"])
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
     beacon_yaml.write_text(
         "artifacts:\n  knowledge:\n    - knowledge/test.md\n  skills: []\n  contexts: []\n"
     )
 
     # Run sync
-    result = runner.invoke(main, ["sync"])
+    result = runner.invoke(main, ["sync", "--skip-git-check"])
 
     assert result.exit_code == 0
     assert "sync" in result.output.lower() or "✓" in result.output
@@ -65,14 +65,14 @@ def test_sync_is_idempotent(valid_warehouse, temp_dir, monkeypatch):
     # Setup
     (valid_warehouse / "knowledge" / "test.md").write_text("# Test")
     runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
-    runner.invoke(main, ["setup", "--manual"])
+    runner.invoke(main, ["setup"])
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
     beacon_yaml.write_text(
         "artifacts:\n  knowledge:\n    - knowledge/test.md\n  skills: []\n  contexts: []\n"
     )
 
     # First sync
-    result1 = runner.invoke(main, ["sync"])
+    result1 = runner.invoke(main, ["sync", "--skip-git-check"])
     assert result1.exit_code == 0
 
     synced_file = (
@@ -81,7 +81,7 @@ def test_sync_is_idempotent(valid_warehouse, temp_dir, monkeypatch):
     mtime1 = synced_file.stat().st_mtime
 
     # Second sync - should be idempotent
-    result2 = runner.invoke(main, ["sync"])
+    result2 = runner.invoke(main, ["sync", "--skip-git-check"])
     assert result2.exit_code == 0
 
     # File should not have been re-copied
@@ -103,13 +103,13 @@ def test_sync_with_glob_patterns(valid_warehouse, temp_dir, monkeypatch):
     (valid_warehouse / "knowledge" / "python" / "file2.md").write_text("# File 2")
 
     runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
-    runner.invoke(main, ["setup", "--manual"])
+    runner.invoke(main, ["setup"])
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
     beacon_yaml.write_text(
         "artifacts:\n  knowledge:\n    - knowledge/python/*.md\n  skills: []\n  contexts: []\n"
     )
 
-    result = runner.invoke(main, ["sync"])
+    result = runner.invoke(main, ["sync", "--skip-git-check"])
 
     assert result.exit_code == 0
 
@@ -138,7 +138,7 @@ def test_sync_without_warehouse_connection(temp_dir, monkeypatch):
 
     monkeypatch.chdir(project_dir)
 
-    result = runner.invoke(main, ["sync"])
+    result = runner.invoke(main, ["sync", "--skip-git-check"])
 
     assert result.exit_code == 1
     assert "warehouse" in result.output.lower()
@@ -159,7 +159,7 @@ def test_sync_without_beacon_yaml(valid_warehouse, temp_dir, monkeypatch):
     # Connect warehouse but don't create beacon.yaml
     runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
 
-    result = runner.invoke(main, ["sync"])
+    result = runner.invoke(main, ["sync", "--skip-git-check"])
 
     assert result.exit_code == 1
     assert "beacon.yaml" in result.output.lower()
@@ -178,7 +178,7 @@ def test_sync_with_empty_beacon_yaml(valid_warehouse, temp_dir, monkeypatch):
     monkeypatch.chdir(project_dir)
 
     runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
-    runner.invoke(main, ["setup", "--manual"])
+    runner.invoke(main, ["setup"])
 
     # beacon.yaml with empty lists
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
@@ -186,7 +186,7 @@ def test_sync_with_empty_beacon_yaml(valid_warehouse, temp_dir, monkeypatch):
         "artifacts:\n  knowledge: []\n  skills: []\n  contexts: []\n"
     )
 
-    result = runner.invoke(main, ["sync"])
+    result = runner.invoke(main, ["sync", "--skip-git-check"])
 
     assert result.exit_code == 0
     assert (
@@ -209,7 +209,7 @@ def test_sync_dry_run_does_not_copy_files(valid_warehouse, temp_dir, monkeypatch
     (valid_warehouse / "knowledge" / "tip.md").write_text("# Tip")
 
     runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
-    runner.invoke(main, ["setup", "--manual"])
+    runner.invoke(main, ["setup"])
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
     beacon_yaml.write_text(
         "artifacts:\n  knowledge:\n    - knowledge/tip.md\n  skills: []\n  contexts: []\n"
@@ -238,7 +238,7 @@ def test_sync_dry_run_reports_would_copy_count(valid_warehouse, temp_dir, monkey
     (knowledge / "b.md").write_text("B")
 
     runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
-    runner.invoke(main, ["setup", "--manual"])
+    runner.invoke(main, ["setup"])
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
     beacon_yaml.write_text(
         "artifacts:\n  knowledge:\n    - knowledge/a.md\n    - knowledge/b.md\n"
@@ -265,7 +265,7 @@ def test_sync_dry_run_reports_would_remove(valid_warehouse, temp_dir, monkeypatc
     (valid_warehouse / "knowledge" / "stale.md").write_text("stale")
 
     runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
-    runner.invoke(main, ["setup", "--manual"])
+    runner.invoke(main, ["setup"])
 
     # Set up beacon.yaml tracking only "keep.md" — stale.md intentionally omitted
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
@@ -370,6 +370,31 @@ class TestSyncSkillEntryValidation:
         (wh / "README.md").write_text("# WH")
         (wh / "skills" / "my-skill").mkdir()
         (wh / "skills" / "my-skill" / "SKILL.md").write_text("# Skill\n")
+
+        # Init git (required by sync)
+        import os
+        import subprocess
+
+        env = {
+            **os.environ,
+            "GIT_AUTHOR_NAME": "Test",
+            "GIT_AUTHOR_EMAIL": "t@t.local",
+            "GIT_COMMITTER_NAME": "Test",
+            "GIT_COMMITTER_EMAIL": "t@t.local",
+        }
+        subprocess.run(
+            ["git", "init"], cwd=wh, env=env, check=True, capture_output=True
+        )
+        subprocess.run(
+            ["git", "add", "."], cwd=wh, env=env, check=True, capture_output=True
+        )
+        subprocess.run(
+            ["git", "commit", "-m", "init"],
+            cwd=wh,
+            env=env,
+            check=True,
+            capture_output=True,
+        )
 
         project = tmp_path / "project"
         project.mkdir()
@@ -502,7 +527,7 @@ def test_sync_knowledge_node_path_expands_to_files(
     (node_dir / "lessons" / "async.md").write_text("# Async Lessons")
 
     runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
-    runner.invoke(main, ["setup", "--manual"])
+    runner.invoke(main, ["setup"])
 
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
     beacon_yaml.write_text(
@@ -531,7 +556,7 @@ def test_sync_knowledge_nested_node_path_expands(
     (node_dir / "facts" / "schema.md").write_text("# Schema Facts")
 
     runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
-    runner.invoke(main, ["setup", "--manual"])
+    runner.invoke(main, ["setup"])
 
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
     beacon_yaml.write_text(

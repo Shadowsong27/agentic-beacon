@@ -7,14 +7,8 @@ import click
 from rich.console import Console
 from rich.table import Table
 
-from beacon.domains.distribution.delta import ComparisonResult, DeltaComparator
-from beacon.domains.distribution.state import (
-    relink_global_sync_state,
-    write_agent_sync_state,
-)
 from beacon.utils.display import is_interactive
-from beacon.utils.git import hash_content
-from beacon.utils.interaction import ConflictResolution, resolve_conflict
+from beacon.utils.interaction import OverwriteDecision, resolve_conflict
 
 console = Console()
 
@@ -74,9 +68,9 @@ def detect_agents(project_root: Path, *, fallback_to_all: bool = False) -> list[
 def build_agents_paths() -> dict[str, Path]:
     """Return a mapping of tool name → global agents directory for detected tools.
 
-    This is the shared detection logic used by both `abc delta` and
-    `abc contribute` so both commands always compare/read from the same
-    global agent locations.
+    Shared detection logic used by `abc install` (and historically by
+    per-project agent-drift tooling) so writes/reads hit the same global
+    agent locations.
     """
     agents_paths: dict[str, Path] = {}
     for tool in detect_agents_global():
@@ -87,24 +81,58 @@ def build_agents_paths() -> dict[str, Path]:
     return agents_paths
 
 
-def install_agent_global(agent: str, agent_name: str, content: str) -> bool:
-    """Write an agent definition file to the global agent directory for a tool.
+def _agent_link_conflicts(dest: Path, source_file: Path) -> bool:
+    """Return whether replacing dest with a warehouse symlink needs confirmation."""
+    if not dest.exists() and not dest.is_symlink():
+        return False
+
+    if dest.is_symlink():
+        try:
+            if dest.resolve(strict=True) == source_file.resolve(strict=True):
+                return False
+        except FileNotFoundError:
+            return False
+
+    if dest.is_dir():
+        return True
+
+    try:
+        return dest.read_text(encoding="utf-8") != source_file.read_text(
+            encoding="utf-8"
+        )
+    except OSError:
+        return True
+
+
+def install_agent_global(agent: str, agent_name: str, source_file: Path) -> bool:
+    """Link an agent definition file into the global agent directory for a tool.
 
     Creates parent dirs if needed.
-    Returns True if the file was written, False if content was identical (skipped).
+    Returns True if the symlink was created or repaired, False if already correct.
     Conflict handling is the caller's responsibility (soft block pre-check).
 
     Args:
         agent: Tool name — "opencode" or "claudecode".
         agent_name: Filename (e.g. "code-reviewer.md").
-        content: File content to write.
+        source_file: Warehouse-side agent file to link to.
     """
     agent_dirs = global_agent_dirs()
+    source = source_file.resolve(strict=True)
     dest = agent_dirs[agent] / agent_name
-    if dest.exists() and dest.read_text(encoding="utf-8") == content:
-        return False
+
+    if dest.is_symlink():
+        try:
+            if dest.resolve(strict=True) == source:
+                return False
+        except FileNotFoundError:
+            pass
+
     dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_text(content, encoding="utf-8")
+    if dest.is_symlink() or dest.exists():
+        if dest.is_dir() and not dest.is_symlink():
+            raise IsADirectoryError(f"Expected agent file, found directory: {dest}")
+        dest.unlink()
+    dest.symlink_to(source)
     return True
 
 
@@ -116,7 +144,7 @@ def uninstall_agent_global(agent_name: str) -> int:
     removed_count = 0
     for agent_dir in global_agent_dirs().values():
         target = agent_dir / agent_name
-        if target.exists():
+        if target.exists() or target.is_symlink():
             target.unlink()
             removed_count += 1
     return removed_count
@@ -199,8 +227,8 @@ def sync_agents_from_warehouse(
     """Sync all agent definition files from the warehouse into global tool directories.
 
     Called as part of `abc sync`. Finds every *.md under warehouse/agents/,
-    compares each against the global agent dirs for detected tools, and installs
-    any that are out-of-date.  A single Y/N prompt is shown when conflicts exist
+    compares each against the global agent dirs for detected tools, and links any
+    that are out-of-date.  A single Y/N prompt is shown when conflicts exist
     (unless --force or --preserve are supplied).
 
     Args:
@@ -212,7 +240,9 @@ def sync_agents_from_warehouse(
     if not agents_dir.is_dir():
         return
 
-    agent_files = sorted(agents_dir.rglob("*.md"))
+    agent_files = sorted(
+        af for af in agents_dir.rglob("*.md") if af.name != "README.md"
+    )
     if not agent_files:
         return
 
@@ -222,20 +252,19 @@ def sync_agents_from_warehouse(
 
     agent_dirs = global_agent_dirs()
 
-    # Build list of (relative_path, content, agent_name) tuples
-    entries: list[tuple[str, str, str]] = []
+    # Build list of (relative_path, source_file, agent_name) tuples
+    entries: list[tuple[str, Path, str]] = []
     for af in agent_files:
         rel = str(af.relative_to(warehouse_path))  # e.g. "agents/code-reviewer.md"
-        content = af.read_text(encoding="utf-8")
         agent_name = af.name
-        entries.append((rel, content, agent_name))
+        entries.append((rel, af, agent_name))
 
     # Detect conflicts: files that exist in global dirs but differ from warehouse
     conflicts: list[str] = []
-    for _rel, content, agent_name in entries:
+    for _rel, source_file, agent_name in entries:
         for tool in tools:
             dest = agent_dirs[tool] / agent_name
-            if dest.exists() and dest.read_text(encoding="utf-8") != content:
+            if _agent_link_conflicts(dest, source_file):
                 conflicts.append(str(dest))
 
     # Single Y/N prompt for all conflicts together
@@ -258,10 +287,10 @@ def sync_agents_from_warehouse(
             )
             effective_preserve = True
 
-    # Install
+    # Link
     installed: list[str] = []
     skipped: list[str] = []
-    for rel, content, agent_name in entries:
+    for _rel, source_file, agent_name in entries:
         for tool in tools:
             dest = agent_dirs[tool] / agent_name
             is_conflict = str(dest) in conflicts
@@ -270,12 +299,8 @@ def sync_agents_from_warehouse(
                 skipped.append(agent_name)
                 continue
 
-            written = install_agent_global(tool, agent_name, content)
-            # Always update sync-state HEAD, even when content is unchanged.
-            # Without this, 'abc delta' keeps reporting agents as stale after a
-            # sync that found nothing to write (warehouse advanced, content same).
-            write_agent_sync_state(warehouse_path, rel, hash_content(content))
-            if written:
+            linked = install_agent_global(tool, agent_name, source_file)
+            if linked:
                 installed.append(agent_name)
 
     if installed:
@@ -297,9 +322,9 @@ def handle_install_agent(
 ) -> None:
     """Handle 'abc install agents/<name>.md' — global install for all detected tools.
 
-    Loads warehouse settings, reads the agent file, performs soft-block conflict
-    detection against global agent dirs, writes to each detected tool dir, and
-    records sync-state for each successful write. Does NOT update beacon.yaml.
+    Loads warehouse settings, performs soft-block conflict detection against global
+    agent dirs, and creates warehouse symlinks in each detected tool dir. Does NOT
+    update beacon.yaml.
     """
     from beacon.core.manifest.workspace import WorkspaceConfig
 
@@ -321,11 +346,7 @@ def handle_install_agent(
         console.print(f"[red]Error:[/red] Agent not found in warehouse: {artifact}")
         sys.exit(1)
 
-    content = agent_file.read_text(encoding="utf-8")
     agent_name = Path(artifact).name
-
-    # Relink sync state if warehouse path has changed
-    relink_global_sync_state(warehouse_path)
 
     # Detect tools
     tools = detect_agents_global()
@@ -342,15 +363,15 @@ def handle_install_agent(
     conflicts: list[str] = []
     for tool in tools:
         dest = agent_dirs[tool] / agent_name
-        if dest.exists() and dest.read_text(encoding="utf-8") != content:
+        if _agent_link_conflicts(dest, agent_file):
             conflicts.append(str(dest))
 
     resolution = resolve_conflict(
         force=force, preserve=preserve, has_conflicts=bool(conflicts)
     )
-    if resolution == ConflictResolution.SKIP:
+    if resolution == OverwriteDecision.SKIP:
         preserve = True  # skip conflicting files
-    elif resolution == ConflictResolution.NEEDS_CONFIRMATION:
+    elif resolution == OverwriteDecision.NEEDS_CONFIRMATION:
         # Non-interactive mode with conflicts — cannot prompt; refuse to proceed.
         conflict_list = "\n".join(f"  • {p}" for p in conflicts)
         console.print(
@@ -372,13 +393,9 @@ def handle_install_agent(
             console.print(f"[yellow]Skipped[/yellow] {dest} (preserved local version)")
             continue
 
-        written = install_agent_global(tool, agent_name, content)
-        # Always update sync-state HEAD, even when content is unchanged.
-        # Without this, 'abc delta' keeps reporting the agent as stale after
-        # install finds nothing to write (warehouse advanced, content same).
-        write_agent_sync_state(warehouse_path, artifact, hash_content(content))
-        if written:
-            console.print(f"[green]Installed[/green] {artifact} → {dest}")
+        linked = install_agent_global(tool, agent_name, agent_file)
+        if linked:
+            console.print(f"[green]Linked[/green] {artifact} → {dest}")
             written_any = True
         else:
             console.print(f"[dim]Up to date[/dim] {dest}")
@@ -387,122 +404,3 @@ def handle_install_agent(
         console.print(
             f"[dim]{artifact} is already up to date in all tool directories.[/dim]"
         )
-
-
-def enrich_agent_stale(
-    result: ComparisonResult,
-    *,
-    warehouse_path: Path,
-    current_head: str,
-    comparator: "DeltaComparator | None" = None,
-) -> ComparisonResult:
-    """Enrich agent ComparisonResults to STALE when the warehouse has advanced.
-
-    Handles two cases:
-
-    IDENTICAL → STALE:
-        The installed file still matches the warehouse, but the warehouse HEAD has
-        advanced AND the warehouse file content changed.  Without enrichment this
-        would look fine but a newer version is available.
-
-    MODIFIED → STALE (per-agent):
-        The installed file no longer matches the warehouse, but the *user* didn't
-        touch it — the warehouse updated it.  Detected by comparing the live global
-        agent hash against the recorded content_hash; if they match the user's copy
-        is still at the installed version, so the difference is purely upstream.
-        Requires ``comparator`` to hash the live files.
-
-    MISSING / ADDED results are returned unchanged.
-    If no sync-state entry exists, the result is returned unchanged.
-
-    Args:
-        result: ComparisonResult to potentially enrich.
-        warehouse_path: Path to the warehouse (used as sync-state key).
-        current_head: Current warehouse HEAD SHA.
-        comparator: DeltaComparator used to hash live agent files (needed for
-            MODIFIED → STALE detection).  If None, that branch is skipped.
-    """
-    from beacon.domains.distribution.delta import ComparisonResult, DeltaStatus
-    from beacon.domains.distribution.state import read_global_sync_state
-
-    if result.status not in (DeltaStatus.IDENTICAL, DeltaStatus.MODIFIED):
-        return result
-
-    state = read_global_sync_state()
-    warehouses = state.get("warehouses", {})
-    wh_entries = warehouses.get(str(warehouse_path), {})
-    entry = wh_entries.get(result.path)
-
-    if entry is None:
-        return result  # No sync-state entry — can't determine STALE
-
-    recorded_head = entry.get("warehouse_head", "")
-    recorded_content_hash = entry.get("content_hash", "")
-    current_warehouse_hash = result.warehouse_hash
-
-    if not recorded_head or recorded_head == current_head:
-        return result  # Warehouse hasn't advanced — no enrichment needed
-
-    # Warehouse HEAD has advanced. Check whether the warehouse file content changed.
-    if (
-        recorded_content_hash
-        and current_warehouse_hash
-        and recorded_content_hash == current_warehouse_hash
-    ):
-        return result  # Content unchanged despite HEAD advancing — not stale
-
-    # Warehouse file content has changed since last install.
-
-    if result.status == DeltaStatus.IDENTICAL:
-        # All agents still match the warehouse — but warehouse has a newer version.
-        stale_statuses = {agent: DeltaStatus.STALE for agent in result.agent_statuses}
-        return ComparisonResult(
-            path=result.path,
-            status=DeltaStatus.STALE,
-            local_hash=result.local_hash,
-            warehouse_hash=result.warehouse_hash,
-            agent_statuses=stale_statuses,
-        )
-
-    # result.status == MODIFIED: check each MODIFIED agent individually.
-    # If the live global file still has the installed content_hash the user
-    # hasn't changed it — the warehouse changed it.  That agent is STALE.
-    # If the live file hash differs from both warehouse and installed hash the
-    # user made a local edit — that agent stays MODIFIED.
-    if comparator is None or not recorded_content_hash:
-        return result  # Can't distinguish — leave as MODIFIED
-
-    new_agent_statuses = dict(result.agent_statuses)
-    changed = False
-    for agent, status in result.agent_statuses.items():
-        if status != DeltaStatus.MODIFIED:
-            continue
-        live_file = comparator.agent_live_path(agent, result.path)
-        if not live_file.exists():
-            continue
-        live_hash = comparator.compute_hash(live_file)
-        if live_hash == recorded_content_hash:
-            # Live file is still at the installed version → warehouse updated it
-            new_agent_statuses[agent] = DeltaStatus.STALE
-            changed = True
-
-    if not changed:
-        return result
-
-    # Recompute aggregate across the updated per-agent statuses.
-    # Priority: ADDED > MODIFIED > STALE > MISSING > IDENTICAL
-    _priority = {
-        DeltaStatus.ADDED: 4,
-        DeltaStatus.MODIFIED: 3,
-        DeltaStatus.STALE: 2,
-        DeltaStatus.MISSING: 1,
-        DeltaStatus.IDENTICAL: 0,
-    }
-    new_aggregate = max(new_agent_statuses.values(), key=lambda s: _priority.get(s, 0))
-    return ComparisonResult(
-        path=result.path,
-        status=new_aggregate,
-        local_hash=result.local_hash,
-        warehouse_hash=result.warehouse_hash,
-        agent_statuses=new_agent_statuses,
-    )

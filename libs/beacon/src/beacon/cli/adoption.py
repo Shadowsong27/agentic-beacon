@@ -9,7 +9,11 @@ from rich.table import Table
 
 from beacon.core.manifest.beacon import BeaconManifest
 from beacon.core.manifest.workspace import WorkspaceConfig
-from beacon.domains.adoption.apply import apply_adoption
+from beacon.domains.adoption.apply import (
+    apply_adoption,
+    cleanup_unadopted_artifacts,
+    warehouse_uncommitted_paths,
+)
 from beacon.domains.adoption.discovery import discover_adoptable, is_agent_installed
 from beacon.domains.adoption.models import AdoptCandidate
 from beacon.domains.adoption.tui import AdoptApp
@@ -20,6 +24,7 @@ from beacon.domains.artifact.agent import (
     uninstall_agent_global,
 )
 from beacon.domains.artifact.skill import wire_skills_post_sync
+from beacon.domains.distribution.distributor import WarehouseDistributor
 from beacon.domains.distribution.sync_engine import SyncEngine
 from beacon.domains.setup.wiring import (
     wire_contexts_claudecode,
@@ -44,8 +49,6 @@ def adopt(*, dry_run: bool) -> None:
     to a full view where you can also unadopt currently adopted artifacts.
     Artifacts added within the last few commits are tagged with how recent they are.
     """
-    from beacon.domains.adoption.apply import cleanup_unadopted_artifacts
-
     project_root = find_project_root()
     beacon_dir = project_root / ".agentic-beacon"
     artifacts_dir = beacon_dir / "artifacts"
@@ -118,8 +121,6 @@ def adopt(*, dry_run: bool) -> None:
         + beacon_settings.artifacts.knowledge
     )
     try:
-        from beacon.domains.distribution.distributor import WarehouseDistributor
-
         distributor = WarehouseDistributor(
             warehouse_root=warehouse_path, target_root=warehouse_path
         )
@@ -167,12 +168,11 @@ def adopt(*, dry_run: bool) -> None:
         installed_count = 0
         for agent_path in agent_adoptions:
             agent_file = warehouse_path / agent_path
-            content = read_agent_definition(agent_file)
-            if content is None:
+            if read_agent_definition(agent_file) is None:
                 continue
             agent_name = agent_file.name
             for tool in tools:
-                install_agent_global(tool, agent_name, content)
+                install_agent_global(tool, agent_name, agent_file)
             installed_count += 1
         if installed_count:
             console.print(
@@ -204,18 +204,28 @@ def adopt(*, dry_run: bool) -> None:
                 else:
                     new_artifact_paths.append(c.path)
 
-            expanded = sync_engine.expand_artifact_paths(new_artifact_paths)
+            expanded: list[str] = []
+            for path in new_artifact_paths:
+                if path.endswith("/"):
+                    matches = sync_engine.expand_glob(f"{path.rstrip('/')}/**/*")
+                    expanded.extend(matches)
+                else:
+                    expanded.append(path)
 
             if expanded:
                 sync_engine.sync_all(
                     artifact_paths=expanded,
-                    preserve=False,
                     dry_run=False,
                 )
-                console.print(
-                    f"[green]✓[/green] Synced and wired: "
-                    f"{', '.join(c.path for c in non_agent_selections)}"
-                )
+                dirty = warehouse_uncommitted_paths(warehouse_path)
+                for c in non_agent_selections:
+                    rel = c.path.rstrip("/")
+                    note = (
+                        " [yellow](has local edits in warehouse)[/yellow]"
+                        if rel in dirty
+                        else ""
+                    )
+                    console.print(f"[green]✓[/green] Symlink created: {c.path}{note}")
 
                 for c in non_agent_selections:
                     if c.artifact_type == "contexts":

@@ -1,13 +1,4 @@
-"""Tests for install_agent_global() helper (Phase 6, task 6.3).
-
-TDD Test Cases (6.1):
-- TC1: Target file does not exist → writes file, returns True
-- TC2: Target file exists with identical content → skips, returns False
-- TC3: Target file exists with different content → overwrites (caller already confirmed), returns True
-- TC4: Parent dir does not exist → auto-creates, writes file, returns True
-- TC5: agent="opencode" → resolves to ~/.config/opencode/agents/<name>.md
-- TC6: agent="claudecode" → resolves to ~/.claude/agents/<name>.md
-"""
+"""Tests for install_agent_global() helper."""
 
 from pathlib import Path
 
@@ -39,68 +30,96 @@ def fake_home(tmp_path, monkeypatch):
     return home
 
 
-def test_tc1_target_not_exist_writes_and_returns_true(fake_home):
-    """TC1: Target file does not exist → writes file, returns True."""
-    result = install_agent_global("opencode", "code-reviewer.md", AGENT_CONTENT)
+@pytest.fixture
+def source_agent(tmp_path):
+    source = tmp_path / "warehouse" / "agents" / "code-reviewer.md"
+    source.parent.mkdir(parents=True)
+    source.write_text(AGENT_CONTENT)
+    return source
+
+
+def test_target_not_exist_links_and_returns_true(fake_home, source_agent):
+    result = install_agent_global("opencode", "code-reviewer.md", source_agent)
 
     assert result is True
     dest = _opencode_agents(fake_home) / "code-reviewer.md"
-    assert dest.exists()
+    assert dest.is_symlink()
+    assert dest.resolve() == source_agent.resolve()
     assert dest.read_text() == AGENT_CONTENT
 
 
-def test_tc2_identical_content_skips_returns_false(fake_home):
-    """TC2: Target file exists with identical content → skips, returns False."""
+def test_correct_symlink_skips_returns_false(fake_home, source_agent):
+    dest = _opencode_agents(fake_home) / "code-reviewer.md"
+    dest.parent.mkdir(parents=True)
+    dest.symlink_to(source_agent)
+    mtime_before = dest.lstat().st_mtime
+
+    result = install_agent_global("opencode", "code-reviewer.md", source_agent)
+
+    assert result is False
+    assert dest.is_symlink()
+    assert dest.lstat().st_mtime == mtime_before
+
+
+def test_identical_regular_file_is_replaced_with_symlink(fake_home, source_agent):
     dest = _opencode_agents(fake_home) / "code-reviewer.md"
     dest.parent.mkdir(parents=True)
     dest.write_text(AGENT_CONTENT)
 
-    result = install_agent_global("opencode", "code-reviewer.md", AGENT_CONTENT)
+    result = install_agent_global("opencode", "code-reviewer.md", source_agent)
 
-    assert result is False
-    # Content unchanged
-    assert dest.read_text() == AGENT_CONTENT
+    assert result is True
+    assert dest.is_symlink()
+    assert dest.resolve() == source_agent.resolve()
 
 
-def test_tc3_different_content_overwrites_returns_true(fake_home):
-    """TC3: Target file exists with different content → overwrites, returns True."""
+def test_different_regular_file_replaced_after_caller_confirms(fake_home, source_agent):
     dest = _opencode_agents(fake_home) / "code-reviewer.md"
     dest.parent.mkdir(parents=True)
     dest.write_text("# Old content\n")
 
-    result = install_agent_global("opencode", "code-reviewer.md", AGENT_CONTENT)
+    result = install_agent_global("opencode", "code-reviewer.md", source_agent)
 
     assert result is True
+    assert dest.is_symlink()
     assert dest.read_text() == AGENT_CONTENT
 
 
-def test_tc4_parent_dir_not_exist_auto_creates(fake_home):
-    """TC4: Parent dir does not exist → auto-creates, writes file, returns True."""
-    # opencode dir doesn't exist at all
-    result = install_agent_global("claudecode", "my-agent.md", AGENT_CONTENT)
+def test_broken_symlink_is_repaired(fake_home, source_agent):
+    dest = _opencode_agents(fake_home) / "code-reviewer.md"
+    dest.parent.mkdir(parents=True)
+    dest.symlink_to(source_agent.parent / "missing.md")
+
+    result = install_agent_global("opencode", "code-reviewer.md", source_agent)
+
+    assert result is True
+    assert dest.is_symlink()
+    assert dest.resolve() == source_agent.resolve()
+
+
+def test_parent_dir_not_exist_auto_creates(fake_home, source_agent):
+    result = install_agent_global("claudecode", "my-agent.md", source_agent)
 
     assert result is True
     dest = _claudecode_agents(fake_home) / "my-agent.md"
-    assert dest.exists()
+    assert dest.is_symlink()
 
 
-def test_tc5_opencode_resolves_to_config_opencode(fake_home):
-    """TC5: agent="opencode" → resolves to ~/.config/opencode/agents/<name>.md"""
-    install_agent_global("opencode", "code-reviewer.md", AGENT_CONTENT)
+def test_opencode_resolves_to_config_opencode(fake_home, source_agent):
+    install_agent_global("opencode", "code-reviewer.md", source_agent)
 
     expected = fake_home / ".config" / "opencode" / "agents" / "code-reviewer.md"
-    assert expected.exists()
+    assert expected.is_symlink()
     # Claude Code dir should NOT be created
     claude_dest = fake_home / ".claude" / "agents" / "code-reviewer.md"
     assert not claude_dest.exists()
 
 
-def test_tc6_claudecode_resolves_to_claude_agents(fake_home):
-    """TC6: agent="claudecode" → resolves to ~/.claude/agents/<name>.md"""
-    install_agent_global("claudecode", "code-reviewer.md", AGENT_CONTENT)
+def test_claudecode_resolves_to_claude_agents(fake_home, source_agent):
+    install_agent_global("claudecode", "code-reviewer.md", source_agent)
 
     expected = fake_home / ".claude" / "agents" / "code-reviewer.md"
-    assert expected.exists()
+    assert expected.is_symlink()
     # OpenCode dir should NOT be created
     opencode_dest = fake_home / ".config" / "opencode" / "agents" / "code-reviewer.md"
     assert not opencode_dest.exists()

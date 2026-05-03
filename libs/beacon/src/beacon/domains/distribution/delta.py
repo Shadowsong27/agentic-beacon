@@ -25,10 +25,8 @@ class DeltaStatus(Enum):
     MODIFIED = "modified"
     ADDED = "added"  # Exists locally but not in warehouse
     MISSING = "missing"  # In beacon.yaml but not synced locally
-    STALE = "stale"  # Installed content matches last snapshot but warehouse HEAD has advanced
+    STALE = "stale"  # Historical status retained for compatibility.
     PENDING = "pending"  # Skill file not yet distributed to this agent (not in warehouse, not in agent)
-    # Note: STALE is NOT in the _compare_skill_file priority map — it is enriched
-    # post-comparison at the CLI layer after reading sync-state.
 
 
 class ComparisonResult(BaseModel):
@@ -215,7 +213,7 @@ class DeltaComparator:
         - IDENTICAL — file matches warehouse exactly
         - MISSING  — file is in warehouse but absent from this tool's global dir
 
-        STALE is not returned here — it is enriched at the CLI layer after reading sync-state.
+        STALE is not returned here; symlinked global agents read warehouse files directly.
 
         Args:
             relative_path: Warehouse-relative path, e.g. "agents/code-reviewer.md".
@@ -680,120 +678,10 @@ def enrich_tracked_stale(
     artifacts_path: Path,
     comparator: DeltaComparator,
 ) -> DeltaSummary:
-    """Re-classify MODIFIED tracked artifacts to STALE when the difference is purely upstream.
+    """No-op in symlink-based model.
 
-    A tracked artifact (skill / knowledge / context) is STALE — not MODIFIED — when:
-    - The local file content matches the warehouse file at the last recorded sync SHA
-      (meaning the user has *not* touched the local copy since the last sync), AND
-    - The current warehouse file differs from that sync-SHA content
-      (meaning the warehouse moved forward after the user's last sync).
-
-    This is the tracked-artifact analogue of the per-agent MODIFIED→STALE enrichment.
-    It uses ``git show <sync_sha>:<path>`` on the warehouse repo instead of a stored
-    content_hash, so no format changes to .sync-state are required.
-
-    Falls back silently when:
-    - The warehouse has no git repo
-    - No sync SHA is recorded
-    - The snapshot is already current
-    - git is unavailable or returns an error for a given path
-
-    For skills (compared against live agent dirs):
-        Each per-agent MODIFIED status is checked independently.
-        If the live skill file matches the synced version, that agent→STALE.
-        The aggregate status is recomputed across the updated per-agent map.
-
-    For knowledge / contexts (compared against artifacts_path):
-        The local artifact hash is compared against the synced warehouse content.
-        If they match, the result is upgraded to STALE.
+    The STALE concept (local file matches last sync SHA but warehouse has
+    advanced) does not apply when artifacts are symlinks to the warehouse
+    working tree.  Retained for API compatibility.
     """
-    from beacon.domains.distribution.state import read_sync_sha
-    from beacon.utils.git import get_file_hash_at_sha, get_warehouse_head_sha
-
-    if not (warehouse_path / ".git").exists():
-        return summary
-
-    sync_sha = read_sync_sha(artifacts_path)
-    if not sync_sha:
-        return summary
-
-    current_sha = get_warehouse_head_sha(warehouse_path)
-    if not current_sha or current_sha == sync_sha:
-        return summary  # Snapshot is current — no enrichment needed
-
-    # Priority map for re-aggregating skill per-agent statuses
-    _priority = {
-        DeltaStatus.ADDED: 4,
-        DeltaStatus.MODIFIED: 3,
-        DeltaStatus.STALE: 2,
-        DeltaStatus.MISSING: 1,
-        DeltaStatus.IDENTICAL: 0,
-    }
-
-    new_results = []
-    for result in summary.results:
-        if result.status != DeltaStatus.MODIFIED:
-            new_results.append(result)
-            continue
-
-        # Fetch the warehouse file content at the last sync SHA once per result.
-        synced_hash = get_file_hash_at_sha(warehouse_path, result.path, sync_sha)
-        if synced_hash is None:
-            new_results.append(result)
-            continue
-
-        is_skill = result.path.startswith("skills/") and bool(comparator.skills_paths)
-
-        if is_skill:
-            # Per-agent check: if live skill file == synced content → STALE for that agent
-            new_agent_statuses = dict(result.agent_statuses)
-            changed = False
-            for agent, status in result.agent_statuses.items():
-                if status != DeltaStatus.MODIFIED:
-                    continue
-                live_file = comparator.skill_live_path(agent, result.path)
-                if not live_file.exists():
-                    continue
-                live_hash = comparator.compute_hash(live_file)
-                if live_hash == synced_hash:
-                    new_agent_statuses[agent] = DeltaStatus.STALE
-                    changed = True
-
-            if not changed:
-                new_results.append(result)
-                continue
-
-            new_aggregate = max(
-                new_agent_statuses.values(), key=lambda s: _priority.get(s, 0)
-            )
-            new_results.append(
-                ComparisonResult(
-                    path=result.path,
-                    status=new_aggregate,
-                    local_hash=result.local_hash,
-                    warehouse_hash=result.warehouse_hash,
-                    agent_statuses=new_agent_statuses,
-                )
-            )
-        else:
-            # Knowledge / context: compare local artifact hash against synced content
-            local_file = artifacts_path / result.path
-            if not local_file.exists():
-                new_results.append(result)
-                continue
-            local_hash = result.local_hash or comparator.compute_hash(local_file)
-            if local_hash == synced_hash:
-                new_results.append(
-                    ComparisonResult(
-                        path=result.path,
-                        status=DeltaStatus.STALE,
-                        local_hash=result.local_hash,
-                        warehouse_hash=result.warehouse_hash,
-                        agent_statuses=result.agent_statuses,
-                    )
-                )
-            else:
-                new_results.append(result)
-
-    summary.results = new_results
     return summary

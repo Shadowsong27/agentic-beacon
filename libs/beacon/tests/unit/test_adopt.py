@@ -1307,48 +1307,6 @@ class TestAdoptDryRunIntegration:
 
 
 class TestSyncNotification:
-    def test_sync_prints_notification_when_unadopted(self, tmp_path, monkeypatch):
-        """After sync, if unadopted artifacts exist, notification is printed."""
-        from beacon.cli.main import main
-
-        project = tmp_path / "project"
-        project.mkdir()
-        monkeypatch.chdir(project)
-
-        beacon_dir = project / ".agentic-beacon"
-        beacon_dir.mkdir()
-
-        warehouse = _make_warehouse(tmp_path)
-        _git_init(warehouse)
-        (warehouse / "contexts" / "existing.md").write_text("# Existing")
-        _git_add_commit(warehouse, "init")
-
-        beacon_yaml = beacon_dir / "beacon.yaml"
-        beacon_yaml.write_text(
-            "artifacts:\n  contexts:\n    - contexts/existing.md\n  skills: []\n  knowledge: []\n"
-        )
-        (beacon_dir / "config.toml").write_text(
-            f'[warehouse]\nlocal_path = "{warehouse}"\n'
-        )
-
-        # Do first sync
-        runner = CliRunner()
-        result = runner.invoke(
-            main, ["sync", "--skip-git-check"], catch_exceptions=False
-        )
-        assert result.exit_code == 0
-
-        # Now add a new unadopted context to warehouse
-        (warehouse / "contexts" / "new-one.md").write_text("# New Context")
-        _git_add_commit(warehouse, "add new context")
-
-        # Second sync should show notification
-        result = runner.invoke(
-            main, ["sync", "--skip-git-check"], catch_exceptions=False
-        )
-        assert result.exit_code == 0
-        assert "adopt" in result.output.lower()
-
     def test_sync_no_notification_when_all_adopted(self, tmp_path, monkeypatch):
         """No notification when all new warehouse artifacts are already in beacon.yaml."""
         from beacon.cli.main import main

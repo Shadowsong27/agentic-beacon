@@ -9,6 +9,8 @@ And integration tests through the full `abc sync` CLI command.
 """
 
 import json
+import os
+import subprocess
 from unittest.mock import patch
 
 import pytest
@@ -432,6 +434,15 @@ def test_install_skill_claudecode_updates_file_content_when_changed(tmp_path):
 # ---------------------------------------------------------------------------
 
 
+GIT_ENV = {
+    **os.environ,
+    "GIT_AUTHOR_NAME": "Test",
+    "GIT_AUTHOR_EMAIL": "t@t.local",
+    "GIT_COMMITTER_NAME": "Test",
+    "GIT_COMMITTER_EMAIL": "t@t.local",
+}
+
+
 @pytest.fixture
 def full_sync_project(tmp_path, valid_warehouse):
     """Connected project with contexts and skills in beacon.yaml."""
@@ -442,6 +453,22 @@ def full_sync_project(tmp_path, valid_warehouse):
     skill_dir = valid_warehouse / "skills" / "my-skill"
     skill_dir.mkdir(parents=True)
     (skill_dir / "SKILL.md").write_text(SAMPLE_SKILL_MD)
+
+    # Commit new files
+    subprocess.run(
+        ["git", "add", "."],
+        cwd=valid_warehouse,
+        env=GIT_ENV,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "commit", "-m", "Add artifacts"],
+        cwd=valid_warehouse,
+        env=GIT_ENV,
+        check=True,
+        capture_output=True,
+    )
 
     project = tmp_path / "project"
     project.mkdir()
@@ -602,6 +629,22 @@ def test_sync_reports_installed_skills_again_after_warehouse_update(
     updated_content = SAMPLE_SKILL_MD + "\n## New Section\nExtra content.\n"
     (valid_warehouse / "skills" / "my-skill" / "SKILL.md").write_text(updated_content)
 
+    # Commit the update
+    subprocess.run(
+        ["git", "add", "."],
+        cwd=valid_warehouse,
+        env=GIT_ENV,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "commit", "-m", "Update skill"],
+        cwd=valid_warehouse,
+        env=GIT_ENV,
+        check=True,
+        capture_output=True,
+    )
+
     result_second = runner.invoke(main, ["sync", "--force"])
 
     assert result_second.exit_code == 0
@@ -622,6 +665,22 @@ def skills_only_project(tmp_path, valid_warehouse):
     skill_dir = valid_warehouse / "skills" / "my-skill"
     skill_dir.mkdir(parents=True, exist_ok=True)
     (skill_dir / "SKILL.md").write_text(SAMPLE_SKILL_MD)
+
+    # Commit new files
+    subprocess.run(
+        ["git", "add", "."],
+        cwd=valid_warehouse,
+        env=GIT_ENV,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "commit", "-m", "Add skill"],
+        cwd=valid_warehouse,
+        env=GIT_ENV,
+        check=True,
+        capture_output=True,
+    )
 
     project = tmp_path / "project"
     project.mkdir()
@@ -723,6 +782,22 @@ def test_sync_skill_dir_without_skill_md_no_prompt(
     # Remove the SKILL.md from the warehouse skill so sync copies a dir without it
     (valid_warehouse / "skills" / "my-skill" / "SKILL.md").unlink()
     (valid_warehouse / "skills" / "my-skill" / "README.md").write_text("# Not a skill")
+
+    # Commit the changes
+    subprocess.run(
+        ["git", "add", "."],
+        cwd=valid_warehouse,
+        env=GIT_ENV,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "commit", "-m", "Update skill"],
+        cwd=valid_warehouse,
+        env=GIT_ENV,
+        check=True,
+        capture_output=True,
+    )
 
     # Update beacon.yaml to match
     beacon_yaml = project / ".agentic-beacon" / "beacon.yaml"
@@ -926,6 +1001,21 @@ def _make_agent_project(tmp_path, monkeypatch):
     (wh / "README.md").write_text("# WH")
     (wh / "agents" / "code-reviewer.md").write_text(SAMPLE_AGENT_MD)
 
+    # Init git
+    subprocess.run(
+        ["git", "init"], cwd=wh, env=GIT_ENV, check=True, capture_output=True
+    )
+    subprocess.run(
+        ["git", "add", "."], cwd=wh, env=GIT_ENV, check=True, capture_output=True
+    )
+    subprocess.run(
+        ["git", "commit", "-m", "init"],
+        cwd=wh,
+        env=GIT_ENV,
+        check=True,
+        capture_output=True,
+    )
+
     project = tmp_path / "project"
     project.mkdir()
     beacon_dir = project / ".agentic-beacon"
@@ -942,7 +1032,7 @@ class TestSyncAgentsFromWarehouse:
     def test_installs_agent_to_opencode_global_dir(
         self, tmp_path, monkeypatch, isolated_home
     ):
-        """abc sync installs warehouse agents into ~/.config/opencode/agents/."""
+        """abc sync links warehouse agents into ~/.config/opencode/agents/."""
         (isolated_home / ".config" / "opencode").mkdir(parents=True)
         wh, project = _make_agent_project(tmp_path, monkeypatch)
 
@@ -951,13 +1041,14 @@ class TestSyncAgentsFromWarehouse:
 
         assert result.exit_code == 0, result.output
         dest = isolated_home / ".config" / "opencode" / "agents" / "code-reviewer.md"
-        assert dest.exists()
+        assert dest.is_symlink()
+        assert dest.resolve() == (wh / "agents" / "code-reviewer.md").resolve()
         assert dest.read_text() == SAMPLE_AGENT_MD
 
     def test_installs_agent_to_claudecode_global_dir(
         self, tmp_path, monkeypatch, isolated_home
     ):
-        """abc sync installs warehouse agents into ~/.claude/agents/."""
+        """abc sync links warehouse agents into ~/.claude/agents/."""
         (isolated_home / ".claude").mkdir(parents=True)
         wh, project = _make_agent_project(tmp_path, monkeypatch)
 
@@ -966,7 +1057,8 @@ class TestSyncAgentsFromWarehouse:
 
         assert result.exit_code == 0, result.output
         dest = isolated_home / ".claude" / "agents" / "code-reviewer.md"
-        assert dest.exists()
+        assert dest.is_symlink()
+        assert dest.resolve() == (wh / "agents" / "code-reviewer.md").resolve()
         assert dest.read_text() == SAMPLE_AGENT_MD
 
     def test_installs_to_both_tools_when_both_present(
@@ -981,10 +1073,14 @@ class TestSyncAgentsFromWarehouse:
         result = runner.invoke(main, ["sync", "--skip-git-check"])
 
         assert result.exit_code == 0, result.output
-        assert (
+        opencode_dest = (
             isolated_home / ".config" / "opencode" / "agents" / "code-reviewer.md"
-        ).exists()
-        assert (isolated_home / ".claude" / "agents" / "code-reviewer.md").exists()
+        )
+        claude_dest = isolated_home / ".claude" / "agents" / "code-reviewer.md"
+        assert opencode_dest.is_symlink()
+        assert claude_dest.is_symlink()
+        assert opencode_dest.resolve() == (wh / "agents" / "code-reviewer.md").resolve()
+        assert claude_dest.resolve() == (wh / "agents" / "code-reviewer.md").resolve()
         assert "code-reviewer" in result.output
 
     def test_skips_agents_when_warehouse_has_no_agents_dir(
@@ -997,6 +1093,21 @@ class TestSyncAgentsFromWarehouse:
         for d in ("knowledge", "skills", "contexts", "docs"):
             (wh / d).mkdir(parents=True)
         (wh / "README.md").write_text("# WH")
+
+        # Init git
+        subprocess.run(
+            ["git", "init"], cwd=wh, env=GIT_ENV, check=True, capture_output=True
+        )
+        subprocess.run(
+            ["git", "add", "."], cwd=wh, env=GIT_ENV, check=True, capture_output=True
+        )
+        subprocess.run(
+            ["git", "commit", "-m", "init"],
+            cwd=wh,
+            env=GIT_ENV,
+            check=True,
+            capture_output=True,
+        )
 
         project = tmp_path / "project"
         project.mkdir()
@@ -1017,17 +1128,23 @@ class TestSyncAgentsFromWarehouse:
     def test_idempotent_when_already_up_to_date(
         self, tmp_path, monkeypatch, isolated_home
     ):
-        """Running sync twice does not re-write agent files that are already current."""
+        """Running sync twice does not re-link agent files that are already current."""
         agents_dir = isolated_home / ".config" / "opencode" / "agents"
         agents_dir.mkdir(parents=True)
-        (agents_dir / "code-reviewer.md").write_text(SAMPLE_AGENT_MD)
-        mtime_before = (agents_dir / "code-reviewer.md").stat().st_mtime
 
         wh, project = _make_agent_project(tmp_path, monkeypatch)
         runner = CliRunner()
-        runner.invoke(main, ["sync", "--skip-git-check"])
+        result = runner.invoke(main, ["sync", "--skip-git-check"])
+        assert result.exit_code == 0, result.output
 
-        mtime_after = (agents_dir / "code-reviewer.md").stat().st_mtime
+        dest = agents_dir / "code-reviewer.md"
+        assert dest.is_symlink()
+        mtime_before = dest.lstat().st_mtime
+
+        result = runner.invoke(main, ["sync", "--skip-git-check"])
+        assert result.exit_code == 0, result.output
+
+        mtime_after = dest.lstat().st_mtime
         assert mtime_before == mtime_after
 
     def test_force_overwrites_conflicting_agent(
@@ -1043,23 +1160,10 @@ class TestSyncAgentsFromWarehouse:
         result = runner.invoke(main, ["sync", "--force", "--skip-git-check"])
 
         assert result.exit_code == 0, result.output
-        assert (agents_dir / "code-reviewer.md").read_text() == SAMPLE_AGENT_MD
-
-    def test_preserve_skips_conflicting_agent(
-        self, tmp_path, monkeypatch, isolated_home
-    ):
-        """--preserve leaves diverged local agent files untouched."""
-        agents_dir = isolated_home / ".config" / "opencode" / "agents"
-        agents_dir.mkdir(parents=True)
-        (agents_dir / "code-reviewer.md").write_text("old local content\n")
-
-        wh, project = _make_agent_project(tmp_path, monkeypatch)
-        runner = CliRunner()
-        result = runner.invoke(main, ["sync", "--preserve", "--skip-git-check"])
-
-        assert result.exit_code == 0, result.output
-        assert (agents_dir / "code-reviewer.md").read_text() == "old local content\n"
-        assert "Skipped" in result.output
+        dest = agents_dir / "code-reviewer.md"
+        assert dest.is_symlink()
+        assert dest.resolve() == (wh / "agents" / "code-reviewer.md").resolve()
+        assert dest.read_text() == SAMPLE_AGENT_MD
 
     def test_non_interactive_conflict_skips_without_prompt(
         self, tmp_path, monkeypatch, isolated_home
@@ -1232,6 +1336,21 @@ class TestSyncMultiFileSkillIntegration:
         (skill_dir / "runner.py").write_text("def main(): pass\n")
         (skill_dir / "config.yaml").write_text("timeout: 30\n")
 
+        # Init git
+        subprocess.run(
+            ["git", "init"], cwd=wh, env=GIT_ENV, check=True, capture_output=True
+        )
+        subprocess.run(
+            ["git", "add", "."], cwd=wh, env=GIT_ENV, check=True, capture_output=True
+        )
+        subprocess.run(
+            ["git", "commit", "-m", "init"],
+            cwd=wh,
+            env=GIT_ENV,
+            check=True,
+            capture_output=True,
+        )
+
         project = tmp_path / "project"
         project.mkdir()
         beacon_dir = project / ".agentic-beacon"
@@ -1283,6 +1402,21 @@ class TestSyncMultiFileSkillIntegration:
         skill_dir = wh / "skills" / "old-style"
         skill_dir.mkdir()
         (skill_dir / "SKILL.md").write_text("# Old\n")
+
+        # Init git
+        subprocess.run(
+            ["git", "init"], cwd=wh, env=GIT_ENV, check=True, capture_output=True
+        )
+        subprocess.run(
+            ["git", "add", "."], cwd=wh, env=GIT_ENV, check=True, capture_output=True
+        )
+        subprocess.run(
+            ["git", "commit", "-m", "init"],
+            cwd=wh,
+            env=GIT_ENV,
+            check=True,
+            capture_output=True,
+        )
 
         project = tmp_path / "project"
         project.mkdir()

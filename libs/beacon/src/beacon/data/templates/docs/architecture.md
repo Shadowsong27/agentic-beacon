@@ -36,18 +36,19 @@ cd ~/my-project
 abc warehouse connect --path ~/path/to/this-warehouse
 
 # Create artifact config and sync
-abc setup --manual   # then edit .agentic-beacon/beacon.yaml
+abc setup            # creates .agentic-beacon/beacon.yaml
+abc adopt            # select relevant warehouse artifacts
 abc sync
 
-# Content is copied to .agentic-beacon/ (gitignored)
+# Content is symlinked under .agentic-beacon/artifacts/ (gitignored)
 ```
 
 ## Contribution
 
-1. Make changes in warehouse repository
+1. Make changes in the warehouse repository (edit directly, or edit via any project's `.agentic-beacon/artifacts/` symlinks — they write through to the warehouse working tree)
 2. Test with Beacon CLI
-3. Submit pull request
-4. After merge, teams run `abc update` to sync
+3. Commit the changes (`abc warehouse contribute -m "…" --push` or via plain `git` inside the warehouse clone)
+4. After merge, teammates pull the warehouse — updated content is visible through existing project symlinks immediately (no per-project re-sync required unless `beacon.yaml` itself changed)
 
 ## Maintenance
 

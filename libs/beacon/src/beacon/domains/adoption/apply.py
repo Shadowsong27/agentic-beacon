@@ -2,16 +2,14 @@
 
 Provides:
 - apply_adoption(): update beacon.yaml with selected/removed artifacts
-- cleanup_unadopted_artifacts(): prompt to delete local artifact files for unadopted entries
+- cleanup_unadopted_artifacts(): prompt to remove local artifact symlinks for unadopted entries
+- warehouse_uncommitted_paths(): return set of relative paths with uncommitted changes
 """
 
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    pass
 
 from beacon.domains.adoption.models import AdoptCandidate
 
@@ -68,6 +66,21 @@ def apply_adoption(
     beacon_settings.to_yaml(beacon_yaml_path)
 
 
+def warehouse_uncommitted_paths(warehouse_path: Path) -> set[str]:
+    """Return relative paths of files with uncommitted changes in the warehouse."""
+    result = subprocess.run(
+        ["git", "-C", str(warehouse_path), "status", "--porcelain"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    paths: set[str] = set()
+    for line in result.stdout.splitlines():
+        if len(line) >= 3:
+            paths.add(line[3:].strip())
+    return paths
+
+
 def cleanup_unadopted_artifacts(
     unadoptions: list[str],
     artifacts_dir: Path,
@@ -75,28 +88,19 @@ def cleanup_unadopted_artifacts(
     *,
     project_root: Path | None = None,
 ) -> None:
-    """Prompt to delete local artifact files for unadopted entries.
+    """Prompt to remove local artifact symlinks for unadopted entries.
 
-    Always requires confirmation.  Files that differ from the warehouse copy
-    are flagged as locally modified so the user can make an informed choice.
+    Always requires confirmation.
 
     When project_root is provided, skill unadoptions also remove live agent
     copies under .opencode/skills/<name>/ and .claude/skills/<name>/.
     """
-    import hashlib
-
     import click
     from rich.console import Console
-    from rich.table import Table
 
     console = Console()
 
-    def _sha256(path: Path) -> str:
-        h = hashlib.sha256()
-        h.update(path.read_bytes())
-        return h.hexdigest()
-
-    to_delete: list[tuple[str, Path, bool]] = []
+    to_remove: list[tuple[str, Path]] = []
 
     for entry in unadoptions:
         entry_clean = entry.rstrip("/")
@@ -107,27 +111,16 @@ def cleanup_unadopted_artifacts(
                 if not f.is_file():
                     continue
                 rel = str(f.relative_to(artifacts_dir))
-                warehouse_file = warehouse_path / rel
-                if warehouse_file.exists():
-                    modified = _sha256(f) != _sha256(warehouse_file)
-                else:
-                    modified = True
-                to_delete.append((rel, f, modified))
+                to_remove.append((rel, f))
         elif local_entry.is_file():
             rel = str(local_entry.relative_to(artifacts_dir))
-            warehouse_file = warehouse_path / rel
-            if warehouse_file.exists():
-                modified = _sha256(local_entry) != _sha256(warehouse_file)
-            else:
-                modified = True
-            to_delete.append((rel, local_entry, modified))
+            to_remove.append((rel, local_entry))
 
         parts = entry_clean.split("/")
         if project_root is not None and len(parts) >= 2 and parts[0] == "skills":
             from beacon.domains.artifact.skill import build_skills_paths
 
             skill_name = parts[1]
-            warehouse_skill_dir = warehouse_path / "skills" / skill_name
             for agent, live_skills_root in build_skills_paths(project_root).items():
                 live_skill_dir = live_skills_root / skill_name
                 if not live_skill_dir.is_dir():
@@ -136,51 +129,47 @@ def cleanup_unadopted_artifacts(
                     if not f.is_file():
                         continue
                     rel_within_skill = f.relative_to(live_skill_dir)
-                    warehouse_file = warehouse_skill_dir / rel_within_skill
-                    if warehouse_file.exists():
-                        modified = _sha256(f) != _sha256(warehouse_file)
-                    else:
-                        modified = True
                     display_label = str(
                         Path(".opencode" if agent == "opencode" else ".claude")
                         / "skills"
                         / skill_name
                         / rel_within_skill
                     )
-                    to_delete.append((display_label, f, modified))
+                    to_remove.append((display_label, f))
 
-    if not to_delete:
+    if not to_remove:
         return
 
-    has_modified = any(m for _, _, m in to_delete)
+    symlink_count = sum(1 for _, path in to_remove if path.is_symlink())
+    file_count = len(to_remove) - symlink_count
 
-    table = Table(show_header=True, header_style="dim", box=None, padding=(0, 2, 0, 0))
-    table.add_column("File")
-    table.add_column("Status")
-    for rel, _, modified in sorted(to_delete):
-        status = (
-            "[yellow]⚠ locally modified[/yellow]" if modified else "[dim]clean[/dim]"
-        )
-        table.add_row(rel, status)
+    if symlink_count > 0 and file_count == 0:
+        noun = "symlink"
+        action = "unlink"
+    elif symlink_count > 0 and file_count > 0:
+        noun = "reference"
+        action = "remove"
+    else:
+        noun = "file"
+        action = "delete"
 
     console.print()
-    console.print("[bold]Local artifact files to delete:[/bold]")
-    console.print(table)
-    if has_modified:
-        console.print(
-            "[yellow]⚠ Some files have local edits that are not in the warehouse.[/yellow]"
-        )
+    console.print(f"[bold]Local artifact {noun}s to {action}:[/bold]")
+    for rel, _ in sorted(to_remove):
+        console.print(f"  {rel}")
 
-    confirmed = click.confirm(f"Delete {len(to_delete)} local file(s)?", default=False)
+    confirmed = click.confirm(
+        f"\n{action.capitalize()} {len(to_remove)} local {noun}(s)?", default=False
+    )
     if not confirmed:
-        console.print("[dim]Skipped cleanup. Files remain in artifacts/.[/dim]")
+        console.print("[dim]Skipped cleanup.[/dim]")
         return
 
-    deleted = 0
-    for _, path, _ in to_delete:
+    removed = 0
+    for _, path in to_remove:
         try:
             path.unlink()
-            deleted += 1
+            removed += 1
         except OSError:
             pass
 
@@ -195,7 +184,7 @@ def cleanup_unadopted_artifacts(
                 if len(parts) >= 2 and parts[0] == "skills":
                     live_skill_roots.append(live_skills_root / parts[1])
 
-    for _, path, _ in to_delete:
+    for _, path in to_remove:
         for parent in path.parents:
             if parent == artifacts_dir:
                 break
@@ -212,4 +201,4 @@ def cleanup_unadopted_artifacts(
         except OSError:
             pass
 
-    console.print(f"[green]✓[/green] Deleted {deleted} file(s).")
+    console.print(f"[green]✓[/green] {action.capitalize()}ed {removed} {noun}(s).")

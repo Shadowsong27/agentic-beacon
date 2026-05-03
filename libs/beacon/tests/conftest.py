@@ -1,6 +1,8 @@
 """pytest configuration and shared fixtures."""
 
+import os
 import shutil
+import subprocess
 import tempfile
 from pathlib import Path
 
@@ -107,5 +109,35 @@ def valid_warehouse(temp_dir):
 
     # Create required README
     (warehouse_path / "README.md").write_text("# Test Warehouse")
+
+    # Initialize git repo and commit initial files (required by symlink-based sync)
+    env = {
+        **os.environ,
+        "GIT_AUTHOR_NAME": "Test",
+        "GIT_AUTHOR_EMAIL": "t@t.local",
+        "GIT_COMMITTER_NAME": "Test",
+        "GIT_COMMITTER_EMAIL": "t@t.local",
+    }
+    subprocess.run(
+        ["git", "init"],
+        cwd=warehouse_path,
+        env=env,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "add", "."],
+        cwd=warehouse_path,
+        env=env,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "commit", "-m", "init"],
+        cwd=warehouse_path,
+        env=env,
+        check=True,
+        capture_output=True,
+    )
 
     return warehouse_path
