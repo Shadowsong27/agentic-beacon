@@ -1,15 +1,18 @@
-"""Sync engine for snapshot-based artifact copying.
+"""Sync engine for symlink-based artifact distribution.
 
-This module implements pure copy (no symlinks) syncing of artifacts
-from warehouse to project's .agentic-beacon/artifacts/ directory.
+This module implements the new symlink-based sync model:
+- Per-file symlinks with absolute targets into the warehouse clone
+- Real directories at intermediate levels
+- Idempotent (skips correct symlinks, repairs broken/wrong-target ones)
+- Out-of-warehouse guard (aborts if any beacon.yaml entry resolves outside warehouse)
+- Orphan pruning (removes symlinks for dropped entries, leaves regular files for migration)
 """
 
 import hashlib
-import shutil
+import os
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
 
 from loguru import logger
 from pydantic import BaseModel
@@ -18,25 +21,13 @@ from beacon.core.file_filter import is_skill_file
 
 
 class SyncResult(BaseModel):
-    """Result of a sync operation."""
+    """Result of a sync operation on a single file."""
 
     success: bool
-    action: Literal["copied", "skipped", "preserved", "error"]
+    action: str  # "created", "skipped", "updated", "removed", "error"
     source_path: Path | None = None
     dest_path: Path | None = None
     error_message: str | None = None
-
-    model_config = {"arbitrary_types_allowed": True}
-
-
-class OrphanInfo(BaseModel):
-    """Information about a single orphaned artifact file."""
-
-    rel_path: str
-    """Relative path under artifacts_path."""
-
-    is_modified: bool
-    """True if local content differs from the warehouse copy."""
 
     model_config = {"arbitrary_types_allowed": True}
 
@@ -45,223 +36,168 @@ class OrphanInfo(BaseModel):
 class SyncSummary:
     """Summary of a full sync operation."""
 
-    copied: int = 0
+    created: int = 0
     skipped: int = 0
-    preserved: int = 0
-    pruned: int = 0
+    updated: int = 0
+    removed: int = 0
     errors: int = 0
     failed_files: list[tuple[str, str]] = field(default_factory=list)
     results: list[SyncResult] = field(default_factory=list)
     log_messages: list[str] = field(default_factory=list)
-    pruned_paths: list[str] = field(default_factory=list)
+
+
+class OutOfWarehouseError(Exception):
+    """Raised when a beacon.yaml entry resolves outside the warehouse root."""
+
+    def __init__(self, entry: str, resolved_path: Path) -> None:
+        self.entry = entry
+        self.resolved_path = resolved_path
+        super().__init__(
+            f"Entry '{entry}' resolves outside the warehouse: {resolved_path}"
+        )
 
 
 @dataclass
 class SyncEngine:
-    """Engine for syncing artifacts from warehouse to project.
-
-    Implements snapshot-based pure copy model:
-    - No symlinks (for agent compatibility)
-    - Idempotent (skips unchanged files)
-    - Preserves directory structure
-    - Supports glob patterns
-    - Supports --preserve (skip locally modified files)
-    - Supports --prune (remove artifacts not in beacon.yaml)
-    - Supports verbose logging
-    """
+    """Engine for syncing artifacts from warehouse to project via symlinks."""
 
     warehouse_path: Path
     artifacts_path: Path
 
     def __post_init__(self) -> None:
-        """Normalize paths and ensure artifacts directory exists."""
-        self.warehouse_path = Path(self.warehouse_path)
-        self.artifacts_path = Path(self.artifacts_path)
-        self.artifacts_path.mkdir(parents=True, exist_ok=True)
+        """Normalize paths."""
+        self.warehouse_path = Path(self.warehouse_path).resolve()
+        self.artifacts_path = Path(self.artifacts_path).resolve()
         logger.debug(
             "SyncEngine initialized: warehouse={}, artifacts={}",
             self.warehouse_path,
             self.artifacts_path,
         )
 
-    def copy_file(self, relative_path: str, preserve: bool = False) -> SyncResult:
-        """Copy a single file from warehouse to artifacts directory.
+    def verify_in_warehouse(self, relative_path: str) -> Path:
+        """Resolve a relative path and verify it lives inside the warehouse.
 
-        Args:
-            relative_path: Relative path from warehouse root (e.g., "knowledge/doc.md")
-            preserve: If True, skip files with local modifications
-
-        Returns:
-            SyncResult indicating success/failure and action taken
+        Raises OutOfWarehouseError if the resolved path is outside.
         """
-        source_file = self.warehouse_path / relative_path
-        dest_file = self.artifacts_path / relative_path
-
-        # Check if source exists
-        if not source_file.exists():
-            logger.debug("Source file not found: {}", source_file)
-            return SyncResult(
-                success=False,
-                action="error",
-                source_path=source_file,
-                error_message=f"Source file not found: {source_file}",
-            )
-
-        # Check if destination exists and is unchanged (idempotent check)
-        if dest_file.exists():
-            if self._files_identical(source_file, dest_file):
-                logger.debug("Skipping unchanged file: {}", relative_path)
-                return SyncResult(
-                    success=True,
-                    action="skipped",
-                    source_path=source_file,
-                    dest_path=dest_file,
-                )
-
-            # File differs - check preserve flag
-            if preserve:
-                logger.debug("Preserving locally modified file: {}", relative_path)
-                return SyncResult(
-                    success=True,
-                    action="preserved",
-                    source_path=source_file,
-                    dest_path=dest_file,
-                )
-
-        # Create parent directories and copy file
+        source = self.warehouse_path / relative_path
+        resolved = source.resolve()
+        # Ensure the resolved path is a descendant of the warehouse root
         try:
-            dest_file.parent.mkdir(parents=True, exist_ok=True)
+            resolved.relative_to(self.warehouse_path)
+        except ValueError:
+            raise OutOfWarehouseError(relative_path, resolved) from None
+        return resolved
 
-            # Copy file (always as regular file, never as symlink)
-            if source_file.is_symlink():
-                # If source is symlink, copy the target content
-                shutil.copy2(source_file.resolve(), dest_file)
-            else:
-                shutil.copy2(source_file, dest_file)
+    def create_symlink(self, relative_path: str) -> SyncResult:
+        """Create or repair a symlink for a single artifact.
 
-            logger.debug("Copied: {} -> {}", source_file, dest_file)
-            return SyncResult(
-                success=True,
-                action="copied",
-                source_path=source_file,
-                dest_path=dest_file,
-            )
-        except PermissionError as e:
-            logger.debug("Permission denied copying {}: {}", relative_path, e)
+        Returns SyncResult indicating what happened.
+        """
+        try:
+            source = self.verify_in_warehouse(relative_path)
+        except OutOfWarehouseError as e:
             return SyncResult(
                 success=False,
                 action="error",
-                source_path=source_file,
-                error_message=f"Permission denied: {e}",
-            )
-        except OSError as e:
-            logger.debug("OS error copying {}: {}", relative_path, e)
-            return SyncResult(
-                success=False,
-                action="error",
-                source_path=source_file,
                 error_message=str(e),
             )
 
-    def _check_file_action(self, relative_path: str, preserve: bool = False) -> str:
-        """Determine what action would be taken for a file without copying.
+        if not source.exists():
+            return SyncResult(
+                success=False,
+                action="error",
+                error_message=f"Source file not found: {source}",
+            )
 
-        Args:
-            relative_path: Relative path from warehouse root
-            preserve: Whether preserve flag is set
+        dest = self.artifacts_path / relative_path
+        target = str(source)
 
-        Returns:
-            One of "copied", "skipped", "preserved", or "error"
-        """
-        source_file = self.warehouse_path / relative_path
-        dest_file = self.artifacts_path / relative_path
+        # Ensure parent directories exist (real directories, not symlinks)
+        dest.parent.mkdir(parents=True, exist_ok=True)
 
-        if not source_file.exists():
-            return "error"
-
-        if dest_file.exists():
-            if self._files_identical(source_file, dest_file):
-                return "skipped"
-            if preserve:
-                return "preserved"
-
-        return "copied"
-
-    def classify_orphans(self, artifact_paths: list[str]) -> list[OrphanInfo]:
-        """Classify files in artifacts_path that are not in artifact_paths.
-
-        A file is an *orphan* if it exists under artifacts_path but is not
-        listed in artifact_paths.  Orphans are split into two categories:
-
-        - Prune candidates: the file also exists in the warehouse (was synced
-          at some point, then removed from beacon.yaml).  These should be
-          deleted after user confirmation.
-        - New contributions: the file does NOT exist in the warehouse (was
-          created locally and has never been pushed).  These must never be
-          auto-deleted.
-
-        Only prune candidates are returned; new contributions are silently
-        ignored.
-
-        Args:
-            artifact_paths: List of relative paths currently in beacon.yaml.
-
-        Returns:
-            List of OrphanInfo for prune candidates, each carrying whether the
-            local copy has been modified relative to the warehouse version.
-        """
-        if not self.artifacts_path.exists():
-            return []
-
-        synced_set = set(artifact_paths)
-        orphans: list[OrphanInfo] = []
-
-        for file_path in sorted(self.artifacts_path.rglob("*")):
-            if not file_path.is_file():
-                continue
-            rel_path = str(file_path.relative_to(self.artifacts_path))
-            if rel_path in synced_set:
-                continue
-
-            warehouse_copy = self.warehouse_path / rel_path
-            if not warehouse_copy.exists():
-                # New contribution — never prune
-                logger.debug(
-                    "Skipping new contribution (not in warehouse): {}", rel_path
+        if dest.exists() or dest.is_symlink():
+            if dest.is_symlink():
+                current_target = os.readlink(dest)
+                if current_target == target:
+                    # Correct symlink already exists
+                    return SyncResult(
+                        success=True,
+                        action="skipped",
+                        source_path=source,
+                        dest_path=dest,
+                    )
+                # Wrong target or broken — remove and recreate
+                dest.unlink()
+            else:
+                # Regular file exists — this is a migration case, handled separately
+                return SyncResult(
+                    success=True,
+                    action="skipped",
+                    source_path=source,
+                    dest_path=dest,
                 )
-                continue
 
-            is_modified = not self.files_identical(file_path, warehouse_copy)
-            orphans.append(OrphanInfo(rel_path=rel_path, is_modified=is_modified))
+        # Create the symlink
+        try:
+            dest.symlink_to(target)
+            return SyncResult(
+                success=True,
+                action="created",
+                source_path=source,
+                dest_path=dest,
+            )
+        except OSError as e:
+            return SyncResult(
+                success=False,
+                action="error",
+                source_path=source,
+                dest_path=dest,
+                error_message=str(e),
+            )
 
-        return orphans
+    def remove_symlink(self, relative_path: str) -> SyncResult:
+        """Remove a symlink (only if it's a symlink, not a regular file)."""
+        dest = self.artifacts_path / relative_path
+        if dest.is_symlink():
+            try:
+                dest.unlink()
+                return SyncResult(
+                    success=True,
+                    action="removed",
+                    dest_path=dest,
+                )
+            except OSError as e:
+                return SyncResult(
+                    success=False,
+                    action="error",
+                    dest_path=dest,
+                    error_message=str(e),
+                )
+        return SyncResult(
+            success=True,
+            action="skipped",
+            dest_path=dest,
+        )
 
     def sync_all(
         self,
         artifact_paths: list[str],
-        preserve: bool = False,
-        prune: bool = False,
         paths_to_prune: list[str] | None = None,
         verbose: bool = False,
         dry_run: bool = False,
         log_fn: Callable[[str], None] | None = None,
     ) -> SyncSummary:
-        """Sync all artifacts from a list of paths.
+        """Sync all artifacts via symlinks.
 
         Args:
             artifact_paths: List of relative paths to sync
-            preserve: If True, skip locally modified files
-            prune: If True, remove artifacts not in the list (legacy flag —
-                   prefer passing paths_to_prune explicitly for confirmed lists)
-            paths_to_prune: Explicit list of relative paths to delete.  When
-                provided this takes precedence over the automatic prune scan
-                driven by ``prune=True``.
+            paths_to_prune: Explicit list of relative paths to remove
             verbose: If True, log detailed operations
-            dry_run: If True, preview actions without copying or pruning
+            dry_run: If True, preview actions without making changes
             log_fn: Optional callback for log messages
 
         Returns:
-            SyncSummary with operation counts and details
+            SyncSummary with operation counts
         """
         summary = SyncSummary()
 
@@ -270,35 +206,38 @@ class SyncEngine:
             if log_fn:
                 log_fn(msg)
 
-        # Sync each artifact
+        # First, validate all paths are inside the warehouse
+        for path in artifact_paths:
+            try:
+                self.verify_in_warehouse(path)
+            except OutOfWarehouseError:
+                # Re-raise to abort the entire sync
+                raise
+
+        # Create symlinks
         for path in artifact_paths:
             if verbose or dry_run:
                 log(f"Syncing: {path}")
 
             if dry_run:
-                action = self._check_file_action(path, preserve=preserve)
-                result = SyncResult(
-                    success=action != "error",
-                    action=action,  # type: ignore[arg-type]
-                )
+                result = self._preview_symlink(path)
             else:
-                result = self.copy_file(path, preserve=preserve)
+                result = self.create_symlink(path)
+
             summary.results.append(result)
 
-            if result.action == "copied":
-                summary.copied += 1
+            if result.action == "created":
+                summary.created += 1
                 if verbose or dry_run:
-                    log(f"  {'Would copy' if dry_run else 'Copied'}: {path}")
+                    log(f"  {'Would create' if dry_run else 'Created'}: {path}")
             elif result.action == "skipped":
                 summary.skipped += 1
                 if verbose or dry_run:
-                    log(f"  Unchanged: {path}")
-            elif result.action == "preserved":
-                summary.preserved += 1
+                    log(f"  {'Would skip' if dry_run else 'Skipped'}: {path}")
+            elif result.action == "updated":
+                summary.updated += 1
                 if verbose or dry_run:
-                    log(
-                        f"  {'Would preserve' if dry_run else 'Preserved'} (local changes): {path}"
-                    )
+                    log(f"  {'Would update' if dry_run else 'Updated'}: {path}")
             elif result.action == "error":
                 summary.errors += 1
                 summary.failed_files.append(
@@ -306,74 +245,93 @@ class SyncEngine:
                 )
                 log(f"  Error: {path} - {result.error_message}")
 
-        # Determine which paths to prune
-        if paths_to_prune is not None:
-            prune_list = paths_to_prune
-        elif prune and self.artifacts_path.exists():
-            synced_set = set(artifact_paths)
-            prune_list = [
-                str(f.relative_to(self.artifacts_path))
-                for f in sorted(self.artifacts_path.rglob("*"))
-                if f.is_file()
-                and str(f.relative_to(self.artifacts_path)) not in synced_set
-            ]
-        else:
-            prune_list = []
-
+        # Prune orphans
+        prune_list = paths_to_prune or []
         for rel_path in prune_list:
-            file_path = self.artifacts_path / rel_path
             if dry_run:
-                summary.pruned += 1
-                summary.pruned_paths.append(rel_path)
-                logger.debug("Would prune: {}", rel_path)
+                summary.removed += 1
                 if verbose or dry_run:
-                    log(f"  Would prune: {rel_path}")
+                    log(f"  Would remove: {rel_path}")
             else:
-                try:
-                    file_path.unlink(missing_ok=True)
-                    summary.pruned += 1
-                    summary.pruned_paths.append(rel_path)
-                    logger.debug("Pruned: {}", rel_path)
+                result = self.remove_symlink(rel_path)
+                if result.action == "removed":
+                    summary.removed += 1
                     if verbose:
-                        log(f"  Pruned: {rel_path}")
-                except OSError as e:
+                        log(f"  Removed: {rel_path}")
+                elif result.action == "error":
                     summary.errors += 1
-                    summary.failed_files.append((rel_path, str(e)))
-                    log(f"  Error pruning {rel_path}: {e}")
+                    summary.failed_files.append(
+                        (rel_path, result.error_message or "unknown error")
+                    )
 
         if prune_list and not dry_run:
             self._cleanup_empty_dirs(self.artifacts_path)
 
         return summary
 
+    def _preview_symlink(self, relative_path: str) -> SyncResult:
+        """Preview what would happen for a symlink without creating it."""
+        try:
+            source = self.verify_in_warehouse(relative_path)
+        except OutOfWarehouseError as e:
+            return SyncResult(
+                success=False,
+                action="error",
+                error_message=str(e),
+            )
+
+        if not source.exists():
+            return SyncResult(
+                success=False,
+                action="error",
+                error_message=f"Source file not found: {source}",
+            )
+
+        dest = self.artifacts_path / relative_path
+        target = str(source)
+
+        if dest.exists() or dest.is_symlink():
+            if dest.is_symlink():
+                current_target = os.readlink(dest)
+                if current_target == target:
+                    return SyncResult(
+                        success=True,
+                        action="skipped",
+                        source_path=source,
+                        dest_path=dest,
+                    )
+                return SyncResult(
+                    success=True,
+                    action="updated",
+                    source_path=source,
+                    dest_path=dest,
+                )
+            return SyncResult(
+                success=True,
+                action="skipped",
+                source_path=source,
+                dest_path=dest,
+            )
+
+        return SyncResult(
+            success=True,
+            action="created",
+            source_path=source,
+            dest_path=dest,
+        )
+
     def expand_glob(self, pattern: str) -> list[str]:
-        """Expand glob pattern to list of matching file paths.
-
-        Args:
-            pattern: Glob pattern relative to warehouse root (e.g., "knowledge/**/*.md")
-
-        Returns:
-            List of relative paths matching the pattern (files only, not directories)
-        """
-        # Glob from warehouse root
+        """Expand glob pattern to list of matching file paths."""
         matches = self.warehouse_path.glob(pattern)
-
-        # Filter to files only and return relative paths
         relative_paths = []
         for match in matches:
             if match.is_file():
                 rel_path = match.relative_to(self.warehouse_path)
                 relative_paths.append(str(rel_path))
-
         return relative_paths
 
     def list_artifacts(self, artifact_type: str | None = None) -> dict[str, list[str]]:
-        """List synced artifacts by type.
-
-        Returns a mapping of artifact type (contexts/knowledge/skills) to
-        sorted lists of relative paths. If artifact_type is specified,
-        only that type is included.
-        """
+        """List synced artifacts by type."""
         types_to_show = (
             [artifact_type] if artifact_type else ["contexts", "knowledge", "skills"]
         )
@@ -385,23 +343,14 @@ class SyncEngine:
             files = sorted(
                 str(f.relative_to(self.artifacts_path))
                 for f in section_dir.rglob("*")
-                if f.is_file() and not f.name.startswith(".")
+                if f.is_symlink() and not f.name.startswith(".")
             )
             if files:
                 result[section] = files
         return result
 
     def expand_artifact_paths(self, patterns: list[str]) -> list[str]:
-        """Expand artifact path patterns to concrete file paths.
-
-        Handles:
-        - Glob patterns (with * or ?)
-        - Skill directories (ending with /)
-        - Knowledge directories (expanded to **/*.md)
-        - Single files
-
-        Returns list of warehouse-relative paths.
-        """
+        """Expand artifact path patterns to concrete file paths."""
         import glob as glob_mod
 
         expanded: list[str] = []
@@ -430,15 +379,7 @@ class SyncEngine:
         return expanded
 
     def files_identical(self, file1: Path, file2: Path) -> bool:
-        """Check if two files have identical content using hash comparison.
-
-        Args:
-            file1: First file path
-            file2: Second file path
-
-        Returns:
-            True if files have same content, False otherwise
-        """
+        """Check if two files have identical content using hash comparison."""
         try:
             hash1 = self._compute_file_hash(file1)
             hash2 = self._compute_file_hash(file2)
@@ -446,44 +387,8 @@ class SyncEngine:
         except OSError:
             return False
 
-    def _files_identical(self, file1: Path, file2: Path) -> bool:
-        """Private alias for files_identical (backward-compat internal callers)."""
-        return self.files_identical(file1, file2)
-
-    def classify_conflicts(self, artifact_paths: list[str]) -> list[str]:
-        """Return list of relative paths where local content differs from warehouse.
-
-        A conflict is any path where both the warehouse source and the local
-        destination exist but their content differs. Fresh files (dest absent) are
-        not conflicts.
-
-        Args:
-            artifact_paths: Relative paths to check (e.g. "knowledge/doc.md")
-
-        Returns:
-            List of conflicting relative paths
-        """
-        conflicts = []
-        for rel_path in artifact_paths:
-            source = self.warehouse_path / rel_path
-            dest = self.artifacts_path / rel_path
-            if (
-                source.exists()
-                and dest.exists()
-                and not self.files_identical(source, dest)
-            ):
-                conflicts.append(rel_path)
-        return conflicts
-
     def _compute_file_hash(self, file_path: Path) -> str:
-        """Compute SHA256 hash of file content.
-
-        Args:
-            file_path: Path to file
-
-        Returns:
-            Hex digest of file hash
-        """
+        """Compute SHA256 hash of file content."""
         sha256 = hashlib.sha256()
         with open(file_path, "rb") as f:
             while chunk := f.read(8192):
@@ -491,11 +396,51 @@ class SyncEngine:
         return sha256.hexdigest()
 
     def _cleanup_empty_dirs(self, root: Path) -> None:
-        """Remove empty directories recursively.
-
-        Args:
-            root: Root directory to clean
-        """
+        """Remove empty directories recursively."""
         for dirpath in sorted(root.rglob("*"), reverse=True):
             if dirpath.is_dir() and not any(dirpath.iterdir()):
                 dirpath.rmdir()
+
+    def classify_entries(
+        self,
+        artifact_paths: list[str],
+    ) -> dict[str, str]:
+        """Classify each beacon.yaml-matched entry in the artifacts directory.
+
+        Returns dict keyed by relative path with values:
+        - "symlink_ok" — symlink pointing to correct warehouse file
+        - "symlink_broken" — symlink pointing to missing target
+        - "regular_file_identical" — regular file, byte-equal to warehouse
+        - "regular_file_modified" — regular file, differs from warehouse
+        - "missing" — not present in artifacts directory
+        """
+        result: dict[str, str] = {}
+        for rel_path in artifact_paths:
+            dest = self.artifacts_path / rel_path
+            source = self.warehouse_path / rel_path
+
+            if not dest.exists() and dest.is_symlink():
+                # Dangling symlink
+                result[rel_path] = "symlink_broken"
+            elif dest.is_symlink():
+                if dest.exists():
+                    resolved = dest.resolve()
+                    expected = source.resolve()
+                    if resolved == expected:
+                        result[rel_path] = "symlink_ok"
+                    else:
+                        result[rel_path] = "symlink_broken"
+                else:
+                    result[rel_path] = "symlink_broken"
+            elif dest.exists() and dest.is_file():
+                if source.exists():
+                    if self.files_identical(source, dest):
+                        result[rel_path] = "regular_file_identical"
+                    else:
+                        result[rel_path] = "regular_file_modified"
+                else:
+                    result[rel_path] = "regular_file_modified"
+            else:
+                result[rel_path] = "missing"
+
+        return result

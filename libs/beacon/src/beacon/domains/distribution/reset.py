@@ -1,6 +1,5 @@
 """Artifact reset operations for the distribution domain."""
 
-import os
 import shutil
 from pathlib import Path
 
@@ -66,11 +65,11 @@ def reset_artifacts(project_root: Path) -> tuple[int, int, int]:
 
     for artifact_path in artifact_paths:
         dest = artifacts_dir / artifact_path
-        if dest.exists():
+        if dest.exists() or dest.is_symlink():
             dest.unlink()
             overwritten_count += 1
-        result = sync_engine.copy_file(artifact_path)
-        if result.action == "copied":
+        result = sync_engine.create_symlink(artifact_path)
+        if result.action == "created":
             copied_count += 1
         elif result.action == "error":
             error_count += 1
@@ -94,11 +93,11 @@ def remove_artifacts_dir(project_root: Path) -> Path | None:
 
 
 def count_synced_files(project_root: Path) -> int:
-    """Count total files in .agentic-beacon/artifacts.
+    """Count total symlinks in .agentic-beacon/artifacts.
 
     Returns 0 if the directory does not exist.
     """
     artifacts_dir = project_root / ".agentic-beacon" / "artifacts"
     if not artifacts_dir.exists():
         return 0
-    return sum(len(files) for _, _, files in os.walk(str(artifacts_dir)))
+    return sum(1 for _ in artifacts_dir.rglob("*") if _.is_symlink())

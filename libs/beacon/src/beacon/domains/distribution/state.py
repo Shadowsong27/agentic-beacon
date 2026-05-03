@@ -12,7 +12,6 @@ from beacon.utils.git import get_warehouse_head_sha
 
 console = Console()
 
-SYNC_STATE_FILENAME = ".sync-state"
 GLOBAL_SYNC_STATE_VERSION = 1
 
 
@@ -21,75 +20,14 @@ def global_sync_state_file() -> Path:
     return Path.home() / ".config" / "agentic-beacon" / "sync-state.json"
 
 
-def read_sync_sha(artifacts_dir: Path) -> str | None:
-    """Read the recorded warehouse HEAD SHA from the artifacts sync-state file.
-
-    Returns the SHA string, or None if the file does not exist.
-    """
-    state_file = artifacts_dir / SYNC_STATE_FILENAME
-    if not state_file.exists():
-        return None
-    content = state_file.read_text().strip()
-    return content or None
+def check_sync_state(artifacts_dir: Path, warehouse_path: Path) -> str | None:
+    """[Deprecated] No-op stub for backward compatibility."""
+    return None
 
 
 def write_sync_state(artifacts_dir: Path, warehouse_path: Path) -> None:
-    """Record the warehouse HEAD SHA into the artifacts sync-state file.
-
-    Called at the end of a successful (non-dry-run) sync so contribute can
-    verify the snapshot was taken against the current warehouse HEAD.
-    """
-    sha = get_warehouse_head_sha(warehouse_path)
-    if sha is None:
-        return  # Warehouse has no git — nothing to record
-    state_file = artifacts_dir / SYNC_STATE_FILENAME
-    state_file.write_text(sha + "\n")
-
-
-def check_sync_state(artifacts_dir: Path, warehouse_path: Path) -> str | None:
-    """Check that the local artifact snapshot is current with the warehouse HEAD.
-
-    Returns a warning message string if:
-    - artifacts_dir does not exist or is empty (sync never run), OR
-    - the recorded sync SHA does not match the current warehouse HEAD (stale snapshot)
-
-    Returns None if everything looks current, or if the warehouse has no git.
-    """
-    if not (warehouse_path / ".git").exists():
-        return None  # No git in warehouse — skip
-
-    # artifacts_dir missing or empty → sync was never run
-    if not artifacts_dir.exists() or not any(
-        f for f in artifacts_dir.iterdir() if f.name != SYNC_STATE_FILENAME
-    ):
-        return "No artifacts found — run 'abc sync' before contributing.\n\n  abc sync"
-
-    state_file = artifacts_dir / SYNC_STATE_FILENAME
-    if not state_file.exists():
-        # Sync was run before sync-state tracking was introduced — warn softly
-        return (
-            "Sync state is unknown. Run 'abc sync' to ensure your snapshot is\n"
-            "  current before contributing to avoid overwriting newer warehouse content.\n\n"
-            "  abc sync"
-        )
-
-    recorded_sha = state_file.read_text().strip()
-    current_sha = get_warehouse_head_sha(warehouse_path)
-
-    if current_sha is None:
-        return None  # Can't determine current SHA — skip silently
-
-    if recorded_sha != current_sha:
-        return (
-            "Local artifact snapshot is based on an older warehouse commit.\n"
-            "  The warehouse has been updated since your last sync — contributing\n"
-            "  now risks overwriting newer warehouse content with stale local changes.\n\n"
-            "  Run 'abc sync' to refresh your snapshot first:\n"
-            "    abc sync\n\n"
-            "  Use --skip-git-check to bypass this check."
-        )
-
-    return None
+    """[Deprecated] No-op stub for backward compatibility."""
+    pass
 
 
 def read_global_sync_state() -> dict:

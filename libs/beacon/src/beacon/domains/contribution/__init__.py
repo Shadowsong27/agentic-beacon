@@ -1,1 +1,1 @@
-"""Contribution domain: project-to-warehouse contribute flow."""
+"""Shim for backward compatibility during transition."""
