@@ -9,7 +9,7 @@ from rich.table import Table
 
 from beacon.core.manifest.beacon import BeaconManifest
 from beacon.core.manifest.workspace import WorkspaceConfig
-from beacon.domains.adoption.apply import apply_adoption
+from beacon.domains.adoption.apply import apply_adoption, cleanup_unadopted_artifacts
 from beacon.domains.adoption.discovery import discover_adoptable, is_agent_installed
 from beacon.domains.adoption.models import AdoptCandidate
 from beacon.domains.adoption.tui import AdoptApp
@@ -20,6 +20,7 @@ from beacon.domains.artifact.agent import (
     uninstall_agent_global,
 )
 from beacon.domains.artifact.skill import wire_skills_post_sync
+from beacon.domains.distribution.distributor import WarehouseDistributor
 from beacon.domains.distribution.sync_engine import SyncEngine
 from beacon.domains.setup.wiring import (
     wire_contexts_claudecode,
@@ -44,8 +45,6 @@ def adopt(*, dry_run: bool) -> None:
     to a full view where you can also unadopt currently adopted artifacts.
     Artifacts added within the last few commits are tagged with how recent they are.
     """
-    from beacon.domains.adoption.apply import cleanup_unadopted_artifacts
-
     project_root = find_project_root()
     beacon_dir = project_root / ".agentic-beacon"
     artifacts_dir = beacon_dir / "artifacts"
@@ -118,8 +117,6 @@ def adopt(*, dry_run: bool) -> None:
         + beacon_settings.artifacts.knowledge
     )
     try:
-        from beacon.domains.distribution.distributor import WarehouseDistributor
-
         distributor = WarehouseDistributor(
             warehouse_root=warehouse_path, target_root=warehouse_path
         )
@@ -204,7 +201,13 @@ def adopt(*, dry_run: bool) -> None:
                 else:
                     new_artifact_paths.append(c.path)
 
-            expanded = sync_engine.expand_artifact_paths(new_artifact_paths)
+            expanded: list[str] = []
+            for path in new_artifact_paths:
+                if path.endswith("/"):
+                    matches = sync_engine.expand_glob(f"{path.rstrip('/')}/**/*")
+                    expanded.extend(matches)
+                else:
+                    expanded.append(path)
 
             if expanded:
                 sync_engine.sync_all(

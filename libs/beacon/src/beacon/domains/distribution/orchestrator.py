@@ -6,6 +6,7 @@ argument parsing + one orchestrator call + output formatting.
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -17,7 +18,10 @@ from beacon.core.gitignore import GitignoreManager
 from beacon.core.manifest.beacon import BeaconManifest
 from beacon.core.preconditions import ensure_sync_ready
 from beacon.domains.adoption.discovery import count_unadopted_since
-from beacon.domains.artifact.agent import sync_agents_from_warehouse
+from beacon.domains.artifact.agent import (
+    sync_agents_from_warehouse,
+    update_agent_gitignores,
+)
 from beacon.domains.artifact.skill import (
     install_bundled_skills_globally,
     normalize_skill_entry,
@@ -33,6 +37,7 @@ from beacon.domains.distribution.sync_engine import (
     SyncSummary,
 )
 from beacon.domains.setup.wiring import (
+    confirm_prune,
     has_synced_contexts,
     unwire_pruned_artifacts,
     wire_contexts_claudecode,
@@ -46,6 +51,14 @@ from beacon.utils.git import find_project_root
 
 
 @dataclass
+class Orphan:
+    """A symlink under .agentic-beacon/artifacts/ not in beacon.yaml."""
+
+    rel_path: str
+    is_modified: bool = False
+
+
+@dataclass
 class SyncOrchestrationResult:
     """Result returned by run_sync()."""
 
@@ -53,7 +66,7 @@ class SyncOrchestrationResult:
     summary: SyncSummary
     artifact_paths: list[str]
     conflicts: list[str]
-    orphans: list
+    orphans: list[Orphan]
     confirmed_prune: list[str]
     oc_added: list[str]
     cc_added: list[str]
@@ -220,7 +233,7 @@ def run_sync(
             ]
 
     # Orphan pruning: only symlinks, not regular files
-    orphans: list = []
+    orphans: list[Orphan] = []
     if artifacts_dir.exists():
         synced_set = set(artifact_paths)
         for file_path in sorted(artifacts_dir.rglob("*")):
@@ -228,14 +241,10 @@ def run_sync(
                 continue
             rel_path = str(file_path.relative_to(artifacts_dir))
             if rel_path not in synced_set:
-                orphans.append(
-                    type("Orphan", (), {"rel_path": rel_path, "is_modified": False})()
-                )
+                orphans.append(Orphan(rel_path=rel_path, is_modified=False))
 
     confirmed_prune: list[str] = []
     if orphans and not dry_run:
-        from beacon.domains.setup.wiring import confirm_prune
-
         confirmed_prune = confirm_prune(orphans, dry_run=dry_run)
 
     try:
@@ -297,8 +306,6 @@ def run_sync(
             project_root, artifacts_dir, force=force
         )
         if not dry_run:
-            from beacon.domains.artifact.agent import update_agent_gitignores
-
             update_agent_gitignores(project_root)
 
     bundled_installed, bundled_skipped = install_bundled_skills_globally()
@@ -351,6 +358,4 @@ def run_sync(
 
 
 def _is_tty() -> bool:
-    import sys
-
     return sys.stdin.isatty()

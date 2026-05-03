@@ -17,8 +17,6 @@ from pathlib import Path
 from loguru import logger
 from pydantic import BaseModel
 
-from beacon.core.file_filter import is_skill_file
-
 
 class SyncResult(BaseModel):
     """Result of a sync operation on a single file."""
@@ -44,6 +42,7 @@ class SyncSummary:
     failed_files: list[tuple[str, str]] = field(default_factory=list)
     results: list[SyncResult] = field(default_factory=list)
     log_messages: list[str] = field(default_factory=list)
+    pruned_paths: list[str] = field(default_factory=list)
 
 
 class OutOfWarehouseError(Exception):
@@ -256,6 +255,7 @@ class SyncEngine:
                 result = self.remove_symlink(rel_path)
                 if result.action == "removed":
                     summary.removed += 1
+                    summary.pruned_paths.append(rel_path)
                     if verbose:
                         log(f"  Removed: {rel_path}")
                 elif result.action == "error":
@@ -349,35 +349,6 @@ class SyncEngine:
                 result[section] = files
         return result
 
-    def expand_artifact_paths(self, patterns: list[str]) -> list[str]:
-        """Expand artifact path patterns to concrete file paths."""
-        import glob as glob_mod
-
-        expanded: list[str] = []
-        for pattern in patterns:
-            if "*" in pattern or "?" in pattern:
-                matches = [
-                    str(Path(p).relative_to(self.warehouse_path))
-                    for p in glob_mod.glob(
-                        str(self.warehouse_path / pattern), recursive=True
-                    )
-                    if Path(p).is_file()
-                ]
-                expanded.extend(matches)
-            elif pattern.endswith("/"):
-                skill_dir = self.warehouse_path / pattern.rstrip("/")
-                if skill_dir.is_dir():
-                    for f in skill_dir.rglob("*"):
-                        if is_skill_file(f):
-                            expanded.append(str(f.relative_to(self.warehouse_path)))
-            elif (self.warehouse_path / pattern).is_dir():
-                for f in (self.warehouse_path / pattern).rglob("*.md"):
-                    if f.is_file():
-                        expanded.append(str(f.relative_to(self.warehouse_path)))
-            else:
-                expanded.append(pattern)
-        return expanded
-
     def files_identical(self, file1: Path, file2: Path) -> bool:
         """Check if two files have identical content using hash comparison."""
         try:
@@ -419,19 +390,15 @@ class SyncEngine:
             dest = self.artifacts_path / rel_path
             source = self.warehouse_path / rel_path
 
-            if not dest.exists() and dest.is_symlink():
-                # Dangling symlink
-                result[rel_path] = "symlink_broken"
-            elif dest.is_symlink():
-                if dest.exists():
+            if dest.is_symlink():
+                if not dest.exists():
+                    result[rel_path] = "symlink_broken"
+                else:
                     resolved = dest.resolve()
                     expected = source.resolve()
-                    if resolved == expected:
-                        result[rel_path] = "symlink_ok"
-                    else:
-                        result[rel_path] = "symlink_broken"
-                else:
-                    result[rel_path] = "symlink_broken"
+                    result[rel_path] = (
+                        "symlink_ok" if resolved == expected else "symlink_broken"
+                    )
             elif dest.exists() and dest.is_file():
                 if source.exists():
                     if self.files_identical(source, dest):

@@ -98,11 +98,8 @@ def migrate_entries(
 
             if contribute_local:
                 # Write local content to warehouse, then symlink
-                if warehouse_file.exists():
-                    shutil.copy2(local_file, warehouse_file)
-                else:
-                    warehouse_file.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(local_file, warehouse_file)
+                warehouse_file.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(local_file, warehouse_file)
                 local_file.unlink()
                 engine.create_symlink(rel_path)
                 resolved[rel_path] = "contributed"
@@ -124,11 +121,8 @@ def migrate_entries(
             choice = _prompt_resolution(rel_path, diff)
 
             if choice == "c":
-                if warehouse_file.exists():
-                    shutil.copy2(local_file, warehouse_file)
-                else:
-                    warehouse_file.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(local_file, warehouse_file)
+                warehouse_file.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(local_file, warehouse_file)
                 local_file.unlink()
                 engine.create_symlink(rel_path)
                 resolved[rel_path] = "contributed"

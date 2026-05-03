@@ -20,16 +20,6 @@ def global_sync_state_file() -> Path:
     return Path.home() / ".config" / "agentic-beacon" / "sync-state.json"
 
 
-def check_sync_state(artifacts_dir: Path, warehouse_path: Path) -> str | None:
-    """[Deprecated] No-op stub for backward compatibility."""
-    return None
-
-
-def write_sync_state(artifacts_dir: Path, warehouse_path: Path) -> None:
-    """[Deprecated] No-op stub for backward compatibility."""
-    pass
-
-
 def read_global_sync_state() -> dict:
     """Read global agent sync-state from ~/.config/agentic-beacon/sync-state.json.
 
