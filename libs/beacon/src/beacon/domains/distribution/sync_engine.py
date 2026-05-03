@@ -272,7 +272,7 @@ class SyncEngine:
             elif result.action == "skipped":
                 summary.skipped += 1
                 if verbose or dry_run:
-                    log(f"  {'Would skip' if dry_run else 'Skipped'}: {path}")
+                    log(f"  {'Would skip' if dry_run else 'Up to date'}: {path}")
             elif result.action == "updated":
                 summary.updated += 1
                 if verbose or dry_run:

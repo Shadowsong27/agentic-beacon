@@ -257,8 +257,8 @@ def test_e2e_sync_is_idempotent(e2e_project):
     result = runner.invoke(main, ["sync"])
 
     assert result.exit_code == 0
-    assert "Skipped" in result.output or "symlink" in result.output.lower()
-    assert "Created: 0" in result.output or "Skipped" in result.output
+    assert "Up to date" in result.output or "symlink" in result.output.lower()
+    assert "Created: 0" in result.output or "Up to date" in result.output
 
 
 def test_e2e_sync_glob_pattern(e2e_project):

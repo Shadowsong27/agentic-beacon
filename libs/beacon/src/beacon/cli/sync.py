@@ -130,7 +130,7 @@ def sync(
     done_label = "Dry run complete" if result.dry_run else "Sync complete"
     console.print(f"\n[bold green]✓ {done_label}[/bold green]")
     console.print(f"  [blue]{action_word}:[/blue] {result.summary.created} symlinks")
-    console.print(f"  [blue]Skipped:[/blue] {result.summary.skipped} files")
+    console.print(f"  [blue]Up to date:[/blue] {result.summary.skipped} symlinks")
     if result.summary.updated > 0:
         console.print(
             f"  [yellow]{'Would update' if result.dry_run else 'Updated'}:[/yellow] "
