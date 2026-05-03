@@ -90,7 +90,7 @@ pytest libs/beacon/tests/ -v --tb=short
 **Output**: Two pure utilities in `beacon/utils/` and `beacon/core/` plus a single precondition function that composes them. All callers in sections 2, 4, and 6 consume this function.
 **Validation**: `pytest libs/beacon/tests/unit/test_platform.py libs/beacon/tests/unit/test_warehouse_path.py` passes; the precondition function is imported by `abc sync` and `abc warehouse contribute` handlers.
 
-- [ ] 1.1 Add a platform check utility in `beacon/utils/` that returns whether the current host is supported (macOS/Linux).
+- [x] 1.1 Add a platform check utility in `beacon/utils/` that returns whether the current host is supported (macOS/Linux).
   - **Input**: `from beacon.utils.platform import ensure_supported_platform; ensure_supported_platform()`
   - **Expected Output**: Returns `None` on macOS/Linux; raises `UnsupportedPlatformError` on Windows with a message naming the platform and pointing at macOS/Linux.
   - **Validation**: Unit test monkeypatches `sys.platform` for each branch and asserts the correct behavior.
@@ -101,7 +101,7 @@ pytest libs/beacon/tests/ -v --tb=short
     - TC4: `sys.platform == "cygwin"` → raises `UnsupportedPlatformError` (cygwin treated as Windows)
     - TC5: Exception message contains the string `"Windows"` and the word `"macOS"` or `"Linux"` for user guidance
 
-- [ ] 1.2 Add a warehouse-path validator in `beacon/core/` that confirms a given path exists and is a git working tree; return a typed result (OK / missing / not-a-repo).
+- [x] 1.2 Add a warehouse-path validator in `beacon/core/` that confirms a given path exists and is a git working tree; return a typed result (OK / missing / not-a-repo).
   - **Input**: `from beacon.core.warehouse_path import validate_warehouse_path; result = validate_warehouse_path("/abs/path")`
   - **Expected Output**: A tagged result (e.g., `WarehousePathOK`, `WarehousePathMissing`, `WarehousePathNotARepo`) with the resolved absolute path on the OK variant.
   - **Validation**: Unit tests against a tmp_path fixture cover all three states; resolution always returns an absolute path.
@@ -114,7 +114,7 @@ pytest libs/beacon/tests/ -v --tb=short
     - TC6: Relative path input → validator normalizes to absolute before returning
     - TC7: Path is a symlink to a valid git worktree → returns OK with the resolved absolute path (not the symlink path)
 
-- [ ] 1.3 Wire both checks into a new precondition function used by `abc sync` and `abc warehouse contribute`.
+- [x] 1.3 Wire both checks into a new precondition function used by `abc sync` and `abc warehouse contribute`.
   - **Input**: `from beacon.core.preconditions import ensure_sync_ready; ensure_sync_ready(project_root)`
   - **Expected Output**: Returns the resolved warehouse path on success; raises a typed error with actionable message on failure.
   - **Validation**: Function composes 1.1 + 1.2; integration test simulates each failure mode and asserts the error message names the exact remediation command.
@@ -126,7 +126,7 @@ pytest libs/beacon/tests/ -v --tb=short
 **Output**: Sync engine that creates per-file symlinks with absolute targets into `.agentic-beacon/artifacts/`, real directories at intermediate levels, rejects out-of-warehouse targets, refuses to run on Windows, and supports `--dry-run`.
 **Validation**: `pytest libs/beacon/tests/unit/test_sync_engine.py` passes; `abc sync` against a fixture warehouse produces the expected symlink tree and nothing else.
 
-- [ ] 2.1 Replace the copy-based sync logic in `domains/distribution/sync_engine.py` with a symlink-based implementation that expands `beacon.yaml` globs, resolves warehouse paths, and creates per-file symlinks with absolute targets.
+- [x] 2.1 Replace the copy-based sync logic in `domains/distribution/sync_engine.py` with a symlink-based implementation that expands `beacon.yaml` globs, resolves warehouse paths, and creates per-file symlinks with absolute targets.
   - **Input**: `from beacon.domains.distribution.sync_engine import run_sync; run_sync(project_root, warehouse_path, beacon_yaml)`
   - **Expected Output**: Symlinks created at `<project>/.agentic-beacon/artifacts/<relpath>` with absolute targets resolving to `<warehouse>/<relpath>`; returns a summary object (created / updated / removed / skipped counts).
   - **Validation**: On a fixture warehouse with 3 declared artifacts, all 3 links exist, each `os.readlink` returns an absolute path, each `Path(link).resolve()` lands inside the fixture warehouse root.
@@ -138,9 +138,9 @@ pytest libs/beacon/tests/ -v --tb=short
     - TC5: `beacon.yaml` entry that matches a warehouse path containing spaces → symlink created correctly (quoting not broken)
     - TC6: Re-running on an already-synced project produces `created=0, skipped=N, updated=0, removed=0`
 
-- [ ] 2.2 Implement directory materialization: real directories under `.agentic-beacon/artifacts/`, symlinks only at leaves; no intermediate-directory symlinks.
+- [x] 2.2 Implement directory materialization: real directories under `.agentic-beacon/artifacts/`, symlinks only at leaves; no intermediate-directory symlinks.
 
-- [ ] 2.3 Implement idempotent sync: skip entries whose symlink already points at the correct warehouse path; repair broken or wrong-target symlinks; remove symlinks for entries no longer in `beacon.yaml`.
+- [x] 2.3 Implement idempotent sync: skip entries whose symlink already points at the correct warehouse path; repair broken or wrong-target symlinks; remove symlinks for entries no longer in `beacon.yaml`.
   - **Input**: `run_sync()` invoked on a project in various pre-existing states.
   - **Expected Output**: Summary counts match the operations actually performed; no unnecessary writes.
   - **Validation**: See TDD cases below.
@@ -152,7 +152,7 @@ pytest libs/beacon/tests/ -v --tb=short
     - TC5: Orphan symlink under `.agentic-beacon/artifacts/` not in `beacon.yaml` → removed; summary reports `removed=1`
     - TC6: Orphan REGULAR FILE under `.agentic-beacon/artifacts/` not in `beacon.yaml` → NOT deleted (only symlinks are pruned; regular files go through migration section 3)
 
-- [ ] 2.4 Remove `--preserve` flag and any copy-semantics-specific sync options; add a `--dry-run` option that prints the intended filesystem changes without applying them.
+- [x] 2.4 Remove `--preserve` flag and any copy-semantics-specific sync options; add a `--dry-run` option that prints the intended filesystem changes without applying them.
   - **Input**: `abc sync --dry-run`
   - **Expected Output**: Stdout lists every would-be operation (`would create`, `would update`, `would remove`); filesystem is unchanged after the command exits.
   - **Validation**: Diff of filesystem before vs after is empty; exit code 0.
@@ -161,12 +161,12 @@ pytest libs/beacon/tests/ -v --tb=short
     - TC2: `--dry-run` run twice in a row → stdout identical both times (idempotent preview)
     - TC3: Passing `--preserve` → command fails with "unknown option" error (flag removed, not deprecated)
 
-- [ ] 2.5 Reject Windows hosts in `abc sync` with a clear error and non-zero exit code.
+- [x] 2.5 Reject Windows hosts in `abc sync` with a clear error and non-zero exit code.
   - **Input**: `abc sync` invoked with `sys.platform` monkeypatched to `"win32"`.
   - **Expected Output**: Exit code non-zero, stderr contains a message naming Windows and pointing at macOS/Linux.
   - **Validation**: Unit test asserts the call raises `UnsupportedPlatformError` from task 1.1 before any filesystem work begins.
 
-- [ ] 2.6 Add an out-of-warehouse guard: before creating any symlink, verify each resolved target path is a descendant of the warehouse root; abort the entire sync with a named-entry error if any entry fails the check.
+- [x] 2.6 Add an out-of-warehouse guard: before creating any symlink, verify each resolved target path is a descendant of the warehouse root; abort the entire sync with a named-entry error if any entry fails the check.
   - **Input**: `beacon.yaml` configured with a glob or path whose resolution lands outside the warehouse root.
   - **Expected Output**: Sync aborts before any symlink is created; error names the offending entry and the resolved out-of-bounds path.
   - **Validation**: Filesystem unchanged after the failed sync; exit code non-zero.
@@ -176,7 +176,7 @@ pytest libs/beacon/tests/ -v --tb=short
     - TC3: Mixed batch — 2 valid entries + 1 out-of-warehouse entry → NONE of the 3 symlinks created (all-or-nothing semantics per the spec)
     - TC4: Warehouse path itself is a symlink; entry resolves inside its canonical target → accepted (canonicalization is consistent)
 
-- [ ] 2.7 Update `domains/distribution/distributor.py`, `state.py`, `orchestrator.py`, `reset.py`, `upgrader.py`, `delta.py` to reflect symlink semantics; remove sync-state SHA tracking tied to the copy snapshot model where obsolete (keep only fields still needed for new behavior).
+- [x] 2.7 Update `domains/distribution/distributor.py`, `state.py`, `orchestrator.py`, `reset.py`, `upgrader.py`, `delta.py` to reflect symlink semantics; remove sync-state SHA tracking tied to the copy snapshot model where obsolete (keep only fields still needed for new behavior).
 
 ## 3. Migration from Copy-Based Trees
 
@@ -185,7 +185,7 @@ pytest libs/beacon/tests/ -v --tb=short
 **Output**: Fully symlinked tree; any modified local content either contributed into the warehouse working tree or explicitly discarded; user-auditable record of each resolution.
 **Validation**: After migration, every `beacon.yaml`-matched path under `.agentic-beacon/artifacts/` is a symlink resolving to the warehouse; warehouse working tree contains exactly the content the user chose to contribute.
 
-- [ ] 3.1 Add a detector in `domains/distribution/` that scans `.agentic-beacon/artifacts/` and classifies each `beacon.yaml`-matched entry as symlink / regular file / missing.
+- [x] 3.1 Add a detector in `domains/distribution/` that scans `.agentic-beacon/artifacts/` and classifies each `beacon.yaml`-matched entry as symlink / regular file / missing.
   - **Input**: `from beacon.domains.distribution.migration import classify_entries; classify_entries(project_root, beacon_yaml, warehouse_path)`
   - **Expected Output**: Dict keyed by relative path with values `"symlink_ok" | "symlink_broken" | "regular_file_identical" | "regular_file_modified" | "missing"`.
   - **Validation**: Classification matches filesystem state exactly for every entry.
@@ -197,7 +197,7 @@ pytest libs/beacon/tests/ -v --tb=short
     - TC5: Entry is absent from disk → `missing`
     - TC6: Entry is a regular file but warehouse has no such file → `regular_file_modified` with warehouse_missing flag (covered under a separate branch to avoid silent data loss)
 
-- [ ] 3.2 Implement the migration flow: per regular file, hash-compare against warehouse; if identical, replace with symlink silently; if different, prompt `contribute` / `discard` with a unified diff preview.
+- [x] 3.2 Implement the migration flow: per regular file, hash-compare against warehouse; if identical, replace with symlink silently; if different, prompt `contribute` / `discard` with a unified diff preview.
   - **Input**: Running `abc sync` against a project classified by 3.1.
   - **Expected Output**: Identical files silently converted; modified files trigger an interactive prompt showing `git diff --no-index` style output with `[c]ontribute / [d]iscard / [s]kip` choices.
   - **Validation**: Post-flow, all resolved entries are symlinks; skipped entries remain as regular files (for resume).
@@ -209,13 +209,13 @@ pytest libs/beacon/tests/ -v --tb=short
     - TC5: User chooses `s` → local file untouched, NO symlink created; migration continues to next entry
     - TC6: Diff output is non-empty and labeled with `(local)` vs `(warehouse)` side markers
 
-- [ ] 3.3 Implement the `contribute` resolution: write local content into warehouse working tree, then replace project file with symlink.
+- [x] 3.3 Implement the `contribute` resolution: write local content into warehouse working tree, then replace project file with symlink.
   - **Validation**: After `contribute`, `git status` inside warehouse shows the file as modified; project path is a symlink to that file.
 
-- [ ] 3.4 Implement the `discard` resolution: delete local file, create symlink pointing at warehouse file.
+- [x] 3.4 Implement the `discard` resolution: delete local file, create symlink pointing at warehouse file.
   - **Validation**: After `discard`, project path is a symlink; warehouse file content unchanged.
 
-- [ ] 3.5 Add `--contribute-local` and `--discard-local` flags for non-interactive bulk resolution; make non-TTY runs without a flag fail with a listing of unresolved files.
+- [x] 3.5 Add `--contribute-local` and `--discard-local` flags for non-interactive bulk resolution; make non-TTY runs without a flag fail with a listing of unresolved files.
   - **Input**: `abc sync --contribute-local` / `abc sync --discard-local` / `abc sync` in a non-TTY environment.
   - **Expected Output**: Flags apply the corresponding resolution to every modified file. Non-TTY without a flag exits non-zero with a listing of unresolved files and clear remediation.
   - **Validation**: CI-simulated run (no TTY) with `--discard-local` converts the full tree without prompts and exits 0.
@@ -225,7 +225,7 @@ pytest libs/beacon/tests/ -v --tb=short
     - TC3: Non-TTY without flag on a tree containing modified files → exits non-zero, stderr lists exact relative paths, exits BEFORE touching any file
     - TC4: `--contribute-local` AND `--discard-local` both passed → command errors out (flags are mutually exclusive)
 
-- [ ] 3.6 Ensure migration is resumable: aborting mid-prompt leaves a valid mixed state; subsequent `abc sync` resumes.
+- [x] 3.6 Ensure migration is resumable: aborting mid-prompt leaves a valid mixed state; subsequent `abc sync` resumes.
   - **TDD Test Cases (write these first):**
     - TC1: User SIGINTs during prompt on file 2 of 3 → file 1 converted, file 2 still a regular file, file 3 still a regular file; command exits non-zero
     - TC2: Re-running `abc sync` on the mixed state resumes at file 2 without re-prompting for file 1
@@ -238,7 +238,7 @@ pytest libs/beacon/tests/ -v --tb=short
 **Output**: `abc warehouse contribute [-m MSG] [--push]` and `abc warehouse status [<path>] [--all]` functional, with handlers in `cli/warehouse.py` restricted to parse-args → single-domain-call → format-output.
 **Validation**: Architecture test (7.7) passes; integration test (7.8) exercises both commands end-to-end.
 
-- [ ] 4.1 Create `beacon/domains/warehouse/contribute.py` encapsulating `git add` + `git commit` inside the warehouse clone, driven by a project's `.agentic-beacon/config.toml`.
+- [x] 4.1 Create `beacon/domains/warehouse/contribute.py` encapsulating `git add` + `git commit` inside the warehouse clone, driven by a project's `.agentic-beacon/config.toml`.
   - **Input**: `from beacon.domains.warehouse.contribute import contribute; contribute(project_root, message="...", push=False)`
   - **Expected Output**: Returns a structured result (`committed_sha | no_changes | push_failed`). Runs `git -C <warehouse> add <tracked paths>` + `git commit -m <msg>`.
   - **Validation**: After call, `git log -1` inside warehouse shows the new commit with the given message.
@@ -250,7 +250,7 @@ pytest libs/beacon/tests/ -v --tb=short
     - TC5: Commit succeeds but edits only non-beacon.yaml paths → those paths NOT staged (scope respects beacon.yaml)
     - TC6: Explicit `push=True` → after commit, `git push` invoked; on push failure, commit remains, returns `push_failed` with original SHA
 
-- [ ] 4.2 Create `beacon/domains/warehouse/status.py` that runs `git status` / `git diff` in the warehouse clone, filtered by `beacon.yaml`-matched paths, and reports modified files and ahead/behind counts.
+- [x] 4.2 Create `beacon/domains/warehouse/status.py` that runs `git status` / `git diff` in the warehouse clone, filtered by `beacon.yaml`-matched paths, and reports modified files and ahead/behind counts.
   - **TDD Test Cases (write these first):**
     - TC1: Clean warehouse → returns empty modifications list, `ahead=0, behind=0`
     - TC2: Warehouse has 2 modified tracked-files matching beacon.yaml + 1 unrelated → returns exactly the 2 beacon.yaml-matched
@@ -259,13 +259,13 @@ pytest libs/beacon/tests/ -v --tb=short
     - TC5: `path` argument passed → returns unified diff string for that single file; errors if path not in beacon.yaml
     - TC6: `--all` equivalent (function parameter) → no beacon.yaml filter applied, returns entire working-tree status
 
-- [ ] 4.3 Add `beacon/cli/warehouse.py` handlers for `abc warehouse contribute` and `abc warehouse status` (existing `abc warehouse connect` stays as-is). Each handler: parse args, call single domain function, format output. No free helpers.
+- [x] 4.3 Add `beacon/cli/warehouse.py` handlers for `abc warehouse contribute` and `abc warehouse status` (existing `abc warehouse connect` stays as-is). Each handler: parse args, call single domain function, format output. No free helpers.
 
-- [ ] 4.4 Implement `--push` flag for `abc warehouse contribute`: after successful commit, run `git push` and report result; exit non-zero on push failure while preserving the commit.
+- [x] 4.4 Implement `--push` flag for `abc warehouse contribute`: after successful commit, run `git push` and report result; exit non-zero on push failure while preserving the commit.
 
-- [ ] 4.5 Implement optional `<path>` argument for `abc warehouse status` producing a unified diff for that single file; reject paths not tracked by `beacon.yaml`.
+- [x] 4.5 Implement optional `<path>` argument for `abc warehouse status` producing a unified diff for that single file; reject paths not tracked by `beacon.yaml`.
 
-- [ ] 4.6 Add `--all` flag to `abc warehouse status` for unfiltered warehouse working-tree report.
+- [x] 4.6 Add `--all` flag to `abc warehouse status` for unfiltered warehouse working-tree report.
 
 ## 5. Remove Deprecated Commands
 
@@ -274,16 +274,16 @@ pytest libs/beacon/tests/ -v --tb=short
 **Output**: Old commands removed from the real command tree but still registered as stub handlers that emit a deprecation error and point at the replacements. No silent aliasing.
 **Validation**: `abc contribute` and `abc delta` both exit non-zero with a clear redirect message; tests assert the message text.
 
-- [ ] 5.1 Delete `abc contribute` CLI handler and the `domains/contribution/` domain (or reduce to a shim that returns the deprecation error).
+- [x] 5.1 Delete `abc contribute` CLI handler and the `domains/contribution/` domain (or reduce to a shim that returns the deprecation error).
 
-- [ ] 5.2 Delete `abc delta` CLI handler.
+- [x] 5.2 Delete `abc delta` CLI handler.
 
-- [ ] 5.3 Register removed command names to produce a clear deprecation error directing users to the replacement command; exit non-zero.
+- [x] 5.3 Register removed command names to produce a clear deprecation error directing users to the replacement command; exit non-zero.
   - **Input**: `abc contribute` / `abc delta`
   - **Expected Output**: Exit code non-zero; stderr contains exact replacement command name (`abc warehouse contribute` / `abc warehouse status`).
   - **Validation**: Tested in 7.x.
 
-- [ ] 5.4 Remove any `beacon.yaml` fields or `.agentic-beacon/` artifacts used solely by the removed commands (sync-state SHA fields that no longer have meaning, etc.).
+- [x] 5.4 Remove any `beacon.yaml` fields or `.agentic-beacon/` artifacts used solely by the removed commands (sync-state SHA fields that no longer have meaning, etc.).
 
 ## 6. Config and Connect Hardening
 
@@ -292,7 +292,7 @@ pytest libs/beacon/tests/ -v --tb=short
 **Output**: `connect` accepts only existing local filesystem paths (no URLs, no tarballs); stored value is always absolute; every `sync` / `warehouse *` invocation validates via precondition 1.3.
 **Validation**: Integration test asserts that malformed `connect` inputs are rejected at setup time, not at first sync.
 
-- [ ] 6.1 Update `abc warehouse connect` to reject non-local paths (http://, git://, tarball URLs) with a clear message; accept only existing local filesystem paths.
+- [x] 6.1 Update `abc warehouse connect` to reject non-local paths (http://, git://, tarball URLs) with a clear message; accept only existing local filesystem paths.
   - **TDD Test Cases (write these first):**
     - TC1: `abc warehouse connect /abs/existing/path` → config.toml stores `/abs/existing/path`
     - TC2: `abc warehouse connect ./relative/path` with `./relative/path` existing → config.toml stores the resolved absolute path
@@ -301,9 +301,9 @@ pytest libs/beacon/tests/ -v --tb=short
     - TC5: `abc warehouse connect file:///abs/path` → exits non-zero (file:// URIs not accepted; plain paths only)
     - TC6: `abc warehouse connect /nonexistent/path` → exits non-zero with a clear "path does not exist" message
 
-- [ ] 6.2 Ensure the stored warehouse path is normalized to an absolute path at write time.
+- [x] 6.2 Ensure the stored warehouse path is normalized to an absolute path at write time.
 
-- [ ] 6.3 Validate stored warehouse path on every `abc sync` and `abc warehouse *` invocation via the precondition from task 1.3.
+- [x] 6.3 Validate stored warehouse path on every `abc sync` and `abc warehouse *` invocation via the precondition from task 1.3.
 
 ## 7. Tests
 

@@ -15,7 +15,7 @@ from loguru import logger
 from beacon.core.exceptions import BeaconSyncError
 from beacon.core.gitignore import GitignoreManager
 from beacon.core.manifest.beacon import BeaconManifest
-from beacon.core.manifest.workspace import WorkspaceConfig
+from beacon.core.preconditions import ensure_sync_ready
 from beacon.domains.adoption.discovery import count_unadopted_since
 from beacon.domains.artifact.agent import (
     sync_agents_from_warehouse,
@@ -29,9 +29,9 @@ from beacon.domains.artifact.skill import (
     wire_bundled_skills_per_project,
     wire_skills_post_sync,
 )
-from beacon.domains.distribution.state import read_sync_sha, write_sync_state
+from beacon.domains.distribution.migration import migrate_entries
 from beacon.domains.distribution.sync_engine import (
-    OrphanInfo,
+    OutOfWarehouseError,
     SyncEngine,
     SyncSummary,
 )
@@ -47,7 +47,14 @@ from beacon.domains.warehouse.git_health import (
     check_warehouse_on_main_branch,
 )
 from beacon.utils.git import find_project_root
-from beacon.utils.interaction import ConflictResolution, resolve_conflict
+
+
+@dataclass
+class Orphan:
+    """A symlink under .agentic-beacon/artifacts/ not in beacon.yaml."""
+
+    rel_path: str
+    is_modified: bool = False
 
 
 @dataclass
@@ -58,7 +65,7 @@ class SyncOrchestrationResult:
     summary: SyncSummary
     artifact_paths: list[str]
     conflicts: list[str]
-    orphans: list[OrphanInfo]
+    orphans: list[Orphan]
     confirmed_prune: list[str]
     oc_added: list[str]
     cc_added: list[str]
@@ -73,54 +80,35 @@ class SyncOrchestrationResult:
     artifacts_dir: Path
     warehouse_path: Path
     wiring_notes: list[str] = field(default_factory=list)
+    migration_resolved: dict[str, str] = field(default_factory=dict)
+    unresolved_files: list[str] = field(default_factory=list)
 
 
 def run_sync(
     project_root: Path | None = None,
     *,
-    preserve: bool = False,
     force: bool = False,
     verbose: bool = False,
     dry_run: bool = False,
     skip_git_check: bool = False,
+    contribute_local: bool = False,
+    discard_local: bool = False,
     log_fn: Callable[[str], None] | None = None,
+    resolve_callback: Callable[[str, str], str] | None = None,
 ) -> SyncOrchestrationResult:
     """Run the full sync pipeline.
 
     Raises BeaconSyncError or other exceptions on fatal issues;
     callers should catch and format output.
     """
+    if contribute_local and discard_local:
+        raise BeaconSyncError(
+            "--contribute-local and --discard-local are mutually exclusive."
+        )
+
     project_root = project_root or find_project_root()
-    beacon_dir = project_root / ".agentic-beacon"
 
-    if not beacon_dir.exists():
-        raise BeaconSyncError(
-            "No .agentic-beacon directory found.\n"
-            "Run 'abc warehouse connect' to connect to a warehouse first."
-        )
-
-    config_file = beacon_dir / "config.toml"
-    if not config_file.exists():
-        raise BeaconSyncError(
-            "No warehouse connected.\n"
-            "Run 'abc warehouse connect --path <warehouse>' first."
-        )
-
-    beacon_yaml = beacon_dir / "beacon.yaml"
-    if not beacon_yaml.exists():
-        raise BeaconSyncError(
-            "No beacon.yaml found.\nRun 'abc setup' to create artifact configuration."
-        )
-
-    warehouse_settings = WorkspaceConfig()
-    warehouse_path = Path(warehouse_settings.warehouse.local_path)
-
-    if not warehouse_path.exists():
-        raise BeaconSyncError(
-            f"Warehouse path no longer exists: {warehouse_path}\n"
-            "The warehouse may have been moved or deleted.\n"
-            "Run 'abc warehouse connect --path <warehouse>' to reconnect."
-        )
+    warehouse_path = ensure_sync_ready(project_root)
 
     if not dry_run and not skip_git_check:
         git_result = check_warehouse_git_clean(warehouse_path)
@@ -132,6 +120,8 @@ def run_sync(
         if not branch_result.ok:
             raise BeaconSyncError(branch_result.error_message, hint=branch_result.hint)
 
+    beacon_dir = project_root / ".agentic-beacon"
+    beacon_yaml = beacon_dir / "beacon.yaml"
     beacon_settings = BeaconManifest.from_yaml(beacon_yaml)
     validate_skill_entries(beacon_settings)
 
@@ -154,7 +144,7 @@ def run_sync(
             )
         else:
             bundled_wired, bundled_wire_errors = [], []
-        sync_agents_from_warehouse(warehouse_path, force=force, preserve=preserve)
+        sync_agents_from_warehouse(warehouse_path, force=force)
         return SyncOrchestrationResult(
             dry_run=dry_run,
             summary=SyncSummary(),
@@ -214,41 +204,63 @@ def run_sync(
             else:
                 artifact_paths.append(pattern)
 
-    old_sync_sha = read_sync_sha(artifacts_dir)
+    # Detect and handle migration from copy-based trees
+    classification = sync_engine.classify_entries(artifact_paths)
+    regular_files = {
+        p: s for p, s in classification.items() if s.startswith("regular_file")
+    }
 
-    if not dry_run:
-        write_sync_state(artifacts_dir, warehouse_path)
+    migration_resolved: dict[str, str] = {}
+    unresolved_files: list[str] = []
 
-    if not dry_run:
-        conflicts = sync_engine.classify_conflicts(artifact_paths)
-        resolution = resolve_conflict(
-            force=force, preserve=preserve, has_conflicts=bool(conflicts)
-        )
-        if resolution == ConflictResolution.SKIP:
-            preserve = True
-        elif resolution == ConflictResolution.NEEDS_CONFIRMATION:
-            raise BeaconSyncError(
-                f"{len(conflicts)} file(s) have local changes that differ from the warehouse:\n"
-                + "\n".join(f"  • {p}" for p in conflicts)
-                + "\n\nNon-interactive mode — cannot prompt for overwrite.",
-                hint="Use --force to overwrite or --preserve to skip conflicting files.",
+    if regular_files and not dry_run:
+        if not contribute_local and not discard_local and resolve_callback is None:
+            # No resolution strategy — collect unresolved and fail
+            unresolved_files = list(regular_files.keys())
+        else:
+            migration_resolved = migrate_entries(
+                sync_engine,
+                classification,
+                contribute_local=contribute_local,
+                discard_local=discard_local,
+                resolve_callback=resolve_callback,
             )
-    else:
-        conflicts = []
+            # Any regular files still remaining are unresolved
+            post_classification = sync_engine.classify_entries(artifact_paths)
+            unresolved_files = [
+                p
+                for p, s in post_classification.items()
+                if s.startswith("regular_file")
+            ]
 
-    orphans = sync_engine.classify_orphans(artifact_paths)
+    # Orphan pruning: only symlinks, not regular files
+    orphans: list[Orphan] = []
+    if artifacts_dir.exists():
+        synced_set = set(artifact_paths)
+        for file_path in sorted(artifacts_dir.rglob("*")):
+            if not file_path.is_symlink():
+                continue
+            rel_path = str(file_path.relative_to(artifacts_dir))
+            if rel_path not in synced_set:
+                orphans.append(Orphan(rel_path=rel_path, is_modified=False))
+
     confirmed_prune: list[str] = []
-    if orphans:
+    if orphans and not dry_run:
         confirmed_prune = confirm_prune(orphans, dry_run=dry_run)
 
-    summary = sync_engine.sync_all(
-        artifact_paths=artifact_paths,
-        preserve=preserve,
-        paths_to_prune=confirmed_prune if not dry_run else None,
-        verbose=verbose,
-        dry_run=dry_run,
-        log_fn=log_fn,
-    )
+    try:
+        summary = sync_engine.sync_all(
+            artifact_paths=artifact_paths,
+            paths_to_prune=confirmed_prune if not dry_run else None,
+            verbose=verbose,
+            dry_run=dry_run,
+            log_fn=log_fn,
+        )
+    except OutOfWarehouseError as e:
+        raise BeaconSyncError(
+            f"Sync aborted: {e}\n"
+            f"Entry '{e.entry}' resolves to {e.resolved_path} which is outside the warehouse."
+        ) from e
 
     if not dry_run:
         gitignore_mgr = GitignoreManager(project_root)
@@ -292,7 +304,7 @@ def run_sync(
 
     if beacon_settings.artifacts.skills:
         wired_skills, wire_errors = wire_skills_post_sync(
-            project_root, artifacts_dir, force=force, preserve=preserve
+            project_root, artifacts_dir, force=force
         )
         if not dry_run:
             update_agent_gitignores(project_root)
@@ -305,13 +317,13 @@ def run_sync(
         wired_skills = wired_skills + bundled_wired
         wire_errors = wire_errors + bundled_wire_errors
 
-    sync_agents_from_warehouse(warehouse_path, force=force, preserve=preserve)
+    sync_agents_from_warehouse(warehouse_path, force=force)
 
     adoption_notification = None
-    if old_sync_sha is not None:
+    if not dry_run:
         try:
             unadopted_count = count_unadopted_since(
-                warehouse_path, beacon_settings, old_sync_sha
+                warehouse_path, beacon_settings, "HEAD"
             )
             if unadopted_count > 0:
                 adoption_notification = (
@@ -325,7 +337,7 @@ def run_sync(
         dry_run=dry_run,
         summary=summary,
         artifact_paths=artifact_paths,
-        conflicts=conflicts,
+        conflicts=[],
         orphans=orphans,
         confirmed_prune=confirmed_prune,
         oc_added=oc_added,
@@ -341,4 +353,6 @@ def run_sync(
         artifacts_dir=artifacts_dir,
         warehouse_path=warehouse_path,
         wiring_notes=wiring_notes,
+        migration_resolved=migration_resolved,
+        unresolved_files=unresolved_files,
     )
