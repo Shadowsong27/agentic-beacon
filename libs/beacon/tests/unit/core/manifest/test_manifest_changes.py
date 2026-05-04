@@ -108,7 +108,7 @@ artifacts:
         assert "artifacts" in str(exc_info.value).lower()
 
     def test_tc5_legacy_loaded_twice(self, tmp_path, loguru_caplog):
-        """TC5: Legacy YAML loaded twice → log emitted each time."""
+        """TC5: Legacy YAML loaded twice → file rewritten on first load, no log on second."""
         beacon_file = tmp_path / "beacon.yaml"
         beacon_file.write_text("""
 artifacts:
@@ -117,12 +117,53 @@ artifacts:
   contexts: []
   skills: []
 """)
-        BeaconManifest.from_yaml(str(beacon_file))
-        BeaconManifest.from_yaml(str(beacon_file))
+        # First load: should emit log and rewrite file
+        manifest = BeaconManifest.from_yaml(str(beacon_file))
+        assert not hasattr(manifest.artifacts, "knowledge")
         msgs = [r.getMessage() for r in loguru_caplog.records]
-        assert msgs.count(self.LEGACY_LOG_TEXT) == 2, msgs
+        assert msgs.count(self.LEGACY_LOG_TEXT) == 1, msgs
 
-    def test_tc6_legacy_plus_extra_key(self, tmp_path):
+        # Assert file was rewritten without knowledge key
+        content = beacon_file.read_text()
+        assert "knowledge:" not in content
+        assert "contexts:" in content
+        assert "skills:" in content
+
+        # Second load: should NOT emit migration log (file is now clean)
+        loguru_caplog.clear()
+        manifest2 = BeaconManifest.from_yaml(str(beacon_file))
+        assert not hasattr(manifest2.artifacts, "knowledge")
+        msgs2 = [r.getMessage() for r in loguru_caplog.records]
+        assert self.LEGACY_LOG_TEXT not in msgs2, msgs2
+
+    def test_tc6_legacy_rewrites_file_on_disk(self, tmp_path, loguru_caplog):
+        """TC6: Legacy YAML with knowledge key is rewritten on disk after load."""
+        beacon_file = tmp_path / "beacon.yaml"
+        beacon_file.write_text("""
+artifacts:
+  knowledge:
+    - knowledge/foo.md
+  contexts: []
+  skills: []
+""")
+        manifest = BeaconManifest.from_yaml(str(beacon_file))
+        assert not hasattr(manifest.artifacts, "knowledge")
+        assert "knowledge" not in manifest.artifacts.model_dump()
+
+        # File on disk should no longer contain knowledge key
+        content = beacon_file.read_text()
+        assert "knowledge:" not in content
+        assert "contexts:" in content
+        assert "skills:" in content
+
+        # Second load should not emit migration log
+        loguru_caplog.clear()
+        manifest2 = BeaconManifest.from_yaml(str(beacon_file))
+        assert not hasattr(manifest2.artifacts, "knowledge")
+        msgs = [r.getMessage() for r in loguru_caplog.records]
+        assert self.LEGACY_LOG_TEXT not in msgs, msgs
+
+    def test_tc7_legacy_plus_extra_key(self, tmp_path):
         """TC6: Legacy YAML with knowledge and unexpected extra key → drops knowledge, extra triggers error."""
         beacon_file = tmp_path / "beacon.yaml"
         beacon_file.write_text("""

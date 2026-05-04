@@ -245,93 +245,67 @@ def run_sync(
         warehouse_path=warehouse_path, artifacts_path=artifacts_dir
     )
 
-    total_explicit = (
-        len(beacon_settings.artifacts.agents)
-        + len(beacon_settings.artifacts.skills)
-        + len(beacon_settings.artifacts.contexts)
-    )
-
-    if total_explicit == 0:
-        if not dry_run:
-            bundled_installed, bundled_skipped = install_bundled_skills_globally()
-            bundled_wired, bundled_wire_errors = wire_bundled_skills_per_project(
-                project_root
-            )
-            sync_agents_from_warehouse(warehouse_path, force=force)
-        else:
-            bundled_installed, bundled_skipped = [], []
-            bundled_wired, bundled_wire_errors = [], []
-        return SyncOrchestrationResult(
-            dry_run=dry_run,
-            summary=SyncSummary(),
-            artifact_paths=[],
-            conflicts=[],
-            orphans=[],
-            confirmed_prune=[],
-            oc_added=[],
-            cc_added=[],
-            wired_skills=list(bundled_wired),
-            wire_errors=list(bundled_wire_errors),
-            bundled_installed=list(bundled_installed),
-            bundled_skipped=list(bundled_skipped),
-            adoption_notification=None,
-            no_artifacts=True,
-            agent_config_init_needed=False,
-            project_root=project_root,
-            artifacts_dir=artifacts_dir,
-            warehouse_path=warehouse_path,
-        )
-
     # 8.3: Single expansion over EffectiveSet
     artifact_paths = _expand_effective_set(
         effective_set, sync_engine, warehouse_path, verbose
     )
 
-    try:
-        sync_engine.validate_paths(artifact_paths)
-    except OutOfWarehouseError as e:
-        raise BeaconSyncError(
-            f"Sync aborted: {e}\n"
-            f"Entry '{e.entry}' resolves to {e.resolved_path} which is outside the warehouse.\n"
-            f"See {MIGRATION_DOC_URL} for details."
-        ) from e
-    except DestinationOutsideArtifactsError as e:
-        raise BeaconSyncError(
-            f"Sync aborted: {e}\n"
-            f"Entry '{e.entry}' would write to {e.resolved_path}, outside the project artifacts directory.\n"
-            f"See {MIGRATION_DOC_URL} for details."
-        ) from e
+    total_explicit = (
+        len(beacon_settings.artifacts.agents)
+        + len(beacon_settings.artifacts.skills)
+        + len(beacon_settings.artifacts.contexts)
+    )
+    no_artifacts = total_explicit == 0
 
-    # Detect and handle migration from copy-based trees
-    classification = sync_engine.classify_entries(artifact_paths)
-    regular_files = {
-        p: s for p, s in classification.items() if s.startswith("regular_file")
-    }
+    if not no_artifacts:
+        try:
+            sync_engine.validate_paths(artifact_paths)
+        except OutOfWarehouseError as e:
+            raise BeaconSyncError(
+                f"Sync aborted: {e}\n"
+                f"Entry '{e.entry}' resolves to {e.resolved_path} which is outside the warehouse.\n"
+                f"See {MIGRATION_DOC_URL} for details."
+            ) from e
+        except DestinationOutsideArtifactsError as e:
+            raise BeaconSyncError(
+                f"Sync aborted: {e}\n"
+                f"Entry '{e.entry}' would write to {e.resolved_path}, outside the project artifacts directory.\n"
+                f"See {MIGRATION_DOC_URL} for details."
+            ) from e
 
-    migration_resolved: dict[str, str] = {}
-    unresolved_files: list[str] = []
+        # Detect and handle migration from copy-based trees
+        classification = sync_engine.classify_entries(artifact_paths)
+        regular_files = {
+            p: s for p, s in classification.items() if s.startswith("regular_file")
+        }
 
-    if regular_files and not dry_run:
-        if not contribute_local and not discard_local and resolve_callback is None:
-            # No resolution strategy — collect unresolved and fail
-            unresolved_files = list(regular_files.keys())
-        else:
-            migration_resolved = migrate_entries(
-                sync_engine,
-                classification,
-                contribute_local=contribute_local,
-                discard_local=discard_local,
-                resolve_callback=resolve_callback,
-            )
-            # Any regular files still remaining are unresolved
-            post_classification = sync_engine.classify_entries(artifact_paths)
-            unresolved_files = [
-                p
-                for p, s in post_classification.items()
-                if s.startswith("regular_file")
-            ]
+        migration_resolved: dict[str, str] = {}
+        unresolved_files: list[str] = []
 
-    # 8.6-8.8: Orphan pruning against effective set
+        if regular_files and not dry_run:
+            if not contribute_local and not discard_local and resolve_callback is None:
+                # No resolution strategy — collect unresolved and fail
+                unresolved_files = list(regular_files.keys())
+            else:
+                migration_resolved = migrate_entries(
+                    sync_engine,
+                    classification,
+                    contribute_local=contribute_local,
+                    discard_local=discard_local,
+                    resolve_callback=resolve_callback,
+                )
+                # Any regular files still remaining are unresolved
+                post_classification = sync_engine.classify_entries(artifact_paths)
+                unresolved_files = [
+                    p
+                    for p, s in post_classification.items()
+                    if s.startswith("regular_file")
+                ]
+    else:
+        migration_resolved = {}
+        unresolved_files = []
+
+    # 8.6-8.8: Orphan pruning against effective set (always run, even for empty manifests)
     orphans: list[Orphan] = []
     if artifacts_dir.exists():
         synced_set = set(artifact_paths)
@@ -438,6 +412,7 @@ def run_sync(
         sync_agents_from_warehouse(warehouse_path, force=force)
     else:
         bundled_installed, bundled_skipped = [], []
+        bundled_wired, bundled_wire_errors = [], []
 
     adoption_notification = None
     if not dry_run:
@@ -467,7 +442,7 @@ def run_sync(
         bundled_installed=list(bundled_installed),
         bundled_skipped=list(bundled_skipped),
         adoption_notification=adoption_notification,
-        no_artifacts=False,
+        no_artifacts=no_artifacts,
         agent_config_init_needed=agent_config_init_needed,
         project_root=project_root,
         artifacts_dir=artifacts_dir,
