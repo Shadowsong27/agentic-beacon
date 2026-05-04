@@ -270,8 +270,8 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:5:end -->
 
 
-- [ ] 5.1 Create `libs/beacon/src/beacon/core/scanner/` module
-- [ ] 5.2 Implement `extract_markdown_links(file_content: str) -> list[LinkRef]` that extracts every `[text](target)` link
+- [x] 5.1 Create `libs/beacon/src/beacon/core/scanner/` module
+- [x] 5.2 Implement `extract_markdown_links(file_content: str) -> list[LinkRef]` that extracts every `[text](target)` link
 <!-- opsx:tdd:5.2:begin -->
   - **Input**: Raw markdown string with a mix of inline links, reference-style links, and non-link brackets.
   - **Expected Output**: `list[LinkRef]` with `(text, target)` for each inline link; reference-style links either skipped or resolved against the reference definitions (document choice in code comment).
@@ -288,7 +288,7 @@ pytest tests/ -v --tb=short
     - TC9: Escaped brackets `\[x\](y)` → NOT extracted
     - TC10: Multiple links on one line → all extracted in document order
 <!-- opsx:tdd:5.2:end -->
-- [ ] 5.3 Strip URL fragments (`#section`) and URL-decode link targets
+- [x] 5.3 Strip URL fragments (`#section`) and URL-decode link targets
 <!-- opsx:tdd:5.3:begin -->
   - **Input**: Link targets containing `#anchor` suffixes and/or `%20`-encoded characters.
   - **Expected Output**: Fragment removed; `%XX` sequences decoded to original characters.
@@ -300,7 +300,7 @@ pytest tests/ -v --tb=short
     - TC4: `#just-a-fragment` → empty string (fragment-only link)
     - TC5: `foo.md#anchor#another` → `foo.md` (first `#` splits)
 <!-- opsx:tdd:5.3:end -->
-- [ ] 5.4 Skip absolute URLs (`http://`, `https://`, `mailto:`, etc.)
+- [x] 5.4 Skip absolute URLs (`http://`, `https://`, `mailto:`, etc.)
 <!-- opsx:tdd:5.4:begin -->
   - **Input**: Link targets with various URL schemes.
   - **Expected Output**: Function returns `None` (or equivalent skip marker) for any target with a URL scheme.
@@ -314,7 +314,7 @@ pytest tests/ -v --tb=short
     - TC6: `../foo.md` → not skipped (relative)
     - TC7: `/absolute/path.md` → not skipped at this layer (left to resolve_link; implementation may choose skip or treat as warehouse-absolute)
 <!-- opsx:tdd:5.4:end -->
-- [ ] 5.5 Implement `resolve_link(scanned_file: Path, link: str, warehouse_root: Path) -> ResolvedLink | None` — returns None for out-of-warehouse or absolute-URL links
+- [x] 5.5 Implement `resolve_link(scanned_file: Path, link: str, warehouse_root: Path) -> ResolvedLink | None` — returns None for out-of-warehouse or absolute-URL links
 <!-- opsx:tdd:5.5:begin -->
   - **Input**: Absolute path to a scanned file, a relative link string, the warehouse root.
   - **Expected Output**: `ResolvedLink` with the warehouse-relative resolved path on success; `None` if resolution lands outside the warehouse or the link is absolute.
@@ -329,7 +329,7 @@ pytest tests/ -v --tb=short
     - TC7: scanned=`/wh/contexts/a.md`, link=`../knowledge/`, wh=`/wh` → ResolvedLink(`knowledge/`) or None if classifier requires `.md` ending (defer to classifier)
     - TC8: Symlinks in path → resolved against realpath? Test documents the chosen behaviour
 <!-- opsx:tdd:5.5:end -->
-- [ ] 5.6 Implement `classify_knowledge_ref(resolved: Path, warehouse_root: Path) -> bool` — the four-part classifier from spec
+- [x] 5.6 Implement `classify_knowledge_ref(resolved: Path, warehouse_root: Path) -> bool` — the four-part classifier from spec
 <!-- opsx:tdd:5.6:begin -->
   - **Input**: A warehouse-resolved path + warehouse root.
   - **Expected Output**: True iff the warehouse-relative path starts with `knowledge/` AND ends with `.md`.
@@ -343,7 +343,7 @@ pytest tests/ -v --tb=short
     - TC6: `foo/knowledge/x.md` (knowledge is a subdir, not top-level) → False
     - TC7: `knowledge/` (directory, not a file) → False
 <!-- opsx:tdd:5.6:end -->
-- [ ] 5.7 Implement `scan_file_for_knowledge(path, warehouse_root) -> set[warehouse_relative_path]`
+- [x] 5.7 Implement `scan_file_for_knowledge(path, warehouse_root) -> set[warehouse_relative_path]`
 <!-- opsx:tdd:5.7:begin -->
   - **Input**: Path to a context or skill SKILL.md file; warehouse root.
   - **Expected Output**: Set of unique warehouse-relative paths classified as knowledge refs.
@@ -355,7 +355,7 @@ pytest tests/ -v --tb=short
     - TC4: File with broken YAML frontmatter but valid body → body still scanned; frontmatter parse error ignored by scanner
     - TC5: Empty file → empty set
 <!-- opsx:tdd:5.7:end -->
-- [ ] 5.8 Implement `scan_adopted_artifacts(beacon, warehouse_root) -> set[warehouse_relative_path]` — iterates adopted contexts and skill SKILL.md files
+- [x] 5.8 Implement `scan_adopted_artifacts(beacon, warehouse_root) -> set[warehouse_relative_path]` — iterates adopted contexts and skill SKILL.md files
 <!-- opsx:tdd:5.8:begin -->
   - **Input**: A `BeaconManifest` with known contexts/skills adopted; warehouse root with fixture files.
   - **Expected Output**: Union of knowledge refs across every adopted context and skill SKILL.md.
@@ -367,13 +367,13 @@ pytest tests/ -v --tb=short
     - TC4: No adopted contexts or skills → empty set
     - TC5: Adopted context with no knowledge links → contributes zero to the set
 <!-- opsx:tdd:5.8:end -->
-- [ ] 5.9 Emit a warning when a classified knowledge reference resolves to a warehouse path that doesn't exist on disk
+- [x] 5.9 Emit a warning when a classified knowledge reference resolves to a warehouse path that doesn't exist on disk
 <!-- opsx:tdd:5.9:begin -->
   - **Input**: Fixture context that links to `knowledge/missing.md` which doesn't exist.
   - **Expected Output**: Scanner includes `knowledge/missing.md` in its output set (scanner doesn't drop refs) AND emits one loguru WARNING record naming the referrer and the missing file.
   - **Validation**: `caplog` captures exactly one warning; set contains the entry (downstream decides what to do).
 <!-- opsx:tdd:5.9:end -->
-- [ ] 5.10 Unit tests: classifier edge cases, URL handling, fragment stripping, out-of-warehouse links, non-md links under knowledge/, deep nesting
+- [x] 5.10 Unit tests: classifier edge cases, URL handling, fragment stripping, out-of-warehouse links, non-md links under knowledge/, deep nesting
 <!-- opsx:tdd:5.10:begin -->
   - **Input**: The aggregated test suite for the scanner module.
   - **Expected Output**: All scanner unit tests pass; coverage ≥ 90% on the scanner module.
@@ -390,8 +390,8 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:6:end -->
 
 
-- [ ] 6.1 Create `libs/beacon/src/beacon/core/dependencies/resolver.py`
-- [ ] 6.2 Implement `compute_effective_set(beacon, warehouse) -> EffectiveSet` where `EffectiveSet` contains explicit + transitive contexts, skills, and derived knowledge
+- [x] 6.1 Create `libs/beacon/src/beacon/core/dependencies/resolver.py`
+- [x] 6.2 Implement `compute_effective_set(beacon, warehouse) -> EffectiveSet` where `EffectiveSet` contains explicit + transitive contexts, skills, and derived knowledge
 <!-- opsx:tdd:6.2:begin -->
   - **Input**: A `BeaconManifest` and a connected warehouse fixture.
   - **Expected Output**: `EffectiveSet(contexts, skills, knowledge)` where each field is a frozenset of warehouse-relative paths.
@@ -406,10 +406,10 @@ pytest tests/ -v --tb=short
     - TC7: Explicit skill unreferenced by any agent → skills contain it, contexts it requires are transitively included
     - TC8: Agent requiring non-existent context → EffectiveSet returns structured failure, not partial state
 <!-- opsx:tdd:6.2:end -->
-- [ ] 6.3 Walk agents' `requires` first (yields required contexts and skills)
-- [ ] 6.4 Walk adopted and transitively-required skills' `requires.contexts` next
-- [ ] 6.5 Run the scanner over all contexts and skills in the effective set to derive knowledge
-- [ ] 6.6 Collect missing-dependency errors into a list; return structured failure when non-empty
+- [x] 6.3 Walk agents' `requires` first (yields required contexts and skills)
+- [x] 6.4 Walk adopted and transitively-required skills' `requires.contexts` next
+- [x] 6.5 Run the scanner over all contexts and skills in the effective set to derive knowledge
+- [x] 6.6 Collect missing-dependency errors into a list; return structured failure when non-empty
 <!-- opsx:tdd:6.6:begin -->
   - **Input**: Manifest with one agent requiring three contexts, two of which are missing.
   - **Expected Output**: Resolver returns structured failure containing both missing-dep errors in one list (not short-circuit on first).
@@ -420,7 +420,7 @@ pytest tests/ -v --tb=short
     - TC3: Missing context and missing skill in same agent → failure with 2 errors covering both kinds
     - TC4: Missing context required by a transitively-pulled skill → failure with 1 error, path chain in message
 <!-- opsx:tdd:6.6:end -->
-- [ ] 6.7 Provide a pure function `is_transitively_required(artifact, effective_set) -> bool` for use in pruning decisions
+- [x] 6.7 Provide a pure function `is_transitively_required(artifact, effective_set) -> bool` for use in pruning decisions
 <!-- opsx:tdd:6.7:begin -->
   - **Input**: An artifact name + the resolver's `EffectiveSet` (including provenance).
   - **Expected Output**: True iff the artifact is in the effective set but not in the explicit adoption list.
@@ -431,7 +431,7 @@ pytest tests/ -v --tb=short
     - TC3: Context in both (explicit + required by agent) → False (explicit wins)
     - TC4: Context in neither → False (nothing to prune)
 <!-- opsx:tdd:6.7:end -->
-- [ ] 6.8 Unit tests: empty manifest, single agent with one context dep, chained agent→skill→context, multiple referrers sharing a knowledge file, missing context in warehouse, missing context in adoption
+- [x] 6.8 Unit tests: empty manifest, single agent with one context dep, chained agent→skill→context, multiple referrers sharing a knowledge file, missing context in warehouse, missing context in adoption
 <!-- opsx:tdd:6.8:begin -->
   - **Input**: Fixtures for each scenario.
   - **Expected Output**: All resolver unit tests pass; coverage ≥ 90%.
