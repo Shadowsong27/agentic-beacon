@@ -237,9 +237,8 @@ def test_e2e_legacy_beacon_yaml_migration(
 ):
     """Legacy beacon.yaml with knowledge list is silently migrated on sync.
 
-    NOTE: The in-memory loader strips the knowledge key (emitting an INFO log)
-    but the file on disk is NOT rewritten. The sync proceeds using the
-    auto-derived knowledge set.
+    The legacy knowledge key is dropped from the in-memory loader and the file
+    is rewritten on disk. Subsequent loads do not emit migration logs.
     """
     runner = CliRunner()
     monkeypatch.chdir(project_dir)
@@ -269,12 +268,27 @@ def test_e2e_legacy_beacon_yaml_migration(
     )
 
     # Assert: knowledge symlinks reflect derived set (from context links)
-    # The legacy pinned knowledge/python/standards.md is still synced because
-    # contexts/team.md also links to it. The other link from team.md
-    # (knowledge/testing/tdd.md) is also derived and synced.
     artifacts = project_dir / ".agentic-beacon" / "artifacts"
     assert (artifacts / "knowledge" / "python" / "standards.md").exists()
     assert (artifacts / "knowledge" / "testing" / "tdd.md").exists()
+
+    # Assert: file on disk was rewritten without knowledge key
+    content = beacon_yaml.read_text()
+    assert "knowledge:" not in content
+    assert "contexts:" in content
+    assert "skills:" in content
+
+    # Sync again — no migration log this time because file is clean
+    result2 = runner.invoke(main, ["sync", "--skip-git-check"])
+    assert result2.exit_code == 0, f"second sync failed: {result2.output}"
+    migration_logs2 = [
+        line
+        for line in result2.output.splitlines()
+        if "artifacts.knowledge removed" in line
+    ]
+    assert len(migration_logs2) == 0, (
+        f"Expected 0 migration logs on second sync, got {len(migration_logs2)}"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -310,3 +324,43 @@ def test_e2e_adopted_agent_missing_dependency_shows_migration_url(
     assert "docs/migrations/artifact-dependencies-frontmatter.md" in output, (
         f"Expected migration doc URL in output: {output}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Regression: full unadoption prunes all knowledge symlinks
+# ---------------------------------------------------------------------------
+
+
+def test_e2e_full_unadoption_prunes_all_knowledge_symlinks(project_dir, monkeypatch):
+    """Removing all artifacts prunes all orphaned knowledge symlinks and empty dirs."""
+    runner = CliRunner()
+    monkeypatch.chdir(project_dir)
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n  contexts:\n    - contexts/team.md\n  agents: []\n  skills: []\n"
+    )
+
+    # First sync
+    result = runner.invoke(main, ["sync", "--skip-git-check"])
+    assert result.exit_code == 0, f"first sync failed: {result.output}"
+
+    artifacts = project_dir / ".agentic-beacon" / "artifacts"
+    assert (artifacts / "contexts" / "team.md").exists()
+    assert (artifacts / "knowledge" / "python" / "standards.md").exists()
+    assert (artifacts / "knowledge" / "testing" / "tdd.md").exists()
+
+    # Now unadopt everything
+    beacon_yaml.write_text("artifacts:\n  contexts: []\n  agents: []\n  skills: []\n")
+
+    # Sync again — should prune all orphaned symlinks
+    result = runner.invoke(main, ["sync", "--skip-git-check"], input="y\n")
+    assert result.exit_code == 0, f"second sync failed: {result.output}"
+
+    # All knowledge symlinks should be removed
+    assert not (artifacts / "knowledge").exists(), (
+        "knowledge dir should not exist after full unadoption"
+    )
+
+    # Context symlink should also be removed
+    assert not (artifacts / "contexts" / "team.md").exists()
