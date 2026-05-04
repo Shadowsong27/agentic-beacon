@@ -44,9 +44,8 @@ def sample_beacon_yaml_complete():
     """Sample complete beacon.yaml content."""
     return """
 artifacts:
-  knowledge:
-    - languages/python/type-hints.md
-    - languages/python/async-patterns.md
+  agents:
+    - agents/python-reviewer.md
   skills:
     - development/tdd-workflow.md
     - deployment/docker-compose.md
@@ -57,11 +56,11 @@ artifacts:
 
 @pytest.fixture
 def sample_beacon_yaml_partial():
-    """Sample partial beacon.yaml content with only knowledge."""
+    """Sample partial beacon.yaml content with only agents."""
     return """
 artifacts:
-  knowledge:
-    - languages/python/basics.md
+  agents:
+    - agents/python-reviewer.md
 """
 
 
@@ -70,7 +69,7 @@ def sample_beacon_yaml_empty():
     """Sample beacon.yaml with empty artifact lists."""
     return """
 artifacts:
-  knowledge: []
+  agents: []
   skills: []
   contexts: []
 """

@@ -7,6 +7,7 @@ committed to git that declares which artifacts to adopt from the warehouse.
 from pathlib import Path
 
 import yaml
+from loguru import logger
 from pydantic import BaseModel, Field
 
 from beacon.core.exceptions import (
@@ -18,9 +19,21 @@ from beacon.core.exceptions import (
 class ArtifactsConfig(BaseModel):
     """Artifacts configuration from beacon.yaml."""
 
-    knowledge: list[str] = Field(default_factory=list)
+    model_config = {"extra": "forbid"}
+
+    agents: list[str] = Field(default_factory=list)
     skills: list[str] = Field(default_factory=list)
     contexts: list[str] = Field(default_factory=list)
+
+    @property
+    def knowledge(self) -> list[str]:
+        """Backward-compat shim: knowledge was removed; always returns []."""
+        return []
+
+    @knowledge.setter
+    def knowledge(self, value: list[str]) -> None:
+        """No-op setter: writes to the deprecated field are silently ignored."""
+        pass
 
 
 class IgnoreConfig(BaseModel):
@@ -82,7 +95,12 @@ class BeaconManifest(BaseModel):
         if not isinstance(artifacts_data, dict):
             raise ValidationError("'artifacts' section must be a YAML object (dict)")
 
-        valid_types = {"knowledge", "skills", "contexts"}
+        # Legacy-drop migration: remove artifacts.knowledge if present
+        if "knowledge" in artifacts_data:
+            logger.info("artifacts.knowledge removed; knowledge is now auto-derived")
+            del artifacts_data["knowledge"]
+
+        valid_types = {"agents", "skills", "contexts"}
         for artifact_type, items in artifacts_data.items():
             if artifact_type not in valid_types:
                 raise ValidationError(
@@ -139,7 +157,7 @@ class ValidationResult(BaseModel):
 class BeaconManifestValidator:
     """Validator for beacon.yaml structure and content."""
 
-    VALID_ARTIFACT_TYPES = {"knowledge", "skills", "contexts"}
+    VALID_ARTIFACT_TYPES = {"agents", "skills", "contexts"}
 
     def validate_structure(self, manifest: BeaconManifest) -> ValidationResult:
         """Validate beacon manifest structure."""

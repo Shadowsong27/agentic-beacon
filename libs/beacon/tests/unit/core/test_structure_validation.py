@@ -29,8 +29,8 @@ class TestBeaconStructureValidation:
         beacon_file = temp_dir / "beacon.yaml"
         beacon_file.write_text("""
 artifacts:
-  knowledge:
-    - file1.md
+  agents:
+    - agents/reviewer.md
   skills:
     - skill1.md
   contexts:
@@ -43,13 +43,13 @@ artifacts:
         assert result.valid is True
         assert len(result.errors) == 0
 
-    def test_tc2_only_knowledge_type(self, temp_dir):
-        """TC2: Only knowledge type → ValidationResult(valid=True)"""
+    def test_tc2_only_agents_type(self, temp_dir):
+        """TC2: Only agents type → ValidationResult(valid=True)"""
         beacon_file = temp_dir / "beacon.yaml"
         beacon_file.write_text("""
 artifacts:
-  knowledge:
-    - file1.md
+  agents:
+    - agents/reviewer.md
 """)
 
         settings = BeaconManifest.from_yaml(str(beacon_file))
@@ -62,8 +62,8 @@ artifacts:
         beacon_file = temp_dir / "beacon.yaml"
         beacon_file.write_text("""
 artifacts:
-  knowledge:
-    - file1.md
+  agents:
+    - agents/reviewer.md
   plugins:
     - plugin1.md
 """)
@@ -82,7 +82,7 @@ artifacts:
         beacon_file = temp_dir / "beacon.yaml"
         beacon_file.write_text("""
 artifacts:
-  knowledge:
+  agents:
     - 12345
 """)
 
@@ -99,7 +99,7 @@ artifacts:
         beacon_file = temp_dir / "beacon.yaml"
         beacon_file.write_text("""
 artifacts:
-  knowledge:
+  agents:
     -
       - nested.md
 """)
@@ -112,7 +112,7 @@ artifacts:
         beacon_file = temp_dir / "beacon.yaml"
         beacon_file.write_text("""
 artifacts:
-  knowledge:
+  agents:
     key: value
 """)
 
@@ -160,8 +160,8 @@ artifacts:
         beacon_file = temp_dir / "beacon.yaml"
         beacon_file.write_text("""
 artifacts:
-  knowledge:
-    - valid.md
+  agents:
+    - agents/reviewer.md
   invalid_type:
     - invalid.md
 """)
@@ -181,7 +181,7 @@ artifacts:
         beacon_file = temp_dir / "beacon.yaml"
         beacon_file.write_text("""
 artifacts:
-  knowledge:
+  agents:
     - valid/path/file.md
     - also-valid_file.md
 """)

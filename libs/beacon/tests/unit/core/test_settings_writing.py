@@ -167,7 +167,7 @@ class TestSettingsSelfWriting:
         settings2 = BeaconManifest.from_yaml(str(output_file))
 
         # Should be identical
-        assert settings1.artifacts.knowledge == settings2.artifacts.knowledge
+        assert settings1.artifacts.agents == settings2.artifacts.agents
         assert settings1.artifacts.skills == settings2.artifacts.skills
         assert settings1.artifacts.contexts == settings2.artifacts.contexts
 
@@ -206,12 +206,12 @@ class TestSettingsSelfWriting:
 
         # Load from written file
         settings2 = BeaconManifest.from_yaml(str(output_file))
-        assert len(settings2.artifacts.knowledge) == len(settings1.artifacts.knowledge)
+        assert len(settings2.artifacts.agents) == len(settings1.artifacts.agents)
 
     def test_tc11_to_yaml_emits_ignore_when_non_empty(self, temp_dir):
         """TC11: to_yaml includes ignore section when ignore.skills is non-empty."""
         settings = BeaconManifest(
-            artifacts={"knowledge": [], "skills": [], "contexts": []},
+            artifacts={"agents": [], "skills": [], "contexts": []},
             ignore={"skills": ["openspec-*", "opsx-*"]},
         )
         output_file = temp_dir / "beacon.yaml"
@@ -225,7 +225,7 @@ class TestSettingsSelfWriting:
     def test_tc12_to_yaml_omits_ignore_when_empty(self, temp_dir):
         """TC12: to_yaml omits ignore section when ignore.skills is empty."""
         settings = BeaconManifest(
-            artifacts={"knowledge": [], "skills": [], "contexts": []},
+            artifacts={"agents": [], "skills": [], "contexts": []},
         )
         output_file = temp_dir / "beacon.yaml"
         settings.to_yaml(str(output_file))
@@ -236,7 +236,7 @@ class TestSettingsSelfWriting:
     def test_tc13_roundtrip_preserves_ignore_skills(self, temp_dir):
         """TC13: Write then read roundtrip preserves ignore.skills values."""
         settings1 = BeaconManifest(
-            artifacts={"knowledge": [], "skills": [], "contexts": []},
+            artifacts={"agents": [], "skills": [], "contexts": []},
             ignore={"skills": ["openspec-*"]},
         )
         output_file = temp_dir / "beacon.yaml"
