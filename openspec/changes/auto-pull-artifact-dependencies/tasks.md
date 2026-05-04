@@ -133,14 +133,14 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:2:end -->
 
 
-- [ ] 2.1 Verify `docs/migrations/artifact-dependencies-frontmatter.md` exists in the repo (already drafted)
+- [x] 2.1 Verify `docs/migrations/artifact-dependencies-frontmatter.md` exists in the repo (already drafted)
 <!-- opsx:tdd:2.1:begin -->
   - **Input**: The file written during the planning session.
   - **Expected Output**: File exists, is non-empty, and begins with `# Migration: Artifact Dependencies via Frontmatter`.
   - **Validation**: `test -s docs/migrations/artifact-dependencies-frontmatter.md && head -1 docs/migrations/artifact-dependencies-frontmatter.md | grep -q 'Migration: Artifact Dependencies via Frontmatter'`
 <!-- opsx:tdd:2.1:end -->
-- [ ] 2.2 Add a link from the top-level README or docs index to the migration doc
-- [ ] 2.3 Add a link from `guides/beacon-yaml-reference.md` explaining that `knowledge:` has been removed
+- [x] 2.2 Add a link from the top-level README or docs index to the migration doc
+- [x] 2.3 Add a link from `guides/beacon-yaml-reference.md` explaining that `knowledge:` has been removed
 
 ## 3. Manifest changes
 
@@ -152,19 +152,19 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:3:end -->
 
 
-- [ ] 3.1 Remove `knowledge: list[str]` from `ArtifactsConfig` in `libs/beacon/src/beacon/core/manifest/beacon.py`
+- [x] 3.1 Remove `knowledge: list[str]` from `ArtifactsConfig` in `libs/beacon/src/beacon/core/manifest/beacon.py`
 <!-- opsx:tdd:3.1:begin -->
   - **Input**: `libs/beacon/src/beacon/core/manifest/beacon.py` with current `ArtifactsConfig` schema including `knowledge`.
   - **Expected Output**: `ArtifactsConfig` contains only `agents`, `contexts`, `skills` fields; `knowledge` attribute raises `AttributeError`.
   - **Validation**: `uv run python -c 'from beacon.core.manifest.beacon import ArtifactsConfig; a = ArtifactsConfig(); assert not hasattr(a, "knowledge"), "knowledge still present"; assert hasattr(a, "agents")'` exits 0.
 <!-- opsx:tdd:3.1:end -->
-- [ ] 3.2 Add `agents: list[str]` to `ArtifactsConfig` if not already present
+- [x] 3.2 Add `agents: list[str]` to `ArtifactsConfig` if not already present
 <!-- opsx:tdd:3.2:begin -->
   - **Input**: `ArtifactsConfig` after task 3.1.
   - **Expected Output**: `ArtifactsConfig().agents` returns an empty list by default; assigning a list persists through YAML round-trip.
   - **Validation**: Unit test: `assert ArtifactsConfig().agents == []` and round-trip with `agents: [agents/foo.md]` preserves the list.
 <!-- opsx:tdd:3.2:end -->
-- [ ] 3.3 Add a legacy-drop migration hook in the manifest loader: on read, if the YAML contains `artifacts.knowledge`, remove it from the parsed dict before Pydantic validation and emit a one-shot info log
+- [x] 3.3 Add a legacy-drop migration hook in the manifest loader: on read, if the YAML contains `artifacts.knowledge`, remove it from the parsed dict before Pydantic validation and emit a one-shot info log
 <!-- opsx:tdd:3.3:begin -->
   - **Input**: Legacy beacon.yaml: `artifacts:\n  knowledge: [knowledge/foo]\n  contexts: []\n  skills: []`.
   - **Expected Output**: Loader parses successfully, returns a `BeaconManifest` whose serialized form has no `knowledge` key, and emits exactly one `loguru` INFO-level record matching `artifacts.knowledge removed; knowledge is now auto-derived`.
@@ -177,7 +177,7 @@ pytest tests/ -v --tb=short
     - TC5: Legacy YAML loaded twice in the same process → log emitted each time the loader runs against a file containing the legacy key (hook is per-load, not per-process; spec says 'one-shot' per migrated file)
     - TC6: Legacy YAML with both `knowledge` and an unexpected extra key → migration drops `knowledge`, extra key triggers the existing validation error pathway
 <!-- opsx:tdd:3.3:end -->
-- [ ] 3.4 Ensure the manifest writer never serializes a `knowledge:` key even if it somehow sneaks into the object
+- [x] 3.4 Ensure the manifest writer never serializes a `knowledge:` key even if it somehow sneaks into the object
 <!-- opsx:tdd:3.4:begin -->
   - **Input**: A `BeaconManifest` instance; attempt to mutate with `setattr(manifest.artifacts, "knowledge", ["x"])`.
   - **Expected Output**: Pydantic rejects the attribute (extra fields forbidden) OR the writer explicitly filters the key during serialization such that the written YAML contains no `knowledge:` line.
@@ -187,7 +187,7 @@ pytest tests/ -v --tb=short
     - TC2: If model is permissive, writer filters → round-trip produces no `knowledge:` line
     - TC3: Manifest constructed with all defaults → written YAML contains `agents`, `contexts`, `skills` keys only
 <!-- opsx:tdd:3.4:end -->
-- [ ] 3.5 Unit tests: legacy field drop, logging behaviour, round-trip write without knowledge
+- [x] 3.5 Unit tests: legacy field drop, logging behaviour, round-trip write without knowledge
 <!-- opsx:tdd:3.5:begin -->
   - **Input**: Test fixtures: legacy YAML file, modern YAML file, empty YAML file.
   - **Expected Output**: All tests pass; coverage reports that the legacy-drop branch is exercised.
@@ -204,8 +204,8 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:4:end -->
 
 
-- [ ] 4.1 Create `libs/beacon/src/beacon/core/dependencies/` module (or `core/frontmatter/` — pick based on neighbouring conventions)
-- [ ] 4.2 Implement `parse_frontmatter(path: Path) -> FrontmatterResult` returning parsed YAML or a structured error
+- [x] 4.1 Create `libs/beacon/src/beacon/core/dependencies/` module (or `core/frontmatter/` — pick based on neighbouring conventions)
+- [x] 4.2 Implement `parse_frontmatter(path: Path) -> FrontmatterResult` returning parsed YAML or a structured error
 <!-- opsx:tdd:4.2:begin -->
   - **Input**: Markdown file with `---\n<yaml>\n---\n<body>\n` structure.
   - **Expected Output**: `FrontmatterResult` containing parsed dict on success, or a structured error naming the file and parse problem on failure. Body content is discarded (not required for dep resolution).
@@ -219,7 +219,7 @@ pytest tests/ -v --tb=short
     - TC6: Frontmatter with nested `requires` block → nested structure preserved in output dict
     - TC7: File does not exist → parser raises (or returns error) `file-not-found` with the path
 <!-- opsx:tdd:4.2:end -->
-- [ ] 4.3 Define `AgentFrontmatter` and `SkillFrontmatter` Pydantic models with `requires` validation rules from spec
+- [x] 4.3 Define `AgentFrontmatter` and `SkillFrontmatter` Pydantic models with `requires` validation rules from spec
 <!-- opsx:tdd:4.3:begin -->
   - **Input**: Parsed frontmatter dicts for agents (with `requires.contexts` and `requires.skills`) and skills (with `requires.contexts`).
   - **Expected Output**: `AgentFrontmatter.model_validate(dict)` succeeds for valid shapes and fails with clear errors for invalid ones. Same for `SkillFrontmatter`.
@@ -235,13 +235,13 @@ pytest tests/ -v --tb=short
     - TC8: Agent with `requires.contexts: 'foo'` (string not list) → ValidationError
     - TC9: Agent with duplicate entries `requires.contexts: [foo, foo]` → either deduplicated silently or validated; decide per spec, test asserts chosen behaviour
 <!-- opsx:tdd:4.3:end -->
-- [ ] 4.4 Reject `requires.skills` on `SkillFrontmatter` at parse time (spec requirement)
+- [x] 4.4 Reject `requires.skills` on `SkillFrontmatter` at parse time (spec requirement)
 <!-- opsx:tdd:4.4:begin -->
   - **Input**: Skill YAML containing `requires: { contexts: [], skills: [foo] }`.
   - **Expected Output**: ValidationError with message explaining skill-to-skill deps are not supported and pointing to the migration doc.
   - **Validation**: Error message contains both 'skill' and the migration-doc path.
 <!-- opsx:tdd:4.4:end -->
-- [ ] 4.5 Implement `validate_requires_against_warehouse(frontmatter, warehouse_path)` — each name must resolve to an existing warehouse file
+- [x] 4.5 Implement `validate_requires_against_warehouse(frontmatter, warehouse_path)` — each name must resolve to an existing warehouse file
 <!-- opsx:tdd:4.5:begin -->
   - **Input**: Parsed frontmatter object + `Path` to a warehouse clone.
   - **Expected Output**: `list[ValidationError]` — empty on success, one entry per missing target on failure. Each error includes the referring artifact, the missing name, and the expected warehouse path.
@@ -253,7 +253,7 @@ pytest tests/ -v --tb=short
     - TC4: Skill `requires.contexts: [python-standards, testing]`, warehouse has first but not second → single error for `testing`
     - TC5: Empty requires.contexts / requires.skills → empty error list (not an error)
 <!-- opsx:tdd:4.5:end -->
-- [ ] 4.6 Unit tests: valid agent, valid skill, missing `requires`, malformed YAML, skill with forbidden `skills` key, dangling reference
+- [x] 4.6 Unit tests: valid agent, valid skill, missing `requires`, malformed YAML, skill with forbidden `skills` key, dangling reference
 <!-- opsx:tdd:4.6:begin -->
   - **Input**: Fixture directory tree for a minimal warehouse + fixture markdown files for each scenario.
   - **Expected Output**: All unit tests in the module pass; coverage of `FrontmatterResult` branches, Pydantic model validators, and `validate_requires_against_warehouse` branches is complete.

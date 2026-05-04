@@ -174,6 +174,7 @@ Agentic Beacon is **bidirectional**. When an agent session produces a better app
 - **[Agentic Warehouse Design](./docs/agentic-warehouse-design.md)** — High-level design and architecture
 - **[Boot Context Design](./docs/boot-context-design/)** — AGENTS.md architecture and patterns
 - **[Spec-Driven Development](./docs/spec-driven-development.md)** — Structured approach to feature planning
+- **[Migration: Artifact Dependencies via Frontmatter](./docs/migrations/artifact-dependencies-frontmatter.md)** — Migrate warehouses to the frontmatter dependency model
 
 ### Practical Guides (guides/)
 - **[Getting Started](./guides/getting-started.md)** — Full onboarding walkthrough

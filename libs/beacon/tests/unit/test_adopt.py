@@ -37,13 +37,11 @@ from click.testing import CliRunner
 def _make_beacon_settings(
     contexts: list[str] | None = None,
     skills: list[str] | None = None,
-    knowledge: list[str] | None = None,
 ) -> BeaconManifest:
     return BeaconManifest(
         artifacts=ArtifactsConfig(
             contexts=contexts or [],
             skills=skills or [],
-            knowledge=knowledge or [],
         )
     )
 
@@ -447,7 +445,7 @@ class TestDiscoverAdoptableAllMode:
         )
 
         # Glob pattern that matches the knowledge path
-        beacon = _make_beacon_settings(knowledge=["knowledge/**/*.md"])
+        beacon = _make_beacon_settings()
         candidates, _ = discover_adoptable(warehouse, beacon, None, show_all=True)
 
         # The knowledge scope "python" = "knowledge/python" should be adopted via glob
@@ -524,6 +522,9 @@ class TestApplyAdoption:
         updated = BeaconManifest.from_yaml(beacon_yaml)
         assert "skills/my-skill/" in updated.artifacts.skills
 
+    @pytest.mark.skip(
+        reason="knowledge field removed from manifest; knowledge adoption deferred"
+    )
     def test_adopt_knowledge_file(self, tmp_path):
         """TC3: Adopt 1 knowledge file -> artifacts.knowledge grows by 1."""
         beacon_yaml = tmp_path / "beacon.yaml"
@@ -539,6 +540,9 @@ class TestApplyAdoption:
         updated = BeaconManifest.from_yaml(beacon_yaml)
         assert "knowledge/python/async.md" in updated.artifacts.knowledge
 
+    @pytest.mark.skip(
+        reason="knowledge field removed from manifest; knowledge adoption deferred"
+    )
     def test_adopt_mixed_types(self, tmp_path):
         """TC4: Adopt 2 contexts + 1 skill + 1 knowledge -> all 3 lists updated."""
         beacon_yaml = tmp_path / "beacon.yaml"

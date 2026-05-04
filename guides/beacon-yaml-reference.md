@@ -16,7 +16,7 @@ my-project/
 
 ```yaml
 artifacts:
-  knowledge:
+  agents:
     - <pattern-or-path>
 
   skills:
@@ -30,6 +30,8 @@ ignore:
   skills:
     - "openspec-*"        # fnmatch glob patterns
 ```
+
+> **Note:** `artifacts.knowledge` was removed in a recent version. Knowledge is now auto-derived from markdown links inside adopted contexts and skills. See [Migration: Artifact Dependencies via Frontmatter](../docs/migrations/artifact-dependencies-frontmatter.md) for details.
 
 All three `artifacts` keys are required (can be empty lists). The file is validated on `abc sync` and `abc setup`.
 

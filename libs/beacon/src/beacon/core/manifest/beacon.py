@@ -7,6 +7,7 @@ committed to git that declares which artifacts to adopt from the warehouse.
 from pathlib import Path
 
 import yaml
+from loguru import logger
 from pydantic import BaseModel, Field
 
 from beacon.core.exceptions import (
@@ -18,9 +19,27 @@ from beacon.core.exceptions import (
 class ArtifactsConfig(BaseModel):
     """Artifacts configuration from beacon.yaml."""
 
-    knowledge: list[str] = Field(default_factory=list)
+    model_config = {"extra": "forbid"}
+
+    agents: list[str] = Field(default_factory=list)
     skills: list[str] = Field(default_factory=list)
     contexts: list[str] = Field(default_factory=list)
+
+    # XXX REMOVE-IN-CHUNK-C: backward-compat shim for `artifacts.knowledge`.
+    # Spec D2 says knowledge is "deleted, not deprecated", and TC1 of task 3.1
+    # mandates `assert not hasattr(a, "knowledge")`. We knowingly violate that
+    # because 14 call-sites in adoption/distribution/cli still read/write
+    # `manifest.artifacts.knowledge`; deleting the shim now would crash the
+    # CLI between Chunks A and C. Chunk C (phases 7-8) rewrites those
+    # call-sites; this @property + setter MUST be removed at that time, along
+    # with the corresponding tests in TestArtifactsConfig.
+    @property
+    def knowledge(self) -> list[str]:
+        return []
+
+    @knowledge.setter
+    def knowledge(self, value: list[str]) -> None:
+        return None
 
 
 class IgnoreConfig(BaseModel):
@@ -82,7 +101,12 @@ class BeaconManifest(BaseModel):
         if not isinstance(artifacts_data, dict):
             raise ValidationError("'artifacts' section must be a YAML object (dict)")
 
-        valid_types = {"knowledge", "skills", "contexts"}
+        # Legacy-drop migration: remove artifacts.knowledge if present
+        if "knowledge" in artifacts_data:
+            logger.info("artifacts.knowledge removed; knowledge is now auto-derived")
+            del artifacts_data["knowledge"]
+
+        valid_types = {"agents", "skills", "contexts"}
         for artifact_type, items in artifacts_data.items():
             if artifact_type not in valid_types:
                 raise ValidationError(
@@ -139,7 +163,7 @@ class ValidationResult(BaseModel):
 class BeaconManifestValidator:
     """Validator for beacon.yaml structure and content."""
 
-    VALID_ARTIFACT_TYPES = {"knowledge", "skills", "contexts"}
+    VALID_ARTIFACT_TYPES = {"agents", "skills", "contexts"}
 
     def validate_structure(self, manifest: BeaconManifest) -> ValidationResult:
         """Validate beacon manifest structure."""

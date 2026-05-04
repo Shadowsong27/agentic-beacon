@@ -33,24 +33,27 @@ class TestBeaconYAMLParser:
         settings = BeaconManifest.from_yaml(str(beacon_file))
 
         assert isinstance(settings, BeaconManifest)
-        assert len(settings.artifacts.knowledge) == 2
-        assert "languages/python/type-hints.md" in settings.artifacts.knowledge
-        assert "languages/python/async-patterns.md" in settings.artifacts.knowledge
+        # Legacy knowledge field is silently dropped
+        assert settings.artifacts.knowledge == []
+        assert "knowledge" not in settings.artifacts.model_dump()
         assert len(settings.artifacts.skills) == 2
         assert "development/tdd-workflow.md" in settings.artifacts.skills
         assert len(settings.artifacts.contexts) == 1
         assert "teams/backend/AGENTS.md" in settings.artifacts.contexts
 
     def test_tc2_valid_partial_beacon_yaml(self, temp_dir, sample_beacon_yaml_partial):
-        """TC2: Valid partial beacon.yaml (only knowledge) → Returns BeaconSettings with empty lists for skills/contexts"""
+        """TC2: Valid partial beacon.yaml (only agents) → Returns BeaconSettings with empty lists for skills/contexts"""
         beacon_file = temp_dir / "beacon.yaml"
         beacon_file.write_text(sample_beacon_yaml_partial)
 
         settings = BeaconManifest.from_yaml(str(beacon_file))
 
         assert isinstance(settings, BeaconManifest)
-        assert len(settings.artifacts.knowledge) == 1
-        assert settings.artifacts.knowledge[0] == "languages/python/basics.md"
+        # Legacy knowledge field is silently dropped
+        assert settings.artifacts.knowledge == []
+        assert "knowledge" not in settings.artifacts.model_dump()
+        assert len(settings.artifacts.agents) == 1
+        assert settings.artifacts.agents[0] == "agents/python-reviewer.md"
         assert len(settings.artifacts.skills) == 0
         assert len(settings.artifacts.contexts) == 0
 
@@ -62,7 +65,10 @@ class TestBeaconYAMLParser:
         settings = BeaconManifest.from_yaml(str(beacon_file))
 
         assert isinstance(settings, BeaconManifest)
-        assert len(settings.artifacts.knowledge) == 0
+        # Legacy knowledge field is silently dropped
+        assert settings.artifacts.knowledge == []
+        assert "knowledge" not in settings.artifacts.model_dump()
+        assert len(settings.artifacts.agents) == 0
         assert len(settings.artifacts.skills) == 0
         assert len(settings.artifacts.contexts) == 0
 
@@ -102,7 +108,7 @@ knowledge:
         beacon_file = temp_dir / "beacon.yaml"
         beacon_file.write_text("""
 artifacts:
-  knowledge: "not-a-list"
+  agents: "not-a-list"
 """)
 
         with pytest.raises(ValidationError) as exc_info:
