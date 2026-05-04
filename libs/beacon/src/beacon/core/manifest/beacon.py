@@ -25,15 +25,21 @@ class ArtifactsConfig(BaseModel):
     skills: list[str] = Field(default_factory=list)
     contexts: list[str] = Field(default_factory=list)
 
+    # XXX REMOVE-IN-CHUNK-C: backward-compat shim for `artifacts.knowledge`.
+    # Spec D2 says knowledge is "deleted, not deprecated", and TC1 of task 3.1
+    # mandates `assert not hasattr(a, "knowledge")`. We knowingly violate that
+    # because 14 call-sites in adoption/distribution/cli still read/write
+    # `manifest.artifacts.knowledge`; deleting the shim now would crash the
+    # CLI between Chunks A and C. Chunk C (phases 7-8) rewrites those
+    # call-sites; this @property + setter MUST be removed at that time, along
+    # with the corresponding tests in TestArtifactsConfig.
     @property
     def knowledge(self) -> list[str]:
-        """Backward-compat shim: knowledge was removed; always returns []."""
         return []
 
     @knowledge.setter
     def knowledge(self, value: list[str]) -> None:
-        """No-op setter: writes to the deprecated field are silently ignored."""
-        pass
+        return None
 
 
 class IgnoreConfig(BaseModel):

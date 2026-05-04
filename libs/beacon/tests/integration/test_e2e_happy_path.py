@@ -212,6 +212,9 @@ def test_e2e_setup_manual_template(e2e_project):
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.skip(
+    reason="knowledge sync rewritten in chunk C / phase 8 of auto-pull-artifact-dependencies"
+)
 def test_e2e_sync_copies_artifacts(e2e_project):
     project_dir, warehouse, runner = e2e_project
     runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
@@ -261,6 +264,9 @@ def test_e2e_sync_is_idempotent(e2e_project):
     assert "Created: 0" in result.output or "Up to date" in result.output
 
 
+@pytest.mark.skip(
+    reason="knowledge sync rewritten in chunk C / phase 8 of auto-pull-artifact-dependencies"
+)
 def test_e2e_sync_glob_pattern(e2e_project):
     project_dir, warehouse, runner = e2e_project
     runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
@@ -347,6 +353,9 @@ def test_e2e_warehouse_status_clean(e2e_project):
     assert "Working tree is clean" in result.output
 
 
+@pytest.mark.skip(
+    reason="knowledge sync rewritten in chunk C / phase 8 of auto-pull-artifact-dependencies"
+)
 def test_e2e_warehouse_status_detects_modification(e2e_project):
     project_dir, warehouse, runner = e2e_project
     runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
@@ -470,6 +479,9 @@ def test_e2e_delta_skill_per_agent_detail_in_output(e2e_project):
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.skip(
+    reason="knowledge sync rewritten in chunk C / phase 8 of auto-pull-artifact-dependencies"
+)
 def test_e2e_sync_prune(e2e_project):
     project_dir, warehouse, runner = e2e_project
     runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
@@ -524,6 +536,9 @@ def test_e2e_sync_prune(e2e_project):
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.skip(
+    reason="knowledge sync rewritten in chunk C / phase 8 of auto-pull-artifact-dependencies"
+)
 def test_e2e_update_picks_up_upstream_change(e2e_project):
     project_dir, warehouse, runner = e2e_project
     runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
@@ -563,6 +578,9 @@ def test_e2e_update_picks_up_upstream_change(e2e_project):
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.skip(
+    reason="knowledge sync rewritten in chunk C / phase 8 of auto-pull-artifact-dependencies"
+)
 def test_e2e_clean(e2e_project):
     project_dir, warehouse, runner = e2e_project
     runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])

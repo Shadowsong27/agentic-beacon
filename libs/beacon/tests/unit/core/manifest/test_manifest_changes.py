@@ -43,8 +43,10 @@ class TestArtifactsConfig:
 class TestLegacyDropHook:
     """Task 3.3: Legacy-drop migration hook in from_yaml."""
 
-    def test_tc1_legacy_yaml_with_populated_knowledge(self, tmp_path, caplog):
-        """TC1: Legacy YAML with populated knowledge list → stripped, log emitted, manifest valid."""
+    LEGACY_LOG_TEXT = "artifacts.knowledge removed; knowledge is now auto-derived"
+
+    def test_tc1_legacy_yaml_with_populated_knowledge(self, tmp_path, loguru_caplog):
+        """TC1: Legacy YAML with populated knowledge list → stripped, exactly one log emitted, manifest valid."""
         beacon_file = tmp_path / "beacon.yaml"
         beacon_file.write_text("""
 artifacts:
@@ -58,9 +60,11 @@ artifacts:
         assert "knowledge" not in manifest.artifacts.model_dump()
         assert manifest.artifacts.contexts == []
         assert manifest.artifacts.skills == []
+        msgs = [r.getMessage() for r in loguru_caplog.records]
+        assert msgs.count(self.LEGACY_LOG_TEXT) == 1, msgs
 
-    def test_tc2_legacy_yaml_with_empty_knowledge(self, tmp_path, caplog):
-        """TC2: Legacy YAML with empty knowledge: [] → stripped, log emitted, manifest valid."""
+    def test_tc2_legacy_yaml_with_empty_knowledge(self, tmp_path, loguru_caplog):
+        """TC2: Legacy YAML with empty knowledge: [] → stripped, exactly one log emitted, manifest valid."""
         beacon_file = tmp_path / "beacon.yaml"
         beacon_file.write_text("""
 artifacts:
@@ -73,8 +77,10 @@ artifacts:
         assert "knowledge" not in manifest.artifacts.model_dump()
         assert manifest.artifacts.contexts == []
         assert manifest.artifacts.skills == []
+        msgs = [r.getMessage() for r in loguru_caplog.records]
+        assert msgs.count(self.LEGACY_LOG_TEXT) == 1, msgs
 
-    def test_tc3_modern_yaml_no_knowledge(self, tmp_path, caplog):
+    def test_tc3_modern_yaml_no_knowledge(self, tmp_path, loguru_caplog):
         """TC3: Modern YAML with no knowledge key → no migration log, manifest valid."""
         beacon_file = tmp_path / "beacon.yaml"
         beacon_file.write_text("""
@@ -88,6 +94,8 @@ artifacts:
         assert "knowledge" not in manifest.artifacts.model_dump()
         assert manifest.artifacts.contexts == []
         assert manifest.artifacts.skills == []
+        msgs = [r.getMessage() for r in loguru_caplog.records]
+        assert self.LEGACY_LOG_TEXT not in msgs, msgs
 
     def test_tc4_missing_artifacts_key(self, tmp_path, caplog):
         """TC4: YAML missing artifacts key → existing error path, no migration log."""
@@ -99,7 +107,7 @@ artifacts:
 
         assert "artifacts" in str(exc_info.value).lower()
 
-    def test_tc5_legacy_loaded_twice(self, tmp_path, caplog):
+    def test_tc5_legacy_loaded_twice(self, tmp_path, loguru_caplog):
         """TC5: Legacy YAML loaded twice → log emitted each time."""
         beacon_file = tmp_path / "beacon.yaml"
         beacon_file.write_text("""
@@ -109,10 +117,10 @@ artifacts:
   contexts: []
   skills: []
 """)
-        # Load twice
         BeaconManifest.from_yaml(str(beacon_file))
         BeaconManifest.from_yaml(str(beacon_file))
-        # Both loads should succeed; loguru emits per-load
+        msgs = [r.getMessage() for r in loguru_caplog.records]
+        assert msgs.count(self.LEGACY_LOG_TEXT) == 2, msgs
 
     def test_tc6_legacy_plus_extra_key(self, tmp_path):
         """TC6: Legacy YAML with knowledge and unexpected extra key → drops knowledge, extra triggers error."""
