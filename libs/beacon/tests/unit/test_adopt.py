@@ -23,8 +23,6 @@ from beacon.domains.adoption.discovery import (
     discover_adoptable,
     extract_heading_description,
     extract_skill_description,
-    find_knowledge_node_for_file,
-    list_knowledge_nodes,
 )
 from beacon.domains.adoption.models import AdoptCandidate
 from click.testing import CliRunner
@@ -134,119 +132,6 @@ class TestExtractHeadingDescription:
 
 # ---------------------------------------------------------------------------
 # Knowledge node helpers
-# ---------------------------------------------------------------------------
-
-
-class TestFindKnowledgeNodeForFile:
-    def test_flat_node_decisions(self):
-        assert (
-            find_knowledge_node_for_file("knowledge/global/decisions/foo.md")
-            == "knowledge/global"
-        )
-
-    def test_flat_node_lessons(self):
-        assert (
-            find_knowledge_node_for_file("knowledge/global/lessons/bar.md")
-            == "knowledge/global"
-        )
-
-    def test_flat_node_facts(self):
-        assert (
-            find_knowledge_node_for_file("knowledge/global/facts/baz.md")
-            == "knowledge/global"
-        )
-
-    def test_nested_node(self):
-        assert (
-            find_knowledge_node_for_file(
-                "knowledge/languages/python/decisions/typing.md"
-            )
-            == "knowledge/languages/python"
-        )
-
-    def test_file_not_under_subtype(self):
-        assert find_knowledge_node_for_file("knowledge/python/basics.md") is None
-
-    def test_file_outside_knowledge(self):
-        assert find_knowledge_node_for_file("contexts/foo.md") is None
-
-
-class TestListKnowledgeNodes:
-    def test_flat_node(self, tmp_path):
-        warehouse = _make_warehouse(tmp_path)
-        (warehouse / "knowledge" / "global" / "facts").mkdir(parents=True)
-        (warehouse / "knowledge" / "global" / "facts" / "foo.md").write_text("# Foo")
-        nodes = list_knowledge_nodes(warehouse)
-        assert nodes == ["knowledge/global"]
-
-    def test_nested_nodes(self, tmp_path):
-        warehouse = _make_warehouse(tmp_path)
-        (warehouse / "knowledge" / "languages" / "python" / "decisions").mkdir(
-            parents=True
-        )
-        (warehouse / "knowledge" / "languages" / "typescript" / "lessons").mkdir(
-            parents=True
-        )
-        nodes = list_knowledge_nodes(warehouse)
-        assert set(nodes) == {
-            "knowledge/languages/python",
-            "knowledge/languages/typescript",
-        }
-
-    def test_grouping_folder_excluded(self, tmp_path):
-        warehouse = _make_warehouse(tmp_path)
-        # languages/ has no decisions/lessons/facts directly — it's just a grouping folder
-        (warehouse / "knowledge" / "languages").mkdir(parents=True)
-        (warehouse / "knowledge" / "languages" / "README.md").write_text("# Languages")
-        nodes = list_knowledge_nodes(warehouse)
-        assert nodes == []
-
-    def test_empty_knowledge_dir(self, tmp_path):
-        warehouse = _make_warehouse(tmp_path)
-        assert list_knowledge_nodes(warehouse) == []
-
-    def test_mixed_flat_and_nested(self, tmp_path):
-        warehouse = _make_warehouse(tmp_path)
-        (warehouse / "knowledge" / "global" / "facts").mkdir(parents=True)
-        (warehouse / "knowledge" / "domains" / "web-services" / "decisions").mkdir(
-            parents=True
-        )
-        nodes = list_knowledge_nodes(warehouse)
-        assert set(nodes) == {"knowledge/global", "knowledge/domains/web-services"}
-
-    def test_parent_with_child_nodes_excluded(self, tmp_path):
-        """A directory that has its own decisions/ but also child knowledge nodes is
-        treated as a grouping folder — only the leaf children are collected, not the
-        parent itself."""
-        warehouse = _make_warehouse(tmp_path)
-        # data-platform has its own decisions/ but also child knowledge nodes
-        (warehouse / "knowledge" / "data-platform" / "decisions").mkdir(parents=True)
-        (warehouse / "knowledge" / "data-platform" / "clickhouse" / "facts").mkdir(
-            parents=True
-        )
-        (warehouse / "knowledge" / "data-platform" / "dbt" / "decisions").mkdir(
-            parents=True
-        )
-        nodes = list_knowledge_nodes(warehouse)
-        assert set(nodes) == {
-            "knowledge/data-platform/clickhouse",
-            "knowledge/data-platform/dbt",
-        }
-
-    def test_flat_root_knowledge_dir_excluded(self, tmp_path):
-        """knowledge/ root with top-level decisions/facts/lessons must NOT produce a
-        blank-named node — the root dir has no display name and would render as '[ ]  [N commits ago]'."""
-        warehouse = _make_warehouse(tmp_path)
-        # Flat structure: knowledge/decisions/, knowledge/facts/ directly
-        (warehouse / "knowledge" / "decisions").mkdir(parents=True)
-        (warehouse / "knowledge" / "facts").mkdir(parents=True)
-        (warehouse / "knowledge" / "decisions" / "foo.md").write_text("# Foo")
-        nodes = list_knowledge_nodes(warehouse)
-        assert nodes == []
-
-
-# ---------------------------------------------------------------------------
-# 7.1 discover_adoptable() — git-diff mode
 # ---------------------------------------------------------------------------
 
 
@@ -415,7 +300,7 @@ class TestDiscoverAdoptableAllMode:
         )
         candidates, _ = discover_adoptable(warehouse, beacon, None, show_all=True)
 
-        assert len(candidates) == 3
+        assert len(candidates) == 2
         assert all(
             c.commits_ago is None for c in candidates
         )  # no git repo → no annotation
@@ -494,7 +379,7 @@ class TestApplyAdoption:
         updated = BeaconManifest.from_yaml(beacon_yaml)
         assert "contexts/platform.md" in updated.artifacts.contexts
         assert updated.artifacts.skills == []
-        assert updated.artifacts.knowledge == []
+        assert not hasattr(updated.artifacts, "knowledge")
 
     def test_adopt_skill_with_trailing_slash(self, tmp_path):
         """TC2: Adopt 1 skill -> stored as skills/<name>/ with trailing slash."""
@@ -521,47 +406,6 @@ class TestApplyAdoption:
 
         updated = BeaconManifest.from_yaml(beacon_yaml)
         assert "skills/my-skill/" in updated.artifacts.skills
-
-    @pytest.mark.skip(
-        reason="knowledge field removed from manifest; knowledge adoption deferred"
-    )
-    def test_adopt_knowledge_file(self, tmp_path):
-        """TC3: Adopt 1 knowledge file -> artifacts.knowledge grows by 1."""
-        beacon_yaml = tmp_path / "beacon.yaml"
-        beacon_yaml.write_text(
-            "artifacts:\n  contexts: []\n  skills: []\n  knowledge: []\n"
-        )
-
-        selections = [
-            AdoptCandidate(artifact_type="knowledge", path="knowledge/python/async.md")
-        ]
-        apply_adoption(beacon_yaml, selections)
-
-        updated = BeaconManifest.from_yaml(beacon_yaml)
-        assert "knowledge/python/async.md" in updated.artifacts.knowledge
-
-    @pytest.mark.skip(
-        reason="knowledge field removed from manifest; knowledge adoption deferred"
-    )
-    def test_adopt_mixed_types(self, tmp_path):
-        """TC4: Adopt 2 contexts + 1 skill + 1 knowledge -> all 3 lists updated."""
-        beacon_yaml = tmp_path / "beacon.yaml"
-        beacon_yaml.write_text(
-            "artifacts:\n  contexts: []\n  skills: []\n  knowledge: []\n"
-        )
-
-        selections = [
-            AdoptCandidate(artifact_type="contexts", path="contexts/a.md"),
-            AdoptCandidate(artifact_type="contexts", path="contexts/b.md"),
-            AdoptCandidate(artifact_type="skills", path="skills/tool/"),
-            AdoptCandidate(artifact_type="knowledge", path="knowledge/python/tips.md"),
-        ]
-        apply_adoption(beacon_yaml, selections)
-
-        updated = BeaconManifest.from_yaml(beacon_yaml)
-        assert len(updated.artifacts.contexts) == 2
-        assert "skills/tool/" in updated.artifacts.skills
-        assert "knowledge/python/tips.md" in updated.artifacts.knowledge
 
     def test_adopt_duplicate_skipped(self, tmp_path):
         """TC5: Adopt artifact already in beacon.yaml -> no duplicate added."""

@@ -382,9 +382,7 @@ class SyncEngine:
 
     def list_artifacts(self, artifact_type: str | None = None) -> dict[str, list[str]]:
         """List synced artifacts by type."""
-        types_to_show = (
-            [artifact_type] if artifact_type else ["contexts", "knowledge", "skills"]
-        )
+        types_to_show = [artifact_type] if artifact_type else ["contexts", "skills"]
         result: dict[str, list[str]] = {}
         for section in types_to_show:
             section_dir = self.artifacts_path / section

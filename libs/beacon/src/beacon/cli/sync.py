@@ -379,16 +379,6 @@ def status(*, project: Path | None) -> None:
             console.print(table)
             console.print()
 
-        if beacon_settings.artifacts.knowledge:
-            from rich.table import Table
-
-            table = Table(title="Configured Knowledge Patterns")
-            table.add_column("Pattern", style="green")
-            for pattern in beacon_settings.artifacts.knowledge:
-                table.add_row(pattern)
-            console.print(table)
-            console.print()
-
         if beacon_settings.artifacts.skills:
             from rich.table import Table
 

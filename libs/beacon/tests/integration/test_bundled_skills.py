@@ -225,7 +225,7 @@ def test_show_bundled_skills_status_installed(tmp_path):
     for skills_root in fake_dirs.values():
         dest = skills_root / BUNDLED_SKILL_NAME
         dest.mkdir(parents=True)
-        (dest / "SKILL.md").write_text("# Skill")
+        (dest / "SKILL.md").write_text("---\nrequires:\n  contexts: []\n---\n# Skill")
 
     output = _capture_bundled_skills_status(fake_dirs)
 
@@ -248,7 +248,7 @@ def test_show_bundled_skills_status_partial(tmp_path):
     fake_dirs = _fake_global_dirs(tmp_path)
     dest = fake_dirs["opencode"] / BUNDLED_SKILL_NAME
     dest.mkdir(parents=True)
-    (dest / "SKILL.md").write_text("# Skill")
+    (dest / "SKILL.md").write_text("---\nrequires:\n  contexts: []\n---\n# Skill")
 
     output = _capture_bundled_skills_status(fake_dirs)
 
@@ -281,9 +281,7 @@ def test_sync_installs_bundled_skills_globally(valid_warehouse, temp_dir, monkey
 
     runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
-    beacon_yaml.write_text(
-        "artifacts:\n  knowledge: []\n  skills: []\n  contexts: []\n"
-    )
+    beacon_yaml.write_text("artifacts:\n\n  skills: []\n  contexts: []\n")
 
     with patch(
         "beacon.domains.artifact.skill.bundled_global_skill_dirs",
@@ -310,9 +308,7 @@ def test_sync_installs_bundled_skills_to_project_dir(
 
     runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
-    beacon_yaml.write_text(
-        "artifacts:\n  knowledge: []\n  skills: []\n  contexts: []\n"
-    )
+    beacon_yaml.write_text("artifacts:\n\n  skills: []\n  contexts: []\n")
 
     with patch(
         "beacon.domains.artifact.skill.bundled_global_skill_dirs",
@@ -339,9 +335,7 @@ def test_sync_reports_bundled_skill_installation(
 
     runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
-    beacon_yaml.write_text(
-        "artifacts:\n  knowledge: []\n  skills: []\n  contexts: []\n"
-    )
+    beacon_yaml.write_text("artifacts:\n\n  skills: []\n  contexts: []\n")
 
     with patch(
         "beacon.domains.artifact.skill.bundled_global_skill_dirs",
@@ -367,9 +361,7 @@ def test_sync_bundled_skills_idempotent(valid_warehouse, temp_dir, monkeypatch):
 
     runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
-    beacon_yaml.write_text(
-        "artifacts:\n  knowledge: []\n  skills: []\n  contexts: []\n"
-    )
+    beacon_yaml.write_text("artifacts:\n\n  skills: []\n  contexts: []\n")
 
     with patch(
         "beacon.domains.artifact.skill.bundled_global_skill_dirs",
@@ -434,9 +426,7 @@ def test_sync_overwrites_stale_bundled_skill(valid_warehouse, temp_dir, monkeypa
 
     runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
-    beacon_yaml.write_text(
-        "artifacts:\n  knowledge: []\n  skills: []\n  contexts: []\n"
-    )
+    beacon_yaml.write_text("artifacts:\n\n  skills: []\n  contexts: []\n")
 
     with patch(
         "beacon.domains.artifact.skill.bundled_global_skill_dirs",
@@ -470,9 +460,7 @@ def test_status_shows_bundled_skills_table(valid_warehouse, temp_dir, monkeypatc
 
     runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
-    beacon_yaml.write_text(
-        "artifacts:\n  knowledge: []\n  skills: []\n  contexts: []\n"
-    )
+    beacon_yaml.write_text("artifacts:\n\n  skills: []\n  contexts: []\n")
 
     with patch(
         "beacon.domains.artifact.skill.bundled_global_skill_dirs",
@@ -499,9 +487,7 @@ def test_status_shows_check_for_installed_bundled_skill(
 
     runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
-    beacon_yaml.write_text(
-        "artifacts:\n  knowledge: []\n  skills: []\n  contexts: []\n"
-    )
+    beacon_yaml.write_text("artifacts:\n\n  skills: []\n  contexts: []\n")
 
     with patch(
         "beacon.domains.artifact.skill.bundled_global_skill_dirs",

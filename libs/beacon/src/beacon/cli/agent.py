@@ -117,7 +117,6 @@ def list_cmd(*, artifact_type: str | None) -> None:
 
     section_config = {
         "contexts": ("Synced Contexts", "cyan", "Context"),
-        "knowledge": ("Synced Knowledge", "green", "File"),
         "skills": ("Synced Skills", "yellow", "Skill"),
     }
 

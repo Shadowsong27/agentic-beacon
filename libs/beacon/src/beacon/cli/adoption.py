@@ -116,9 +116,7 @@ def adopt(*, dry_run: bool) -> None:
         return
 
     adopted_paths: list[str] = (
-        beacon_settings.artifacts.contexts
-        + beacon_settings.artifacts.skills
-        + beacon_settings.artifacts.knowledge
+        beacon_settings.artifacts.contexts + beacon_settings.artifacts.skills
     )
     try:
         distributor = WarehouseDistributor(

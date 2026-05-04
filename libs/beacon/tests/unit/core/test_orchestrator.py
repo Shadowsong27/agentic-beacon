@@ -21,7 +21,9 @@ def test_dry_run_does_not_call_wiring_or_global_install(tmp_path, monkeypatch):
     (warehouse / "contexts").mkdir()
     (warehouse / "contexts" / "team.md").write_text("# Team\n")
     (warehouse / "skills" / "review").mkdir(parents=True)
-    (warehouse / "skills" / "review" / "SKILL.md").write_text("# Review\n")
+    (warehouse / "skills" / "review" / "SKILL.md").write_text(
+        "---\nrequires:\n  contexts: []\n---\n# Review\n"
+    )
 
     project = tmp_path / "project"
     beacon_dir = project / ".agentic-beacon"
@@ -31,7 +33,6 @@ def test_dry_run_does_not_call_wiring_or_global_install(tmp_path, monkeypatch):
     )
     (beacon_dir / "beacon.yaml").write_text(
         "artifacts:\n"
-        "  knowledge: []\n"
         "  skills:\n"
         "    - skills/review\n"
         "  contexts:\n"

@@ -39,15 +39,15 @@ def warehouse_with_artifacts(tmp_path):
 
     (wh / "contexts").mkdir()
     (wh / "contexts" / "AGENTS.md").write_text("# Context")
-
-    (wh / "knowledge").mkdir()
-    (wh / "knowledge" / "python").mkdir()
-    (wh / "knowledge" / "python" / "standards.md").write_text("# Python Standards")
+    (wh / "contexts" / "python").mkdir()
+    (wh / "contexts" / "python" / "standards.md").write_text("# Python Standards")
 
     (wh / "skills").mkdir()
     skill_dir = wh / "skills" / "code-review"
     skill_dir.mkdir()
-    (skill_dir / "SKILL.md").write_text("# Skill: Code Review")
+    (skill_dir / "SKILL.md").write_text(
+        "---\nrequires:\n  contexts: []\n---\n# Skill: Code Review"
+    )
 
     # Init git and commit files (required by sync)
     env = _git_env()
@@ -91,12 +91,12 @@ def synced_project(connected_project):
     beacon_yaml = project / ".agentic-beacon" / "beacon.yaml"
     beacon_yaml.write_text(
         "artifacts:\n"
-        "  knowledge:\n"
-        "    - knowledge/python/standards.md\n"
-        "  skills:\n"
-        "    - skills/code-review/\n"
         "  contexts:\n"
         "    - contexts/AGENTS.md\n"
+        "    - contexts/python/standards.md\n"
+        "  skills:\n"
+        "    - skills/code-review/\n"
+        "  agents: []\n"
     )
 
     result = runner.invoke(main, ["sync"])
@@ -123,26 +123,24 @@ def test_warehouse_list_requires_connected_project(runner, tmp_path, monkeypatch
 
 
 def test_warehouse_list_all_types(connected_project):
-    """abc warehouse list shows all three sections."""
+    """abc warehouse list shows all sections."""
     project, warehouse, runner = connected_project
 
     result = runner.invoke(main, ["warehouse", "list"])
 
     assert result.exit_code == 0
     assert "Contexts" in result.output
-    assert "Knowledge" in result.output
     assert "Skills" in result.output
 
 
-def test_warehouse_list_filter_knowledge(connected_project):
-    """abc warehouse list knowledge shows only knowledge section."""
+def test_warehouse_list_filter_contexts_second(connected_project):
+    """abc warehouse list contexts shows only contexts section."""
     project, warehouse, runner = connected_project
 
-    result = runner.invoke(main, ["warehouse", "list", "knowledge"])
+    result = runner.invoke(main, ["warehouse", "list", "contexts"])
 
     assert result.exit_code == 0
-    assert "Knowledge" in result.output
-    assert "Contexts" not in result.output
+    assert "Contexts" in result.output
     assert "Skills" not in result.output
 
 
@@ -154,7 +152,6 @@ def test_warehouse_list_filter_skills(connected_project):
 
     assert result.exit_code == 0
     assert "Skills" in result.output
-    assert "Knowledge" not in result.output
     assert "Contexts" not in result.output
 
 
@@ -166,7 +163,6 @@ def test_warehouse_list_filter_contexts(connected_project):
 
     assert result.exit_code == 0
     assert "Contexts" in result.output
-    assert "Knowledge" not in result.output
     assert "Skills" not in result.output
 
 
@@ -193,7 +189,6 @@ def test_warehouse_list_empty_warehouse(runner, tmp_path, monkeypatch):
     (wh / "agents").mkdir()
     (wh / "docs").mkdir()
     (wh / "contexts").mkdir()
-    (wh / "knowledge").mkdir()
     (wh / "skills").mkdir()
 
     connect_result = runner.invoke(main, ["warehouse", "connect", "--path", str(wh)])
@@ -230,33 +225,25 @@ def test_list_project_no_artifacts_dir(runner, tmp_path, monkeypatch):
     assert "No synced artifacts" in result.output
 
 
-@pytest.mark.skip(
-    reason="knowledge field removed from manifest; list command knowledge output deferred"
-)
 def test_list_project_all_types(synced_project):
-    """abc list shows all three synced artifact sections."""
+    """abc list shows all synced artifact sections."""
     project, warehouse, runner = synced_project
 
     result = runner.invoke(main, ["list"])
 
     assert result.exit_code == 0
     assert "Contexts" in result.output
-    assert "Knowledge" in result.output
     assert "Skills" in result.output
 
 
-@pytest.mark.skip(
-    reason="knowledge field removed from manifest; list command knowledge output deferred"
-)
-def test_list_project_filter_knowledge(synced_project):
-    """abc list knowledge shows only synced knowledge."""
+def test_list_project_filter_contexts_second(synced_project):
+    """abc list contexts shows only synced contexts."""
     project, warehouse, runner = synced_project
 
-    result = runner.invoke(main, ["list", "knowledge"])
+    result = runner.invoke(main, ["list", "contexts"])
 
     assert result.exit_code == 0
-    assert "Knowledge" in result.output
-    assert "Contexts" not in result.output
+    assert "Contexts" in result.output
     assert "Skills" not in result.output
 
 
@@ -268,7 +255,6 @@ def test_list_project_filter_skills(synced_project):
 
     assert result.exit_code == 0
     assert "Skills" in result.output
-    assert "Knowledge" not in result.output
     assert "Contexts" not in result.output
 
 
@@ -280,13 +266,9 @@ def test_list_project_filter_contexts(synced_project):
 
     assert result.exit_code == 0
     assert "Contexts" in result.output
-    assert "Knowledge" not in result.output
     assert "Skills" not in result.output
 
 
-@pytest.mark.skip(
-    reason="knowledge field removed from manifest; list command knowledge output deferred"
-)
 def test_list_project_shows_artifact_paths(synced_project):
     """abc list shows actual relative file paths under each section."""
     project, warehouse, runner = synced_project
@@ -294,7 +276,7 @@ def test_list_project_shows_artifact_paths(synced_project):
     result = runner.invoke(main, ["list"])
 
     assert result.exit_code == 0
-    assert "knowledge/python/standards.md" in result.output
+    assert "contexts/python/standards.md" in result.output
     assert "skills/code-review/SKILL.md" in result.output
     assert "contexts/AGENTS.md" in result.output
 
@@ -331,9 +313,6 @@ def test_integration_warehouse_list_skills_filter(connected_project):
     assert "code-review" in result.output
 
 
-@pytest.mark.skip(
-    reason="knowledge sync rewritten in chunk C / phase 8 of auto-pull-artifact-dependencies"
-)
 @pytest.mark.integration
 def test_integration_list_after_sync(synced_project):
     """Integration: abc list shows all synced artifacts after abc sync."""
@@ -342,7 +321,7 @@ def test_integration_list_after_sync(synced_project):
     result = runner.invoke(main, ["list"])
 
     assert result.exit_code == 0
-    assert "knowledge/python/standards.md" in result.output
+    assert "contexts/python/standards.md" in result.output
     assert "skills/code-review/SKILL.md" in result.output
     assert "contexts/AGENTS.md" in result.output
 
@@ -370,7 +349,6 @@ def test_warehouse_list_agents_section(tmp_path, monkeypatch):
     )
     (wh / "docs").mkdir()
     (wh / "contexts").mkdir()
-    (wh / "knowledge").mkdir()
     (wh / "skills").mkdir()
 
     connect = runner.invoke(main, ["warehouse", "connect", "--path", str(wh)])
@@ -399,7 +377,6 @@ def test_warehouse_list_filter_agents(tmp_path, monkeypatch):
     )
     (wh / "docs").mkdir()
     (wh / "contexts").mkdir()
-    (wh / "knowledge").mkdir()
     (wh / "skills").mkdir()
 
     connect = runner.invoke(main, ["warehouse", "connect", "--path", str(wh)])
@@ -426,7 +403,6 @@ def test_warehouse_list_agents_empty(tmp_path, monkeypatch):
     (wh / "agents").mkdir()
     (wh / "docs").mkdir()
     (wh / "contexts").mkdir()
-    (wh / "knowledge").mkdir()
     (wh / "skills").mkdir()
 
     connect = runner.invoke(main, ["warehouse", "connect", "--path", str(wh)])

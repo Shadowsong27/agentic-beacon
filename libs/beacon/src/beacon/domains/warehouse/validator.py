@@ -9,14 +9,13 @@ class WarehouseValidator:
     """Validates warehouse directory structure.
 
     A valid warehouse must contain:
-    - Required directories: contexts/, knowledge/, skills/, docs/
+    - Required directories: agents/, contexts/, skills/, docs/
     - Required file: README.md
     """
 
     REQUIRED_DIRECTORIES = [
         "agents",
         "contexts",
-        "knowledge",
         "skills",
         "docs",
     ]

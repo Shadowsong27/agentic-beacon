@@ -47,7 +47,7 @@ def connected_project(tmp_path, warehouse_with_agents, monkeypatch):
         f'[warehouse]\nlocal_path = "{warehouse_with_agents}"\n'
     )
     (beacon_dir / "beacon.yaml").write_text(
-        "artifacts:\n  knowledge: []\n  skills: []\n  contexts: []\n"
+        "artifacts:\n\n  skills: []\n  contexts: []\n"
     )
     monkeypatch.chdir(project)
     return project, warehouse_with_agents
@@ -139,7 +139,7 @@ def test_agents_sync_no_agents_dir_is_noop(tmp_path, monkeypatch, isolated_home)
     beacon_dir.mkdir()
     (beacon_dir / "config.toml").write_text(f'[warehouse]\nlocal_path = "{wh}"\n')
     (beacon_dir / "beacon.yaml").write_text(
-        "artifacts:\n  knowledge: []\n  skills: []\n  contexts: []\n"
+        "artifacts:\n\n  skills: []\n  contexts: []\n"
     )
     monkeypatch.chdir(project)
 
