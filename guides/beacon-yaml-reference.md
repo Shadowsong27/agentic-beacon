@@ -33,36 +33,7 @@ ignore:
 
 > **Note:** `artifacts.knowledge` was removed in a recent version. Knowledge is now auto-derived from markdown links inside adopted contexts and skills. See [Migration: Artifact Dependencies via Frontmatter](../docs/migrations/artifact-dependencies-frontmatter.md) for details.
 
-All three `artifacts` keys are required (can be empty lists). The file is validated on `abc sync` and `abc setup`.
-
----
-
-## `artifacts.knowledge`
-
-Knowledge artifacts are markdown files — best practices, standards, framework guides, team decisions. They inform the agent's approach when answering questions or writing code.
-
-```yaml
-artifacts:
-  knowledge:
-    # Exact file path (relative to warehouse root)
-    - knowledge/decisions/coding-standards.md
-
-    # Directory wildcard — all files one level deep
-    - knowledge/testing/*.md
-
-    # Recursive wildcard — all .md files under a subtree
-    - knowledge/python/**/*.md
-
-    # Any path your warehouse uses
-    - knowledge/global/**/*.md
-```
-
-**Path rules:**
-- Paths are relative to the warehouse root
-- Only files are matched (not directories)
-- Patterns with `*`, `**`, or `?` are expanded as globs
-- Unmatched patterns warn but do not cause errors
-- The inner structure of `knowledge/` is defined by your warehouse — there are no required subdirectories
+All `artifacts` keys are required (can be empty lists). The file is validated on `abc sync` and `abc setup`.
 
 ---
 
@@ -126,22 +97,8 @@ artifacts:
 # .agentic-beacon/beacon.yaml
 
 artifacts:
-  knowledge:
-    # Team-wide Python standards
-    - knowledge/languages/python/type-hints.md
-    - knowledge/languages/python/async-patterns.md
-    - knowledge/languages/python/error-handling.md
-
-    # Framework-specific
-    - knowledge/languages/python/fastapi/**/*.md
-    - knowledge/languages/python/pydantic/**/*.md
-
-    # Testing
-    - knowledge/languages/python/pytest/**/*.md
-    - knowledge/best-practices/tdd-workflow.md
-
-    # Infrastructure
-    - knowledge/infrastructure/docker-python.md
+  agents:
+    - agents/python-reviewer.md
 
   skills:
     - skills/code-review/
@@ -152,19 +109,21 @@ artifacts:
     - contexts/teams/backend/AGENTS.md
 ```
 
+Knowledge files are pulled in automatically based on markdown links inside the adopted contexts and skills above. There is no `artifacts.knowledge` key.
+
 ---
 
 ## Minimal Example
 
 ```yaml
 artifacts:
-  knowledge: []
+  agents: []
   skills: []
   contexts:
     - contexts/global.md
 ```
 
-An empty `knowledge` or `skills` list is valid — those artifact types simply won't be synced.
+Empty `agents`, `skills`, or `contexts` lists are valid — those artifact types simply won't be synced.
 
 ---
 
@@ -188,7 +147,7 @@ An empty `knowledge` or `skills` list is valid — those artifact types simply w
 - The file does not exist → run `abc setup`
 - The YAML is malformed (syntax error)
 - The `artifacts` key is missing
-- Any of `knowledge`, `skills`, or `contexts` is not a list
+- Any of `agents`, `skills`, or `contexts` is not a list
 
 A warning (not an error) is shown for:
 - Patterns that match no files in the warehouse
