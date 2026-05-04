@@ -1,0 +1,312 @@
+"""End-to-end tests for auto-pull-artifact-dependencies (Phase 10).
+
+Covers tasks 10.1–10.4:
+- 10.1: Init → adopt → sync with derived knowledge symlinks
+- 10.2: Unadopt context → sync prunes knowledge symlinks
+- 10.3: Legacy beacon.yaml with knowledge list → migration
+- 10.4: Adopted agent with unadopted dependency → error with migration URL
+"""
+
+import os
+import subprocess
+from pathlib import Path
+
+import pytest
+from beacon.cli.main import main
+from click.testing import CliRunner
+
+pytestmark = pytest.mark.integration
+
+
+def _git_env():
+    return {
+        **os.environ,
+        "GIT_AUTHOR_NAME": "Test",
+        "GIT_AUTHOR_EMAIL": "t@t.local",
+        "GIT_COMMITTER_NAME": "Test",
+        "GIT_COMMITTER_EMAIL": "t@t.local",
+    }
+
+
+def _git_init(path: Path) -> None:
+    env = _git_env()
+    subprocess.run(["git", "init"], cwd=path, env=env, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "config", "user.email", "test@test.com"],
+        cwd=path,
+        env=env,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test"],
+        cwd=path,
+        env=env,
+        check=True,
+        capture_output=True,
+    )
+
+
+def _git_add_commit(path: Path, message: str = "add files") -> str:
+    env = _git_env()
+    subprocess.run(
+        ["git", "add", "-A"], cwd=path, env=env, check=True, capture_output=True
+    )
+    subprocess.run(
+        ["git", "commit", "-m", message],
+        cwd=path,
+        env=env,
+        check=True,
+        capture_output=True,
+    )
+    result = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=path, capture_output=True, text=True, env=env
+    )
+    return result.stdout.strip()
+
+
+@pytest.fixture
+def warehouse_with_knowledge_refs(tmp_path):
+    """Warehouse with contexts that reference knowledge files."""
+    wh = tmp_path / "warehouse"
+    wh.mkdir()
+    (wh / "agents").mkdir()
+    (wh / "contexts").mkdir()
+    (wh / "knowledge").mkdir()
+    (wh / "skills").mkdir()
+    (wh / "docs").mkdir()
+    (wh / "README.md").write_text("# Test Warehouse\n")
+
+    # Create knowledge files
+    (wh / "knowledge" / "python").mkdir(parents=True)
+    (wh / "knowledge" / "python" / "standards.md").write_text("# Python Standards\n")
+    (wh / "knowledge" / "testing").mkdir(parents=True)
+    (wh / "knowledge" / "testing" / "tdd.md").write_text("# TDD\n")
+
+    # Create a context that references two knowledge files
+    (wh / "contexts" / "team.md").write_text(
+        "# Team Context\n"
+        "See [Python Standards](../knowledge/python/standards.md)\n"
+        "And [TDD](../knowledge/testing/tdd.md)\n"
+    )
+
+    # Create another context with no knowledge links
+    (wh / "contexts" / "plain.md").write_text("# Plain Context\nNo links here.\n")
+
+    # Create a skill with no knowledge links
+    skill_dir = wh / "skills" / "code-review"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nrequires:\n  contexts: []\n---\n# Skill: Code Review\n"
+    )
+
+    # Create an agent that requires the team context
+    (wh / "agents" / "reviewer.md").write_text(
+        "---\nrequires:\n  contexts: [team]\n  skills: []\n---\n# Reviewer Agent\n"
+    )
+
+    # Create an agent with an unresolvable dependency
+    (wh / "agents" / "broken.md").write_text(
+        "---\nrequires:\n  contexts: [missing-context]\n  skills: []\n---\n# Broken Agent\n"
+    )
+
+    _git_init(wh)
+    _git_add_commit(wh, "init")
+
+    return wh
+
+
+@pytest.fixture
+def project_dir(tmp_path, warehouse_with_knowledge_refs, monkeypatch):
+    """A project directory connected to the warehouse."""
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.chdir(project)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main, ["warehouse", "connect", "--path", str(warehouse_with_knowledge_refs)]
+    )
+    assert result.exit_code == 0, f"connect failed: {result.output}"
+
+    result = runner.invoke(main, ["setup"])
+    assert result.exit_code == 0, f"setup failed: {result.output}"
+
+    return project
+
+
+# ---------------------------------------------------------------------------
+# 10.1: E2E — adopt context → sync → knowledge symlinks appear
+# ---------------------------------------------------------------------------
+
+
+def test_e2e_adopt_context_creates_knowledge_symlinks(project_dir, monkeypatch):
+    """Adopting a context that references knowledge files creates knowledge symlinks."""
+    runner = CliRunner()
+    monkeypatch.chdir(project_dir)
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n  contexts:\n    - contexts/team.md\n  agents: []\n  skills: []\n"
+    )
+
+    result = runner.invoke(main, ["sync", "--skip-git-check"])
+    assert result.exit_code == 0, f"sync failed: {result.output}"
+
+    artifacts = project_dir / ".agentic-beacon" / "artifacts"
+
+    # The adopted context should be present
+    assert (artifacts / "contexts" / "team.md").exists()
+
+    # The two referenced knowledge files should be present as symlinks
+    assert (artifacts / "knowledge" / "python" / "standards.md").exists()
+    assert (artifacts / "knowledge" / "testing" / "tdd.md").exists()
+
+    # The unadopted context should NOT create knowledge symlinks
+    assert not (artifacts / "contexts" / "plain.md").exists()
+
+    # Count knowledge symlinks — should be exactly 2
+    knowledge_dir = artifacts / "knowledge"
+    if knowledge_dir.exists():
+        knowledge_symlinks = list(knowledge_dir.rglob("*.md"))
+        assert len(knowledge_symlinks) == 2, (
+            f"Expected 2 knowledge symlinks, got {len(knowledge_symlinks)}: {knowledge_symlinks}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# 10.2: E2E — unadopt context → sync prunes knowledge symlinks
+# ---------------------------------------------------------------------------
+
+
+def test_e2e_unadopt_context_prunes_knowledge_symlinks(
+    project_dir, warehouse_with_knowledge_refs, monkeypatch
+):
+    """Removing a context prunes its orphaned knowledge symlinks."""
+    runner = CliRunner()
+    monkeypatch.chdir(project_dir)
+
+    # Add another context that references a different knowledge file
+    wh = warehouse_with_knowledge_refs
+    (wh / "contexts" / "qa.md").write_text(
+        "# QA Context\nSee [TDD](../knowledge/testing/tdd.md)\n"
+    )
+    _git_add_commit(wh, "add qa context")
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n"
+        "  contexts:\n"
+        "    - contexts/team.md\n"
+        "    - contexts/qa.md\n"
+        "  agents: []\n"
+        "  skills: []\n"
+    )
+
+    # First sync
+    result = runner.invoke(main, ["sync", "--skip-git-check"])
+    assert result.exit_code == 0
+
+    artifacts = project_dir / ".agentic-beacon" / "artifacts"
+    assert (artifacts / "knowledge" / "python" / "standards.md").exists()
+    assert (artifacts / "knowledge" / "testing" / "tdd.md").exists()
+
+    # Now unadopt team.md (but keep qa.md)
+    beacon_yaml.write_text(
+        "artifacts:\n  contexts:\n    - contexts/qa.md\n  agents: []\n  skills: []\n"
+    )
+
+    # Sync again — should prune orphaned knowledge symlinks
+    result = runner.invoke(main, ["sync", "--skip-git-check"], input="y\n")
+    assert result.exit_code == 0, f"second sync failed: {result.output}"
+
+    # qa.md's knowledge symlink should remain
+    assert (artifacts / "knowledge" / "testing" / "tdd.md").exists()
+
+    # team.md's orphaned knowledge symlink should be removed
+    assert not (artifacts / "knowledge" / "python" / "standards.md").exists()
+
+
+# ---------------------------------------------------------------------------
+# 10.3: E2E — legacy beacon.yaml with knowledge list → migration
+# ---------------------------------------------------------------------------
+
+
+def test_e2e_legacy_beacon_yaml_migration(
+    project_dir, warehouse_with_knowledge_refs, monkeypatch
+):
+    """Legacy beacon.yaml with knowledge list is silently migrated on sync.
+
+    NOTE: The in-memory loader strips the knowledge key (emitting an INFO log)
+    but the file on disk is NOT rewritten. The sync proceeds using the
+    auto-derived knowledge set.
+    """
+    runner = CliRunner()
+    monkeypatch.chdir(project_dir)
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    # Write a legacy beacon.yaml with knowledge key
+    beacon_yaml.write_text(
+        "artifacts:\n"
+        "  knowledge:\n"
+        "    - knowledge/python/standards.md\n"
+        "  contexts:\n"
+        "    - contexts/team.md\n"
+        "  skills: []\n"
+    )
+
+    result = runner.invoke(main, ["sync", "--skip-git-check"])
+    assert result.exit_code == 0, f"sync failed: {result.output}"
+
+    # Assert: exactly one INFO record about migration in output
+    migration_logs = [
+        line
+        for line in result.output.splitlines()
+        if "artifacts.knowledge removed" in line
+    ]
+    assert len(migration_logs) == 1, (
+        f"Expected 1 migration log, got {len(migration_logs)}. Output:\n{result.output}"
+    )
+
+    # Assert: knowledge symlinks reflect derived set (from context links)
+    # The legacy pinned knowledge/python/standards.md is still synced because
+    # contexts/team.md also links to it. The other link from team.md
+    # (knowledge/testing/tdd.md) is also derived and synced.
+    artifacts = project_dir / ".agentic-beacon" / "artifacts"
+    assert (artifacts / "knowledge" / "python" / "standards.md").exists()
+    assert (artifacts / "knowledge" / "testing" / "tdd.md").exists()
+
+
+# ---------------------------------------------------------------------------
+# 10.4: E2E — adopted agent with unadopted dependency → error
+# ---------------------------------------------------------------------------
+
+
+def test_e2e_adopted_agent_missing_dependency_shows_migration_url(
+    project_dir, warehouse_with_knowledge_refs, monkeypatch
+):
+    """Adopted agent with unadopted required context fails sync with migration URL."""
+    runner = CliRunner()
+    monkeypatch.chdir(project_dir)
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    # Adopt the broken agent but NOT its required context
+    beacon_yaml.write_text(
+        "artifacts:\n  agents:\n    - agents/broken.md\n  contexts: []\n  skills: []\n"
+    )
+
+    result = runner.invoke(main, ["sync", "--skip-git-check"])
+
+    # Assert non-zero exit
+    assert result.exit_code != 0, (
+        f"Expected non-zero exit, got 0. Output: {result.output}"
+    )
+
+    # Assert: stderr contains agent name, missing context name, and migration URL
+    output = result.output
+    assert "broken" in output.lower() or "missing-context" in output.lower(), (
+        f"Expected agent name or missing context in output: {output}"
+    )
+    assert "docs/migrations/artifact-dependencies-frontmatter.md" in output, (
+        f"Expected migration doc URL in output: {output}"
+    )

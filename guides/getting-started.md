@@ -15,13 +15,15 @@ Think of it like npm for agentic artifacts:
 | `node_modules/` | **`.agentic-beacon/artifacts/`** — local downloaded snapshot |
 | `npm install` | **`abc sync`** — fetch and update artifacts |
 
-## The Three Artifact Types
+## The Four Artifact Types
 
-**Knowledge** — Markdown files containing standards, decisions, best practices, and guides. Agents read these to inform how they work.
+**Contexts** — Boot instruction files loaded at agent session start. These carry the rules and conventions that apply to every interaction.
 
 **Skills** — Reusable workflows. A `SKILL.md` tells the agent how to perform a repeatable task (code review, test generation, etc.).
 
-**Contexts** — Boot instruction files loaded at agent session start. These carry the rules and conventions that apply to every interaction.
+**Knowledge** — Markdown files containing standards, decisions, best practices, and guides. Knowledge is **auto-derived** from markdown links inside the contexts and skills you adopt — you do not select knowledge manually.
+
+**Agents** — Sub-agent definitions installed into global tool directories (`~/.claude/agents/`, `~/.config/opencode/agents/`) and available across every project.
 
 ---
 
@@ -172,16 +174,14 @@ Edit `.agentic-beacon/beacon.yaml`:
 
 ```yaml
 artifacts:
-  knowledge:
-    - knowledge/decisions/coding-standards.md
-    - knowledge/testing/**/*.md
-
   skills:
     - skills/code-review/
 
   contexts:
     - contexts/global.md
 ```
+
+> **Note:** Knowledge files are no longer declared in `beacon.yaml`. They are auto-derived from markdown links inside your adopted contexts and skills. See [Migration: Artifact Dependencies via Frontmatter](../docs/migrations/artifact-dependencies-frontmatter.md) for details.
 
 Paths are relative to the warehouse root. Glob patterns are supported. See [beacon.yaml Reference](./beacon-yaml-reference.md) for the full schema.
 
@@ -196,7 +196,7 @@ Artifacts are symlinked into `.agentic-beacon/artifacts/` and wired into your ag
 `abc sync` does the full job in one step:
 - **Contexts** — appended to `opencode.json` instructions or `CLAUDE.md` (whichever exists)
 - **Skills** — installed into `.opencode/skills/` + `.opencode/command/` (or `.claude/skills/`)
-- **Knowledge** — symlinked to artifacts, no further wiring needed
+- **Knowledge** — auto-derived from markdown links inside adopted contexts and skills, then symlinked to artifacts
 
 > **First run on a new project?** If you don't have an `opencode.json` or `CLAUDE.md` yet, create one first — even an empty `opencode.json` (`{}`) is enough for sync to wire contexts into it automatically.
 
@@ -252,7 +252,7 @@ Run `abc adopt` to open an interactive selector and add them to your `beacon.yam
 abc adopt
 ```
 
-This opens a TUI where you can browse new artifacts grouped by type (contexts, skills, knowledge), check the ones you want, and press **Enter** to confirm. Selected artifacts are added to `beacon.yaml` and immediately synced and wired into your agent config.
+This opens a TUI where you can browse new artifacts grouped by type (contexts, skills, agents), check the ones you want, and press **Enter** to confirm. Selected artifacts are added to `beacon.yaml` and immediately synced and wired into your agent config. Knowledge files are pulled in automatically based on links inside the contexts and skills you adopt.
 
 **Flags:**
 

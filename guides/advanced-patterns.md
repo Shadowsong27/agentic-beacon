@@ -12,29 +12,14 @@ Patterns in `beacon.yaml` are matched against the warehouse root. Only files (no
 
 | Pattern | Matches |
 |---------|---------|
-| `knowledge/python/type-hints.md` | Exact file |
-| `knowledge/python/*.md` | All `.md` files in one directory |
-| `knowledge/python/**/*.md` | All `.md` files recursively under `python/` |
 | `skills/code-review/**/*` | All files under a skill directory |
 | `contexts/teams/*/AGENTS.md` | One `AGENTS.md` per team subdirectory |
+| `agents/*.md` | All agent files in one directory |
 
 ### Practical Examples
 
 ```yaml
 artifacts:
-  knowledge:
-    # Exact file - very specific, won't pick up new files
-    - knowledge/global/decisions/coding-standards.md
-
-    # Directory wildcard - all files one level deep
-    - knowledge/languages/python/*.md
-
-    # Recursive wildcard - all markdown under python/
-    - knowledge/languages/python/**/*.md
-
-    # Multi-level wildcard - all team contexts
-    - contexts/teams/*/AGENTS.md
-
   skills:
     # Skills are typically directories; use /**/* to get all files
     - skills/code-review/**/*
@@ -43,6 +28,13 @@ artifacts:
   contexts:
     # Global context file
     - contexts/global.md
+
+    # Multi-level wildcard - all team contexts
+    - contexts/teams/*/AGENTS.md
+
+  agents:
+    # All agents in the warehouse
+    - agents/*.md
 ```
 
 ### Pattern Doesn't Match?
@@ -74,9 +66,9 @@ Prints the intended symlink operations (create / update / remove) without touchi
 ```
 Dry run — no filesystem changes will be made.
 
-would create  .agentic-beacon/artifacts/knowledge/python/type-hints.md  → /Users/me/team-warehouse/knowledge/python/type-hints.md
-would create  .agentic-beacon/artifacts/skills/code-review/SKILL.md      → /Users/me/team-warehouse/skills/code-review/SKILL.md
-would remove  .agentic-beacon/artifacts/knowledge/python/old-removed.md  (no longer in beacon.yaml)
+would create  .agentic-beacon/artifacts/contexts/global.md             → /Users/me/team-warehouse/contexts/global.md
+would create  .agentic-beacon/artifacts/skills/code-review/SKILL.md    → /Users/me/team-warehouse/skills/code-review/SKILL.md
+would remove  .agentic-beacon/artifacts/contexts/old-removed.md        (no longer in beacon.yaml)
 ```
 
 Use this to confirm a `beacon.yaml` edit does what you expect before applying it.

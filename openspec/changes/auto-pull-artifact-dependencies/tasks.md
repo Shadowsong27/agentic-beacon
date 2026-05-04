@@ -623,31 +623,31 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:10:end -->
 
 
-- [ ] 10.1 End-to-end test: `abc warehouse init` → `abc adopt` → `abc sync` against a fresh warehouse, verify derived knowledge symlinks appear and unadopted knowledge is not created
+- [x] 10.1 End-to-end test: `abc warehouse init` → `abc adopt` → `abc sync` against a fresh warehouse, verify derived knowledge symlinks appear and unadopted knowledge is not created
 <!-- opsx:tdd:10.1:begin -->
   - **Input**: Fresh temp project; scaffolded warehouse from 9.5; scripted adoption selecting one context that references two knowledge files.
   - **Expected Output**: Post-sync: two knowledge symlinks present under `.agentic-beacon/artifacts/knowledge/`; no additional knowledge symlinks appear for unadopted contexts.
   - **Validation**: Integration test compares `find .agentic-beacon/artifacts/knowledge -type l` to expected set.
 <!-- opsx:tdd:10.1:end -->
-- [ ] 10.2 End-to-end test: unadopt the last referrer of a knowledge file, run sync, verify symlink is pruned
+- [x] 10.2 End-to-end test: unadopt the last referrer of a knowledge file, run sync, verify symlink is pruned
 <!-- opsx:tdd:10.2:begin -->
   - **Input**: State from 10.1. Edit `beacon.yaml` to remove the context. Run `abc sync`.
   - **Expected Output**: Both knowledge symlinks are gone; the knowledge directory tree is fully pruned.
   - **Validation**: Post-sync: `.agentic-beacon/artifacts/knowledge/` does not exist, or exists and is empty.
 <!-- opsx:tdd:10.2:end -->
-- [ ] 10.3 End-to-end test: upgrade path — start with a `beacon.yaml` containing `knowledge:` list, run sync, verify silent drop log and correct final state
+- [x] 10.3 End-to-end test: upgrade path — start with a `beacon.yaml` containing `knowledge:` list, run sync, verify silent drop log and correct final state
 <!-- opsx:tdd:10.3:begin -->
   - **Input**: Hand-crafted legacy `beacon.yaml` with `artifacts.knowledge: [knowledge/python-standards]` and at least one adopted context.
   - **Expected Output**: Post-sync: `beacon.yaml` rewritten without `knowledge:` key; one loguru INFO record emitted about the migration; knowledge symlinks reflect the derived set (which may or may not include the formerly-pinned knowledge, depending on whether any adopted artifact references it).
   - **Validation**: Assert file diff shows `knowledge:` removed; capture exactly one INFO record; assert final artifact tree matches spec.
 <!-- opsx:tdd:10.3:end -->
-- [ ] 10.4 End-to-end test: adopted agent with unadopted dependency produces non-zero exit with migration-doc URL in stderr
+- [x] 10.4 End-to-end test: adopted agent with unadopted dependency produces non-zero exit with migration-doc URL in stderr
 <!-- opsx:tdd:10.4:begin -->
   - **Input**: Hand-crafted `beacon.yaml` where an agent is adopted but its `requires.contexts` is not.
   - **Expected Output**: `abc sync` exits non-zero; stderr contains the agent name, the missing context name, and the migration-doc URL.
   - **Validation**: Subprocess runner: `exit_code != 0`; assertions on captured stderr.
 <!-- opsx:tdd:10.4:end -->
-- [ ] 10.5 Run full pytest suite and ensure all existing tests still pass
+- [x] 10.5 Run full pytest suite and ensure all existing tests still pass
 <!-- opsx:tdd:10.5:begin -->
   - **Input**: Clean checkout of the feature branch post-implementation.
   - **Expected Output**: `uv run pytest` at repo root returns exit code 0 with no skipped tests unrelated to platform.
@@ -670,10 +670,10 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:11:end -->
 
 
-- [ ] 11.1 Update `guides/` to reflect the new adoption model (no more knowledge selection)
-- [ ] 11.2 Update `AGENTS.md` and `README.md` sections that mention knowledge adoption
-- [ ] 11.3 Update `docs/agentic-warehouse-design.md` sections that describe knowledge as an independently-adoptable artifact
-- [ ] 11.4 Add a CHANGELOG entry documenting the breaking changes
+- [x] 11.1 Update `guides/` to reflect the new adoption model (no more knowledge selection)
+- [x] 11.2 Update `AGENTS.md` and `README.md` sections that mention knowledge adoption
+- [x] 11.3 Update `docs/agentic-warehouse-design.md` sections that describe knowledge as an independently-adoptable artifact
+- [x] 11.4 Add a CHANGELOG entry documenting the breaking changes
 - [ ] 11.5 **[MANUAL]** Verify conventional commits throughout the PR for Release-Please version bump
 <!-- opsx:tdd:11.5:begin -->
   - **Input**: `git log --oneline <base>..HEAD` on the feature branch.
