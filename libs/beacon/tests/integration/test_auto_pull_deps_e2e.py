@@ -147,7 +147,7 @@ def test_e2e_adopt_context_creates_knowledge_symlinks(project_dir, monkeypatch):
 
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
     beacon_yaml.write_text(
-        "artifacts:\n  contexts:\n    - contexts/team.md\n  agents: []\n  skills: []\n"
+        "artifacts:\n  contexts:\n    - contexts/team.md\n  skills: []\n"
     )
 
     result = runner.invoke(main, ["sync", "--skip-git-check"])
@@ -199,7 +199,7 @@ def test_e2e_unadopt_context_prunes_knowledge_symlinks(
         "  contexts:\n"
         "    - contexts/team.md\n"
         "    - contexts/qa.md\n"
-        "  agents: []\n"
+        ""
         "  skills: []\n"
     )
 
@@ -213,7 +213,7 @@ def test_e2e_unadopt_context_prunes_knowledge_symlinks(
 
     # Now unadopt team.md (but keep qa.md)
     beacon_yaml.write_text(
-        "artifacts:\n  contexts:\n    - contexts/qa.md\n  agents: []\n  skills: []\n"
+        "artifacts:\n  contexts:\n    - contexts/qa.md\n  skills: []\n"
     )
 
     # Sync again — should prune orphaned knowledge symlinks
@@ -292,34 +292,104 @@ def test_e2e_legacy_beacon_yaml_migration(
 
 
 # ---------------------------------------------------------------------------
-# 10.4: E2E — adopted agent with unadopted dependency → error
+# 10.4: E2E — sync does not install agents globally (PER-109 deferred)
 # ---------------------------------------------------------------------------
 
 
-def test_e2e_adopted_agent_missing_dependency_shows_migration_url(
-    project_dir, warehouse_with_knowledge_refs, monkeypatch
-):
-    """Adopted agent with unadopted required context fails sync with migration URL."""
+def test_e2e_sync_does_not_install_agents(project_dir, monkeypatch, isolated_home):
+    """Sync must not call sync_agents_from_warehouse or install agents globally."""
     runner = CliRunner()
     monkeypatch.chdir(project_dir)
 
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
-    # Adopt the broken agent but NOT its required context
     beacon_yaml.write_text(
-        "artifacts:\n  agents:\n    - agents/broken.md\n  contexts: []\n  skills: []\n"
+        "artifacts:\n  contexts:\n    - contexts/team.md\n  skills: []\n"
+    )
+
+    result = runner.invoke(main, ["sync", "--skip-git-check"])
+    assert result.exit_code == 0, f"sync failed: {result.output}"
+
+    # No agent should appear in global dirs
+    for d in [
+        isolated_home / ".config" / "opencode" / "agents",
+        isolated_home / ".claude" / "agents",
+    ]:
+        if d.exists():
+            assert not any(
+                f.suffix == ".md" and f.name != "README.md" for f in d.rglob("*")
+            ), f"Unexpected agent files in {d}"
+
+
+# ---------------------------------------------------------------------------
+# 10.4b: E2E — skill-required context auto-pulled transitively
+# ---------------------------------------------------------------------------
+
+
+def test_e2e_skill_context_auto_pulled(
+    project_dir, warehouse_with_knowledge_refs, monkeypatch
+):
+    """Skill requiring a context that is not in beacon.yaml is auto-pulled."""
+    wh = warehouse_with_knowledge_refs
+    runner = CliRunner()
+    monkeypatch.chdir(project_dir)
+
+    # Add a skill that requires a context
+    skill_dir = wh / "skills" / "code-review"
+    skill_dir.mkdir(parents=True, exist_ok=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nrequires:\n  contexts: [team]\n---\n# Skill\n"
+    )
+    _git_add_commit(wh, "add skill with dep")
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n  contexts: []\n  skills:\n    - skills/code-review/\n"
+    )
+
+    result = runner.invoke(main, ["sync", "--skip-git-check"])
+    assert result.exit_code == 0, f"sync failed: {result.output}"
+
+    artifacts = project_dir / ".agentic-beacon" / "artifacts"
+    # The transitive context should have been synced
+    assert (artifacts / "contexts" / "team.md").exists()
+    assert (artifacts / "skills" / "code-review" / "SKILL.md").exists()
+
+
+# ---------------------------------------------------------------------------
+# 10.4c: E2E — missing skill-required context fails with migration URL
+# ---------------------------------------------------------------------------
+
+
+def test_e2e_missing_skill_context_shows_migration_url(
+    project_dir, warehouse_with_knowledge_refs, monkeypatch
+):
+    """Skill requiring a non-existent context fails sync with migration URL."""
+    wh = warehouse_with_knowledge_refs
+    runner = CliRunner()
+    monkeypatch.chdir(project_dir)
+
+    # Add a skill that requires a missing context
+    skill_dir = wh / "skills" / "broken-skill"
+    skill_dir.mkdir(parents=True, exist_ok=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nrequires:\n  contexts: [missing-context]\n---\n# Broken\n"
+    )
+    _git_add_commit(wh, "add broken skill")
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n  contexts: []\n  skills:\n    - skills/broken-skill/\n"
     )
 
     result = runner.invoke(main, ["sync", "--skip-git-check"])
 
-    # Assert non-zero exit
     assert result.exit_code != 0, (
         f"Expected non-zero exit, got 0. Output: {result.output}"
     )
 
-    # Assert: stderr contains agent name, missing context name, and migration URL
     output = result.output
-    assert "broken" in output.lower() or "missing-context" in output.lower(), (
-        f"Expected agent name or missing context in output: {output}"
+    assert "missing-context" in output.lower(), (
+        f"Expected missing context name in output: {output}"
     )
     assert "docs/migrations/artifact-dependencies-frontmatter.md" in output, (
         f"Expected migration doc URL in output: {output}"
@@ -338,7 +408,7 @@ def test_e2e_full_unadoption_prunes_all_knowledge_symlinks(project_dir, monkeypa
 
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
     beacon_yaml.write_text(
-        "artifacts:\n  contexts:\n    - contexts/team.md\n  agents: []\n  skills: []\n"
+        "artifacts:\n  contexts:\n    - contexts/team.md\n  skills: []\n"
     )
 
     # First sync
@@ -351,7 +421,7 @@ def test_e2e_full_unadoption_prunes_all_knowledge_symlinks(project_dir, monkeypa
     assert (artifacts / "knowledge" / "testing" / "tdd.md").exists()
 
     # Now unadopt everything
-    beacon_yaml.write_text("artifacts:\n  contexts: []\n  agents: []\n  skills: []\n")
+    beacon_yaml.write_text("artifacts:\n  contexts: []\n  skills: []\n")
 
     # Sync again — should prune all orphaned symlinks
     result = runner.invoke(main, ["sync", "--skip-git-check"], input="y\n")

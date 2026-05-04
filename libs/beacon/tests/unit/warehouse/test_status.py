@@ -56,7 +56,7 @@ def status_project(tmp_path, status_warehouse, monkeypatch):
         "    - contexts/test.md\n"
         "    - contexts/other.md\n"
         "  skills: []\n"
-        "  agents: []\n"
+        "\n"
     )
 
     (status_warehouse / "contexts").mkdir()
@@ -162,7 +162,7 @@ class TestStatus:
             "    - contexts/other.md\n"
             f"    - {filename}\n"
             "  skills: []\n"
-            "  agents: []\n"
+            "\n"
         )
 
         result = status(project)

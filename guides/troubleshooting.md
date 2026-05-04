@@ -92,22 +92,18 @@ ls /path/to/warehouse/knowledge/
 1. **Pattern doesn't match:**
 ```yaml
 # Wrong - no files match
-knowledge:
   - languages/python/fastapi.md  # Doesn't exist
 
 # Right - check actual warehouse structure
-knowledge:
   - languages/python/fastapi/*.md  # Matches directory
 ```
 
 2. **Glob pattern too restrictive:**
 ```yaml
 # Restrictive
-knowledge:
   - languages/python/file.md  # Only one file
 
 # Broader
-knowledge:
   - languages/python/**/*.md  # All markdown recursively
 ```
 
@@ -316,11 +312,9 @@ cd ~/project-b && abc sync
 1. **Too many artifacts:**
 ```yaml
 # Too broad
-knowledge:
   - **/*.md  # Syncs entire warehouse
 
 # Better
-knowledge:
   - languages/python/**/*.md  # Only Python
 ```
 
@@ -350,7 +344,6 @@ du -sh .agentic-beacon/artifacts/
 ```yaml
 # Remove from beacon.yaml
 artifacts:
-  knowledge:
     # Remove this line if not needed
     # - large-dataset/**/*.md
 ```

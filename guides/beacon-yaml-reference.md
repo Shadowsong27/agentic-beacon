@@ -16,9 +16,6 @@ my-project/
 
 ```yaml
 artifacts:
-  agents:
-    - <pattern-or-path>
-
   skills:
     - skills/<name>/      # directory-level entry (canonical form)
 
@@ -32,6 +29,8 @@ ignore:
 ```
 
 > **Note:** `artifacts.knowledge` was removed in a recent version. Knowledge is now auto-derived from markdown links inside adopted contexts and skills. See [Migration: Artifact Dependencies via Frontmatter](../docs/migrations/artifact-dependencies-frontmatter.md) for details.
+
+> **Note:** Agents are machine-level global artifacts installed into `~/.config/opencode/agents/` and `~/.claude/agents/` via `abc install agents/<name>.md` or `abc adopt`. They are not tracked in `beacon.yaml`. Selective global agent installation is deferred to a future release (PER-109).
 
 All `artifacts` keys are required (can be empty lists). The file is validated on `abc sync` and `abc setup`.
 
@@ -97,9 +96,6 @@ artifacts:
 # .agentic-beacon/beacon.yaml
 
 artifacts:
-  agents:
-    - agents/python-reviewer.md
-
   skills:
     - skills/code-review/
     - skills/generate-tests/
@@ -117,13 +113,12 @@ Knowledge files are pulled in automatically based on markdown links inside the a
 
 ```yaml
 artifacts:
-  agents: []
   skills: []
   contexts:
     - contexts/global.md
 ```
 
-Empty `agents`, `skills`, or `contexts` lists are valid — those artifact types simply won't be synced.
+Empty `skills` or `contexts` lists are valid — those artifact types simply won't be synced.
 
 ---
 
@@ -147,7 +142,7 @@ Empty `agents`, `skills`, or `contexts` lists are valid — those artifact types
 - The file does not exist → run `abc setup`
 - The YAML is malformed (syntax error)
 - The `artifacts` key is missing
-- Any of `agents`, `skills`, or `contexts` is not a list
+- Any of `skills` or `contexts` is not a list
 
 A warning (not an error) is shown for:
 - Patterns that match no files in the warehouse

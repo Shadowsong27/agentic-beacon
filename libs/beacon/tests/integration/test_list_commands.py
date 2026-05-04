@@ -96,7 +96,7 @@ def synced_project(connected_project):
         "    - contexts/python/standards.md\n"
         "  skills:\n"
         "    - skills/code-review/\n"
-        "  agents: []\n"
+        "\n"
     )
 
     result = runner.invoke(main, ["sync"])

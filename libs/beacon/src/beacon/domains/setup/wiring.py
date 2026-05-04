@@ -18,13 +18,10 @@ def create_beacon_template(path: Path) -> None:
 # Run 'abc sync' after editing to download artifacts.
 #
 # Skills are tracked at the directory level: skills/code-review/
+# Agents are machine-level global artifacts — use 'abc install agents/<name>.md'
+# or 'abc adopt' to install them directly into your agent tool directories.
 
 artifacts:
-  agents: []
-    # Examples:
-    # - agents/python-reviewer.md
-    # - agents/security-auditor.md
-
   skills: []
     # Examples:
     # - skills/code-review/

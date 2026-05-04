@@ -27,7 +27,6 @@ Edit `.agentic-beacon/beacon.yaml` to declare which artifacts your Python projec
 # .agentic-beacon/beacon.yaml
 
 artifacts:
-  knowledge:
     # Pull specific files you know you need
     - knowledge/decisions/coding-standards.md
     - knowledge/decisions/testing-strategy.md
@@ -74,7 +73,6 @@ Not every Python project needs the same things. Pull only what's relevant.
 **A focused microservice:**
 ```yaml
 artifacts:
-  knowledge:
     - knowledge/decisions/coding-standards.md
     - knowledge/fastapi-patterns.md
     - knowledge/testing/pytest-guide.md
@@ -87,7 +85,6 @@ artifacts:
 **A data pipeline:**
 ```yaml
 artifacts:
-  knowledge:
     - knowledge/decisions/coding-standards.md
     - knowledge/data/pipeline-patterns.md
     - knowledge/data/testing-strategy.md
@@ -101,7 +98,6 @@ artifacts:
 **A minimal setup for a new project:**
 ```yaml
 artifacts:
-  knowledge:
     - knowledge/decisions/coding-standards.md
   skills: []
   contexts:

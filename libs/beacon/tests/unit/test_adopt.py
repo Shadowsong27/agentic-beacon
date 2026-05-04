@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 import pytest_asyncio  # noqa: F401 – ensures asyncio marks resolve
-from beacon.core.manifest.beacon import ArtifactsConfig, BeaconManifest
+from beacon.core.manifest.beacon import BeaconManifest
 from beacon.domains.adoption.apply import apply_adoption
 from beacon.domains.adoption.discovery import (
     count_unadopted_since,
@@ -37,10 +37,7 @@ def _make_beacon_settings(
     skills: list[str] | None = None,
 ) -> BeaconManifest:
     return BeaconManifest(
-        artifacts=ArtifactsConfig(
-            contexts=contexts or [],
-            skills=skills or [],
-        )
+        artifacts={"contexts": contexts or [], "skills": skills or []}
     )
 
 
@@ -367,9 +364,7 @@ class TestApplyAdoption:
     def test_adopt_one_context(self, tmp_path):
         """TC1: Adopt 1 context -> artifacts.contexts grows by 1, others unchanged."""
         beacon_yaml = tmp_path / "beacon.yaml"
-        beacon_yaml.write_text(
-            "artifacts:\n  contexts: []\n  skills: []\n  knowledge: []\n"
-        )
+        beacon_yaml.write_text("artifacts:\n  contexts: []\n  skills: []\n\n")
 
         selections = [
             AdoptCandidate(artifact_type="contexts", path="contexts/platform.md")
@@ -384,9 +379,7 @@ class TestApplyAdoption:
     def test_adopt_skill_with_trailing_slash(self, tmp_path):
         """TC2: Adopt 1 skill -> stored as skills/<name>/ with trailing slash."""
         beacon_yaml = tmp_path / "beacon.yaml"
-        beacon_yaml.write_text(
-            "artifacts:\n  contexts: []\n  skills: []\n  knowledge: []\n"
-        )
+        beacon_yaml.write_text("artifacts:\n  contexts: []\n  skills: []\n\n")
 
         selections = [AdoptCandidate(artifact_type="skills", path="skills/gen-tests/")]
         apply_adoption(beacon_yaml, selections)
@@ -397,9 +390,7 @@ class TestApplyAdoption:
     def test_adopt_skill_normalizes_path(self, tmp_path):
         """TC2b: Skill path without trailing slash gets slash added."""
         beacon_yaml = tmp_path / "beacon.yaml"
-        beacon_yaml.write_text(
-            "artifacts:\n  contexts: []\n  skills: []\n  knowledge: []\n"
-        )
+        beacon_yaml.write_text("artifacts:\n  contexts: []\n  skills: []\n\n")
 
         selections = [AdoptCandidate(artifact_type="skills", path="skills/my-skill")]
         apply_adoption(beacon_yaml, selections)
@@ -411,7 +402,7 @@ class TestApplyAdoption:
         """TC5: Adopt artifact already in beacon.yaml -> no duplicate added."""
         beacon_yaml = tmp_path / "beacon.yaml"
         beacon_yaml.write_text(
-            "artifacts:\n  contexts:\n    - contexts/existing.md\n  skills: []\n  knowledge: []\n"
+            "artifacts:\n  contexts:\n    - contexts/existing.md\n  skills: []\n\n"
         )
 
         selections = [
@@ -425,7 +416,9 @@ class TestApplyAdoption:
     def test_empty_selection_no_change(self, tmp_path):
         """TC6: Empty selection -> beacon.yaml unchanged."""
         beacon_yaml = tmp_path / "beacon.yaml"
-        original = "artifacts:\n  contexts:\n    - contexts/existing.md\n  skills: []\n  knowledge: []\n"
+        original = (
+            "artifacts:\n  contexts:\n    - contexts/existing.md\n  skills: []\n\n"
+        )
         beacon_yaml.write_text(original)
 
         apply_adoption(beacon_yaml, [])
@@ -437,7 +430,7 @@ class TestApplyAdoption:
         """Existing entries in beacon.yaml are not removed on adoption."""
         beacon_yaml = tmp_path / "beacon.yaml"
         beacon_yaml.write_text(
-            "artifacts:\n  contexts:\n    - contexts/old.md\n  skills: []\n  knowledge: []\n"
+            "artifacts:\n  contexts:\n    - contexts/old.md\n  skills: []\n\n"
         )
 
         selections = [AdoptCandidate(artifact_type="contexts", path="contexts/new.md")]
@@ -452,7 +445,7 @@ class TestApplyAdoption:
         beacon_yaml = tmp_path / "beacon.yaml"
         beacon_yaml.write_text(
             "artifacts:\n  contexts:\n    - contexts/a.md\n    - contexts/b.md\n"
-            "  skills:\n    - skills/tool/\n  knowledge: []\n"
+            "  skills:\n    - skills/tool/\n\n"
         )
 
         apply_adoption(beacon_yaml, [], unadoptions=["contexts/a.md", "skills/tool/"])
@@ -466,7 +459,7 @@ class TestApplyAdoption:
         """Unadoption normalises trailing slashes when matching."""
         beacon_yaml = tmp_path / "beacon.yaml"
         beacon_yaml.write_text(
-            "artifacts:\n  contexts: []\n  skills:\n    - skills/foo/\n  knowledge: []\n"
+            "artifacts:\n  contexts: []\n  skills:\n    - skills/foo/\n\n"
         )
 
         apply_adoption(beacon_yaml, [], unadoptions=["skills/foo"])  # no trailing slash
@@ -781,7 +774,7 @@ def _make_tree_app(candidates, updated_adopted=None):
     from textual.binding import Binding
     from textual.widgets import Footer, Header, Static, Tree
 
-    _ARTIFACT_ICONS = {"contexts": "📄", "skills": "🔧", "knowledge": "📚"}
+    _ARTIFACT_ICONS = {"contexts": "📄", "skills": "🔧", "agents": "🤖"}
 
     def _leaf_label(path: str, selected: bool) -> str:
         cb = "[bold cyan]\\[x][/bold cyan]" if selected else "[dim]\\[ ][/dim]"
@@ -809,7 +802,7 @@ def _make_tree_app(candidates, updated_adopted=None):
             by_type: dict[str, list] = {}
             for c in candidates:
                 by_type.setdefault(c.artifact_type, []).append(c)
-            for atype in ["contexts", "skills", "knowledge"]:
+            for atype in ["contexts", "skills", "agents"]:
                 tc = by_type.get(atype, [])
                 if not tc:
                     continue
@@ -951,7 +944,7 @@ class TestAdoptTreeTUI:
         candidates = [
             AdoptCandidate("contexts", "contexts/a.md", "Alpha"),
             AdoptCandidate("skills", "skills/tool/", "Tool"),
-            AdoptCandidate("knowledge", "knowledge/python", "Python"),
+            AdoptCandidate("agents", "agents/cr.md", "Code Reviewer"),
         ]
         app = _make_tree_app(candidates)
         async with app.run_test(headless=True) as pilot:
@@ -1054,9 +1047,7 @@ class TestAdoptDryRunIntegration:
         artifacts_dir.mkdir()
 
         beacon_yaml = beacon_dir / "beacon.yaml"
-        beacon_yaml.write_text(
-            "artifacts:\n  contexts: []\n  skills: []\n  knowledge: []\n"
-        )
+        beacon_yaml.write_text("artifacts:\n  contexts: []\n  skills: []\n\n")
 
         # Set up warehouse
         warehouse = _make_warehouse(tmp_path)
@@ -1096,9 +1087,7 @@ class TestAdoptDryRunIntegration:
         artifacts_dir = beacon_dir / "artifacts"
         artifacts_dir.mkdir()
         beacon_yaml = beacon_dir / "beacon.yaml"
-        beacon_yaml.write_text(
-            "artifacts:\n  contexts: []\n  skills: []\n  knowledge: []\n"
-        )
+        beacon_yaml.write_text("artifacts:\n  contexts: []\n  skills: []\n\n")
 
         warehouse = _make_warehouse(tmp_path)
         _git_init(warehouse)
@@ -1135,7 +1124,7 @@ class TestAdoptDryRunIntegration:
 
         beacon_yaml = beacon_dir / "beacon.yaml"
         beacon_yaml.write_text(
-            "artifacts:\n  contexts:\n    - contexts/team.md\n  skills: []\n  knowledge: []\n"
+            "artifacts:\n  contexts:\n    - contexts/team.md\n  skills: []\n\n"
         )
         (artifacts_dir / ".sync-state").write_text(sha + "\n")
         (beacon_dir / "config.toml").write_text(
@@ -1173,7 +1162,7 @@ class TestSyncNotification:
 
         beacon_yaml = beacon_dir / "beacon.yaml"
         beacon_yaml.write_text(
-            "artifacts:\n  contexts:\n    - contexts/existing.md\n  skills: []\n  knowledge: []\n"
+            "artifacts:\n  contexts:\n    - contexts/existing.md\n  skills: []\n\n"
         )
         (beacon_dir / "config.toml").write_text(
             f'[warehouse]\nlocal_path = "{warehouse}"\n'
@@ -1187,7 +1176,7 @@ class TestSyncNotification:
         (warehouse / "contexts" / "new.md").write_text("# New")
         _git_add_commit(warehouse, "add new")
         beacon_yaml.write_text(
-            "artifacts:\n  contexts:\n    - contexts/existing.md\n    - contexts/new.md\n  skills: []\n  knowledge: []\n"
+            "artifacts:\n  contexts:\n    - contexts/existing.md\n    - contexts/new.md\n  skills: []\n\n"
         )
 
         result = runner.invoke(
@@ -1215,7 +1204,7 @@ class TestSyncNotification:
 
         beacon_yaml = beacon_dir / "beacon.yaml"
         beacon_yaml.write_text(
-            "artifacts:\n  contexts:\n    - contexts/existing.md\n  skills: []\n  knowledge: []\n"
+            "artifacts:\n  contexts:\n    - contexts/existing.md\n  skills: []\n\n"
         )
         (beacon_dir / "config.toml").write_text(
             f'[warehouse]\nlocal_path = "{warehouse}"\n'

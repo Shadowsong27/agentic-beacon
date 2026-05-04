@@ -39,7 +39,7 @@ abc warehouse connect --path ~/agentic-beacon-starter-warehouse
 
 ```bash
 abc setup            # creates .agentic-beacon/beacon.yaml
-abc adopt            # select contexts, knowledge, and skills
+abc adopt            # select contexts, skills, and agents
 abc sync             # creates symlinks into the warehouse clone and wires your agent config
 ```
 
@@ -83,7 +83,7 @@ Under the symlink-based sync model, the warehouse clone is the single write entr
 
 ```
 1. abc sync                              — only needed when beacon.yaml changes or symlinks drift
-2. code with agent                       — agent uses the symlinked contexts, knowledge, and skills
+2. code with agent                       — agent uses the symlinked contexts and skills
 3. abc warehouse status                  — see what you've changed (scoped by beacon.yaml)
 4. abc warehouse contribute -m "…" --push — commit and push the edits in the warehouse
 ```

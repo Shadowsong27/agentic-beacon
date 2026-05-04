@@ -14,7 +14,6 @@ Patterns in `beacon.yaml` are matched against the warehouse root. Only files (no
 |---------|---------|
 | `skills/code-review/**/*` | All files under a skill directory |
 | `contexts/teams/*/AGENTS.md` | One `AGENTS.md` per team subdirectory |
-| `agents/*.md` | All agent files in one directory |
 
 ### Practical Examples
 
@@ -31,10 +30,6 @@ artifacts:
 
     # Multi-level wildcard - all team contexts
     - contexts/teams/*/AGENTS.md
-
-  agents:
-    # All agents in the warehouse
-    - agents/*.md
 ```
 
 ### Pattern Doesn't Match?

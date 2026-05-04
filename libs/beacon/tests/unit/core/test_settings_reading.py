@@ -54,7 +54,7 @@ class TestSettingsSelfReading:
         settings = BeaconManifest.from_yaml(str(beacon_file))
 
         assert isinstance(settings, BeaconManifest)
-        assert len(settings.artifacts.agents) > 0
+        assert len(settings.artifacts.skills) > 0
 
     def test_tc3_config_missing_raises_error(self, temp_dir):
         """TC3: config.toml missing → Pydantic raises validation error"""
@@ -131,7 +131,6 @@ class TestSettingsSelfReading:
         settings2 = BeaconManifest.from_yaml(str(beacon_file))
 
         # Should produce identical results
-        assert settings1.artifacts.agents == settings2.artifacts.agents
         assert settings1.artifacts.skills == settings2.artifacts.skills
         assert settings1.artifacts.contexts == settings2.artifacts.contexts
 
