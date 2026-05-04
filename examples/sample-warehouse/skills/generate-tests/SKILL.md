@@ -3,6 +3,8 @@ name: generate-tests
 description: Generate comprehensive unit and integration tests for a given function, module, or feature
 license: MIT
 compatibility: opencode, claude-code
+requires:
+  contexts: []
 ---
 
 # Skill: Generate Tests

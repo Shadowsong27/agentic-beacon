@@ -19,113 +19,6 @@ from click.testing import CliRunner
 # ========== Task 7.1: ABC Sync Command Implementation ==========
 
 
-@pytest.mark.skip(
-    reason="knowledge field removed from manifest; sync knowledge tests deferred"
-)
-def test_sync_with_valid_configuration(valid_warehouse, temp_dir, monkeypatch):
-    """TC1: Valid beacon.yaml → Sync creates artifacts directory with files."""
-    runner = CliRunner()
-    project_dir = temp_dir / "my-project"
-    project_dir.mkdir()
-    monkeypatch.chdir(project_dir)
-
-    # Connect warehouse
-    runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
-
-    # Write beacon.yaml with knowledge entry
-    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
-    beacon_yaml.write_text(
-        "artifacts:\n  knowledge:\n    - knowledge/test.md\n  skills: []\n  contexts: []\n"
-    )
-
-    # Run sync
-    result = runner.invoke(main, ["sync", "--skip-git-check"])
-
-    assert result.exit_code == 0
-    assert "sync" in result.output.lower() or "✓" in result.output
-
-    # Verify file was copied
-    synced_file = (
-        project_dir / ".agentic-beacon" / "artifacts" / "knowledge" / "test.md"
-    )
-    assert synced_file.exists()
-    assert synced_file.read_text() == "# Test"
-
-
-@pytest.mark.skip(
-    reason="knowledge sync rewritten in chunk C / phase 8 of auto-pull-artifact-dependencies"
-)
-def test_sync_is_idempotent(valid_warehouse, temp_dir, monkeypatch):
-    """TC2: Second sync with no changes → No files copied (idempotent)."""
-    runner = CliRunner()
-
-    project_dir = temp_dir / "project"
-    project_dir.mkdir()
-    monkeypatch.chdir(project_dir)
-
-    # Setup
-    (valid_warehouse / "knowledge" / "test.md").write_text("# Test")
-    runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
-    runner.invoke(main, ["setup"])
-    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
-    beacon_yaml.write_text(
-        "artifacts:\n  knowledge:\n    - knowledge/test.md\n  skills: []\n  contexts: []\n"
-    )
-
-    # First sync
-    result1 = runner.invoke(main, ["sync", "--skip-git-check"])
-    assert result1.exit_code == 0
-
-    synced_file = (
-        project_dir / ".agentic-beacon" / "artifacts" / "knowledge" / "test.md"
-    )
-    mtime1 = synced_file.stat().st_mtime
-
-    # Second sync - should be idempotent
-    result2 = runner.invoke(main, ["sync", "--skip-git-check"])
-    assert result2.exit_code == 0
-
-    # File should not have been re-copied
-    mtime2 = synced_file.stat().st_mtime
-    assert mtime2 == mtime1
-
-
-@pytest.mark.skip(
-    reason="knowledge sync rewritten in chunk C / phase 8 of auto-pull-artifact-dependencies"
-)
-def test_sync_with_glob_patterns(valid_warehouse, temp_dir, monkeypatch):
-    """TC8: beacon.yaml with globs → All matching files synced."""
-    runner = CliRunner()
-
-    project_dir = temp_dir / "project"
-    project_dir.mkdir()
-    monkeypatch.chdir(project_dir)
-
-    # Create multiple files matching pattern
-    (valid_warehouse / "knowledge" / "python").mkdir(parents=True, exist_ok=True)
-    (valid_warehouse / "knowledge" / "python" / "file1.md").write_text("# File 1")
-    (valid_warehouse / "knowledge" / "python" / "file2.md").write_text("# File 2")
-
-    runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
-    runner.invoke(main, ["setup"])
-    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
-    beacon_yaml.write_text(
-        "artifacts:\n  knowledge:\n    - knowledge/python/*.md\n  skills: []\n  contexts: []\n"
-    )
-
-    result = runner.invoke(main, ["sync", "--skip-git-check"])
-
-    assert result.exit_code == 0
-
-    # Verify both files were copied
-    artifacts_dir = project_dir / ".agentic-beacon" / "artifacts"
-    assert (artifacts_dir / "knowledge" / "python" / "file1.md").exists()
-    assert (artifacts_dir / "knowledge" / "python" / "file2.md").exists()
-
-
-# ========== Task 7.2: Warehouse Connection Validation ==========
-
-
 def test_sync_without_warehouse_connection(temp_dir, monkeypatch):
     """TC1: No config.toml exists → Error message about connection."""
     runner = CliRunner()
@@ -371,7 +264,9 @@ class TestSyncSkillEntryValidation:
             (wh / d).mkdir(parents=True)
         (wh / "README.md").write_text("# WH")
         (wh / "skills" / "my-skill").mkdir()
-        (wh / "skills" / "my-skill" / "SKILL.md").write_text("# Skill\n")
+        (wh / "skills" / "my-skill" / "SKILL.md").write_text(
+            "---\nrequires:\n  contexts: []\n---\n# Skill\n"
+        )
 
         # Init git (required by sync)
         import os
@@ -409,7 +304,7 @@ class TestSyncSkillEntryValidation:
         else:
             skills_yaml = "  skills: []\n"
         (beacon_dir / "beacon.yaml").write_text(
-            f"artifacts:\n  knowledge: []\n{skills_yaml}  contexts: []\n"
+            f"artifacts:\n{skills_yaml}  contexts: []\n"
         )
         monkeypatch.chdir(project)
         return project
@@ -510,78 +405,3 @@ class TestSyncSkillEntryValidation:
         result = CliRunner().invoke(main, ["sync", "--skip-git-check"])
 
         assert result.exit_code == 0
-
-
-@pytest.mark.skip(
-    reason="knowledge sync rewritten in chunk C / phase 8 of auto-pull-artifact-dependencies"
-)
-def test_sync_knowledge_node_path_expands_to_files(
-    valid_warehouse, temp_dir, monkeypatch
-):
-    """TC: beacon.yaml with node-level knowledge path syncs all .md files within the node."""
-    runner = CliRunner()
-    project_dir = temp_dir / "project"
-    project_dir.mkdir()
-    monkeypatch.chdir(project_dir)
-
-    # Create a proper knowledge node (with decisions/ subdir)
-    node_dir = valid_warehouse / "knowledge" / "python"
-    (node_dir / "decisions").mkdir(parents=True)
-    (node_dir / "decisions" / "typing.md").write_text("# Typing Decision")
-    (node_dir / "lessons").mkdir()
-    (node_dir / "lessons" / "async.md").write_text("# Async Lessons")
-
-    runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
-    runner.invoke(main, ["setup"])
-
-    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
-    beacon_yaml.write_text(
-        "artifacts:\n  knowledge:\n    - knowledge/python\n  skills: []\n  contexts: []\n"
-    )
-
-    result = runner.invoke(main, ["sync", "--skip-git-check"])
-    assert result.exit_code == 0
-
-    artifacts_dir = project_dir / ".agentic-beacon" / "artifacts"
-    assert (artifacts_dir / "knowledge" / "python" / "decisions" / "typing.md").exists()
-    assert (artifacts_dir / "knowledge" / "python" / "lessons" / "async.md").exists()
-
-
-@pytest.mark.skip(
-    reason="knowledge sync rewritten in chunk C / phase 8 of auto-pull-artifact-dependencies"
-)
-def test_sync_knowledge_nested_node_path_expands(
-    valid_warehouse, temp_dir, monkeypatch
-):
-    """TC: Sub-domain node path like knowledge/data-platform/clickhouse syncs correctly."""
-    runner = CliRunner()
-    project_dir = temp_dir / "project"
-    project_dir.mkdir()
-    monkeypatch.chdir(project_dir)
-
-    node_dir = valid_warehouse / "knowledge" / "data-platform" / "clickhouse"
-    (node_dir / "facts").mkdir(parents=True)
-    (node_dir / "facts" / "schema.md").write_text("# Schema Facts")
-
-    runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
-    runner.invoke(main, ["setup"])
-
-    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
-    beacon_yaml.write_text(
-        "artifacts:\n  knowledge:\n"
-        "    - knowledge/data-platform/clickhouse\n"
-        "  skills: []\n  contexts: []\n"
-    )
-
-    result = runner.invoke(main, ["sync", "--skip-git-check"])
-    assert result.exit_code == 0
-
-    artifacts_dir = project_dir / ".agentic-beacon" / "artifacts"
-    assert (
-        artifacts_dir
-        / "knowledge"
-        / "data-platform"
-        / "clickhouse"
-        / "facts"
-        / "schema.md"
-    ).exists()

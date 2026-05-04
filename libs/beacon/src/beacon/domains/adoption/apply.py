@@ -47,9 +47,6 @@ def apply_adoption(
                 skill_path = skill_path + "/"
             if skill_path not in beacon_settings.artifacts.skills:
                 beacon_settings.artifacts.skills.append(skill_path)
-        elif candidate.artifact_type == "knowledge":
-            if candidate.path not in beacon_settings.artifacts.knowledge:
-                beacon_settings.artifacts.knowledge.append(candidate.path)
 
     for path in unadoptions or []:
         norm = path.rstrip("/")
@@ -58,9 +55,6 @@ def apply_adoption(
         ]
         beacon_settings.artifacts.skills = [
             p for p in beacon_settings.artifacts.skills if p.rstrip("/") != norm
-        ]
-        beacon_settings.artifacts.knowledge = [
-            p for p in beacon_settings.artifacts.knowledge if p.rstrip("/") != norm
         ]
 
     beacon_settings.to_yaml(beacon_yaml_path)

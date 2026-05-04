@@ -20,7 +20,6 @@ from typing import TYPE_CHECKING
 
 from beacon.domains.adoption.models import (
     ADOPTABLE_TYPES,
-    KNOWLEDGE_SUBTYPES,
     NEW_TAG_MAX_COMMITS,
     AdoptCandidate,
 )
@@ -53,73 +52,6 @@ def skill_dir_from_path(path: str) -> str:
     return path
 
 
-def find_knowledge_node_for_file(file_path: str) -> str | None:
-    """Find the knowledge node path for a file under knowledge/.
-
-    A node is identified by the first path segment that is decisions/lessons/facts.
-    E.g. "knowledge/global/decisions/foo.md" → "knowledge/global"
-         "knowledge/languages/python/lessons/bar.md" → "knowledge/languages/python"
-    Returns None if the file is not under a knowledge subtype directory.
-    """
-    parts = file_path.split("/")
-    for i, part in enumerate(parts):
-        if part in KNOWLEDGE_SUBTYPES:
-            return "/".join(parts[:i])
-    return None
-
-
-def is_knowledge_node(dir_path: Path) -> bool:
-    """Return True if dir_path directly contains decisions/, lessons/, or facts/."""
-    return any((dir_path / st).is_dir() for st in KNOWLEDGE_SUBTYPES)
-
-
-def collect_knowledge_nodes(
-    current: Path, warehouse_path: Path, nodes: list[str]
-) -> None:
-    """Recursively collect knowledge node paths (warehouse-relative) into nodes.
-
-    Only *leaf* nodes are collected — a directory that directly contains
-    decisions/, lessons/, or facts/ AND has no child directories that are
-    themselves knowledge nodes.  Grouping/parent folders are skipped; only
-    their leaf descendants are recorded.
-    """
-    child_dirs = [
-        child
-        for child in sorted(current.iterdir())
-        if child.is_dir()
-        and not child.name.startswith(".")
-        and child.name not in KNOWLEDGE_SUBTYPES
-    ]
-    if is_knowledge_node(current) and not any(
-        is_knowledge_node(child) for child in child_dirs
-    ):
-        nodes.append(str(current.relative_to(warehouse_path)).replace("\\", "/"))
-        return  # leaf node — don't recurse further
-    for child in child_dirs:
-        collect_knowledge_nodes(child, warehouse_path, nodes)
-
-
-def list_knowledge_nodes(warehouse_path: Path) -> list[str]:
-    """Return all warehouse-relative knowledge node paths.
-
-    Only directories that directly contain decisions/, lessons/, or facts/ are nodes.
-    Grouping/parent folders are excluded.  The knowledge/ root itself is never a node
-    (it has no display name and would produce blank labels in the TUI).
-    """
-    knowledge_dir = warehouse_path / "knowledge"
-    if not knowledge_dir.exists():
-        return []
-    nodes: list[str] = []
-    for child in sorted(knowledge_dir.iterdir()):
-        if (
-            child.is_dir()
-            and not child.name.startswith(".")
-            and child.name not in KNOWLEDGE_SUBTYPES
-        ):
-            collect_knowledge_nodes(child, warehouse_path, nodes)
-    return nodes
-
-
 # ─────────────────────────────────────────────────────────────
 # Adoption state helpers
 # ─────────────────────────────────────────────────────────────
@@ -146,11 +78,7 @@ def is_adopted(path: str, beacon_settings: BeaconManifest) -> bool:
     Skill directory paths are matched with and without trailing slash.
     """
     normalized = path.rstrip("/")
-    all_beacon = (
-        beacon_settings.artifacts.contexts
-        + beacon_settings.artifacts.knowledge
-        + beacon_settings.artifacts.skills
-    )
+    all_beacon = beacon_settings.artifacts.contexts + beacon_settings.artifacts.skills
     for bp in all_beacon:
         bp_norm = bp.rstrip("/")
         if bp_norm == normalized:
@@ -311,10 +239,9 @@ def build_candidates(
 ) -> list[AdoptCandidate]:
     """Build AdoptCandidate list from a list of warehouse-relative file paths.
 
-    Skills are grouped by directory; knowledge is grouped at subdomain level.
+    Skills are grouped by directory.
     """
     seen_skill_dirs: set[str] = set()
-    seen_knowledge_subdirs: set[str] = set()
     candidates: list[AdoptCandidate] = []
 
     for path in paths:
@@ -343,23 +270,6 @@ def build_candidates(
                     artifact_type="skills",
                     path=skill_dir,
                     description=desc,
-                    is_new=is_new,
-                )
-            )
-        elif artifact_type == "knowledge":
-            knowledge_node = find_knowledge_node_for_file(path)
-            if knowledge_node is None:
-                continue  # file not under decisions/lessons/facts — not a valid node
-            if knowledge_node in seen_knowledge_subdirs:
-                continue
-            if is_adopted(knowledge_node, beacon_settings):
-                continue
-            seen_knowledge_subdirs.add(knowledge_node)
-            candidates.append(
-                AdoptCandidate(
-                    artifact_type="knowledge",
-                    path=knowledge_node,
-                    description="",
                     is_new=is_new,
                 )
             )
@@ -402,27 +312,6 @@ def discover_all(
                 AdoptCandidate(
                     artifact_type="contexts",
                     path=ctx_path,
-                    description=desc,
-                    is_new=False,
-                )
-            )
-
-    # Knowledge — discover nodes (dirs with decisions/lessons/facts) directly
-    for knowledge_path in list_knowledge_nodes(warehouse_path):
-        if not is_adopted(knowledge_path, beacon_settings):
-            desc = ""
-            node_dir = warehouse_path / knowledge_path
-            for f in sorted(node_dir.rglob("*.md")):
-                candidate_desc = extract_heading_description(
-                    f.read_text(encoding="utf-8")
-                )
-                if candidate_desc:
-                    desc = candidate_desc
-                    break
-            candidates.append(
-                AdoptCandidate(
-                    artifact_type="knowledge",
-                    path=knowledge_path,
                     description=desc,
                     is_new=False,
                 )
@@ -508,7 +397,6 @@ def count_unadopted_since(
     """
     new_paths = run_git_diff(warehouse_path, sync_sha, "A")
     seen_skill_dirs: set[str] = set()
-    seen_knowledge_nodes: set[str] = set()
     count = 0
 
     for path in new_paths:
@@ -522,16 +410,6 @@ def count_unadopted_since(
                 continue
             if not is_adopted(skill_dir, beacon_settings):
                 seen_skill_dirs.add(skill_key)
-                count += 1
-        elif artifact_type == "knowledge":
-            # Beacon.yaml stores node-level paths; check at node level
-            node = find_knowledge_node_for_file(path)
-            if node is None:
-                continue
-            if node in seen_knowledge_nodes:
-                continue
-            if not is_adopted(node, beacon_settings):
-                seen_knowledge_nodes.add(node)
                 count += 1
         else:
             if not is_adopted(path, beacon_settings):

@@ -34,7 +34,7 @@ class TestBeaconYAMLParser:
 
         assert isinstance(settings, BeaconManifest)
         # Legacy knowledge field is silently dropped
-        assert settings.artifacts.knowledge == []
+        assert not hasattr(settings.artifacts, "knowledge")
         assert "knowledge" not in settings.artifacts.model_dump()
         assert len(settings.artifacts.skills) == 2
         assert "development/tdd-workflow.md" in settings.artifacts.skills
@@ -50,7 +50,7 @@ class TestBeaconYAMLParser:
 
         assert isinstance(settings, BeaconManifest)
         # Legacy knowledge field is silently dropped
-        assert settings.artifacts.knowledge == []
+        assert not hasattr(settings.artifacts, "knowledge")
         assert "knowledge" not in settings.artifacts.model_dump()
         assert len(settings.artifacts.agents) == 1
         assert settings.artifacts.agents[0] == "agents/python-reviewer.md"
@@ -66,7 +66,7 @@ class TestBeaconYAMLParser:
 
         assert isinstance(settings, BeaconManifest)
         # Legacy knowledge field is silently dropped
-        assert settings.artifacts.knowledge == []
+        assert not hasattr(settings.artifacts, "knowledge")
         assert "knowledge" not in settings.artifacts.model_dump()
         assert len(settings.artifacts.agents) == 0
         assert len(settings.artifacts.skills) == 0

@@ -17,10 +17,10 @@ def runner():
 # Helper
 # ---------------------------------------------------------------------------
 
-EXPECTED_DIRS = ["contexts", "knowledge", "skills", "docs"]
+EXPECTED_DIRS = ["agents", "contexts", "skills", "docs"]
 EXPECTED_FILES = [
+    "agents/README.md",
     "contexts/README.md",
-    "knowledge/README.md",
     "skills/README.md",
     "docs/architecture.md",
     "docs/contribution-guide.md",

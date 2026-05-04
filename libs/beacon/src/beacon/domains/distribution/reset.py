@@ -45,12 +45,6 @@ def reset_artifacts(project_root: Path) -> tuple[int, int, int]:
     for context_name in beacon_settings.artifacts.contexts:
         artifact_paths.append(f"contexts/{context_name}")
 
-    for pattern in beacon_settings.artifacts.knowledge:
-        if "*" in pattern or "?" in pattern or "[" in pattern:
-            artifact_paths.extend(sync_engine.expand_glob(pattern))
-        else:
-            artifact_paths.append(pattern)
-
     for skill_entry in beacon_settings.artifacts.skills:
         normalized = normalize_skill_entry(skill_entry)
         skill_dir = warehouse_path / normalized

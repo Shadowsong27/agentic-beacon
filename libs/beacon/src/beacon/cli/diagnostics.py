@@ -7,10 +7,6 @@ from rich.console import Console
 
 from beacon.core.manifest.beacon import BeaconManifest
 from beacon.core.manifest.workspace import WorkspaceConfig
-from beacon.domains.adoption.discovery import (
-    find_knowledge_node_for_file,
-    is_knowledge_node,
-)
 from beacon.utils.display import print_doctor_summary
 from beacon.utils.git import find_project_root
 
@@ -21,7 +17,7 @@ console = Console()
 @click.option(
     "--fix",
     is_flag=True,
-    help="Automatically repair fixable issues (e.g. migrate file-level knowledge paths to node-level).",
+    help="Automatically repair fixable issues.",
 )
 def doctor(*, fix: bool) -> None:
     """Diagnose the health of the current project's beacon configuration.
@@ -30,12 +26,10 @@ def doctor(*, fix: bool) -> None:
     \b
       • Warehouse connection (config.toml present, local_path reachable)
       • beacon.yaml parseable and structurally valid
-      • Knowledge entries: file-level paths migrated to node-level
-      • Knowledge entries: node directories exist in the warehouse
       • Skill entries: skill directories exist in the warehouse
       • Context entries: context files exist in the warehouse
 
-    Use --fix to automatically repair file-level knowledge path entries.
+    Use --fix to automatically repair fixable issues.
     """
 
     issues: list[str] = []
@@ -111,93 +105,8 @@ def doctor(*, fix: bool) -> None:
         print_doctor_summary(issues, fixes_applied)
         return
 
-    knowledge_entries: list[str] = list(beacon_settings.artifacts.knowledge)
     skill_entries: list[str] = list(beacon_settings.artifacts.skills)
     context_entries: list[str] = list(beacon_settings.artifacts.contexts)
-
-    file_level: list[tuple[str, str | None]] = []
-    for entry in knowledge_entries:
-        if entry.endswith(".md") or any(
-            seg in entry.split("/") for seg in ("decisions", "lessons", "facts")
-        ):
-            node = find_knowledge_node_for_file(entry)
-            file_level.append((entry, node))
-
-    if not file_level:
-        _ok(
-            f"Knowledge entries: {len(knowledge_entries)} registered, all at node level"
-        )
-    else:
-        _warn(
-            f"Knowledge entries: {len(file_level)} file-level path(s) should be node-level",
-            "Use --fix to auto-migrate, or update beacon.yaml manually.",
-        )
-        for old, suggested in file_level:
-            arrow = (
-                f"  →  [green]{suggested}[/green]"
-                if suggested
-                else "  [red](no node found — check warehouse structure)[/red]"
-            )
-            console.print(f"       [dim]{old}[/dim]{arrow}")
-
-        if fix:
-            new_entries: list[str] = []
-            seen: set[str] = set()
-            for entry in knowledge_entries:
-                if entry.endswith(".md") or any(
-                    seg in entry.split("/") for seg in ("decisions", "lessons", "facts")
-                ):
-                    node = find_knowledge_node_for_file(entry)
-                    if node and node not in seen:
-                        new_entries.append(node)
-                        seen.add(node)
-                        fixes_applied.append(f"  {entry}  →  {node}")
-                    elif not node:
-                        if entry not in seen:
-                            new_entries.append(entry)
-                            seen.add(entry)
-                else:
-                    if entry not in seen:
-                        new_entries.append(entry)
-                        seen.add(entry)
-            beacon_settings.artifacts.knowledge = new_entries
-            beacon_settings.to_yaml(beacon_yaml)
-            beacon_settings = BeaconManifest.from_yaml(beacon_yaml)
-            knowledge_entries = list(beacon_settings.artifacts.knowledge)
-            console.print(
-                f"       [green]Fixed:[/green] migrated {len(fixes_applied)} knowledge path(s) to node level"
-            )
-
-    if warehouse_path:
-        missing_nodes: list[str] = []
-        invalid_nodes: list[str] = []
-        for entry in knowledge_entries:
-            node_dir = warehouse_path / entry
-            if not node_dir.exists():
-                missing_nodes.append(entry)
-            elif not is_knowledge_node(node_dir):
-                invalid_nodes.append(entry)
-
-        if missing_nodes:
-            _err(
-                f"Knowledge entries: {len(missing_nodes)} node(s) missing from warehouse",
-                "These paths do not exist in the warehouse directory.",
-            )
-            for p in missing_nodes:
-                console.print(f"       [dim]{p}[/dim]")
-
-        if invalid_nodes:
-            _warn(
-                f"Knowledge entries: {len(invalid_nodes)} path(s) point to non-node directories",
-                "These directories have no decisions/, lessons/, or facts/ subfolders.",
-            )
-            for p in invalid_nodes:
-                console.print(f"       [dim]{p}[/dim]")
-
-        if not missing_nodes and not invalid_nodes:
-            _ok(
-                f"Knowledge entries: all {len(knowledge_entries)} node(s) exist in warehouse"
-            )
 
     if warehouse_path:
         missing_skills: list[str] = []

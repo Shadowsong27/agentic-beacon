@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-ADOPTABLE_TYPES = ("contexts", "skills", "knowledge", "agents")
+ADOPTABLE_TYPES = ("contexts", "skills", "agents")
 NEW_TAG_MAX_COMMITS = 5  # only show "[added N commits ago]" if within this many commits
-KNOWLEDGE_SUBTYPES = frozenset(("decisions", "lessons", "facts"))
 
 
 @dataclass

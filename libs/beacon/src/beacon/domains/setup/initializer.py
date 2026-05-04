@@ -21,7 +21,6 @@ TEMPLATE_FILES: list[str] = [
     "contexts/README.md",
     "docs/architecture.md",
     "docs/contribution-guide.md",
-    "knowledge/README.md",
     "skills/README.md",
     "skills/record-knowledge/SKILL.md",
     "skills/record-skill/SKILL.md",
@@ -57,8 +56,8 @@ class WarehouseInitializer:
 
         Args:
             org_name: Organization name for documentation
-            languages: Ignored — inner knowledge structure is user-defined
-            domains: Ignored — inner knowledge structure is user-defined
+            languages: Ignored — inner context structure is user-defined
+            domains: Ignored — inner context structure is user-defined
             init_git: Whether to initialize git repository
 
         Returns:
@@ -76,7 +75,6 @@ class WarehouseInitializer:
 
         # Create starter files
         self._create_contexts()
-        self._create_knowledge()
         self._create_skills()
         self._create_docs(org_name)
         self._create_root_files(org_name)
@@ -103,7 +101,6 @@ class WarehouseInitializer:
         self.warehouse_path.mkdir(parents=True, exist_ok=True)
         (self.warehouse_path / "agents").mkdir(exist_ok=True)
         (self.warehouse_path / "contexts").mkdir(exist_ok=True)
-        (self.warehouse_path / "knowledge").mkdir(exist_ok=True)
         (self.warehouse_path / "skills").mkdir(exist_ok=True)
         (self.warehouse_path / "docs").mkdir(exist_ok=True)
         self._create_agents()
@@ -132,13 +129,6 @@ class WarehouseInitializer:
         self._write_if_missing(
             self.warehouse_path / "contexts" / "README.md",
             self._render_template("contexts/README.md", ""),
-        )
-
-    def _create_knowledge(self) -> None:
-        """Create starter knowledge file."""
-        self._write_if_missing(
-            self.warehouse_path / "knowledge" / "README.md",
-            self._render_template("knowledge/README.md", ""),
         )
 
     def _create_skills(self) -> None:

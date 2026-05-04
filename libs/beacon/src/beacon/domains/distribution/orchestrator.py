@@ -12,9 +12,10 @@ from pathlib import Path
 
 from loguru import logger
 
+from beacon.core.dependencies.resolver import ResolutionFailure, compute_effective_set
 from beacon.core.exceptions import BeaconSyncError
 from beacon.core.gitignore import GitignoreManager
-from beacon.core.manifest.beacon import BeaconManifest
+from beacon.core.manifest.beacon import ArtifactsConfig, BeaconManifest
 from beacon.core.preconditions import ensure_sync_ready
 from beacon.domains.adoption.discovery import count_unadopted_since
 from beacon.domains.artifact.agent import (
@@ -48,6 +49,8 @@ from beacon.domains.warehouse.git_health import (
     check_warehouse_on_main_branch,
 )
 from beacon.utils.git import find_project_root
+
+MIGRATION_DOC_URL = "docs/migrations/artifact-dependencies-frontmatter.md"
 
 
 @dataclass
@@ -83,6 +86,101 @@ class SyncOrchestrationResult:
     wiring_notes: list[str] = field(default_factory=list)
     migration_resolved: dict[str, str] = field(default_factory=dict)
     unresolved_files: list[str] = field(default_factory=list)
+
+
+def _normalize_beacon_for_resolver(
+    beacon: BeaconManifest, warehouse_path: Path
+) -> BeaconManifest:
+    """Normalize beacon.yaml entries to match resolver's expected format.
+
+    Resolver expects context names without 'contexts/' prefix and '.md' suffix,
+    and skill names without 'skills/' prefix and trailing slash.
+    Also expands glob patterns to concrete entries.
+    """
+    sync_engine = SyncEngine(
+        warehouse_path=warehouse_path, artifacts_path=Path("/dev/null")
+    )
+
+    normalized_agents: list[str] = []
+    for a in beacon.artifacts.agents:
+        if "*" in a or "?" in a or "[" in a:
+            normalized_agents.extend(sync_engine.expand_glob(a))
+        else:
+            normalized_agents.append(Path(a).stem if a.startswith("agents/") else a)
+
+    normalized_contexts: list[str] = []
+    for c in beacon.artifacts.contexts:
+        if "*" in c or "?" in c or "[" in c:
+            for match in sync_engine.expand_glob(c):
+                normalized_contexts.append(
+                    str(Path(match).with_suffix("")).replace("contexts/", "", 1)
+                )
+        else:
+            if c.startswith("contexts/"):
+                normalized_contexts.append(
+                    str(Path(c).with_suffix("")).replace("contexts/", "", 1)
+                )
+            else:
+                normalized_contexts.append(c)
+
+    normalized_skills: list[str] = []
+    for s in beacon.artifacts.skills:
+        if "*" in s or "?" in s or "[" in s:
+            for match in sync_engine.expand_glob(s):
+                normalized_skills.append(match.replace("skills/", "").rstrip("/"))
+        else:
+            normalized_skills.append(s.replace("skills/", "").rstrip("/"))
+
+    normalized = BeaconManifest(
+        artifacts=ArtifactsConfig(
+            agents=normalized_agents,
+            contexts=normalized_contexts,
+            skills=normalized_skills,
+        ),
+        ignore=beacon.ignore,
+    )
+    return normalized
+
+
+def _expand_effective_set(
+    effective_set,
+    sync_engine: SyncEngine,
+    warehouse_path: Path,
+    verbose: bool,
+) -> list[str]:
+    """Expand EffectiveSet into individual file paths for sync.
+
+    Skills and knowledge directories are expanded to their contents;
+    contexts are used as-is.
+    """
+    artifact_paths: list[str] = []
+
+    for ctx in sorted(effective_set.contexts):
+        ctx_path = f"contexts/{ctx}.md"
+        artifact_paths.append(ctx_path)
+
+    for skill_name in sorted(effective_set.skills):
+        skill_dir_entry = normalize_skill_entry(skill_name)
+        matches = sync_engine.expand_glob(f"{skill_dir_entry}/**/*")
+        if matches:
+            artifact_paths.extend(matches)
+        else:
+            logger.warning(
+                "No files found for skill: {}",
+                skill_name_from_entry(skill_name),
+            )
+
+    for knowledge_path in sorted(effective_set.knowledge):
+        if (warehouse_path / knowledge_path).is_dir():
+            matches = sync_engine.expand_glob(f"{knowledge_path}/**/*.md")
+            if matches:
+                artifact_paths.extend(matches)
+            else:
+                logger.warning("No .md files found under: {}", knowledge_path)
+        else:
+            artifact_paths.append(knowledge_path)
+
+    return artifact_paths
 
 
 def run_sync(
@@ -127,18 +225,33 @@ def run_sync(
     beacon_settings = BeaconManifest.from_yaml(beacon_yaml)
     validate_skill_entries(beacon_settings)
 
+    # 8.1: Dependency resolution as FIRST step — before any file I/O
+    normalized_beacon = _normalize_beacon_for_resolver(beacon_settings, warehouse_path)
+    effective_result = compute_effective_set(normalized_beacon, warehouse_path)
+    if isinstance(effective_result, ResolutionFailure):
+        # 8.2: Exit with structured error containing migration doc URL
+        error_msg = (
+            f"Dependency resolution failed. See {MIGRATION_DOC_URL} "
+            f"for migration instructions.\n\n"
+            + "\n".join(f"  • {e}" for e in effective_result.errors)
+        )
+        logger.error(error_msg)
+        raise BeaconSyncError(error_msg)
+
+    effective_set = effective_result
+
     artifacts_dir = beacon_dir / "artifacts"
     sync_engine = SyncEngine(
         warehouse_path=warehouse_path, artifacts_path=artifacts_dir
     )
 
-    total_artifacts = (
-        len(beacon_settings.artifacts.knowledge)
+    total_explicit = (
+        len(beacon_settings.artifacts.agents)
         + len(beacon_settings.artifacts.skills)
         + len(beacon_settings.artifacts.contexts)
     )
 
-    if total_artifacts == 0:
+    if total_explicit == 0:
         if not dry_run:
             bundled_installed, bundled_skipped = install_bundled_skills_globally()
             bundled_wired, bundled_wire_errors = wire_bundled_skills_per_project(
@@ -169,55 +282,24 @@ def run_sync(
             warehouse_path=warehouse_path,
         )
 
-    artifact_paths: list[str] = []
-
-    for artifact_type in ["knowledge", "skills", "contexts"]:
-        artifacts_list = getattr(beacon_settings.artifacts, artifact_type)
-        for pattern in artifacts_list:
-            if "*" in pattern or "?" in pattern or "[" in pattern:
-                try:
-                    matches = sync_engine.expand_glob(pattern)
-                    if not matches:
-                        logger.warning("No files matched pattern: {}", pattern)
-                    elif verbose:
-                        logger.info(
-                            "Pattern '{}' matched {} files", pattern, len(matches)
-                        )
-                    artifact_paths.extend(matches)
-                except Exception as e:
-                    raise BeaconSyncError(
-                        f"Invalid glob pattern '{pattern}': {e}"
-                    ) from e
-            elif artifact_type == "skills":
-                skill_dir_entry = normalize_skill_entry(pattern)
-                matches = sync_engine.expand_glob(f"{skill_dir_entry}/**/*")
-                if matches:
-                    artifact_paths.extend(matches)
-                else:
-                    logger.warning(
-                        "No files found for skill: {}",
-                        skill_name_from_entry(pattern),
-                    )
-            elif artifact_type == "knowledge" and (warehouse_path / pattern).is_dir():
-                matches = sync_engine.expand_glob(f"{pattern}/**/*.md")
-                if matches:
-                    artifact_paths.extend(matches)
-                else:
-                    logger.warning("No .md files found under: {}", pattern)
-            else:
-                artifact_paths.append(pattern)
+    # 8.3: Single expansion over EffectiveSet
+    artifact_paths = _expand_effective_set(
+        effective_set, sync_engine, warehouse_path, verbose
+    )
 
     try:
         sync_engine.validate_paths(artifact_paths)
     except OutOfWarehouseError as e:
         raise BeaconSyncError(
             f"Sync aborted: {e}\n"
-            f"Entry '{e.entry}' resolves to {e.resolved_path} which is outside the warehouse."
+            f"Entry '{e.entry}' resolves to {e.resolved_path} which is outside the warehouse.\n"
+            f"See {MIGRATION_DOC_URL} for details."
         ) from e
     except DestinationOutsideArtifactsError as e:
         raise BeaconSyncError(
             f"Sync aborted: {e}\n"
-            f"Entry '{e.entry}' would write to {e.resolved_path}, outside the project artifacts directory."
+            f"Entry '{e.entry}' would write to {e.resolved_path}, outside the project artifacts directory.\n"
+            f"See {MIGRATION_DOC_URL} for details."
         ) from e
 
     # Detect and handle migration from copy-based trees
@@ -249,7 +331,7 @@ def run_sync(
                 if s.startswith("regular_file")
             ]
 
-    # Orphan pruning: only symlinks, not regular files
+    # 8.6-8.8: Orphan pruning against effective set
     orphans: list[Orphan] = []
     if artifacts_dir.exists():
         synced_set = set(artifact_paths)
@@ -275,12 +357,14 @@ def run_sync(
     except OutOfWarehouseError as e:
         raise BeaconSyncError(
             f"Sync aborted: {e}\n"
-            f"Entry '{e.entry}' resolves to {e.resolved_path} which is outside the warehouse."
+            f"Entry '{e.entry}' resolves to {e.resolved_path} which is outside the warehouse.\n"
+            f"See {MIGRATION_DOC_URL} for details."
         ) from e
     except DestinationOutsideArtifactsError as e:
         raise BeaconSyncError(
             f"Sync aborted: {e}\n"
-            f"Entry '{e.entry}' would write to {e.resolved_path}, outside the project artifacts directory."
+            f"Entry '{e.entry}' would write to {e.resolved_path}, outside the project artifacts directory.\n"
+            f"See {MIGRATION_DOC_URL} for details."
         ) from e
 
     if not dry_run:
@@ -298,7 +382,11 @@ def run_sync(
     if summary.pruned_paths and not dry_run:
         unwire_pruned_artifacts(project_root, summary.pruned_paths, artifacts_dir)
 
-    if beacon_settings.artifacts.contexts and not dry_run:
+    # Use effective set for wiring decisions
+    has_contexts = bool(effective_set.contexts) and not dry_run
+    has_skills = bool(effective_set.skills) and not dry_run
+
+    if has_contexts:
         oc_added = wire_contexts_opencode(project_root, artifacts_dir)
         cc_added = wire_contexts_claudecode(project_root, artifacts_dir)
 
@@ -312,18 +400,17 @@ def run_sync(
         )
         if not has_opencode and not has_claude:
             if has_synced_contexts(artifacts_dir):
-                if not dry_run:
-                    agent_config_init_needed = True
-                else:
-                    wiring_notes.append(
-                        "  Contexts synced — wire them into your agent config:\n"
-                        '  [bold]opencode.json[/bold] → add to "instructions" array:\n'
-                        '    ".agentic-beacon/artifacts/contexts/<name>.md"\n'
-                        "  [bold]CLAUDE.md[/bold] → add a line per context:\n"
-                        "    @.agentic-beacon/artifacts/contexts/<name>.md"
-                    )
+                agent_config_init_needed = True
+            else:
+                wiring_notes.append(
+                    "  Contexts synced — wire them into your agent config:\n"
+                    '  [bold]opencode.json[/bold] → add to "instructions" array:\n'
+                    '    ".agentic-beacon/artifacts/contexts/<name>.md"\n'
+                    "  [bold]CLAUDE.md[/bold] → add a line per context:\n"
+                    "    @.agentic-beacon/artifacts/contexts/<name>.md"
+                )
 
-    if beacon_settings.artifacts.contexts and dry_run:
+    if effective_set.contexts and dry_run:
         wiring_notes.append(
             "  Contexts would be synced — wire them into your agent config if needed:\n"
             '  [bold]opencode.json[/bold] → add to "instructions" array:\n'
@@ -332,7 +419,7 @@ def run_sync(
             "    @.agentic-beacon/artifacts/contexts/<name>.md"
         )
 
-    if beacon_settings.artifacts.skills and not dry_run:
+    if has_skills:
         wired_skills, wire_errors = wire_skills_post_sync(
             project_root,
             artifacts_dir,

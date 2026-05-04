@@ -18,9 +18,9 @@ class TestArtifactsConfig:
     """Task 3.1 + 3.2: ArtifactsConfig schema changes."""
 
     def test_tc1_knowledge_field_removed(self):
-        """TC1: knowledge field returns empty list via backward-compat shim."""
+        """TC1: knowledge field is not present on ArtifactsConfig."""
         config = ArtifactsConfig()
-        assert config.knowledge == []
+        assert not hasattr(config, "knowledge")
         assert "knowledge" not in config.model_dump()
 
     def test_tc2_agents_field_exists_with_default(self):
@@ -56,7 +56,7 @@ artifacts:
   skills: []
 """)
         manifest = BeaconManifest.from_yaml(str(beacon_file))
-        assert manifest.artifacts.knowledge == []
+        assert not hasattr(manifest.artifacts, "knowledge")
         assert "knowledge" not in manifest.artifacts.model_dump()
         assert manifest.artifacts.contexts == []
         assert manifest.artifacts.skills == []
@@ -73,7 +73,7 @@ artifacts:
   skills: []
 """)
         manifest = BeaconManifest.from_yaml(str(beacon_file))
-        assert manifest.artifacts.knowledge == []
+        assert not hasattr(manifest.artifacts, "knowledge")
         assert "knowledge" not in manifest.artifacts.model_dump()
         assert manifest.artifacts.contexts == []
         assert manifest.artifacts.skills == []
@@ -90,7 +90,7 @@ artifacts:
   skills: []
 """)
         manifest = BeaconManifest.from_yaml(str(beacon_file))
-        assert manifest.artifacts.knowledge == []
+        assert not hasattr(manifest.artifacts, "knowledge")
         assert "knowledge" not in manifest.artifacts.model_dump()
         assert manifest.artifacts.contexts == []
         assert manifest.artifacts.skills == []
