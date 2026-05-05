@@ -1,10 +1,3 @@
-## REMOVED Requirements
-
-### Requirement: Beacon.yaml grouped by artifact type
-**Reason**: Knowledge is no longer a manually-adopted artifact type. It is derived at sync time from scanning adopted contexts and skills for markdown links into `knowledge/`. The `artifacts.knowledge` field is removed from `beacon.yaml` to eliminate drift between declared and actually-referenced knowledge.
-
-**Migration**: On first `abc sync` after upgrading to this version, any existing `artifacts.knowledge` field in `beacon.yaml` is silently dropped. The rewritten `beacon.yaml` contains only `artifacts.contexts` and `artifacts.skills`. Users who want specific knowledge present in their project must adopt a context or skill that references it. See `docs/migrations/artifact-dependencies-frontmatter.md`.
-
 ## MODIFIED Requirements
 
 ### Requirement: Beacon.yaml config file for artifact dependencies

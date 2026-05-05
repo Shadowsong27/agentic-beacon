@@ -80,7 +80,7 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:1:end -->
 
 
-- [ ] 1.1 **[MANUAL]** Hand the warehouse migration prompt to a separate model and run it against `~/Code/knowledge/hl-knowledge-market/`
+- [x] 1.1 **[MANUAL]** Hand the warehouse migration prompt to a separate model and run it against `~/Code/knowledge/hl-knowledge-market/`
 <!-- opsx:tdd:1.1:begin -->
   - **Input**: The warehouse migration prompt (delivered in the planning session); separate LLM session with write access to `~/Code/knowledge/hl-knowledge-market/`; branch `artifact-dependencies-frontmatter` checked out.
   - **Expected Output**: Every `agents/*.md` and every `skills/*/SKILL.md` has been modified in place to include a `requires:` YAML frontmatter block; the model's summary reports the before/after frontmatter for every file plus any `TODO: verify` flags.
@@ -93,26 +93,26 @@ pytest tests/ -v --tb=short
     - TC4: A skill's body content after migration → Byte-identical to pre-migration below the frontmatter
     - TC5: A non-agent, non-SKILL file under the warehouse (e.g. `contexts/*.md`, `knowledge/**`) → Untouched by the run
 <!-- opsx:tdd:1.1:end -->
-- [ ] 1.2 **[MANUAL]** Review generated `requires:` frontmatter on all agents in the warehouse
+- [x] 1.2 **[MANUAL]** Review generated `requires:` frontmatter on all agents in the warehouse
 <!-- opsx:tdd:1.2:begin -->
   - **Input**: The 8 modified agent files under `~/Code/knowledge/hl-knowledge-market/agents/` after task 1.1.
   - **Expected Output**: Every agent file's `requires.contexts` and `requires.skills` list reflects the operator's authoritative intent.
   - **Validation**: For each name in `requires.contexts`, `test -f contexts/<name>.md` returns 0. For each name in `requires.skills`, `test -d skills/<name>` returns 0. Operator confirms semantic accuracy by reading the agent's prose.
 <!-- opsx:tdd:1.2:end -->
-- [ ] 1.3 **[MANUAL]** Review generated `requires:` frontmatter on all skills in the warehouse
+- [x] 1.3 **[MANUAL]** Review generated `requires:` frontmatter on all skills in the warehouse
 <!-- opsx:tdd:1.3:begin -->
   - **Input**: All `skills/*/SKILL.md` files after task 1.1.
   - **Expected Output**: Every skill file has `requires.contexts` as a list (possibly empty) and no `requires.skills` key.
   - **Validation**: `for f in skills/*/SKILL.md; do python3 -c 'import yaml, sys; d = yaml.safe_load(open(sys.argv[1]).read().split("---")[1]); assert "skills" not in d.get("requires", {}), sys.argv[1]' "$f"; done` exits 0 for every file.
 <!-- opsx:tdd:1.3:end -->
-- [ ] 1.4 **[MANUAL]** Resolve every `TODO: verify` flag produced by the migration pass
+- [x] 1.4 **[MANUAL]** Resolve every `TODO: verify` flag produced by the migration pass
 <!-- opsx:tdd:1.4:begin -->
   - **Input**: The summary from task 1.1 plus every file that the migration model flagged.
   - **Expected Output**: Zero `# TODO: verify` comments remain in any agent or skill frontmatter.
   - **Validation**: `rg -n 'TODO: verify' agents/ skills/` returns zero matches.
 <!-- opsx:tdd:1.4:end -->
-- [ ] 1.5 **[MANUAL]** Commit the warehouse frontmatter changes with a conventional commit message
-- [ ] 1.6 **[MANUAL]** Confirm no knowledge references leaked into agent files; rewrite any that did
+- [x] 1.5 **[MANUAL]** Commit the warehouse frontmatter changes with a conventional commit message
+- [x] 1.6 **[MANUAL]** Confirm no knowledge references leaked into agent files; rewrite any that did
 <!-- opsx:tdd:1.6:begin -->
   - **Input**: All `agents/*.md` on the `artifact-dependencies-frontmatter` branch.
   - **Expected Output**: Zero markdown links in any agent file resolve to a path under `knowledge/`.
@@ -439,36 +439,36 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:7:end -->
 
 
-- [ ] 7.1 Remove knowledge from `KNOWLEDGE_SUBTYPES` usage in discovery (or delete the constant entirely)
+- [x] 7.1 Remove knowledge from `KNOWLEDGE_SUBTYPES` usage in discovery (or delete the constant entirely)
 <!-- opsx:tdd:7.1:begin -->
   - **Input**: Current `libs/beacon/src/beacon/domains/adoption/models.py:9` defining `KNOWLEDGE_SUBTYPES`.
   - **Expected Output**: Either the constant is deleted and all references removed, or it remains but is no longer wired into discovery/TUI.
   - **Validation**: `rg -n KNOWLEDGE_SUBTYPES libs/beacon/src/` returns zero matches (preferred) or matches only in deprecated/deleted modules.
 <!-- opsx:tdd:7.1:end -->
-- [ ] 7.2 Remove `_build_knowledge_subtree` closure and the knowledge section from the TUI
+- [x] 7.2 Remove `_build_knowledge_subtree` closure and the knowledge section from the TUI
 <!-- opsx:tdd:7.2:begin -->
   - **Input**: Current `libs/beacon/src/beacon/domains/adoption/tui.py:293-400`.
   - **Expected Output**: TUI renders two sections (Contexts, Skills); no knowledge section or tree widget appears.
   - **Validation**: Snapshot test or direct widget introspection: top-level tree has exactly two roots, none named 'Knowledge'.
 <!-- opsx:tdd:7.2:end -->
-- [ ] 7.3 [REMOVED] Agents may appear as global-install candidates in `abc adopt` but are not a project-scoped selectable category in `beacon.yaml` (agents are global, not project-scoped; PER-109 adds persistent selected-global-agent state for `abc sync`)
+- [x] 7.3 [REMOVED] Agents may appear as global-install candidates in `abc adopt` but are not a project-scoped selectable category in `beacon.yaml` (agents are global, not project-scoped; PER-109 adds persistent selected-global-agent state for `abc sync`)
 <!-- opsx:tdd:7.3:begin -->
   - **Reason removed**: Agents are global machine-level artifacts. `abc adopt` may show agents as global-install candidates and installs them globally immediately without updating project `beacon.yaml`. PER-109 adds persistent selected-global-agent state and `abc sync` installing those selected global agents.
 <!-- opsx:tdd:7.3:end -->
-- [ ] 7.4 [REMOVED] Dependency prompting during adopt is deferred to PER-109 (agents may appear as global-install candidates in `abc adopt`; project-scoped dependency prompting for agent `requires` is deferred to PER-109; no agent dependencies are written to project `beacon.yaml`)
+- [x] 7.4 [REMOVED] Dependency prompting during adopt is deferred to PER-109 (agents may appear as global-install candidates in `abc adopt`; project-scoped dependency prompting for agent `requires` is deferred to PER-109; no agent dependencies are written to project `beacon.yaml`)
 <!-- opsx:tdd:7.4:begin -->
   - **Reason removed**: Without agents as a selectable category in the TUI, there is no adopt-time triggering context for dependency prompting. Skill-context dependency validation happens at sync time.
 <!-- opsx:tdd:7.4:end -->
-- [ ] 7.5 [REMOVED] see 7.4
-- [ ] 7.6 [REMOVED] see 7.4
-- [ ] 7.7 [REMOVED] see 7.4
-- [ ] 7.8 Unit tests: adopt context, adopt skill, adopt both, verify beacon.yaml written correctly without knowledge
+- [x] 7.5 [REMOVED] see 7.4
+- [x] 7.6 [REMOVED] see 7.4
+- [x] 7.7 [REMOVED] see 7.4
+- [x] 7.8 Unit tests: adopt context, adopt skill, adopt both, verify beacon.yaml written correctly without knowledge
 <!-- opsx:tdd:7.8:begin -->
   - **Input**: Fixture manifests + fixture warehouses for each scenario.
   - **Expected Output**: All scenarios pass; beacon.yaml final state matches expected for each (no `knowledge:` key, no `agents:` key).
   - **Validation**: `uv run pytest libs/beacon/tests/unit/domains/adoption/ -v` → pass.
 <!-- opsx:tdd:7.8:end -->
-- [ ] 7.9 [REMOVED] Integration test for TUI dependency prompting removed (no agent category in `beacon.yaml`; agents may be shown as global-install candidates in `abc adopt`)
+- [x] 7.9 [REMOVED] Integration test for TUI dependency prompting removed (no agent category in `beacon.yaml`; agents may be shown as global-install candidates in `abc adopt`)
 <!-- opsx:tdd:7.9:begin -->
   - **Reason removed**: Dependency prompting at adopt time for project-scoped artifacts is out of scope. Agents appear as global-install candidates in `abc adopt` and install globally immediately; agent dependency prompting is deferred to PER-109 alongside persistent selected-global-agent state.
 <!-- opsx:tdd:7.9:end -->
@@ -483,27 +483,27 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:8:end -->
 
 
-- [ ] 8.1 Insert dependency-resolution step at the top of `run_sync()` before any file operations
+- [x] 8.1 Insert dependency-resolution step at the top of `run_sync()` before any file operations
 <!-- opsx:tdd:8.1:begin -->
   - **Input**: Existing `run_sync()` in `libs/beacon/src/beacon/domains/distribution/orchestrator.py`.
   - **Expected Output**: First operation in `run_sync()` is `compute_effective_set()`; no file I/O occurs before it completes successfully.
   - **Validation**: Mock the file-operations step; assert it is NOT called when resolver returns a failure. Static inspection + behavioural test.
 <!-- opsx:tdd:8.1:end -->
-- [ ] 8.2 Exit with structured error (non-zero, loguru at ERROR level) if dependency resolution returns failures
+- [x] 8.2 Exit with structured error (non-zero, loguru at ERROR level) if dependency resolution returns failures
 <!-- opsx:tdd:8.2:begin -->
   - **Input**: Manifest with an unresolvable dep; run `abc sync`.
   - **Expected Output**: Process exits non-zero; one loguru ERROR record emitted containing the migration-doc URL and the referrer/target names.
   - **Validation**: CliRunner or subprocess harness: `exit_code != 0`; `assert 'docs/migrations/artifact-dependencies-frontmatter.md' in captured_stderr`.
 <!-- opsx:tdd:8.2:end -->
-- [ ] 8.3 Replace the three separate list expansions with a single expansion over the `EffectiveSet`
-- [ ] 8.4 Run the knowledge scanner as part of computing the effective set; collect derived knowledge paths
-- [ ] 8.5 Create symlinks for the effective set (contexts + skills + derived knowledge)
+- [x] 8.3 Replace the three separate list expansions with a single expansion over the `EffectiveSet`
+- [x] 8.4 Run the knowledge scanner as part of computing the effective set; collect derived knowledge paths
+- [x] 8.5 Create symlinks for the effective set (contexts + skills + derived knowledge)
 <!-- opsx:tdd:8.5:begin -->
   - **Input**: A fixture warehouse with known effective set; a fresh empty project directory.
   - **Expected Output**: After sync, `.agentic-beacon/artifacts/<type>/...` contains one symlink per path in the effective set. Every symlink's target is an absolute path into the warehouse clone.
   - **Validation**: Walk the artifacts tree; compare symlink set to effective set; assert every target file exists at the pointed-to location.
 <!-- opsx:tdd:8.5:end -->
-- [ ] 8.6 Prune orphaned knowledge symlinks: compare existing symlinks under `.agentic-beacon/artifacts/knowledge/` against the derived set; remove mismatches
+- [x] 8.6 Prune orphaned knowledge symlinks: compare existing symlinks under `.agentic-beacon/artifacts/knowledge/` against the derived set; remove mismatches
 <!-- opsx:tdd:8.6:begin -->
   - **Input**: Project with pre-existing knowledge symlinks; new sync where derived set has shrunk.
   - **Expected Output**: Orphaned symlinks are removed; derived-set symlinks are preserved.
@@ -515,13 +515,13 @@ pytest tests/ -v --tb=short
     - TC4: Add a new referrer of a previously-derived knowledge file → no pruning; symlink preserved
     - TC5: Add a referrer to a brand-new knowledge file → new symlink created, no others pruned
 <!-- opsx:tdd:8.6:end -->
-- [ ] 8.7 Prune empty parent directories after knowledge pruning
+- [x] 8.7 Prune empty parent directories after knowledge pruning
 <!-- opsx:tdd:8.7:begin -->
   - **Input**: A knowledge tree like `.agentic-beacon/artifacts/knowledge/python-standards/lessons/` containing one symlink.
   - **Expected Output**: After pruning the last symlink, both `lessons/` and `python-standards/` directories are removed; the top-level `knowledge/` directory is also removed if it becomes empty.
   - **Validation**: Walk the tree post-sync; assert directories with zero children do not exist.
 <!-- opsx:tdd:8.7:end -->
-- [ ] 8.8 Prune transitively-pulled contexts when they drop out of the effective set
+- [x] 8.8 Prune transitively-pulled contexts when they drop out of the effective set
 <!-- opsx:tdd:8.8:begin -->
   - **Input**: Fixture: skill S requires context C (C not explicitly adopted). Unadopt S.
   - **Expected Output**: Next sync removes the `contexts/C.md` symlink because it was only transitively pulled.
@@ -533,13 +533,13 @@ pytest tests/ -v --tb=short
     - TC4: Two transitive referrers, unadopt one → context preserved
     - TC5: Two transitive referrers, unadopt both → context pruned
 <!-- opsx:tdd:8.8:end -->
-- [ ] 8.9 Ensure every error message includes a URL to `docs/migrations/artifact-dependencies-frontmatter.md`
+- [x] 8.9 Ensure every error message includes a URL to `docs/migrations/artifact-dependencies-frontmatter.md`
 <!-- opsx:tdd:8.9:begin -->
   - **Input**: All error-path tests in tasks 8.2 and 4.x.
   - **Expected Output**: Every captured error record or stderr blob contains the substring `docs/migrations/artifact-dependencies-frontmatter.md`.
   - **Validation**: Grep-style assertions across the error-path test suite: zero failures would pass without this substring present.
 <!-- opsx:tdd:8.9:end -->
-- [ ] 8.10 Integration test: full sync against a fixture warehouse exercising skills + contexts + derived knowledge; verify correct symlinks and no orphans
+- [x] 8.10 Integration test: full sync against a fixture warehouse exercising skills + contexts + derived knowledge; verify correct symlinks and no orphans
 <!-- opsx:tdd:8.10:begin -->
   - **Input**: Comprehensive fixture warehouse with skills (explicit), contexts (explicit + transitive from skill requires), knowledge (derived-only).
   - **Expected Output**: Post-sync tree exactly matches the hand-computed expected tree; second sync is a no-op.
@@ -556,24 +556,24 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:9:end -->
 
 
-- [ ] 9.1 [REMOVED] Agent frontmatter in sample warehouse is warehouse metadata for future groundwork (PER-109); `abc install agents/<name>.md` and `abc adopt` already install agents globally
+- [x] 9.1 [REMOVED] Agent frontmatter in sample warehouse is warehouse metadata for future groundwork (PER-109); `abc install agents/<name>.md` and `abc adopt` already install agents globally
 <!-- opsx:tdd:9.1:begin -->
   - **Reason removed**: Agents are not part of project `beacon.yaml`; agent `requires:` frontmatter is warehouse metadata for future groundwork (PER-109). `abc install agents/<name>.md` and `abc adopt` already support global agent install. PER-109 adds persistent selected-global-agent state and `abc sync` consuming agent `requires`.
 <!-- opsx:tdd:9.1:end -->
-- [ ] 9.2 Add `requires:` frontmatter to every skill under `examples/sample-warehouse/skills/`
+- [x] 9.2 Add `requires:` frontmatter to every skill under `examples/sample-warehouse/skills/`
 <!-- opsx:tdd:9.2:begin -->
   - **Input**: Every `SKILL.md` under `examples/sample-warehouse/skills/`.
   - **Expected Output**: Each parses as `SkillFrontmatter`; no forbidden `skills:` key present.
   - **Validation**: Same as 9.1 using `SkillFrontmatter`.
 <!-- opsx:tdd:9.2:end -->
-- [ ] 9.3 Remove any `knowledge: [...]` entries from the sample `beacon.yaml` template
+- [x] 9.3 Remove any `knowledge: [...]` entries from the sample `beacon.yaml` template
 <!-- opsx:tdd:9.3:begin -->
   - **Input**: Sample `beacon.yaml` template file (location per scaffold).
   - **Expected Output**: Template does not contain `knowledge:` key under `artifacts:`.
   - **Validation**: `rg -n '^\s*knowledge:' examples/ libs/beacon/src/beacon/data/` returns zero matches.
 <!-- opsx:tdd:9.3:end -->
-- [ ] 9.4 Update `libs/beacon/src/beacon/data/` templates (warehouse scaffolding) to match
-- [ ] 9.5 Verify `abc warehouse init test-warehouse` still produces a valid, migrated warehouse
+- [x] 9.4 Update `libs/beacon/src/beacon/data/` templates (warehouse scaffolding) to match
+- [x] 9.5 Verify `abc warehouse init test-warehouse` still produces a valid, migrated warehouse
 <!-- opsx:tdd:9.5:begin -->
   - **Input**: Fresh temp directory; run `abc warehouse init test-warehouse`.
   - **Expected Output**: Scaffolded warehouse has `requires:` frontmatter on every agent and skill; `beacon.yaml` has no `knowledge:` key; `abc warehouse validate` (or equivalent) passes.
@@ -620,7 +620,7 @@ pytest tests/ -v --tb=short
   - **Expected Output**: `uv run pytest` at repo root returns exit code 0 with no skipped tests unrelated to platform.
   - **Validation**: CI equivalent: `uv sync --group dev && uv run pytest`.
 <!-- opsx:tdd:10.5:end -->
-- [ ] 10.6 **[MANUAL]** Happy-path manual test in this repo: re-adopt `contexts/python-standards` through new flow, verify the 12+ knowledge files it references appear as symlinks under `.agentic-beacon/artifacts/knowledge/`
+- [x] 10.6 **[MANUAL]** Happy-path manual test in this repo: re-adopt `contexts/python-standards` through new flow, verify the 12+ knowledge files it references appear as symlinks under `.agentic-beacon/artifacts/knowledge/`
 <!-- opsx:tdd:10.6:begin -->
   - **Input**: This very repo (`~/Code/oss/agentic-beacon`) with its current `beacon.yaml` (`knowledge: []`, contexts includes `python-standards`).
   - **Expected Output**: After running `abc sync` on the new CLI, `.agentic-beacon/artifacts/knowledge/python-standards/` contains the 12+ knowledge symlinks referenced by `python-standards.md`, and (if any cross-pack refs exist) `knowledge/cicd/` is also populated accordingly.
@@ -641,13 +641,13 @@ pytest tests/ -v --tb=short
 - [x] 11.2 Update `AGENTS.md` and `README.md` sections that mention knowledge adoption
 - [x] 11.3 Update `docs/agentic-warehouse-design.md` sections that describe knowledge as an independently-adoptable artifact
 - [x] 11.4 Add a CHANGELOG entry documenting the breaking changes
-- [ ] 11.5 **[MANUAL]** Verify conventional commits throughout the PR for Release-Please version bump
+- [x] 11.5 **[MANUAL]** Verify conventional commits throughout the PR for Release-Please version bump
 <!-- opsx:tdd:11.5:begin -->
   - **Input**: `git log --oneline <base>..HEAD` on the feature branch.
   - **Expected Output**: Every subject line matches the conventional-commit format `<type>(<scope>)?: <description>`, with at least one `feat!:` or `fix!:` recording the breaking change.
   - **Validation**: `git log --format=%s <base>..HEAD | grep -vE '^(feat|fix|chore|refactor|docs|test|build|ci)(\(.+\))?!?: ' | wc -l` returns 0.
 <!-- opsx:tdd:11.5:end -->
-- [ ] 11.6 **[MANUAL]** Mark the change complete; prepare for `/opsx-archive` post-merge
+- [x] 11.6 **[MANUAL]** Mark the change complete; prepare for `/opsx-archive` post-merge
 
 <!-- opsx:metadata:begin -->
 ---

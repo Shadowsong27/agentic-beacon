@@ -1,10 +1,3 @@
-## REMOVED Requirements
-
-### Requirement: Interactive TUI for artifact selection
-**Reason**: The TUI continues to exist, but knowledge is removed from it as a selectable category. The requirement is being restated to reflect the new category set (contexts, skills; no knowledge) — see MODIFIED below. This REMOVED entry exists only to record that the prior "three categories including knowledge" wording is deprecated; the replacement lives in MODIFIED Requirements.
-
-**Migration**: No user-facing migration. The TUI simply no longer shows a knowledge section. Users who previously adopted knowledge through the TUI will find those knowledge files auto-pulled via the contexts and skills that reference them.
-
 ## MODIFIED Requirements
 
 ### Requirement: Interactive TUI for artifact selection
