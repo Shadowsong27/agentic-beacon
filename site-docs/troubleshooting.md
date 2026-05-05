@@ -7,12 +7,13 @@ Common issues and solutions for Agentic Beacon.
 | Problem | Quick Fix |
 |---------|-----------|
 | No warehouse connected | `abc warehouse connect --path <path>` |
-| No `beacon.yaml` | `abc setup --manual` |
+| No `beacon.yaml` | `abc setup` |
 | Files not syncing | Check paths in `beacon.yaml` match warehouse |
 | Wrong version | `pip install --upgrade agentic-beacon` |
 | Warehouse moved | `abc warehouse connect --path <new-path>` |
 | Artifacts in git | Add to `.gitignore` and `git rm --cached` |
 | Team out of sync | `cd warehouse && git pull && cd project && abc sync` |
+| Skill frontmatter missing | Add `requires:` block to skill's `SKILL.md` |
 
 ---
 
@@ -20,11 +21,22 @@ Common issues and solutions for Agentic Beacon.
 
 ### "No such command"
 
-**Problem:** Using old v1.x commands or wrong version installed.
+**Problem:** Using old v1.x or v2.x commands that have been removed.
 
 ```bash
 abc --version    # check current version
 ```
+
+Removed commands and their replacements:
+
+| Removed | Use instead |
+|---------|-------------|
+| `abc delta` | `abc warehouse status` |
+| `abc contribute` | `abc warehouse contribute -m "message"` |
+| `abc install <artifact>` | Edit `beacon.yaml`, then `abc sync` |
+| `abc sync --preserve` | `abc sync --contribute-local` or `--discard-local` |
+| `abc setup --manual` | `abc setup` (no flags needed) |
+| `abc setup --agent-assisted` | `abc setup` (no flags needed) |
 
 Upgrade:
 
@@ -58,7 +70,7 @@ local_path = "/absolute/path/to/warehouse"
 **Problem:** Running `abc sync` before creating configuration.
 
 ```bash
-abc setup --manual
+abc setup
 # Edit .agentic-beacon/beacon.yaml
 abc sync
 ```
@@ -86,7 +98,7 @@ touch README.md
 
 ### "Warehouse has uncommitted changes"
 
-**Problem:** `abc sync` or `abc contribute` blocked because the warehouse has uncommitted changes.
+**Problem:** `abc sync` blocked because the warehouse has uncommitted changes.
 
 ```bash
 cd ~/my-org-warehouse
@@ -108,6 +120,23 @@ cd ~/my-org-warehouse
 git pull
 ```
 
+### "Skill frontmatter missing or invalid"
+
+**Problem:** `abc sync` fails because an adopted skill is missing `requires:` frontmatter.
+
+Every skill's `SKILL.md` must include:
+
+```yaml
+---
+requires:
+  contexts:
+    - global.md
+    - teams/backend/AGENTS.md
+---
+```
+
+Add the missing frontmatter block to the skill's `SKILL.md` in the warehouse, then re-sync.
+
 ---
 
 ## File Sync Issues
@@ -119,35 +148,15 @@ git pull
 **Diagnostic:**
 ```bash
 cat .agentic-beacon/beacon.yaml      # check declared paths
-ls /path/to/warehouse/knowledge/     # verify paths exist in warehouse
-abc status                           # check sync state
+ls /path/to/warehouse/contexts/      # verify paths exist in warehouse
+abc status                           # check sync status
 ```
 
 **Common causes:**
 
-1. **Pattern doesn't match any files:**
-
-```yaml
-# Wrong — path doesn't exist
-knowledge:
-  - languages/python/fastapi.md
-
-# Right — check the actual warehouse structure
-knowledge:
-  - languages/python/fastapi/*.md
-```
-
-2. **Glob too narrow:**
-
-```yaml
-# Narrow — only one file
-knowledge:
-  - languages/python/type-hints.md
-
-# Broader — all markdown under python/
-knowledge:
-  - languages/python/**/*.md
-```
+1. **Pattern doesn't match any files:** Check the actual warehouse directory structure
+2. **Knowledge not auto-derived:** Knowledge files are only synced when referenced by a markdown link from an adopted context or skill. Add a link like `[guide](knowledge/path/file.md)` to your context file.
+3. **Skill dependency not satisfied:** Skills won't sync if their `requires:` context dependencies aren't available in the warehouse
 
 ### "0 files" on re-sync despite warehouse updates
 
@@ -270,7 +279,7 @@ ls .agentic-beacon/artifacts/contexts/
 2. Verify wiring:
 ```bash
 # Claude Code
-cat AGENTS.md | grep agentic-beacon
+cat CLAUDE.md | grep agentic-beacon
 
 # OpenCode
 cat opencode.json | grep agentic-beacon

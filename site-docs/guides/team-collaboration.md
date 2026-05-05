@@ -7,7 +7,7 @@ This guide covers how teams share a warehouse, stay in sync, and manage the cont
 | Role | Artifact |
 |------|---------|
 | **Warehouse** | Your team's shared registry — one git repo |
-| **`beacon.yaml`** | Each project's artifact dependencies |
+| **`beacon.yaml`** | Each project's context and skill dependencies |
 | **Artifacts** | Synced to each developer's local machine |
 
 The warehouse is the single source of truth. Projects pull from it; improvements flow back to it.
@@ -46,7 +46,7 @@ git clone git@github.com:yourorg/team-warehouse.git ~/team-warehouse
 cd my-project
 abc warehouse connect --path ~/team-warehouse
 abc adopt      # select artifacts interactively
-abc sync       # download and wire
+abc sync       # sync and wire
 ```
 
 **Tip:** Add to your team onboarding checklist:
@@ -56,7 +56,7 @@ abc sync       # download and wire
 - [ ] Clone warehouse: `git clone git@github.com:yourorg/team-warehouse.git ~/team-warehouse`
 - [ ] In each project: `abc warehouse connect --path ~/team-warehouse`
 - [ ] Select artifacts: `abc adopt`
-- [ ] Download artifacts: `abc sync`
+- [ ] Sync artifacts: `abc sync`
 ```
 
 ---
@@ -70,10 +70,6 @@ Create example `beacon.yaml` files in the warehouse for common project types:
 ```yaml
 # team-warehouse/examples/beacon-python-api.yaml
 artifacts:
-  knowledge:
-    - knowledge/languages/python/**/*.md
-    - knowledge/best-practices/api-design.md
-
   skills:
     - skills/code-review/
     - skills/generate-tests/
@@ -87,10 +83,12 @@ New projects copy the template:
 ```bash
 cd new-api-project
 abc warehouse connect --path ~/team-warehouse
-abc setup --manual
+abc setup
 cp ~/team-warehouse/examples/beacon-python-api.yaml .agentic-beacon/beacon.yaml
 abc sync
 ```
+
+Knowledge files referenced by those contexts and skills are auto-derived — no manual knowledge configuration needed.
 
 ### Pattern 2: Progressive Artifact Adoption
 
@@ -99,8 +97,6 @@ Start minimal, grow as the warehouse grows:
 **Sprint 1 — Start minimal:**
 ```yaml
 artifacts:
-  knowledge:
-    - knowledge/languages/python/type-hints.md
   skills: []
   contexts:
     - contexts/teams/backend/AGENTS.md
@@ -112,7 +108,7 @@ cd ~/team-warehouse && git pull
 cd my-project && abc sync
 # → "2 new artifact(s) available — run abc adopt to review"
 abc adopt
-# → TUI: select pytest guide, tdd-workflow, generate-tests → Enter
+# → TUI: select code-review skill, generate-tests skill → Enter
 ```
 
 ### Pattern 3: Team-Specific Contexts
@@ -133,6 +129,7 @@ contexts/
 Backend project `beacon.yaml`:
 ```yaml
 artifacts:
+  skills: []
   contexts:
     - contexts/teams/backend/AGENTS.md
     - contexts/projects/customer-portal/AGENTS.md
@@ -141,6 +138,7 @@ artifacts:
 Frontend project `beacon.yaml`:
 ```yaml
 artifacts:
+  skills: []
   contexts:
     - contexts/teams/frontend/AGENTS.md
     - contexts/projects/customer-portal/AGENTS.md
@@ -152,6 +150,8 @@ artifacts:
 
 ### Adding new knowledge
 
+Knowledge is auto-derived from markdown links. When you add a knowledge file to the warehouse, link to it from a context or skill and it will be synced automatically:
+
 ```bash
 cd ~/team-warehouse
 cat > knowledge/best-practices/error-handling.md << 'EOF'
@@ -159,21 +159,24 @@ cat > knowledge/best-practices/error-handling.md << 'EOF'
 ...
 EOF
 
-git add knowledge/best-practices/error-handling.md
+# Add a reference in the backend context
+echo "See [Error Handling](knowledge/best-practices/error-handling.md) for guidelines." >> contexts/teams/backend/AGENTS.md
+
+git add .
 git commit -m "docs: add error handling best practices"
 git push
 ```
 
-Team members discover and adopt it:
+Team members get the new knowledge on their next sync:
 
 ```bash
 cd ~/team-warehouse && git pull
 cd my-project && abc sync
-# → "1 new artifact(s) available — run abc adopt to review"
-abc adopt
 ```
 
-### Updating existing knowledge
+The resolver finds the `knowledge/best-practices/error-handling.md` link in the adopted context and syncs it automatically.
+
+### Updating existing artifacts
 
 ```bash
 cd ~/team-warehouse
@@ -184,36 +187,11 @@ git commit -m "docs: update type hints guide with Python 3.12 features"
 git push
 ```
 
-Team members get the update on their next sync (for artifacts already in their `beacon.yaml`):
+Team members get the update on their next sync:
 
 ```bash
 cd ~/team-warehouse && git pull
 cd my-project && abc sync
-```
-
-### Warehouse PR Template
-
-For teams using PRs to review warehouse changes:
-
-```markdown
-## New Artifact Proposal
-
-**Type:** Knowledge / Skill / Context
-
-**Location:** `knowledge/languages/python/pydantic-v2.md`
-
-**Purpose:** Document Pydantic v2 migration patterns
-
-**Example beacon.yaml:**
-```yaml
-knowledge:
-  - knowledge/languages/python/pydantic-v2.md
-```
-
-**Checklist:**
-- [ ] Tested in at least one project
-- [ ] Team review completed
-- [ ] Examples validated
 ```
 
 ---
@@ -229,7 +207,7 @@ knowledge:
 
 ### Regular maintenance schedule
 
-- **Monthly:** Review and prune outdated artifacts
+- **Monthly:** Review and prune outdated artifacts; remove dead markdown links
 - **Quarterly:** Major version tags with changelogs
 - **Ad-hoc:** Quick additions for new patterns
 
@@ -239,17 +217,14 @@ knowledge:
 
 ### Team standard changes
 
-When a shared artifact is updated:
+When a shared artifact is updated, sync picks up the latest:
 
 ```bash
-# Before sync
-abc delta contexts/teams/backend/AGENTS.md   # see what's different locally
+# Before sync, review warehouse changes
+abc warehouse status
 
-# Sync (overwrites unless --preserve)
+# Sync
 abc sync
-
-# Or sync while protecting local edits
-abc sync --preserve
 ```
 
 ### Multiple warehouse versions
@@ -285,9 +260,9 @@ backend-team-warehouse/      # Team-specific standards
 ## Best Practices
 
 1. **Clear ownership** — assign maintainers to warehouse sections (e.g., Python guild owns `knowledge/languages/python/`)
-2. **Document every artifact** — purpose, usage examples, owner
-3. **Use semantic versioning** — tag stable warehouse releases: `v1.0.0`
-4. **Onboarding exercise** — new team members should complete a "create your first beacon.yaml" exercise
+2. **Use frontmatter** — every skill's `SKILL.md` must declare `requires: { contexts: [...] }`
+3. **Link to knowledge** — knowledge files only sync when referenced by a markdown link from an adopted context or skill
+4. **Use semantic versioning** — tag stable warehouse releases: `v1.0.0`
 
 ---
 

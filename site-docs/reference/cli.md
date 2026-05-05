@@ -48,7 +48,7 @@ abc warehouse connect [OPTIONS]
 
 | Option | Description |
 |--------|-------------|
-| `--path PATH` | Path to the warehouse (required) |
+| `--path PATH` | Path to the warehouse (prompted if omitted) |
 
 Creates `.agentic-beacon/config.toml` (gitignored) with the warehouse location.
 
@@ -61,15 +61,64 @@ abc warehouse connect --path ~/my-org-warehouse
 
 ### `abc warehouse list`
 
-List warehouses or artifacts within a connected warehouse.
+List artifacts available in the connected warehouse.
 
 ```bash
-abc warehouse list [OPTIONS]
+abc warehouse list [ARTIFACT_TYPE]
+```
+
+| Argument | Description |
+|----------|-------------|
+| (none) | List all artifact types |
+| `agents` | List available agents |
+| `knowledge` | List available knowledge |
+| `skills` | List available skills |
+| `contexts` | List available contexts |
+
+---
+
+### `abc warehouse contribute`
+
+Commit changes in the warehouse working tree back to the warehouse repository.
+
+```bash
+abc warehouse contribute -m MESSAGE [OPTIONS]
 ```
 
 | Option | Description |
 |--------|-------------|
-| `--artifact-type TYPE` | Filter by type: `agents`, `knowledge`, `skills`, `contexts` |
+| `-m, --message TEXT` | Commit message (required) |
+| `--push` | Push the commit to the remote after committing |
+
+Stages and commits files tracked by `beacon.yaml` that have uncommitted changes in the warehouse clone.
+
+**Example:**
+```bash
+abc warehouse contribute -m "Update python standards"
+abc warehouse contribute -m "Fix typo" --push
+```
+
+---
+
+### `abc warehouse status`
+
+Show warehouse working tree status.
+
+```bash
+abc warehouse status [PATH] [OPTIONS]
+```
+
+| Argument / Option | Description |
+|---|---|
+| `PATH` | Optional: show unified diff for this specific file |
+| `--all` | Show unfiltered warehouse working-tree status |
+
+**Example:**
+```bash
+abc warehouse status
+abc warehouse status knowledge/python/standards.md
+abc warehouse status --all
+```
 
 ---
 
@@ -78,11 +127,12 @@ abc warehouse list [OPTIONS]
 Upgrade warehouse template documentation to the latest version.
 
 ```bash
-abc warehouse template-upgrade [OPTIONS]
+abc warehouse template-upgrade [WAREHOUSE_PATH] [OPTIONS]
 ```
 
 | Option | Description |
 |--------|-------------|
+| `WAREHOUSE_PATH` | Path to warehouse (defaults to current directory) |
 | `--dry-run` | Preview changes without applying |
 | `--interactive` | Prompt before each change |
 | `--force` | Apply without confirmation |
@@ -96,18 +146,14 @@ abc warehouse template-upgrade [OPTIONS]
 Create `.agentic-beacon/beacon.yaml` configuration.
 
 ```bash
-abc setup [OPTIONS]
+abc setup
 ```
 
-| Option | Description |
-|--------|-------------|
-| `--manual` | Create an empty template for manual editing |
-| `--agent-assisted` | Create template + `warehouse-catalog.md` for AI assistance |
+Creates a `beacon.yaml` template that declares which artifacts this project uses. Must be run after `abc warehouse connect`.
 
 **Example:**
 ```bash
-abc setup --manual
-abc setup --agent-assisted
+abc setup
 ```
 
 ---
@@ -125,7 +171,6 @@ abc adopt [OPTIONS]
 | Option | Description |
 |--------|-------------|
 | `--dry-run` | Preview available artifacts without making changes |
-| `--all` | Show all artifacts, including already-adopted ones |
 
 **Keyboard shortcuts in TUI:**
 
@@ -150,46 +195,21 @@ abc sync [OPTIONS]
 
 | Option | Description |
 |--------|-------------|
-| `--preserve` | Skip files with local modifications |
-| `--force` | Overwrite all artifacts, ignoring local changes |
-| `--dry-run` | Preview what would be synced without copying |
+| `--force` | Overwrite all conflicting files without prompting |
+| `--dry-run` | Preview what would be synced without making changes |
 | `--verbose` | Show per-file sync output |
 | `--skip-git-check` | Skip warehouse git state validation |
+| `--contribute-local` | Non-interactive: contribute all modified local files to warehouse |
+| `--discard-local` | Non-interactive: discard all modified local files and replace with symlinks |
 
 **What sync does per artifact type:**
 
 | Artifact | Action |
 |---|---|
-| Knowledge | Copy to `.agentic-beacon/artifacts/knowledge/` |
-| Contexts | Copy + wire into `AGENTS.md` or `opencode.json` |
-| Skills | Copy + install into tool-specific directories |
+| Knowledge | Create symlinks in `.agentic-beacon/artifacts/knowledge/` |
+| Contexts | Create symlinks + wire into `CLAUDE.md` or `opencode.json` |
+| Skills | Create symlinks + install into tool-specific directories |
 | Agents | Install into global tool directories |
-
----
-
-### `abc install`
-
-Sync and wire a single artifact from the warehouse.
-
-```bash
-abc install ARTIFACT [OPTIONS]
-```
-
-| Argument / Option | Description |
-|---|---|
-| `ARTIFACT` | Artifact path relative to warehouse root (e.g. `skills/code-review/`) |
-| `--agent TYPE` | Target agent: `opencode` or `claudecode` |
-| `--preserve` | Skip if local modification exists |
-| `--force` | Overwrite local modifications |
-
-**Examples:**
-```bash
-abc install skills/code-review/
-abc install contexts/global.md
-abc install agents/reviewer.md
-```
-
-Adds the artifact to `beacon.yaml` automatically.
 
 ---
 
@@ -203,75 +223,10 @@ abc agents sync [OPTIONS]
 
 | Option | Description |
 |--------|-------------|
-| `--preserve` | Skip agents with local modifications |
-| `--force` | Overwrite local modifications |
+| `--force` | Overwrite conflicting files without prompting |
 | `--skip-git-check` | Skip warehouse git state validation |
 
 Does not require `beacon.yaml` — works in any project connected to a warehouse.
-
----
-
-## Comparison & Contribution
-
-### `abc delta`
-
-Compare local artifacts with the warehouse.
-
-```bash
-abc delta [FILE] [OPTIONS]
-```
-
-| Argument / Option | Description |
-|---|---|
-| `FILE` | Optional: show detailed line-by-line diff for this file |
-| `--no-color` | Disable color output |
-
-**Without `FILE` — summary view:**
-
-```
-Delta Summary
-──────────────────────────────────────
-MODIFIED  knowledge/python/type-hints.md
-ADDED     knowledge/python/new-lesson.md
-
-  Modified: 1  Added: 1
-```
-
-**With `FILE` — detailed diff:**
-
-```bash
-abc delta knowledge/python/type-hints.md
-```
-
-**Status values:**
-
-| Status | Meaning |
-|--------|---------|
-| `MODIFIED` | Exists locally and in warehouse with different content |
-| `ADDED` | Exists locally but not in warehouse |
-| `MISSING` | In `beacon.yaml` but not synced yet |
-| `IDENTICAL` | Matches warehouse exactly |
-| `STALE` | Synced from an older warehouse version |
-
----
-
-### `abc contribute`
-
-Copy local artifact changes back to the warehouse.
-
-```bash
-abc contribute [FILE] [OPTIONS]
-```
-
-| Argument / Option | Description |
-|---|---|
-| `FILE` | Optional: contribute only this file |
-| `--dry-run` | Preview what would be contributed |
-| `--skip-git-check` | Skip warehouse git state validation |
-| `--manual-git` | Print manual git steps instead of auto-creating a PR |
-| `--exclude-unregistered` | Skip files not in `beacon.yaml` |
-
-**Default behavior:** creates a `contrib/<timestamp>` branch in the warehouse, commits, pushes, and opens a PR via `gh`. Falls back to printing manual steps if `gh` is not available.
 
 ---
 
@@ -279,7 +234,7 @@ abc contribute [FILE] [OPTIONS]
 
 ### `abc status`
 
-Show the current warehouse connection and sync state.
+Show the current warehouse connection and configuration status.
 
 ```bash
 abc status [OPTIONS]
@@ -288,6 +243,8 @@ abc status [OPTIONS]
 | Option | Description |
 |--------|-------------|
 | `--project PATH` | Check a specific project directory |
+
+Displays the connected warehouse path, configured contexts/skills (with ✓/✗ for synced status), bundled skills status, and total synced file count.
 
 ---
 
@@ -335,7 +292,7 @@ abc clean [OPTIONS]
 |--------|-------------|
 | `--project PATH` | Clean a specific project directory |
 
-Removes `.agentic-beacon/artifacts/` entirely. Run `abc sync` to re-download.
+Removes `.agentic-beacon/artifacts/` entirely. Run `abc sync` to re-sync.
 
 ---
 
@@ -351,7 +308,19 @@ abc reset [OPTIONS]
 |--------|-------------|
 | `--project PATH` | Reset a specific project directory |
 
-Equivalent to `abc sync --force`. Discards all local modifications to artifacts.
+Overwrites all symlinks from the warehouse, discarding any local modifications.
+
+---
+
+## Removed Commands
+
+The following commands have been removed in v3. Their stubs remain with migration guidance:
+
+| Removed | Replacement |
+|---------|-------------|
+| `abc delta` | `abc warehouse status` |
+| `abc contribute` | `abc warehouse contribute -m "message"` |
+| `abc install <artifact>` | Edit `beacon.yaml` manually, then `abc sync` |
 
 ---
 
@@ -373,13 +342,14 @@ Available on all commands:
 |---------|-------------|
 | `abc warehouse init` | Create a new warehouse |
 | `abc warehouse connect` | Connect a project to a warehouse |
+| `abc warehouse list` | List available artifacts in warehouse |
+| `abc warehouse status` | Show warehouse working tree changes |
+| `abc warehouse contribute -m MESSAGE` | Commit warehouse changes back |
+| `abc warehouse template-upgrade` | Upgrade warehouse template docs |
 | `abc setup` | Create `beacon.yaml` configuration |
 | `abc adopt` | Browse + select artifacts via TUI |
 | `abc sync` | Sync all declared artifacts |
-| `abc install <artifact>` | Sync a single artifact |
 | `abc agents sync` | Sync global agent definitions |
-| `abc delta` | Compare local artifacts with warehouse |
-| `abc contribute` | Copy local changes back to warehouse |
 | `abc status` | Show connection and sync status |
 | `abc doctor` | Validate project health |
 | `abc list` | List synced artifacts |

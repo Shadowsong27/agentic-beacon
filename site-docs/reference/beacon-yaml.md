@@ -9,7 +9,7 @@ my-project/
 └── .agentic-beacon/
     ├── beacon.yaml     # ✅ Commit this
     ├── config.toml     # ❌ Gitignored (local warehouse path)
-    └── artifacts/      # ❌ Gitignored (downloaded files)
+    └── artifacts/      # ❌ Gitignored (symlink tree into warehouse)
 ```
 
 ---
@@ -18,51 +18,19 @@ my-project/
 
 ```yaml
 artifacts:
-  knowledge:
-    - <pattern-or-path>
-
   skills:
     - skills/<name>/      # directory-level entry (canonical form)
 
   contexts:
     - <pattern-or-path>
-
-# Optional — suppress skills from abc delta and abc contribute
-ignore:
-  skills:
-    - "openspec-*"        # fnmatch glob patterns
 ```
 
-All three `artifacts` keys are required (can be empty lists). The file is validated on `abc sync` and `abc setup`.
+Only two artifact types are declared in `beacon.yaml`:
 
----
+- **Skills** — declared at directory level (trailing `/`), must have `requires: { contexts: [...] }` frontmatter in their `SKILL.md`
+- **Contexts** — file or glob patterns, wired into agent config on sync
 
-## `artifacts.knowledge`
-
-Knowledge artifacts are markdown files — best practices, standards, framework guides, team decisions.
-
-```yaml
-artifacts:
-  knowledge:
-    # Exact file path (relative to warehouse root)
-    - knowledge/decisions/coding-standards.md
-
-    # Directory wildcard — all files one level deep
-    - knowledge/testing/*.md
-
-    # Recursive wildcard — all .md files under a subtree
-    - knowledge/python/**/*.md
-
-    # Any path your warehouse uses
-    - knowledge/global/**/*.md
-```
-
-**Path rules:**
-
-- Paths are relative to the warehouse root
-- Only files are matched (not directories)
-- Patterns with `*`, `**`, or `?` are expanded as globs
-- Unmatched patterns warn but do not cause errors
+**Knowledge files are NOT declared in beacon.yaml.** They are auto-derived from markdown links (`[text](knowledge/...)`) found in adopted contexts and skills. The dependency resolver scans all adopted artifacts and syncs every referenced knowledge file automatically.
 
 ---
 
@@ -73,11 +41,24 @@ Skills are tracked at the **directory level** — a skill is a directory with a 
 ```yaml
 artifacts:
   skills:
-    # Canonical form — directory path
     - skills/code-review/
     - skills/generate-tests/
     - skills/api-design/
 ```
+
+!!! info "Required: Frontmatter Dependencies"
+    Every skill's `SKILL.md` must include a YAML frontmatter block declaring which contexts it needs:
+
+    ```yaml
+    ---
+    requires:
+      contexts:
+        - global.md
+        - teams/backend/AGENTS.md
+    ---
+    ```
+
+    Missing or malformed frontmatter on any adopted skill causes `abc sync` to fail with a hard error.
 
 !!! warning
     Skills must be declared as directories. File-level entries (e.g. `skills/code-review/SKILL.md`) are rejected by `abc sync` with an error.
@@ -86,7 +67,7 @@ artifacts:
 
 ## `artifacts.contexts`
 
-Contexts are `AGENTS.md`-style files that load as boot context when the agent starts.
+Contexts are boot instruction files that load when the agent starts.
 
 ```yaml
 artifacts:
@@ -104,23 +85,34 @@ artifacts:
 
 **How contexts are wired:**
 
-- **Claude Code** — path appended to `AGENTS.md` as `@.agentic-beacon/artifacts/contexts/...`
+- **Claude Code** — path appended to `CLAUDE.md` as `@.agentic-beacon/artifacts/contexts/...`
 - **OpenCode** — path added as a file reference in `opencode.json`
 
 ---
 
-## `ignore`
+## How Knowledge Works
 
-Suppress specific skills from appearing in `abc delta` and `abc contribute`. Useful for skills installed by external tools (e.g., OpenSpec) that you don't want to track through the warehouse.
+Knowledge is NOT declared in `beacon.yaml`. There is no `artifacts.knowledge` key. Knowledge files are:
 
-```yaml
-ignore:
-  skills:
-    - "openspec-*"
-    - "opsx-*"
+1. **Auto-derived** — `abc sync` scans all adopted contexts and skills for markdown links to `knowledge/` paths
+2. **Synced automatically** — referenced knowledge files are symlinked into `.agentic-beacon/artifacts/knowledge/`
+3. **Pruned automatically** — knowledge files no longer referenced by any adopted artifact are removed as orphans
+
+**Example:** If your adopted context contains:
+```markdown
+See the [Python standards](knowledge/python/standards.md) for details.
 ```
 
-Patterns use [`fnmatch`](https://docs.python.org/3/library/fnmatch.html) syntax, matched against the skill directory name (without the `skills/` prefix).
+Then `knowledge/python/standards.md` is automatically synced — no manual configuration needed.
+
+---
+
+## Path Rules
+
+- Paths are relative to the warehouse root
+- Only files are matched (not directories, except skills which are directory-level)
+- Patterns with `*`, `**`, or `?` are expanded as globs
+- Unmatched patterns warn but do not cause errors
 
 ---
 
@@ -130,23 +122,6 @@ Patterns use [`fnmatch`](https://docs.python.org/3/library/fnmatch.html) syntax,
 # .agentic-beacon/beacon.yaml
 
 artifacts:
-  knowledge:
-    # Python standards
-    - knowledge/languages/python/type-hints.md
-    - knowledge/languages/python/async-patterns.md
-    - knowledge/languages/python/error-handling.md
-
-    # Framework-specific
-    - knowledge/languages/python/fastapi/**/*.md
-    - knowledge/languages/python/pydantic/**/*.md
-
-    # Testing
-    - knowledge/languages/python/pytest/**/*.md
-    - knowledge/best-practices/tdd-workflow.md
-
-    # Infrastructure
-    - knowledge/infrastructure/docker-python.md
-
   skills:
     - skills/code-review/
     - skills/generate-tests/
@@ -154,11 +129,9 @@ artifacts:
   contexts:
     - contexts/global.md
     - contexts/teams/backend/AGENTS.md
-
-ignore:
-  skills:
-    - "opsx-*"
 ```
+
+Knowledge files referenced by those contexts and skills will be auto-derived and synced automatically.
 
 ---
 
@@ -166,13 +139,12 @@ ignore:
 
 ```yaml
 artifacts:
-  knowledge: []
   skills: []
   contexts:
     - contexts/global.md
 ```
 
-An empty `knowledge` or `skills` list is valid — those artifact types simply won't be synced.
+An empty `skills` list is valid — skills simply won't be synced.
 
 ---
 
@@ -180,12 +152,10 @@ An empty `knowledge` or `skills` list is valid — those artifact types simply w
 
 | Command | Effect on `beacon.yaml` |
 |---------|------------------------|
-| `abc setup --manual` | Creates an empty template |
-| `abc setup --agent-assisted` | Creates template + `warehouse-catalog.md` for AI assistance |
+| `abc setup` | Creates a template you can edit |
 | `abc adopt` | Appends selected artifact paths |
-| `abc install <artifact>` | Adds one artifact path |
-| `abc sync` | Reads `beacon.yaml`, copies and wires all matching artifacts |
-| `abc delta` | Reads `beacon.yaml` to determine which files to compare |
+| `abc sync` | Reads `beacon.yaml`, resolves dependencies via frontmatter, derives knowledge, creates symlinks |
+| `abc warehouse status` | Reads `beacon.yaml` to determine which warehouse files to check |
 
 ---
 
@@ -193,15 +163,18 @@ An empty `knowledge` or `skills` list is valid — those artifact types simply w
 
 `abc sync` validates `beacon.yaml` before proceeding. It errors if:
 
-- The file does not exist → run `abc setup --manual`
+- The file does not exist → run `abc setup`
 - The YAML is malformed (syntax error)
 - The `artifacts` key is missing
-- Any of `knowledge`, `skills`, or `contexts` is not a list
+- Any of `skills` or `contexts` is not a list
 - A skill entry is a file path rather than a directory path
+- Any adopted skill is missing required `requires:` frontmatter
+- Any required context does not exist in the warehouse
 
 Warnings (not errors) for:
 
 - Patterns that match no files in the warehouse
+- Knowledge files referenced by links but not found in the warehouse
 
 ---
 
@@ -214,7 +187,6 @@ git add .agentic-beacon/beacon.yaml
 # Already gitignored by abc
 # .agentic-beacon/config.toml
 # .agentic-beacon/artifacts/
-# .agentic-beacon/warehouse-catalog.md
 ```
 
 The `.gitignore` entries are added automatically when you run `abc warehouse connect` and `abc sync`.
@@ -225,7 +197,7 @@ The `.gitignore` entries are added automatically when you run `abc warehouse con
 
 ```bash
 # Create beacon.yaml
-abc setup --manual
+abc setup
 
 # Populate it interactively
 abc adopt
@@ -233,8 +205,8 @@ abc adopt
 # Apply the configuration
 abc sync
 
-# Preview differences between local and warehouse
-abc delta
+# Preview warehouse working tree changes
+abc warehouse status
 
 # Check what's configured and synced
 abc status

@@ -5,10 +5,10 @@ Once your project is connected and initially synced, the recurring loop is strai
 ## The Loop
 
 ```
-1. abc sync          — pull the latest artifacts from the warehouse
-2. code with agent   — agent uses synced contexts, knowledge, and skills
-3. abc delta         — see what has drifted locally
-4. abc contribute    — promote valuable changes back to the warehouse
+1. abc sync                     — pull the latest artifacts from the warehouse
+2. code with agent              — agent uses synced contexts, knowledge, and skills
+3. abc warehouse status         — see what has changed in the warehouse working tree
+4. abc warehouse contribute     — commit improvements back to the warehouse
 5. repeat
 ```
 
@@ -16,7 +16,7 @@ Once your project is connected and initially synced, the recurring loop is strai
 
 ## Step 1: Pull Warehouse Updates
 
-When the warehouse changes (a teammate added a new knowledge file, improved a context, etc.):
+When the warehouse changes (a teammate added a new context, improved a skill, etc.):
 
 ```bash
 # Pull warehouse updates
@@ -30,8 +30,8 @@ After sync, if new artifacts are available that you haven't adopted yet:
 
 ```
 ✓ Sync complete
-  Copied: 2 files
-  Unchanged: 8 files
+  Created: 2 symlinks
+  Up to date: 8 symlinks
 
 1 new artifact(s) available — run abc adopt to review
 ```
@@ -44,8 +44,8 @@ Run `abc adopt` to open the TUI and select new artifacts interactively.
 
 Your AI agent now reads:
 
-- Contexts wired into `AGENTS.md` or `opencode.json` (loaded at session start)
-- Knowledge files referenced by path from contexts
+- Contexts wired into `CLAUDE.md` or `opencode.json` (loaded at session start)
+- Knowledge files auto-derived from markdown links and symlinked into `artifacts/`
 - Skills available as slash commands (e.g. `/code-review`, `/generate-tests`)
 - Global agents available in any project (`/reviewer`, etc.)
 
@@ -53,64 +53,49 @@ No extra setup needed — everything is in place after `abc sync`.
 
 ---
 
-## Step 3: Review Local Drift
+## Step 3: Review Warehouse Working Tree Changes
 
-After a coding session, your agent may have improved synced artifacts. Check with:
+After a coding session, your agent may have improved synced artifacts. Since artifacts are symlinks into the warehouse, check with:
 
 ```bash
-abc delta
+abc warehouse status
 ```
 
-Shows all local differences from the warehouse:
+Shows modifications to warehouse files tracked by resolved artifacts:
 
 ```
-Delta Summary
-──────────────────────────────────────
-MODIFIED  knowledge/python/type-hints.md
-MODIFIED  skills/code-review/SKILL.md
-ADDED     knowledge/python/new-lesson.md
-
-  Modified: 2  Added: 1
+Modified files:
+  modified  knowledge/python/type-hints.md
+  modified  skills/code-review/SKILL.md
 ```
 
 Inspect a specific file:
 
 ```bash
-abc delta knowledge/python/type-hints.md
+abc warehouse status knowledge/python/type-hints.md
 ```
 
 Shows a line-by-line diff.
 
 ---
 
-## Step 4: Contribute Back
+## Step 4: Commit Changes Back
 
-If local changes are worth sharing:
-
-```bash
-abc contribute
-```
-
-By default, this:
-
-1. Creates a `contrib/<timestamp>` branch in the warehouse
-2. Commits the changes
-3. Pushes and opens a PR via `gh`
-4. Prints the PR URL
-
-Contribute a single file:
+If improvements are worth sharing:
 
 ```bash
-abc contribute knowledge/python/type-hints.md
+abc warehouse contribute -m "Improve type hints guide with Python 3.12+ patterns"
 ```
 
-Preview before contributing:
+This stages and commits all files tracked by resolved artifacts that have uncommitted changes in the warehouse.
+
+Push immediately:
 
 ```bash
-abc contribute --dry-run
+abc warehouse contribute -m "Fix typo in error handling" --push
 ```
 
-Once the PR is merged, teammates get the improvements on their next sync.
+Once in the warehouse, teammates get the improvements on their next sync.
 
 ---
 
@@ -120,22 +105,7 @@ Once the PR is merged, teammates get the improvements on their next sync.
 abc status
 ```
 
-Shows the connected warehouse, configured artifacts, and sync state:
-
-```
-Warehouse: /Users/you/my-org-warehouse
-
-Configured Contexts
-  ✓ contexts/global.md
-  ✓ contexts/teams/backend/AGENTS.md
-
-Configured Knowledge Patterns
-  • knowledge/python/**/*.md
-
-Configured Skills
-  ✓ code-review
-  ✓ generate-tests
-```
+Shows the connected warehouse, configured contexts and skills (with ✓/✗ for synced status), and total synced file count.
 
 ```bash
 abc doctor
@@ -160,8 +130,8 @@ abc list agents       # list globally installed agents
 |-----------|---------|
 | Pull warehouse updates | `cd ~/warehouse && git pull && cd project && abc sync` |
 | Discover new artifacts | `abc adopt` |
-| Check local drift | `abc delta` |
-| Share improvements | `abc contribute` |
+| Check warehouse tree changes | `abc warehouse status` |
+| Share improvements | `abc warehouse contribute -m "message"` |
 | Check project health | `abc status` |
 | Diagnose issues | `abc doctor` |
 | Reset all artifacts | `abc reset` |
@@ -171,5 +141,5 @@ abc list agents       # list globally installed agents
 ## Next Steps
 
 - **[Contributing Back](contributing-back.md)** — the contribution workflow in depth
-- **[Advanced Patterns](advanced-patterns.md)** — `abc delta`, sync flags, glob patterns
+- **[Advanced Patterns](advanced-patterns.md)** — glob patterns and advanced configuration
 - **[Team Collaboration](team-collaboration.md)** — coordinating across a team

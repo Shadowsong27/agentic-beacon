@@ -41,8 +41,8 @@ Expected output:
   Location: /Users/you/my-org-warehouse
 
 Next Steps:
-  1. Run 'abc adopt' to browse and select artifacts
-  2. Run 'abc sync' to download artifacts
+  1. Run 'abc setup' to configure artifacts
+  2. Run 'abc sync' to sync artifacts
 ```
 
 ---
@@ -62,17 +62,13 @@ Opens a TUI where you browse artifacts grouped by type. Press `Space` to select,
 ### Option B: Manual configuration
 
 ```bash
-abc setup --manual
+abc setup
 ```
 
-Creates an empty `beacon.yaml` template at `.agentic-beacon/beacon.yaml`. Edit it manually to declare which artifacts you need:
+Creates a `beacon.yaml` template at `.agentic-beacon/beacon.yaml`. Edit it manually to declare which contexts and skills you need:
 
 ```yaml
 artifacts:
-  knowledge:
-    - knowledge/python/**/*.md
-    - knowledge/decisions/coding-standards.md
-
   skills:
     - skills/code-review/
 
@@ -80,13 +76,7 @@ artifacts:
     - contexts/global.md
 ```
 
-### Option C: Agent-assisted
-
-```bash
-abc setup --agent-assisted
-```
-
-Generates a `warehouse-catalog.md` with a listing of all available artifacts. Use this with your AI agent to help populate `beacon.yaml`.
+**Knowledge is auto-derived** — knowledge files referenced by markdown links in your contexts and skills are synced automatically. No manual knowledge configuration needed.
 
 ---
 
@@ -96,11 +86,11 @@ Generates a `warehouse-catalog.md` with a listing of all available artifacts. Us
 abc sync
 ```
 
-Reads `beacon.yaml` and performs the full sync:
+Reads `beacon.yaml`, resolves skill→context dependencies via frontmatter, auto-derives knowledge from markdown links, and performs the full sync:
 
-- **Knowledge** → copied to `.agentic-beacon/artifacts/knowledge/`
-- **Contexts** → copied and wired into `AGENTS.md` or `opencode.json`
-- **Skills** → copied and installed into each detected tool's directories
+- **Contexts** → symlinked into `.agentic-beacon/artifacts/contexts/` and wired into `CLAUDE.md` or `opencode.json`
+- **Skills** → symlinked into `.agentic-beacon/artifacts/skills/` and installed into each detected tool's directories
+- **Knowledge** → auto-derived from markdown links and symlinked into `.agentic-beacon/artifacts/knowledge/`
 - **Agents** → installed into global tool directories
 
 ---
@@ -121,8 +111,7 @@ Teammates clone the repo, run `abc warehouse connect`, and `abc sync` to get the
 ```
 ✅  .agentic-beacon/beacon.yaml       — commit this
 ❌  .agentic-beacon/config.toml      — gitignored (local path)
-❌  .agentic-beacon/artifacts/       — gitignored (downloaded snapshot)
-❌  .agentic-beacon/warehouse-catalog.md  — gitignored
+❌  .agentic-beacon/artifacts/       — gitignored (symlink tree)
 ```
 
 The `.gitignore` entries are added automatically by `abc warehouse connect` and `abc sync`.
@@ -141,7 +130,7 @@ cd ~/my-org-warehouse && git pull
 cd my-project && abc sync
 ```
 
-Sync is idempotent — only changed files are re-copied.
+Sync is idempotent — only changed files are updated.
 
 ---
 
@@ -151,7 +140,7 @@ Sync is idempotent — only changed files are re-copied.
 abc status
 ```
 
-Shows the connected warehouse, configured artifacts, and sync state.
+Shows the connected warehouse, configured contexts and skills (with ✓/✗ for synced status), and total synced file count.
 
 ```bash
 abc doctor

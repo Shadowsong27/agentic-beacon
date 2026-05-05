@@ -13,7 +13,7 @@ Centrally manage and distribute contexts, knowledge, and skills across your team
 
 ## The Problem: Context Drift
 
-When a team adopts AI coding agents, each project accumulates its own `AGENTS.md` or context file. Standards diverge. A pattern discovered in one repo never reaches the others. When guidelines change, someone copy-pastes updates into 15 repos and misses three.
+When a team adopts AI coding agents, each project accumulates its own context file. Standards diverge. A pattern discovered in one repo never reaches the others. When guidelines change, someone copy-pastes updates into 15 repos and misses three.
 
 This is **Context Drift** — the same DRY problem that version control solved for code, unsolved for agentic engineering artifacts.
 
@@ -29,21 +29,21 @@ Two moving parts:
 
 **Warehouse** — a single git repository owned by your team. It holds the shared source of truth: contexts, knowledge, skills, and agent definitions.
 
-**Beacon** — a per-project connector. Running `abc warehouse connect` creates `.agentic-beacon/` in your project with a `beacon.yaml` that declares which warehouse artifacts this project needs.
+**Beacon** — a per-project connector. Running `abc warehouse connect` creates `.agentic-beacon/` in your project with a `beacon.yaml` that declares which contexts and skills this project needs. Knowledge files are auto-derived from markdown links in contexts and skills.
 
 ```
 Warehouse (shared git repo)                 Your project / global
 ────────────────────────────                ────────────────────────────────
-knowledge/    ── abc sync ──►  .agentic-beacon/artifacts/knowledge/
 contexts/     ── abc sync ──►  .agentic-beacon/artifacts/contexts/
-                                opencode.json / AGENTS.md (wired)
+                                 opencode.json / CLAUDE.md (wired)
+knowledge/    ── auto-derive ─► .agentic-beacon/artifacts/knowledge/
 skills/       ── abc sync ──►  .opencode/skills/<name>/
 agents/       ── abc sync ──►  ~/.claude/agents/<name>.md
 ```
 
-`abc sync` reads `beacon.yaml` and does the full job in one step: copies and wires knowledge and contexts into your agent config, installs skills into each detected tool's directories, and installs agent definitions globally.
+`abc sync` reads `beacon.yaml`, resolves skill→context dependencies via frontmatter, auto-derives knowledge from markdown links, and creates symlinks into the warehouse for all resolved artifacts.
 
-When a session produces something worth sharing, `abc contribute` copies it back to the warehouse so every project benefits on the next sync.
+When a session produces something worth sharing, `abc warehouse contribute -m "message"` commits changes in the warehouse working tree so every project benefits on the next sync.
 
 ---
 
@@ -56,9 +56,9 @@ Four types form the core of a warehouse, organized by two axes: **project scope*
 | **Project-scoped** | 📄 Contexts · 🧠 Knowledge | ⚡ Skills |
 | **Global** | — | 🤖 Agents |
 
-- **Contexts** — boot instructions and coding standards; wired into `opencode.json` / `AGENTS.md` automatically on sync
-- **Knowledge** — atomic decisions, lessons, and facts; copied to `.agentic-beacon/artifacts/` and referenced from contexts
-- **Skills** — reusable workflows installed as slash commands into each tool's live directories
+- **Contexts** — boot instructions and coding standards; declared in `beacon.yaml`, wired into `opencode.json` / `CLAUDE.md` on sync
+- **Knowledge** — decisions, lessons, and facts; auto-derived from markdown links in contexts and skills — no manual configuration needed
+- **Skills** — reusable workflows with frontmatter `requires:` dependencies; installed as slash commands
 - **Agents** — sub-agent definitions installed once into global tool directories (`~/.claude/agents/`, `~/.config/opencode/agents/`)
 
 ---
@@ -100,4 +100,4 @@ abc sync
 
 A shared wiki is **read-only by design** — someone curates it, everyone else consumes it. There is no path from a coding session back to the wiki. Improvements stay on the developer's machine.
 
-Agentic Beacon is **bidirectional**. When an agent session produces a better approach, `abc contribute` copies it back to the warehouse and opens a PR. Once merged, every project gets the improvement on the next `abc sync`. The warehouse gets smarter over time because the whole team is contributing to it, not just reading from it. That compounding loop is what the tool was built around.
+Agentic Beacon is **bidirectional**. When an agent session produces a better approach, `abc warehouse contribute -m "message"` commits it back to the warehouse. Once merged, every project gets the improvement on the next `abc sync`. The warehouse gets smarter over time because the whole team is contributing to it, not just reading from it. That compounding loop is what the tool was built around.

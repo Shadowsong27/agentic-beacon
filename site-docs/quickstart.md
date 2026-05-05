@@ -41,6 +41,9 @@ echo "# Org Standards\n## Conventions\n- Python 3.12+, type hints required" > co
 # Add a knowledge file
 mkdir -p knowledge/decisions
 echo "# Why We Use Pydantic\n..." > knowledge/decisions/pydantic.md
+
+# Reference the knowledge file from your context
+echo "See [Pydantic rationale](knowledge/decisions/pydantic.md) for details." >> contexts/global.md
 ```
 
 ### 3. Commit and push
@@ -73,7 +76,7 @@ This writes your selections to `.agentic-beacon/beacon.yaml`.
 abc sync
 ```
 
-Artifacts are copied into `.agentic-beacon/artifacts/`, wired into your agent config, and skills installed as slash commands.
+Artifacts are symlinked into `.agentic-beacon/artifacts/`, wired into your agent config, and skills installed as slash commands. Knowledge files referenced by markdown links in your contexts and skills are auto-derived and synced automatically.
 
 ---
 
@@ -103,10 +106,10 @@ Done. Your agent now has the team's contexts, knowledge, and skills loaded.
 Once set up, the recurring loop is:
 
 ```
-1. abc sync          — pull the latest from the warehouse
-2. code with agent   — agent uses synced contexts, knowledge, and skills
-3. abc delta         — see what has drifted (agent-suggested changes)
-4. abc contribute    — promote valuable local changes back to the warehouse
+1. abc sync                     — pull the latest from the warehouse
+2. code with agent              — agent uses synced contexts, knowledge, and skills
+3. abc warehouse status         — see what has changed in the warehouse working tree
+4. abc warehouse contribute     — commit improvements back to the warehouse
 5. repeat
 ```
 
@@ -117,7 +120,7 @@ Once set up, the recurring loop is:
 ```
 ✅  .agentic-beacon/beacon.yaml    — your artifact dependencies (commit this)
 ❌  .agentic-beacon/config.toml   — gitignored (local warehouse path)
-❌  .agentic-beacon/artifacts/    — gitignored (downloaded snapshot)
+❌  .agentic-beacon/artifacts/    — gitignored (symlink tree)
 ```
 
 Teammates run `abc warehouse connect` + `abc sync` to get the same artifacts on their machines.

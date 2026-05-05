@@ -8,10 +8,10 @@ Agentic Beacon is built around two components — the **warehouse** and the **be
 |-------------|--------------------------|
 | npm registry | **Warehouse** — your central repository of shared artifacts |
 | `package.json` | **`beacon.yaml`** — your project's artifact dependencies |
-| `node_modules/` | **`.agentic-beacon/artifacts/`** — local downloaded snapshot |
-| `npm install` | **`abc sync`** — fetch and wire all artifacts |
+| `node_modules/` | **`.agentic-beacon/artifacts/`** — local symlink tree |
+| `npm install` | **`abc sync`** — resolve, sync, and wire all artifacts |
 
-Like npm, the warehouse is separate from the projects that consume it. Projects declare what they need; the tool does the copying and wiring. The artifacts directory is gitignored — regenerated from source on demand.
+Like npm, the warehouse is separate from the projects that consume it. Projects declare what they need; the tool resolves dependencies, creates symlinks, and wires artifacts. The artifacts directory is gitignored — regenerated from source on demand.
 
 ---
 
@@ -41,19 +41,15 @@ Each project that consumes warehouse artifacts has a `.agentic-beacon/` director
 ```
 my-project/
 └── .agentic-beacon/
-    ├── beacon.yaml       ← committed to git: declares which artifacts this project needs
+    ├── beacon.yaml       ← committed to git: declares which contexts and skills this project needs
     ├── config.toml       ← gitignored: local warehouse path
-    └── artifacts/        ← gitignored: downloaded artifact snapshot
+    └── artifacts/        ← gitignored: symlink tree into warehouse
 ```
 
-`beacon.yaml` is the per-project manifest. It lists paths and glob patterns for the warehouse artifacts this project wants:
+`beacon.yaml` declares two types of artifacts:
 
 ```yaml
 artifacts:
-  knowledge:
-    - knowledge/python/**/*.md
-    - knowledge/decisions/coding-standards.md
-
   skills:
     - skills/code-review/
     - skills/generate-tests/
@@ -69,16 +65,60 @@ artifacts:
 
 ## What `abc sync` Does
 
-`abc sync` reads `beacon.yaml`, finds the warehouse via `config.toml`, and does the full job in one step:
+`abc sync` runs a multi-phase pipeline:
 
-| Artifact type | What sync does |
-|---|---|
-| **Knowledge** | Copies files into `.agentic-beacon/artifacts/knowledge/`; no further wiring (referenced from contexts) |
-| **Contexts** | Copies files into `.agentic-beacon/artifacts/contexts/`; adds path references to `opencode.json` or `AGENTS.md` |
-| **Skills** | Copies skill directories into `.agentic-beacon/artifacts/skills/`; installs into each detected tool's live skill + command directories |
-| **Agents** | Reads `agents/` from the warehouse; installs directly into global tool directories (`~/.claude/agents/`, `~/.config/opencode/agents/`) |
+1. **Read `beacon.yaml`** — loads the declared contexts and skills
+2. **Resolve dependencies** — reads `requires:` frontmatter from each skill's `SKILL.md` to compute the full set of required contexts
+3. **Auto-derive knowledge** — scans every adopted context and skill for markdown links to `knowledge/` paths and adds them to the sync set
+4. **Create symlinks** — creates per-file symlinks under `.agentic-beacon/artifacts/` pointing into the warehouse clone
+5. **Wire artifacts** — adds context references to `CLAUDE.md` or `opencode.json`, installs skills into tool directories
+6. **Prune orphans** — removes symlinks for artifacts no longer referenced
 
-No live connection to the warehouse is needed during coding sessions. The agent reads from local files.
+| Artifact type | How it's configured | What sync does |
+|---|---|---|
+| **Contexts** | Declared in `beacon.yaml` | Symlinks + wiring into agent config |
+| **Skills** | Declared in `beacon.yaml` | Symlinks + install into tool directories |
+| **Knowledge** | Auto-derived from markdown links in contexts/skills | Symlinks only (referenced from contexts) |
+| **Agents** | Read from warehouse `agents/` directory | Install into global tool directories |
+
+---
+
+## Frontmatter Dependencies
+
+Skills declare their context dependencies in YAML frontmatter. Every skill's `SKILL.md` must include:
+
+```yaml
+---
+requires:
+  contexts:
+    - global.md
+    - teams/backend/AGENTS.md
+---
+```
+
+Missing or malformed frontmatter on any adopted skill causes `abc sync` to fail with a hard error. This ensures all required contexts are present before the agent starts.
+
+---
+
+## Knowledge Auto-Derivation
+
+Knowledge files are NOT declared in `beacon.yaml`. When a context or skill contains a markdown link to a `knowledge/` path:
+
+```markdown
+See the [Python type hints guide](knowledge/python/type-hints.md) for details.
+```
+
+The dependency resolver finds that reference and adds it to the sync set automatically. No manual configuration needed.
+
+---
+
+## Symlink Model
+
+`abc sync` creates **symlinks**, not copies. `.agentic-beacon/artifacts/` is a tree of symlinks pointing into the warehouse clone. This means:
+
+- **One physical file per machine.** No duplicate copies to drift out of sync.
+- **Edits go directly to the warehouse.** Editing a symlinked file edits the warehouse working tree.
+- **Cross-project visibility.** If two projects share the same artifact, editing it in Project A makes the change visible in Project B immediately.
 
 ---
 
@@ -88,8 +128,8 @@ No live connection to the warehouse is needed during coding sessions. The agent 
 
 | Tool | Context wiring | Skill install |
 |------|---------------|---------------|
-| **Claude Code** | Appends `@path` references to `AGENTS.md` | Copies to `.claude/skills/<name>/` and `.claude/commands/<name>.md` |
-| **OpenCode** | Adds file references to `opencode.json` | Copies to `.opencode/skills/<name>/` and `.opencode/command/<name>.md` |
+| **Claude Code** | Appends `@path` references to `CLAUDE.md` | Symlinks to `.claude/skills/<name>/` and `.claude/commands/<name>.md` |
+| **OpenCode** | Adds file references to `opencode.json` | Symlinks to `.opencode/skills/<name>/` and `.opencode/command/<name>.md` |
 
 If both tools are detected, artifacts are installed for both simultaneously.
 
@@ -97,23 +137,21 @@ If both tools are detected, artifacts are installed for both simultaneously.
 
 ## The Contribution Loop
 
-The workflow is bidirectional. When a coding session produces improvements to an artifact, `abc contribute` copies it back to the warehouse:
+The workflow is bidirectional. With symlinks, editing an artifact directly modifies the warehouse working tree. To share improvements:
 
 ```
-1. abc sync          ← pull from warehouse
-2. code with agent   ← agent uses synced artifacts, may improve them
-3. abc delta         ← review what changed locally
-4. abc contribute    ← push improvements back to warehouse (creates a PR)
-5. teammates sync    ← everyone benefits
+1. abc sync                     ← sync from warehouse (creates symlinks)
+2. code with agent              ← agent uses synced artifacts, may improve them
+3. abc warehouse status         ← review what changed in the warehouse working tree
+4. abc warehouse contribute -m "msg"  ← commit changes and push back
+5. teammates sync               ← everyone benefits
 ```
-
-This closes the feedback loop: improvements flow from the warehouse to projects, and from projects back to the warehouse.
 
 ---
 
 ## Git Safety Checks
 
-Before running `abc sync` or `abc contribute`, Agentic Beacon checks that:
+Before running `abc sync`, Agentic Beacon checks that:
 
 - The warehouse has no uncommitted changes
 - The local branch is not behind its remote

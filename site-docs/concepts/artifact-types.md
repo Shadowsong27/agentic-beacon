@@ -19,34 +19,46 @@ Contexts are boot instruction files: coding standards, architectural constraints
 
 **Project-scoped** because the standards relevant to a data pipeline differ from those in a mobile app. Each project controls which contexts it loads via `beacon.yaml`.
 
-**Tool-agnostic** because the content is plain markdown. The wiring mechanism adapts to the tool (`opencode.json` vs. `AGENTS.md`), but the file itself is identical.
+**Tool-agnostic** because the content is plain markdown. The wiring mechanism adapts to the tool (`opencode.json` vs. `CLAUDE.md`), but the file itself is identical.
+
+**Declared in `beacon.yaml`:**
+```yaml
+contexts:
+  - contexts/global.md
+  - contexts/teams/backend/AGENTS.md
+```
 
 **Where they live after sync:**
 ```
-.agentic-beacon/artifacts/contexts/global.md
+.agentic-beacon/artifacts/contexts/global.md  →  symlink to warehouse
 ```
 
 **How they're wired:**
-
-- Claude Code: appended as `@.agentic-beacon/artifacts/contexts/global.md` to `AGENTS.md`
+- Claude Code: appended as `@.agentic-beacon/artifacts/contexts/global.md` to `CLAUDE.md`
 - OpenCode: added as a file reference in `opencode.json`
 
 ---
 
 ## 🧠 Knowledge — Project-scoped, Tool-agnostic
 
-Knowledge artifacts are atomic reference documents: decisions and their rationale, lessons learned, coding patterns, framework guides, security policies.
+Knowledge artifacts are atomic reference documents: decisions and their rationale, lessons learned, coding patterns, framework guides.
 
-**Project-scoped** because a project curates which knowledge is relevant to its domain.
+**Project-scoped** because each project's contexts reference different knowledge files.
 
-**Tool-agnostic** for the same reason as contexts: plain markdown, referenced by path from contexts.
+**Tool-agnostic** — plain markdown, referenced by path from contexts and skills.
+
+**NOT declared in `beacon.yaml`.** Knowledge files are auto-derived from markdown links in adopted contexts and skills. When a context says:
+
+```markdown
+See the [Python type hints guide](knowledge/python/type-hints.md).
+```
+
+The dependency resolver finds `knowledge/python/type-hints.md` and syncs it automatically. No manual configuration needed.
 
 **Where they live after sync:**
 ```
-.agentic-beacon/artifacts/knowledge/decisions/coding-standards.md
+.agentic-beacon/artifacts/knowledge/decisions/coding-standards.md  →  symlink to warehouse
 ```
-
-Knowledge files are not wired automatically — they're referenced from context files, or the agent fetches them on demand.
 
 ---
 
@@ -63,12 +75,24 @@ Skills are reusable procedures available as slash commands during a session. To 
 | Claude Code | `.claude/skills/<name>/` | `.claude/commands/<name>.md` |
 | OpenCode | `.opencode/skills/<name>/` | `.opencode/command/<name>.md` |
 
-`abc sync` copies each skill directory into both locations when both tools are detected.
+**Declared in `beacon.yaml` as directory-level entries:**
+```yaml
+skills:
+  - skills/code-review/
+  - skills/generate-tests/
+```
 
-**Invoking a skill:**
+**Must include frontmatter `requires:` in `SKILL.md`:**
+```yaml
+---
+requires:
+  contexts:
+    - global.md
+    - teams/backend/AGENTS.md
+---
 ```
-/code-review src/main.py          # Claude Code or OpenCode
-```
+
+Missing frontmatter causes sync to fail with a hard error — all required contexts must be available.
 
 ---
 
@@ -76,7 +100,7 @@ Skills are reusable procedures available as slash commands during a session. To 
 
 Agent definitions are sub-agent profiles — specialized agents that can be invoked from any project (code reviewer, test writer, PR description generator, etc.).
 
-**Global** because a specialized agent should be available everywhere without per-project configuration. Installing it once is enough.
+**Global** because a specialized agent should be available everywhere without per-project configuration.
 
 **Tool-specific** because each tool has its own global agent directory:
 
@@ -85,9 +109,7 @@ Agent definitions are sub-agent profiles — specialized agents that can be invo
 | Claude Code | `~/.claude/agents/` |
 | OpenCode | `~/.config/opencode/agents/` |
 
-`abc sync` installs agents from the warehouse directly into both directories.
-
-`abc agents sync` can sync agents independently of other artifact types — no `beacon.yaml` required.
+`abc agents sync` installs agent definitions from the warehouse into both directories. No `beacon.yaml` required.
 
 ---
 
@@ -99,35 +121,26 @@ Applies different logic per type:
 
 | Artifact | Sync behavior |
 |---|---|
-| Contexts | Copy to `.agentic-beacon/artifacts/contexts/`; wire into agent config |
-| Knowledge | Copy to `.agentic-beacon/artifacts/knowledge/`; no wiring |
-| Skills | Copy to artifacts; install into each detected tool's live directories |
-| Agents | Install directly into global tool directories; no project copy |
+| Contexts | Symlink to `.agentic-beacon/artifacts/contexts/`; wire into agent config |
+| Skills | Symlink to artifacts; install into each detected tool's live directories |
+| Knowledge | Auto-derived from markdown links; symlink to `.agentic-beacon/artifacts/knowledge/` |
+| Agents | Install directly into global tool directories |
 
-### `abc delta`
+### `abc warehouse status`
 
-"Local state" is different per type:
-
-- **Contexts / Knowledge** → compare `.agentic-beacon/artifacts/` against warehouse
-- **Skills** → compare the per-tool installed directories against warehouse
-- **Agents** → compare global directories (`~/.claude/agents/`, `~/.config/opencode/agents/`) against warehouse; also flags project-local agents as promotion candidates
-
-### `abc contribute`
-
-Source depends on where the artifact was modified:
-
-- **Contexts / Knowledge** → source is `.agentic-beacon/artifacts/`
-- **Skills** → source is the live tool install directory (the installed copy is what was modified)
-- **Agents** → source is the global agent directory; project-local agents are included as new warehouse entries
-
-### `abc install <artifact>`
-
-Applies the same type-specific logic as `abc sync` for a single artifact:
+Shows modifications to warehouse files tracked by resolved artifacts. With symlinks, editing an artifact directly modifies the warehouse working tree:
 
 ```bash
-abc install contexts/python.md        # copies + wires into agent config
-abc install skills/code-review/       # copies + installs into tool directories
-abc install agents/reviewer.md        # installs into global agent directories
+abc warehouse status                                   # summary of modified files
+abc warehouse status knowledge/python/type-hints.md    # diff for a single file
+```
+
+### `abc warehouse contribute`
+
+Commits changes in the warehouse working tree. Since symlinks write directly to the warehouse, you edit an artifact, then commit:
+
+```bash
+abc warehouse contribute -m "Update type hints guide with Python 3.12+ patterns"
 ```
 
 ---
@@ -137,8 +150,8 @@ abc install agents/reviewer.md        # installs into global agent directories
 Knowing an artifact's type tells you exactly:
 
 - Where it lives after sync
-- How `abc delta` finds it
-- Where `abc contribute` reads it from
-- Which commands are needed to manage it
+- How it's declared (or auto-derived)
+- How it's wired or installed
+- Which commands manage it
 
 The two-axis model keeps the framework internally consistent: the behavior follows directly from position in the matrix.

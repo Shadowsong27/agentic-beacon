@@ -1,6 +1,6 @@
 # Syncing Artifacts
 
-`abc sync` is the core command — it reads `beacon.yaml`, finds all matching artifacts in the warehouse, and installs them in the right places for your AI tools.
+`abc sync` is the core command — it reads `beacon.yaml`, resolves dependencies via frontmatter, auto-derives knowledge from markdown links, and installs everything in the right places for your AI tools.
 
 ## Basic Usage
 
@@ -12,55 +12,35 @@ Reads `.agentic-beacon/beacon.yaml` and performs the full sync. Output example:
 
 ```
 ✓ Sync complete
-  Copied: 5 files
-  Unchanged: 10 files
-  Wired: 2 contexts
-  Installed: 1 skill
+  Created: 5 symlinks
+  Up to date: 10 symlinks
+  ✓ Wired 2 context(s) into CLAUDE.md
+  ✓ Installed 1 skill(s) (code-review)
 ```
 
 ---
 
 ## What Sync Does
 
-For each artifact type, sync applies different logic:
+`abc sync` runs a multi-phase pipeline:
+
+1. **Read `beacon.yaml`** — loads declared contexts and skills
+2. **Resolve dependencies** — reads `requires:` frontmatter from each skill's `SKILL.md` to compute transitive context dependencies
+3. **Auto-derive knowledge** — scans all adopted contexts and skills for markdown links to `knowledge/` paths
+4. **Create symlinks** — creates per-file symlinks under `.agentic-beacon/artifacts/` pointing into the warehouse
+5. **Wire artifacts** — adds context references to `CLAUDE.md`/`opencode.json`, installs skills into tool directories
+6. **Prune orphans** — removes symlinks for artifacts no longer referenced
 
 | Artifact | Destination | Wiring |
 |---|---|---|
-| **Knowledge** | `.agentic-beacon/artifacts/knowledge/` | None (referenced from contexts) |
-| **Contexts** | `.agentic-beacon/artifacts/contexts/` | Added to `AGENTS.md` or `opencode.json` |
-| **Skills** | `.agentic-beacon/artifacts/skills/` + tool dirs | Installed as slash commands |
+| **Contexts** | `.agentic-beacon/artifacts/contexts/` (symlinks) | Added to `CLAUDE.md` or `opencode.json` |
+| **Skills** | `.agentic-beacon/artifacts/skills/` (symlinks) + tool dirs | Installed as slash commands |
+| **Knowledge** | `.agentic-beacon/artifacts/knowledge/` (symlinks) | Auto-derived from markdown links; no wiring needed |
 | **Agents** | `~/.claude/agents/` + `~/.config/opencode/agents/` | Ready in all projects |
-
-Sync is **idempotent** — files with identical content (SHA256 comparison) are skipped. Only changed files are re-copied.
 
 ---
 
 ## Sync Flags
-
-### `--preserve` — Protect Local Edits
-
-```bash
-abc sync --preserve
-```
-
-Skips files that exist locally and differ from the warehouse version, preserving your local edits.
-
-```
-✓ Sync complete
-  Copied: 5 files
-  Unchanged: 10 files
-  Preserved: 2 locally modified files
-```
-
-!!! note
-    `--preserve` only skips files that already exist locally. New files from the warehouse are always copied.
-
-Use `abc delta` first to review local changes before deciding whether to preserve or overwrite:
-
-```bash
-abc delta                                     # summary of all local changes
-abc delta knowledge/python/type-hints.md      # detailed diff for one file
-```
 
 ### `--force` — Overwrite Everything
 
@@ -68,10 +48,7 @@ abc delta knowledge/python/type-hints.md      # detailed diff for one file
 abc sync --force
 ```
 
-Force-overwrites all artifacts, ignoring local modifications and SHA256 comparisons. Use when you want to fully reset to the current warehouse state.
-
-!!! warning
-    Any local edits to artifacts will be overwritten. Run `abc delta` first if you want to review.
+Force-overwrites all conflicting files, ignoring any local modifications. Use when you want to fully reset to the current warehouse state.
 
 ### `--dry-run` — Preview Without Applying
 
@@ -79,7 +56,12 @@ Force-overwrites all artifacts, ignoring local modifications and SHA256 comparis
 abc sync --dry-run
 ```
 
-Shows what would be copied without actually copying anything. Useful for previewing the effect of a sync.
+Shows what would be synced without making changes:
+
+```
+Would create: 5 symlinks
+Up to date: 10 symlinks
+```
 
 ### `--verbose` — Per-file Output
 
@@ -87,13 +69,7 @@ Shows what would be copied without actually copying anything. Useful for preview
 abc sync --verbose
 ```
 
-Shows a line for each file processed:
-
-```
-Syncing: knowledge/python/type-hints.md → Copied
-Syncing: knowledge/python/async-patterns.md → Unchanged
-Syncing: knowledge/python/error-handling.md → Preserved (local changes)
-```
+Shows detailed output for each file processed.
 
 ### `--skip-git-check` — Skip Warehouse Validation
 
@@ -101,16 +77,29 @@ Syncing: knowledge/python/error-handling.md → Preserved (local changes)
 abc sync --skip-git-check
 ```
 
-Bypasses the warehouse git state checks (uncommitted changes, behind remote, non-main branch). Useful in CI environments or when you know the warehouse state is acceptable.
+Bypasses the warehouse git state checks (uncommitted changes, behind remote, non-main branch). Useful in CI environments.
+
+### `--contribute-local` — Auto-contribute Modified Files
+
+```bash
+abc sync --contribute-local
+```
+
+Non-interactive: automatically contributes all locally modified files back to the warehouse during sync.
+
+### `--discard-local` — Auto-discard Local Changes
+
+```bash
+abc sync --discard-local
+```
+
+Non-interactive: discards all locally modified files and replaces them with fresh symlinks from the warehouse.
 
 ---
 
 ## Combining Flags
 
 ```bash
-# Preserve local changes + verbose output
-abc sync --preserve --verbose
-
 # Preview a full reset
 abc sync --force --dry-run
 ```
@@ -125,19 +114,7 @@ abc agents sync
 
 Syncs agent definitions from the warehouse into global tool directories without running a full project sync. Does not require `beacon.yaml` — works in any project connected to a warehouse.
 
-Supports the same `--force` and `--preserve` flags.
-
----
-
-## Syncing a Single Artifact
-
-```bash
-abc install skills/code-review/
-abc install contexts/global.md
-abc install agents/reviewer.md
-```
-
-Copies and wires a single artifact, then adds it to `beacon.yaml` so future syncs remain idempotent.
+Supports `--force` and `--skip-git-check` flags.
 
 ---
 
@@ -147,7 +124,7 @@ Copies and wires a single artifact, then adds it to `beacon.yaml` so future sync
 abc reset
 ```
 
-Force-overwrites all synced artifacts from the warehouse, discarding local modifications. Equivalent to `abc sync --force`.
+Force-overwrites all synced artifacts from the warehouse, discarding any local modifications.
 
 ---
 
@@ -157,12 +134,12 @@ Force-overwrites all synced artifacts from the warehouse, discarding local modif
 abc clean
 ```
 
-Removes `.agentic-beacon/artifacts/` entirely. Run `abc sync` to re-download.
+Removes `.agentic-beacon/artifacts/` entirely. Run `abc sync` to re-sync.
 
 ---
 
 ## Next Steps
 
-- **[Advanced Patterns](advanced-patterns.md)** — glob patterns, `abc delta`, artifact lifecycle
+- **[Advanced Patterns](advanced-patterns.md)** — glob patterns and artifact lifecycle
 - **[Day-to-Day Workflow](day-to-day-workflow.md)** — how sync fits into the recurring loop
 - **[CLI Reference](../reference/cli.md)** — full flag documentation

@@ -1,6 +1,6 @@
 # Contributing Back to the Warehouse
 
-When your agent improves a synced artifact — a context file, a knowledge document, or a skill — those improvements live in `.agentic-beacon/artifacts/` and are gitignored by default. Use `abc contribute` to copy them back to the warehouse so the whole team benefits.
+Agentic Beacon uses a **symlink model**: `abc sync` creates symlinks from `.agentic-beacon/artifacts/` into your warehouse clone. When an agent session improves an artifact, those changes are already in the warehouse working tree — use `abc warehouse contribute` to commit and share them.
 
 ---
 
@@ -9,61 +9,52 @@ When your agent improves a synced artifact — a context file, a knowledge docum
 ### 1. Review what changed
 
 ```bash
-abc delta
+abc warehouse status
 ```
 
-Shows all differences between your local artifacts and the warehouse:
+Shows modifications to warehouse files tracked by `beacon.yaml`:
 
 ```
-Delta Summary
-──────────────────────────────────────
-MODIFIED  knowledge/python/type-hints.md
-MODIFIED  skills/code-review/SKILL.md
-ADDED     knowledge/python/new-lesson.md
-
-  Modified: 2  Added: 1
+Modified files:
+  modified  knowledge/python/type-hints.md
+  modified  skills/code-review/SKILL.md
 ```
 
 Inspect a specific file:
 
 ```bash
-abc delta knowledge/python/type-hints.md
+abc warehouse status knowledge/python/type-hints.md
 ```
 
-### 2. Contribute changes
+Shows a line-by-line diff.
 
-Contribute everything at once:
+### 2. Commit changes
+
+Commit all modified files with a message:
 
 ```bash
-abc contribute
+abc warehouse contribute -m "Improve type hints guide with Python 3.12+ patterns"
 ```
 
-Contribute a single file:
+Push the commit immediately:
 
 ```bash
-abc contribute knowledge/python/type-hints.md
-```
-
-Preview without applying:
-
-```bash
-abc contribute --dry-run
+abc warehouse contribute -m "Fix typo in error handling guide" --push
 ```
 
 ### 3. What happens automatically
 
-By default, `abc contribute`:
+`abc warehouse contribute`:
 
-1. Creates a `contrib/<timestamp>` branch in the warehouse
-2. Commits the changes with a descriptive message
-3. Pushes the branch and opens a PR via `gh`
-4. Prints the PR URL
+1. Stages all files tracked by `beacon.yaml` that have uncommitted changes
+2. Creates a commit with your message
+3. If `--push` is used, pushes the commit to the remote
 
-If `gh` is not installed or the warehouse has no GitHub remote, it falls back to printing the manual git steps.
+If there are no changes to commit, it prints a message and exits cleanly.
 
 ### 4. Teammates pick it up
 
-Once the PR is merged:
+Once your changes are in the warehouse:
 
 ```bash
 cd ~/team-warehouse && git pull
@@ -74,74 +65,36 @@ cd my-project && abc sync
 
 ## Manual Git Workflow
 
-If you prefer to manage the git steps yourself, or if you're using GitLab or Bitbucket:
+Since artifacts are symlinks into the warehouse clone, you can also use plain git commands:
 
 ```bash
-abc contribute --manual-git
-```
-
-Prints the manual steps instead of creating the PR automatically.
-
-You can also skip the auto-PR and handle git manually:
-
-```bash
-# 1. See what changed
-abc delta knowledge/python/type-hints.md
-
-# 2. Copy to warehouse
-cp .agentic-beacon/artifacts/knowledge/python/type-hints.md \
-   ~/team-warehouse/knowledge/python/type-hints.md
-
-# 3. Commit in the warehouse
+# In the warehouse clone
 cd ~/team-warehouse
-git checkout -b contrib/improve-type-hints
 git add knowledge/python/type-hints.md
-git commit -m "docs: improve type hints guide with Python 3.12+ patterns"
-git push -u origin contrib/improve-type-hints
-# Open a PR on your platform
+git commit -m "docs: improve type hints guide"
+git push
 ```
+
+The warehouse working tree is always up to date because symlinks write directly to it.
 
 ---
 
-## Contribution Types
+## How the Symlink Model Changes Things
 
-### Improving an existing artifact
+| Old copy-based model (removed) | Current symlink model |
+|---|---|
+| Artifacts copied to `.agentic-beacon/artifacts/` | Artifacts are symlinks into the warehouse |
+| `abc delta` compared copies against warehouse | `abc warehouse status` shows warehouse working tree changes |
+| `abc contribute` copied files back to warehouse | `abc warehouse contribute` commits changes already in the warehouse |
+| Local edits were isolated per project | Local edits go directly to the warehouse clone |
 
-Most common — your agent refines a context, knowledge file, or skill during a session.
-
-```bash
-abc delta                                      # see what changed
-abc contribute knowledge/python/type-hints.md  # contribute one file
-```
-
-### Adding a new artifact
-
-If your agent created a new file that should live in the warehouse:
-
-```bash
-# The file is ADDED status in abc delta
-abc contribute                                 # picks up both MODIFIED and ADDED files
-```
-
-Or contribute a specific new file:
-
-```bash
-abc contribute knowledge/python/new-lesson.md
-```
-
-### Excluding unregistered artifacts
-
-To skip files that aren't registered in `beacon.yaml`:
-
-```bash
-abc contribute --exclude-unregistered
-```
+Editing a symlinked artifact file IS editing the warehouse working tree. The edit is visible to all projects that use the same artifact on the same machine.
 
 ---
 
 ## Contribution Checklist
 
-Before contributing to the warehouse:
+Before committing to the warehouse:
 
 - [ ] Tested the artifact in a real project — agent actually used it correctly
 - [ ] Content is generic — no project-specific paths, credentials, or names
@@ -150,21 +103,8 @@ Before contributing to the warehouse:
 
 ---
 
-## What Gets Contributed
-
-`abc contribute` includes:
-
-| Status | Included by default |
-|--------|-------------------|
-| `MODIFIED` (you edited an existing artifact) | ✅ |
-| `ADDED` (you created a new file locally) | ✅ |
-| `MISSING` (in beacon.yaml but not synced) | ❌ |
-| `IDENTICAL` (no changes) | ❌ |
-
----
-
 ## Next Steps
 
-- **[Advanced Patterns](advanced-patterns.md)** — `abc delta` in depth
 - **[Day-to-Day Workflow](day-to-day-workflow.md)** — how contributing fits into the loop
 - **[Creating Skills](creating-skills.md)** — writing effective skill definitions before contributing
+- **[Command Reference](../reference/cli.md)** — full `abc warehouse contribute` options
