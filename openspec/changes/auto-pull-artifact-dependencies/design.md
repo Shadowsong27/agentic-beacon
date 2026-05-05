@@ -116,7 +116,7 @@ Validation rules:
 
 Agent `requires:` frontmatter may exist as warehouse metadata for future groundwork (PER-109) but is not validated or read during `abc sync`.
 
-Validation is a separate pass before sync. Errors are collected and presented together where possible ("skill X requires context A which is not adopted") rather than failing on the first miss.
+Validation is a separate pass before sync. Errors are collected and presented together where possible ("skill X requires context A which is not found in the warehouse") rather than failing on the first miss. Required contexts that exist in the warehouse are auto-pulled transitively; this is not an error.
 
 ### D6. Explicit vs transitive provenance for contexts
 

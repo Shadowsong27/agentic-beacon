@@ -61,6 +61,8 @@ def compute_effective_set(
     effective_contexts: set[str] = set(explicit_contexts)
     effective_skills: set[str] = set(explicit_skills)
 
+    context_required_by: dict[str, list[str]] = {}
+
     # Phase 1: Walk skills (6.4)
     skills_to_walk = list(effective_skills)
     for skill_name in skills_to_walk:
@@ -80,13 +82,24 @@ def compute_effective_set(
             error_set.add(f"Skill '{skill_name}' frontmatter validation failed: {exc}")
             continue
 
-        effective_contexts.update(skill_fm.requires.contexts)
+        for ctx_name in skill_fm.requires.contexts:
+            effective_contexts.add(ctx_name)
+            context_required_by.setdefault(ctx_name, []).append(skill_name)
 
     # Phase 3: Validate all effective artifacts exist in warehouse (6.6)
     for ctx_name in effective_contexts:
         ctx_path = warehouse / "contexts" / f"{ctx_name}.md"
         if not ctx_path.exists():
-            error_set.add(f"Context '{ctx_name}' not found in warehouse: {ctx_path}")
+            if ctx_name in context_required_by:
+                skills = ", ".join(context_required_by[ctx_name])
+                error_set.add(
+                    f"Skill(s) '{skills}' require context '{ctx_name}' "
+                    f"which is not found in the warehouse: {ctx_path}"
+                )
+            else:
+                error_set.add(
+                    f"Context '{ctx_name}' not found in warehouse: {ctx_path}"
+                )
 
     for skill_name in effective_skills:
         skill_path = warehouse / "skills" / skill_name / "SKILL.md"

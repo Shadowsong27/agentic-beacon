@@ -377,7 +377,7 @@ pytest tests/ -v --tb=short
 ## 6. Dependency resolution
 
 <!-- opsx:phase-summary:6:begin -->
-**Goal**: Compose frontmatter parsing and scanning into a single `EffectiveSet` computation that yields explicit + transitive contexts and derived knowledge, plus collected errors for unadopted deps.
+**Goal**: Compose frontmatter parsing and scanning into a single `EffectiveSet` computation that yields explicit + transitive contexts and derived knowledge, plus collected errors for required contexts missing from the warehouse.
 **Input**: Loaded `BeaconManifest` (contexts + skills), connected warehouse; outputs of frontmatter parser and scanner.
 **Output**: `compute_effective_set(beacon, warehouse) -> EffectiveSet` deterministic and pure; `is_transitively_required(...)` helper; structured failure type listing all missing deps collected in a single pass.
 **Validation**: Unit tests pass for empty manifest, single skill requiring a context, diamond (two artifacts share a knowledge file), missing-context-in-warehouse, missing-context-in-adoption. Running `compute_effective_set` twice with identical inputs returns equal results.
@@ -397,7 +397,7 @@ pytest tests/ -v --tb=short
     - TC4: Two contexts sharing a knowledge file → knowledge set has one entry, not two
     - TC5: Explicit context plus a skill that requires the same context → contexts contain it once; provenance marked `explicit`
     - TC6: Explicit skill → skills contain it, contexts it requires are transitively included
-    - TC7: Skill requiring non-existent context → EffectiveSet returns structured failure, not partial state
+    - TC7: Skill requiring context missing from warehouse → EffectiveSet returns structured failure, not partial state
 <!-- opsx:tdd:6.2:end -->
 - [x] 6.3 Walk adopted skills' `requires.contexts` (yields transitive contexts)
 - [x] 6.4 Run the scanner over all contexts and skills in the effective set to derive knowledge
@@ -422,7 +422,7 @@ pytest tests/ -v --tb=short
     - TC3: Context in both (explicit + required by skill) → False (explicit wins)
     - TC4: Context in neither → False (nothing to prune)
 <!-- opsx:tdd:6.6:end -->
-- [x] 6.7 Unit tests: empty manifest, single skill with one context dep, multiple referrers sharing a knowledge file, missing context in warehouse, missing context in adoption
+- [x] 6.7 Unit tests: empty manifest, single skill with one context dep, multiple referrers sharing a knowledge file, skill-required context missing from warehouse
 <!-- opsx:tdd:6.7:begin -->
   - **Input**: Fixtures for each scenario.
   - **Expected Output**: All resolver unit tests pass; coverage ≥ 90%.
@@ -608,9 +608,9 @@ pytest tests/ -v --tb=short
   - **Expected Output**: Post-sync: `beacon.yaml` rewritten without `knowledge:` key; one loguru INFO record emitted about the migration; knowledge symlinks reflect the derived set (which may or may not include the formerly-pinned knowledge, depending on whether any adopted artifact references it).
   - **Validation**: Assert file diff shows `knowledge:` removed; capture exactly one INFO record; assert final artifact tree matches spec.
 <!-- opsx:tdd:10.3:end -->
-- [x] 10.4 End-to-end test: adopted skill with unadopted required context produces non-zero exit with migration-doc URL in stderr
+- [x] 10.4 End-to-end test: adopted skill with required context missing from warehouse produces non-zero exit with migration-doc URL in stderr
 <!-- opsx:tdd:10.4:begin -->
-  - **Input**: Hand-crafted `beacon.yaml` where a skill is adopted but its `requires.contexts` entry is not.
+  - **Input**: Hand-crafted `beacon.yaml` where a skill is adopted but its `requires.contexts` entry does not exist in the warehouse.
   - **Expected Output**: `abc sync` exits non-zero; stderr contains the skill name, the missing context name, and the migration-doc URL.
   - **Validation**: Subprocess runner: `exit_code != 0`; assertions on captured stderr.
 <!-- opsx:tdd:10.4:end -->

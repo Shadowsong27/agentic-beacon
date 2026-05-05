@@ -23,18 +23,22 @@ Agents are global machine-level artifacts not tracked in project `beacon.yaml`. 
 - **WHEN** a skill entrypoint has `requires: { contexts: [...], skills: [...] }`
 - **THEN** `abc sync` fails with an error explaining that skill-to-skill dependencies are not supported
 
-### Requirement: Unadopted context dependency is a hard error at sync
-The system SHALL validate at `abc sync` that every `requires.contexts` entry in an adopted skill resolves to a context that is explicitly or transitively adopted.
+### Requirement: Required context resolution is auto-pull; missing-from-warehouse is a hard error
+The system SHALL at `abc sync` include every `requires.contexts` entry declared by an adopted skill in the effective context set transitively, even if the context is not explicitly listed in `beacon.yaml.artifacts.contexts`.
 
-If a required context dependency is missing, the system SHALL refuse to sync and SHALL emit an error that (1) names the requiring skill, (2) names the missing context, and (3) links to the migration document.
+If a required context exists in the warehouse (`contexts/<name>.md`), the system SHALL auto-pull and symlink it without error. If a required context does NOT exist in the warehouse, the system SHALL refuse to sync and SHALL emit an error that (1) names the requiring skill, (2) names the missing context, and (3) links to the migration document.
 
-#### Scenario: Required context not adopted
-- **WHEN** adopted skill `python-refactor` requires context `python-standards`, and `python-standards` is not in `beacon.yaml.artifacts.contexts` nor pulled by another adopted artifact
-- **THEN** `abc sync` exits non-zero with an error: "skill 'python-refactor' requires context 'python-standards' which is not adopted"
+#### Scenario: Required context auto-pulled from warehouse
+- **WHEN** adopted skill `python-refactor` requires context `python-standards`, `python-standards` exists in the warehouse, but is NOT in `beacon.yaml.artifacts.contexts`
+- **THEN** `abc sync` succeeds; `python-standards` is auto-pulled into the effective context set and a symlink is created
+
+#### Scenario: Required context missing from warehouse
+- **WHEN** adopted skill `python-refactor` requires context `nonexistent`, and `nonexistent` does NOT exist as `contexts/nonexistent.md` in the warehouse
+- **THEN** `abc sync` exits non-zero with an error: "skill 'python-refactor' requires context 'nonexistent' which is not found in the warehouse"
 
 #### Scenario: Required context pulled transitively
-- **WHEN** adopted skill requires context `python-standards`, and `python-standards` is listed in `beacon.yaml.artifacts.contexts` only because another adopted skill pulled it
-- **THEN** `abc sync` succeeds; transitive adoption satisfies the requirement
+- **WHEN** adopted skill requires context `python-standards`, and `python-standards` exists in the warehouse
+- **THEN** `abc sync` succeeds; the context is included in the effective set regardless of whether it is also explicitly adopted
 
 ### Requirement: Migration document exists and is referenced
 The system SHALL ship a migration document at `docs/migrations/artifact-dependencies-frontmatter.md` in the agentic-beacon repository. Every error message raised by the sync flow due to missing or malformed `requires:` frontmatter on skills SHALL include a URL pointing to this document.

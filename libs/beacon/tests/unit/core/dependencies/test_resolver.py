@@ -105,13 +105,14 @@ class TestComputeEffectiveSet:
         assert "py-std" in result.contexts
 
     def test_tc7_missing_skill_context(self, tmp_path):
-        """TC7: Skill requiring non-existent context -> structured failure."""
+        """TC7: Skill requiring context missing from warehouse -> structured failure with skill name."""
         wh = self._make_warehouse(tmp_path)
         self._write_skill(wh, "refactor", ["missing"])
         beacon = BeaconManifest(artifacts={"skills": ["refactor"]})
         result = compute_effective_set(beacon, wh)
         assert isinstance(result, ResolutionFailure)
         assert any("missing" in e for e in result.errors)
+        assert any("refactor" in e for e in result.errors)
 
     def test_tc8_unknown_artifact_type_is_rejected(self, tmp_path):
         """TC8: beacon.yaml with agents key -> rejected (agents not a valid type)."""
@@ -150,7 +151,7 @@ class TestMissingDepErrors:
         assert "missing-skill" in result.errors[0]
 
     def test_tc2_missing_context_for_skill(self, tmp_path):
-        """TC2: Skill requires context that doesn't exist -> failure with 1 error."""
+        """TC2: Skill requires context that doesn't exist -> failure with 1 error naming the skill."""
         wh = self._make_warehouse(tmp_path)
 
         skill_dir = wh / "skills" / "refactor"
@@ -164,6 +165,7 @@ class TestMissingDepErrors:
         assert isinstance(result, ResolutionFailure)
         assert len(result.errors) == 1
         assert "missing-ctx" in result.errors[0]
+        assert "refactor" in result.errors[0]
 
     def test_tc3_missing_adopted_context_in_warehouse(self, tmp_path):
         """TC3: Explicit context not in warehouse -> failure."""

@@ -42,18 +42,18 @@ The system SHALL treat beacon.yaml as the declarative specification of the proje
 - **THEN** system syncs that artifact, scans it for knowledge references, and creates symlinks for any newly-referenced knowledge files
 
 ### Requirement: Validation of artifact paths in beacon.yaml
-The system SHALL validate that artifact paths in beacon.yaml exist in the connected warehouse, AND that every `requires:` dependency declared by an adopted skill resolves to an adopted context.
+The system SHALL validate that artifact paths in beacon.yaml exist in the connected warehouse, AND that every `requires:` dependency declared by an adopted skill resolves to a context that exists in the warehouse. Required contexts that exist in the warehouse are auto-pulled transitively; they need not be explicit in `beacon.yaml`.
 
 #### Scenario: Valid artifact paths
-- **WHEN** user runs `abc sync` and all beacon.yaml paths exist in warehouse and all `requires:` dependencies are satisfied
-- **THEN** system syncs artifacts successfully
+- **WHEN** user runs `abc sync` and all beacon.yaml paths exist in warehouse and all `requires:` dependencies resolve to warehouse contexts
+- **THEN** system syncs artifacts successfully; skill-required contexts are auto-pulled
 
 #### Scenario: Missing artifact in warehouse
 - **WHEN** user runs `abc sync` and beacon.yaml references a path that doesn't exist in the warehouse
 - **THEN** system displays an error listing missing artifacts and exits non-zero
 
-#### Scenario: Missing required context dependency
-- **WHEN** an adopted skill declares `requires.contexts: [python-standards]` but `python-standards` is not adopted
+#### Scenario: Required context missing from warehouse
+- **WHEN** an adopted skill declares `requires.contexts: [nonexistent]` and `contexts/nonexistent.md` does not exist in the warehouse
 - **THEN** `abc sync` exits non-zero with an error naming the skill and the missing dependency, and linking to the migration document
 
 #### Scenario: Empty beacon.yaml

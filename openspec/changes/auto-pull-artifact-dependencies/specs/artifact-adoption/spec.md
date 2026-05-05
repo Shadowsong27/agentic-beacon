@@ -10,11 +10,11 @@
 ### Requirement: Interactive TUI for artifact selection
 The system SHALL launch a textual-based full-screen TUI application that displays adoption candidates as categorized checkboxes for contexts and skills, with descriptions, allowing toggle selection. Knowledge is NOT a selectable category in the TUI; knowledge is derived at sync time from adopted contexts and skills.
 
-Agents are global machine-level artifacts and are NOT selectable in the project adopt TUI. Selective global agent installation is deferred to PER-109.
+Agents are global machine-level artifacts. The adopt TUI MAY show agents as global-install candidates alongside contexts and skills. Selecting an agent triggers a global machine-level installation and does NOT update project `beacon.yaml`. Persistent selected-global-agent state and `abc sync` installing selected agents is deferred to PER-109.
 
 #### Scenario: TUI displays categorized candidates
 - **WHEN** there are 2 context candidates and 1 skill candidate
-- **THEN** TUI shows "Contexts" section with 2 checkboxes and "Skills" section with 1 checkbox; no "Agents" or "Knowledge" section appears
+- **THEN** TUI shows "Contexts" section with 2 checkboxes and "Skills" section with 1 checkbox; Agents may appear as a machine-level global-install section; no "Knowledge" section appears
 
 #### Scenario: Select all via keybinding
 - **WHEN** user presses `a` in the TUI
