@@ -104,12 +104,12 @@ def main():
             ],
         ),
         (
-            "  │  knowledge/         │──abc sync──►│  .agentic-beacon/artifacts/  │",
+            "  │  knowledge/         │── auto ────►│  .agentic-beacon/artifacts/  │",
             [
                 (2, DIM),
                 (4, MAUVE),
                 (23, DIM),
-                (24, SUBTEXT),
+                (24, DIM),
                 (37, DIM),
                 (39, GREEN),
                 (70, DIM),
@@ -128,12 +128,12 @@ def main():
             ],
         ),
         (
-            "  │  agents/            │──abc sync──►│  ~/.claude/agents/           │",
+            "  │  agents/            │─agents sync►│  ~/.claude/agents/           │",
             [
                 (2, DIM),
                 (4, SUBTEXT),
                 (23, DIM),
-                (24, SUBTEXT),
+                (24, DIM),
                 (37, DIM),
                 (39, GREEN),
                 (70, DIM),

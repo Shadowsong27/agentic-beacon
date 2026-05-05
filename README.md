@@ -35,22 +35,30 @@ There are two moving parts:
 
 **Warehouse** — a single git repository owned by your team. It holds the shared source of truth: contexts, knowledge, skills, and agent definitions. Cloned locally on every developer's machine; commit it like any other repo.
 
-**Beacon** — a per-project connector. Running `abc warehouse connect` creates `.agentic-beacon/` in your project with a `beacon.yaml` that declares which warehouse artifacts this project needs.
+**Beacon** — a per-project connector. Running `abc warehouse connect` creates `.agentic-beacon/` in your project with a `beacon.yaml` that declares which contexts and skills this project needs.
 
 ```
 Warehouse clone (local git repo)              Your project / global
 ────────────────────────────                  ────────────────────────────────
-knowledge/   ── abc sync (symlink) ──►  .agentic-beacon/artifacts/knowledge/
 contexts/    ── abc sync (symlink) ──►  .agentic-beacon/artifacts/contexts/
                                         opencode.json / AGENTS.md (wired)
 skills/      ── abc sync (symlink) ──►  .agentic-beacon/artifacts/skills/
                                         .opencode/skills/<name>/  (wired)
                                         .claude/skills/<name>/    (wired)
-agents/      ── abc agents sync (symlink) ─► ~/.claude/agents/<name>.md
-                                        ~/.config/opencode/agents/<name>.md
+knowledge/   ── auto-derived      ──►  .agentic-beacon/artifacts/knowledge/
+             (from markdown links            (symlinked on demand)
+              in contexts & skills)
+agents/      ── abc agents sync   ──►  ~/.claude/agents/<name>.md
+             (symlink)                  ~/.config/opencode/agents/<name>.md
 ```
 
-`abc sync` reads `beacon.yaml` and creates per-file **symlinks** from `.agentic-beacon/artifacts/` into your local warehouse clone, then wires skills into each detected tool's live directories. One logical artifact, one physical file per machine — no duplicate copies, no merge-back cycle. Agents, which live outside the project tree in machine-wide tool directories, are also installed as per-file symlinks via `abc agents sync`.
+`abc sync` reads `beacon.yaml` and creates per-file **symlinks** from `.agentic-beacon/artifacts/` into your local warehouse clone, then wires skills into each detected tool's live directories. One logical artifact, one physical file per machine — no duplicate copies, no merge-back cycle.
+
+**Knowledge is auto-derived.** There is no `knowledge:` key in `beacon.yaml`. Instead, `abc sync` scans markdown links inside your adopted contexts and skills, resolves any that point to warehouse knowledge files, and symlinks them transitively. Add a knowledge file to a context — it appears on next sync. Remove the last reference — the symlink is pruned automatically.
+
+**Frontmatter dependencies.** Agents and skills can declare `requires:` in YAML frontmatter to express cross-artifact dependencies. `abc sync` validates that every required context or skill is adopted and errors early if any are missing.
+
+**Agents are symlinked.** Like other artifacts, global agent files are per-file symlinks into the warehouse clone, not copies. Edits made in `~/.claude/agents/` or `~/.config/opencode/agents/` land directly in the warehouse working tree. Install them with `abc agents sync` (all at once) or `abc install agents/<name>.md` (one at a time).
 
 When a session produces something worth sharing, you edit the file in place — the edit lands directly in the warehouse working tree through the symlink — and commit it with `abc warehouse contribute -m "…"`. Teammates pull the warehouse and the new content is visible through their existing project symlinks with no per-project resync.
 
@@ -72,13 +80,13 @@ Four types form the core of a warehouse, each defined by two axes: **project sco
 - **Contexts** — boot instructions and coding standards; wired into `opencode.json` / `AGENTS.md` automatically on sync.
 - **Knowledge** — atomic decisions, lessons, and facts; symlinked under `.agentic-beacon/artifacts/` and referenced from contexts.
 - **Skills** — reusable workflows wired as slash commands into each tool's live directories.
-- **Agents** — sub-agent definitions installed once (as copies, since they live outside the warehouse tree) into global tool directories (`~/.claude/agents/`, `~/.config/opencode/agents/`) and available across every project.
+- **Agents** — sub-agent definitions installed as symlinks into global tool directories (`~/.claude/agents/`, `~/.config/opencode/agents/`) and available across every project. Edits flow back to the warehouse through the symlink — same write model as other artifact types.
 
 > See **[Artifact Type Matrix](./docs/artifact-type-matrix.md)** for the full design rationale and how this drives command behaviour.
 
 ## Interactive Artifact Adoption
 
-`abc adopt` opens an interactive TUI to browse and select warehouse artifacts. Scroll through contexts, skills, and agents — press `Space` to select, `Enter` to confirm. Knowledge files are pulled in automatically based on markdown links inside adopted contexts and skills.
+`abc adopt` opens an interactive TUI to browse and select warehouse artifacts. Scroll through contexts, skills, and agents — press `Space` to select, `Enter` to confirm. `beacon.yaml` is updated with your selections; knowledge is derived automatically on the next `abc sync` based on markdown links inside the adopted artifacts.
 
 <p align="center">
   <img src="docs/screenshots/adopt-tui.png" alt="abc adopt TUI" width="100%" />
@@ -147,25 +155,15 @@ abc sync
 
 `abc sync` is only needed again when your `beacon.yaml` changes (new artifacts declared) or when symlinks drift (missing/broken targets) — not per warehouse update.
 
-## Agentic Beacon vs. Similar Tools
+## When to Use Agentic Beacon
 
-| Tool | What it does |
-|------|-------------|
-| **Repomix** | Bundles your codebase into a single LLM-readable file |
-| **faf-mcp** | Syncs context files locally via MCP |
-| **cursorrules.com** | Static directory of community `.cursorrules` files |
-| **Shared wiki / prompt library** | A team-maintained document store agents are told to read |
-| **Langfuse / LLM Ops tools** | Production observability and prompt management for LLM apps |
-
-**Use Agentic Beacon when** you want a version-controlled, team-wide source of truth for agent instructions across multiple projects or repos.
-
-**Not the right fit when** you need a one-off codebase bundle (use Repomix), a single solo project, or production LLM observability (use Langfuse).
-
-### Why not a shared wiki or prompt library?
-
-A shared wiki is **read-only by design** — someone curates it, everyone else consumes it. There is no path from a coding session back to the wiki. Improvements stay on the developer's machine.
-
-Agentic Beacon is **bidirectional**. When an agent session produces a better approach, `abc warehouse contribute` commits the edit back into the warehouse clone (the same clone your project's symlinks point at, so the edit already landed there the moment it was saved). Once the commit is pushed, every other project on your team's machines gets the improvement automatically — no per-project resync. The warehouse gets smarter over time because the whole team is contributing to it, not just reading from it. That compounding loop is what the tool was built around.
+| Use it when… | Skip it when… |
+|---|---|
+| You have multiple projects that should share the same agent instructions | You have a single project with no plans to standardize across repos |
+| Your team keeps rewriting the same contexts and skills from scratch in each repo | You need a one-off codebase bundle to feed into a chat session |
+| Knowledge from one coding session should compound across the whole team | You need production observability for LLM calls in a deployed app |
+| You want agent edits from any session to flow back into a shared, version-controlled source | Your team has no shared git workflow or central warehouse makes no sense for your setup |
+| You're running multiple AI tools (Claude Code, OpenCode) and want one source of truth for all of them | |
 
 ## Documentation
 
@@ -174,7 +172,7 @@ Agentic Beacon is **bidirectional**. When an agent session produces a better app
 - **[Agentic Warehouse Design](./docs/agentic-warehouse-design.md)** — High-level design and architecture
 - **[Boot Context Design](./docs/boot-context-design/)** — AGENTS.md architecture and patterns
 - **[Spec-Driven Development](./docs/spec-driven-development.md)** — Structured approach to feature planning
-- **[Migration: Artifact Dependencies via Frontmatter](./docs/migrations/artifact-dependencies-frontmatter.md)** — Migrate warehouses to the frontmatter dependency model
+- **[Migration: Artifact Dependencies via Frontmatter](./docs/migrations/artifact-dependencies-frontmatter.md)** — Migrate warehouses to auto-derived knowledge and `requires:` frontmatter
 
 ### Practical Guides (guides/)
 - **[Getting Started](./guides/getting-started.md)** — Full onboarding walkthrough
@@ -202,7 +200,7 @@ Agentic Beacon is **bidirectional**. When an agent session produces a better app
 | `abc sync --dry-run` | Preview the symlink operations without touching the filesystem |
 | `abc sync --contribute-local` / `--discard-local` | Non-interactive migration from a copy-based tree |
 | `abc doctor` | Validate project health: warehouse connection, `beacon.yaml` validity, broken symlinks |
-| `abc agents sync` | Install agent definitions from warehouse into global tool directories (`--force` / `--preserve`) |
+| `abc agents sync` | Symlink all warehouse agent definitions into global tool directories (`--force` to overwrite conflicts) |
 | `abc reset` | Force-rebuild all symlinks from the warehouse |
 | `abc list` | List synced artifacts; `abc list agents` shows globally installed agents |
 | `abc status` | Show current warehouse connection and project sync status |
@@ -214,4 +212,4 @@ Agentic Beacon is **bidirectional**. When an agent session produces a better app
 
 If you find Agentic Beacon useful, consider [giving it a star](https://github.com/Shadowsong27/agentic-beacon) — it helps others discover the project.
 
-**Last Updated:** 2026-05-03
+**Last Updated:** 2026-05-05
