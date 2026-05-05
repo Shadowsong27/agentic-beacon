@@ -17,15 +17,11 @@ def create_beacon_template(path: Path) -> None:
 # beacon.yaml - Declare which warehouse artifacts this project needs.
 # Run 'abc sync' after editing to download artifacts.
 #
-# Supports glob patterns: knowledge/languages/python/**/*.md
 # Skills are tracked at the directory level: skills/code-review/
+# Agents are machine-level global artifacts — use 'abc install agents/<name>.md'
+# or 'abc adopt' to install them directly into your agent tool directories.
 
 artifacts:
-  knowledge: []
-    # Examples:
-    # - knowledge/languages/python/**/*.md
-    # - knowledge/infrastructure/docker-standards.md
-
   skills: []
     # Examples:
     # - skills/code-review/

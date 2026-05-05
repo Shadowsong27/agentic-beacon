@@ -22,7 +22,9 @@ def connected_project(valid_warehouse, temp_dir, monkeypatch):
     (valid_warehouse / "contexts" / "AGENTS.md").write_text("# Global Context")
     skills_dir = valid_warehouse / "skills" / "code-review"
     skills_dir.mkdir(parents=True)
-    (skills_dir / "SKILL.md").write_text("# Code Review Skill")
+    (skills_dir / "SKILL.md").write_text(
+        "---\nrequires:\n  contexts: []\n---\n# Code Review Skill"
+    )
     (valid_warehouse / "knowledge" / "python.md").write_text("# Python Standards")
 
     # Connect
@@ -100,11 +102,7 @@ def test_status_shows_cross_for_unsynced_context(
 
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
     beacon_yaml.write_text(
-        "artifacts:\n"
-        "  knowledge: []\n"
-        "  skills: []\n"
-        "  contexts:\n"
-        "    - contexts/AGENTS.md\n"
+        "artifacts:\n\n  skills: []\n  contexts:\n    - contexts/AGENTS.md\n"
     )
 
     # Manually create artifacts dir but NOT the context file

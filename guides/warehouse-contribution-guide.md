@@ -94,14 +94,27 @@ A new warehouse file is not visible to a project until its path is matched by th
 1. Create the file directly in the warehouse clone:
    ```bash
    cd ~/team-warehouse
-   mkdir -p knowledge/python
-   $EDITOR knowledge/python/new-lesson.md
+   $EDITOR contexts/new-context.md
    ```
 2. Declare it in your project's `beacon.yaml`:
    ```yaml
    artifacts:
-     knowledge:
-       - knowledge/python/new-lesson.md
+     contexts:
+       - contexts/new-context.md
+   ```
+3. Sync the project so the symlink is created:
+   ```bash
+   abc sync
+   ```
+4. Commit the warehouse changes:
+   ```bash
+   abc warehouse contribute -m "contexts: add new-context" --push
+   ```
+2. Declare it in your project's `beacon.yaml`:
+   ```yaml
+   artifacts:
+     contexts:
+       - contexts/python.md
    ```
 3. Sync the project so the symlink is created:
    ```bash

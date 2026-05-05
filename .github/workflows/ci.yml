@@ -44,6 +44,11 @@ jobs:
       - name: Install dependencies
         run: uv sync --group dev
 
+      - name: Configure git identity (required by warehouse contribute tests)
+        run: |
+          git config --global user.email "ci@agentic-beacon.test"
+          git config --global user.name "Agentic Beacon CI"
+
       - name: Run unit tests
         run: uv run pytest -m "not integration" -q
 
@@ -77,6 +82,11 @@ jobs:
 
       - name: Install dependencies
         run: uv sync --group dev
+
+      - name: Configure git identity (required by warehouse contribute tests)
+        run: |
+          git config --global user.email "ci@agentic-beacon.test"
+          git config --global user.name "Agentic Beacon CI"
 
       - name: Run e2e integration tests
         run: uv run pytest -m integration -v

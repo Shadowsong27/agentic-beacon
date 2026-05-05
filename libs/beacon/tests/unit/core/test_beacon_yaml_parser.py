@@ -33,25 +33,23 @@ class TestBeaconYAMLParser:
         settings = BeaconManifest.from_yaml(str(beacon_file))
 
         assert isinstance(settings, BeaconManifest)
-        assert len(settings.artifacts.knowledge) == 2
-        assert "languages/python/type-hints.md" in settings.artifacts.knowledge
-        assert "languages/python/async-patterns.md" in settings.artifacts.knowledge
+        assert not hasattr(settings.artifacts, "agents")
         assert len(settings.artifacts.skills) == 2
         assert "development/tdd-workflow.md" in settings.artifacts.skills
         assert len(settings.artifacts.contexts) == 1
         assert "teams/backend/AGENTS.md" in settings.artifacts.contexts
 
     def test_tc2_valid_partial_beacon_yaml(self, temp_dir, sample_beacon_yaml_partial):
-        """TC2: Valid partial beacon.yaml (only knowledge) → Returns BeaconSettings with empty lists for skills/contexts"""
+        """TC2: Valid partial beacon.yaml (only skills) → Returns BeaconSettings with empty contexts"""
         beacon_file = temp_dir / "beacon.yaml"
         beacon_file.write_text(sample_beacon_yaml_partial)
 
         settings = BeaconManifest.from_yaml(str(beacon_file))
 
         assert isinstance(settings, BeaconManifest)
-        assert len(settings.artifacts.knowledge) == 1
-        assert settings.artifacts.knowledge[0] == "languages/python/basics.md"
-        assert len(settings.artifacts.skills) == 0
+        assert not hasattr(settings.artifacts, "agents")
+        assert len(settings.artifacts.skills) == 1
+        assert settings.artifacts.skills[0] == "development/tdd-workflow.md"
         assert len(settings.artifacts.contexts) == 0
 
     def test_tc3_empty_artifacts_section(self, temp_dir, sample_beacon_yaml_empty):
@@ -62,7 +60,7 @@ class TestBeaconYAMLParser:
         settings = BeaconManifest.from_yaml(str(beacon_file))
 
         assert isinstance(settings, BeaconManifest)
-        assert len(settings.artifacts.knowledge) == 0
+        assert not hasattr(settings.artifacts, "agents")
         assert len(settings.artifacts.skills) == 0
         assert len(settings.artifacts.contexts) == 0
 
@@ -98,17 +96,16 @@ knowledge:
         assert "artifacts" in str(exc_info.value).lower()
 
     def test_tc6_artifact_type_not_a_list(self, temp_dir):
-        """TC6: Artifact type not a list (string) → Raises ValidationError "Artifact types must be lists" """
+        """TC6: Artifact type not a list (string) → Raises ValidationError."""
         beacon_file = temp_dir / "beacon.yaml"
         beacon_file.write_text("""
 artifacts:
-  knowledge: "not-a-list"
+  skills: "not-a-list"
 """)
 
         with pytest.raises(ValidationError) as exc_info:
             BeaconManifest.from_yaml(str(beacon_file))
 
-        # Pydantic should complain about type mismatch
         assert (
             "list" in str(exc_info.value).lower()
             or "type" in str(exc_info.value).lower()
@@ -119,17 +116,14 @@ artifacts:
         beacon_file = temp_dir / "beacon.yaml"
         beacon_file.write_text("""
 artifacts:
-  knowledge:
+  agents:
     - valid.md
-  unknown_type:
-    - invalid.md
 """)
 
         with pytest.raises(ValidationError) as exc_info:
             BeaconManifest.from_yaml(str(beacon_file))
 
         error_str = str(exc_info.value).lower()
-        # Should mention the unknown field
         assert (
             "unknown" in error_str or "extra" in error_str or "unexpected" in error_str
         )

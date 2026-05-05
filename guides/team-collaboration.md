@@ -98,7 +98,6 @@ Create example beacon.yaml files for common project types:
 **team-warehouse/examples/beacon.yaml.python-api**
 ```yaml
 artifacts:
-  knowledge:
     - languages/python/type-hints.md
     - languages/python/fastapi/**/*.md
     - languages/python/pytest/**/*.md
@@ -131,7 +130,6 @@ Start minimal, grow as needed. Use `abc adopt` to discover and add new artifacts
 **Sprint 1 - Start minimal:**
 ```yaml
 artifacts:
-  knowledge:
     - languages/python/type-hints.md
     - best-practices/code-review.md
 
@@ -286,7 +284,6 @@ Schedule regular warehouse reviews:
 
 **Example beacon.yaml:**
 ```yaml
-knowledge:
   - languages/python/pydantic-v2.md
 ```
 

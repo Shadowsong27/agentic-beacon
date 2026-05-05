@@ -12,9 +12,6 @@ Patterns in `beacon.yaml` are matched against the warehouse root. Only files (no
 
 | Pattern | Matches |
 |---------|---------|
-| `knowledge/python/type-hints.md` | Exact file |
-| `knowledge/python/*.md` | All `.md` files in one directory |
-| `knowledge/python/**/*.md` | All `.md` files recursively under `python/` |
 | `skills/code-review/**/*` | All files under a skill directory |
 | `contexts/teams/*/AGENTS.md` | One `AGENTS.md` per team subdirectory |
 
@@ -22,19 +19,6 @@ Patterns in `beacon.yaml` are matched against the warehouse root. Only files (no
 
 ```yaml
 artifacts:
-  knowledge:
-    # Exact file - very specific, won't pick up new files
-    - knowledge/global/decisions/coding-standards.md
-
-    # Directory wildcard - all files one level deep
-    - knowledge/languages/python/*.md
-
-    # Recursive wildcard - all markdown under python/
-    - knowledge/languages/python/**/*.md
-
-    # Multi-level wildcard - all team contexts
-    - contexts/teams/*/AGENTS.md
-
   skills:
     # Skills are typically directories; use /**/* to get all files
     - skills/code-review/**/*
@@ -43,6 +27,9 @@ artifacts:
   contexts:
     # Global context file
     - contexts/global.md
+
+    # Multi-level wildcard - all team contexts
+    - contexts/teams/*/AGENTS.md
 ```
 
 ### Pattern Doesn't Match?
@@ -50,15 +37,15 @@ artifacts:
 If a pattern matches nothing, `abc sync` will warn but not fail:
 
 ```
-Warning: No files matched pattern: knowledge/python/fastapi.md
+Warning: No files matched pattern: contexts/teams/mobile/AGENTS.md
 ```
 
 Debug it by listing the warehouse:
 
 ```bash
-ls /path/to/warehouse/knowledge/python/
+ls /path/to/warehouse/contexts/teams/
 # or
-find /path/to/warehouse/knowledge/python/ -name "*.md"
+find /path/to/warehouse/contexts/ -name "*.md"
 ```
 
 ---
@@ -74,9 +61,9 @@ Prints the intended symlink operations (create / update / remove) without touchi
 ```
 Dry run — no filesystem changes will be made.
 
-would create  .agentic-beacon/artifacts/knowledge/python/type-hints.md  → /Users/me/team-warehouse/knowledge/python/type-hints.md
-would create  .agentic-beacon/artifacts/skills/code-review/SKILL.md      → /Users/me/team-warehouse/skills/code-review/SKILL.md
-would remove  .agentic-beacon/artifacts/knowledge/python/old-removed.md  (no longer in beacon.yaml)
+would create  .agentic-beacon/artifacts/contexts/global.md             → /Users/me/team-warehouse/contexts/global.md
+would create  .agentic-beacon/artifacts/skills/code-review/SKILL.md    → /Users/me/team-warehouse/skills/code-review/SKILL.md
+would remove  .agentic-beacon/artifacts/contexts/old-removed.md        (no longer in beacon.yaml)
 ```
 
 Use this to confirm a `beacon.yaml` edit does what you expect before applying it.

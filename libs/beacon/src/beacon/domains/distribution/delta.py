@@ -450,7 +450,7 @@ class DeltaComparator:
             artifacts_path=self.artifacts_path,
         )
 
-        for artifact_type in ["knowledge", "skills", "contexts"]:
+        for artifact_type in ["skills", "contexts"]:
             patterns = getattr(beacon_settings.artifacts, artifact_type)
             for pattern in patterns:
                 if "*" in pattern or "?" in pattern or "[" in pattern:
@@ -527,48 +527,6 @@ class DeltaComparator:
                                             if rel_path not in seen:
                                                 seen.add(rel_path)
                                                 artifact_paths.append(rel_path)
-                    elif artifact_type == "knowledge" and (
-                        pattern.endswith("/")
-                        or (self.warehouse_path / pattern).is_dir()
-                    ):
-                        # Node-level knowledge directory.
-                        #
-                        # When no local files exist yet (node not synced): show the node
-                        # path as a single MISSING entry rather than N individual missing
-                        # files — keeps the output clean for the "just added to beacon.yaml,
-                        # haven't synced yet" case.
-                        #
-                        # When local files do exist: expand to individual paths so the user
-                        # sees exactly which files are MODIFIED / ADDED / IDENTICAL.
-                        node_path = pattern.rstrip("/")
-
-                        # Collect all .md files known for this node
-                        warehouse_files = sync_engine.expand_glob(
-                            f"{node_path}/**/*.md"
-                        )
-                        local_files: list[str] = []
-                        if self.artifacts_path.exists():
-                            local_node = self.artifacts_path / node_path
-                            if local_node.exists():
-                                for f in local_node.rglob("*.md"):
-                                    if f.is_file():
-                                        local_files.append(
-                                            str(f.relative_to(self.artifacts_path))
-                                        )
-
-                        if not local_files:
-                            # Nothing synced — single node-level MISSING entry
-                            if node_path not in seen:
-                                seen.add(node_path)
-                                artifact_paths.append(node_path)
-                        else:
-                            # Files present — expand to individual paths for precise diffs
-                            for rel_path in dict.fromkeys(
-                                warehouse_files + local_files
-                            ):
-                                if rel_path not in seen:
-                                    seen.add(rel_path)
-                                    artifact_paths.append(rel_path)
                     else:
                         if pattern not in seen:
                             seen.add(pattern)

@@ -73,7 +73,7 @@ def init(
     """
     Initialize a new warehouse repository.
 
-    Creates a complete warehouse structure with contexts, knowledge, and skills.
+    Creates a complete warehouse structure with contexts, skills, and agents.
     When NAME is omitted, the warehouse is initialised in the current directory
     (useful when the repo already exists, e.g. freshly cloned from GitHub).
     Existing files are always preserved — only missing files are created.
@@ -173,7 +173,7 @@ def init(
             step = 2
         else:
             step = 1
-        console.print(f"  {step}. Customize contexts, knowledge, and skills")
+        console.print(f"  {step}. Customize contexts, skills, and agents")
         console.print(f"  {step + 1}. git remote add origin <your-repo-url>")
         console.print(f"  {step + 2}. git push -u origin main")
 

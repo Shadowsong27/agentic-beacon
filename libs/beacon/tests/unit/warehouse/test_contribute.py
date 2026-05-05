@@ -53,16 +53,12 @@ def contrib_project(tmp_path, contrib_warehouse, monkeypatch):
     # beacon.yaml with tracked paths
     beacon_yaml = beacon_dir / "beacon.yaml"
     beacon_yaml.write_text(
-        "artifacts:\n"
-        "  knowledge:\n"
-        "    - knowledge/test.md\n"
-        "  skills: []\n"
-        "  contexts: []\n"
+        "artifacts:\n  contexts:\n    - contexts/test.md\n  skills: []\n\n"
     )
 
     # Create the tracked file in warehouse and commit it
-    (contrib_warehouse / "knowledge").mkdir()
-    (contrib_warehouse / "knowledge" / "test.md").write_text("# Test\n")
+    (contrib_warehouse / "contexts").mkdir()
+    (contrib_warehouse / "contexts" / "test.md").write_text("# Test\n")
     env = _git_env()
     subprocess.run(
         ["git", "add", "."],
@@ -106,7 +102,7 @@ class TestContribute:
         """TC1: Warehouse has uncommitted edits -> commit created."""
         project, wh = contrib_project
         # Modify tracked file
-        (wh / "knowledge" / "test.md").write_text("# Test\nmodified\n")
+        (wh / "contexts" / "test.md").write_text("# Test\nmodified\n")
 
         result = contribute(project, message="Update test", push=False)
         assert result.status == "committed"
@@ -154,7 +150,7 @@ class TestContribute:
         )
 
         # Now modify and push
-        (wh / "knowledge" / "test.md").write_text("# Test\nmodified for push\n")
+        (wh / "contexts" / "test.md").write_text("# Test\nmodified for push\n")
         result = contribute(project, message="Update for push", push=True)
         assert result.status == "committed"
         assert result.committed_sha
@@ -162,7 +158,7 @@ class TestContribute:
     def test_push_failure_preserves_commit(self, contrib_project):
         """TC6 variant: Push failure -> status push_failed, commit preserved."""
         project, wh = contrib_project
-        (wh / "knowledge" / "test.md").write_text("# Test\nmodified\n")
+        (wh / "contexts" / "test.md").write_text("# Test\nmodified\n")
 
         # No upstream configured -> push will fail
         result = contribute(project, message="Update no upstream", push=True)
@@ -190,7 +186,7 @@ class TestContribute:
         (hook_dir / "pre-commit").write_text("#!/bin/sh\nexit 1\n")
         (hook_dir / "pre-commit").chmod(0o755)
 
-        (wh / "knowledge" / "test.md").write_text("# Test\nmodified\n")
+        (wh / "contexts" / "test.md").write_text("# Test\nmodified\n")
 
         with pytest.raises(RuntimeError) as exc_info:
             contribute(project, message="Should fail", push=False)
@@ -225,7 +221,7 @@ class TestContribute:
         project, wh = contrib_project
         env = _git_env()
 
-        (wh / "knowledge" / "test.md").write_text("# Test\ntracked change\n")
+        (wh / "contexts" / "test.md").write_text("# Test\ntracked change\n")
         (wh / "unrelated.md").write_text("# Unrelated\n")
         subprocess.run(
             ["git", "add", "unrelated.md"],
@@ -246,7 +242,7 @@ class TestContribute:
             text=True,
             check=True,
         )
-        assert "knowledge/test.md" in committed_files.stdout
+        assert "contexts/test.md" in committed_files.stdout
         assert "unrelated.md" not in committed_files.stdout
 
         staged_files = subprocess.run(

@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+import pytest
 from beacon.cli.main import main
 from beacon.core.manifest.beacon import BeaconManifest
 from click.testing import CliRunner
@@ -73,6 +74,9 @@ class TestDoctorHealthyProject:
 
 
 class TestDoctorKnowledgeFilePaths:
+    @pytest.mark.skip(
+        reason="knowledge field removed from manifest; doctor knowledge checks deferred"
+    )
     def test_detects_file_level_md_path(self, tmp_path, monkeypatch):
         """Path ending in .md is detected as a file-level issue."""
         _setup_project(
@@ -89,6 +93,9 @@ class TestDoctorKnowledgeFilePaths:
         assert "file-level" in result.output.lower()
         assert "knowledge/python" in result.output
 
+    @pytest.mark.skip(
+        reason="knowledge field removed from manifest; doctor knowledge checks deferred"
+    )
     def test_detects_subtype_segment_path(self, tmp_path, monkeypatch):
         """Path containing decisions/ segment is detected as file-level."""
         _setup_project(
@@ -105,6 +112,9 @@ class TestDoctorKnowledgeFilePaths:
         assert "file-level" in result.output.lower()
         assert "knowledge/data-platform/clickhouse" in result.output
 
+    @pytest.mark.skip(
+        reason="knowledge field removed from manifest; doctor knowledge checks deferred"
+    )
     def test_fix_migrates_file_paths_to_node_level(self, tmp_path, monkeypatch):
         """--fix rewrites file-level entries to their node paths in beacon.yaml."""
         project, warehouse = _setup_project(
@@ -127,6 +137,9 @@ class TestDoctorKnowledgeFilePaths:
         updated = BeaconManifest.from_yaml(beacon_yaml)
         assert updated.artifacts.knowledge == ["knowledge/python"]
 
+    @pytest.mark.skip(
+        reason="knowledge field removed from manifest; doctor knowledge checks deferred"
+    )
     def test_fix_deduplicates_same_node(self, tmp_path, monkeypatch):
         """--fix deduplicates multiple file paths pointing to the same node."""
         project, _ = _setup_project(
@@ -151,6 +164,9 @@ class TestDoctorKnowledgeFilePaths:
             "knowledge/data-platform",
         }
 
+    @pytest.mark.skip(
+        reason="knowledge field removed from manifest; doctor knowledge checks deferred"
+    )
     def test_node_level_path_no_issue(self, tmp_path, monkeypatch):
         """Node-level knowledge path (no subtype segment, exists as node) passes."""
         project, warehouse = _setup_project(tmp_path, monkeypatch)
@@ -166,6 +182,9 @@ class TestDoctorKnowledgeFilePaths:
 
 
 class TestDoctorMissingArtifacts:
+    @pytest.mark.skip(
+        reason="knowledge field removed from manifest; doctor knowledge checks deferred"
+    )
     def test_missing_knowledge_node_flagged(self, tmp_path, monkeypatch):
         """Knowledge entry pointing to non-existent warehouse dir is flagged."""
         _setup_project(

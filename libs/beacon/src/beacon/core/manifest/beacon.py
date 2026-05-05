@@ -7,6 +7,7 @@ committed to git that declares which artifacts to adopt from the warehouse.
 from pathlib import Path
 
 import yaml
+from loguru import logger
 from pydantic import BaseModel, Field
 
 from beacon.core.exceptions import (
@@ -18,7 +19,8 @@ from beacon.core.exceptions import (
 class ArtifactsConfig(BaseModel):
     """Artifacts configuration from beacon.yaml."""
 
-    knowledge: list[str] = Field(default_factory=list)
+    model_config = {"extra": "forbid"}
+
     skills: list[str] = Field(default_factory=list)
     contexts: list[str] = Field(default_factory=list)
 
@@ -82,7 +84,14 @@ class BeaconManifest(BaseModel):
         if not isinstance(artifacts_data, dict):
             raise ValidationError("'artifacts' section must be a YAML object (dict)")
 
-        valid_types = {"knowledge", "skills", "contexts"}
+        # Legacy-drop migration: remove artifacts.knowledge if present
+        legacy_knowledge_removed = False
+        if "knowledge" in artifacts_data:
+            logger.info("artifacts.knowledge removed; knowledge is now auto-derived")
+            del artifacts_data["knowledge"]
+            legacy_knowledge_removed = True
+
+        valid_types = {"skills", "contexts"}
         for artifact_type, items in artifacts_data.items():
             if artifact_type not in valid_types:
                 raise ValidationError(
@@ -103,7 +112,16 @@ class BeaconManifest(BaseModel):
                     )
 
         try:
-            return cls(**data)
+            manifest = cls(**data)
+            if legacy_knowledge_removed:
+                try:
+                    manifest.to_yaml(path)
+                except OSError as e:
+                    logger.warning(
+                        "Could not rewrite beacon.yaml after removing legacy knowledge key: {}",
+                        e,
+                    )
+            return manifest
         except Exception as e:
             raise ValidationError(f"Configuration validation failed: {e}") from e
 
@@ -139,7 +157,7 @@ class ValidationResult(BaseModel):
 class BeaconManifestValidator:
     """Validator for beacon.yaml structure and content."""
 
-    VALID_ARTIFACT_TYPES = {"knowledge", "skills", "contexts"}
+    VALID_ARTIFACT_TYPES = {"skills", "contexts"}
 
     def validate_structure(self, manifest: BeaconManifest) -> ValidationResult:
         """Validate beacon manifest structure."""

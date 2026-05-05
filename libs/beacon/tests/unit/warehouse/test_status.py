@@ -52,16 +52,16 @@ def status_project(tmp_path, status_warehouse, monkeypatch):
     beacon_yaml = beacon_dir / "beacon.yaml"
     beacon_yaml.write_text(
         "artifacts:\n"
-        "  knowledge:\n"
-        "    - knowledge/test.md\n"
-        "    - knowledge/other.md\n"
+        "  contexts:\n"
+        "    - contexts/test.md\n"
+        "    - contexts/other.md\n"
         "  skills: []\n"
-        "  contexts: []\n"
+        "\n"
     )
 
-    (status_warehouse / "knowledge").mkdir()
-    (status_warehouse / "knowledge" / "test.md").write_text("# Test\n")
-    (status_warehouse / "knowledge" / "other.md").write_text("# Other\n")
+    (status_warehouse / "contexts").mkdir()
+    (status_warehouse / "contexts" / "test.md").write_text("# Test\n")
+    (status_warehouse / "contexts" / "other.md").write_text("# Other\n")
     (status_warehouse / "untracked.md").write_text("# Untracked\n")
 
     # Commit files so they are tracked by git
@@ -103,11 +103,11 @@ class TestStatus:
     def test_modified_tracked_files_listed(self, status_project):
         """TC2: Modified tracked files matching beacon.yaml -> listed."""
         project, wh = status_project
-        (wh / "knowledge" / "test.md").write_text("# Test\nmodified\n")
+        (wh / "contexts" / "test.md").write_text("# Test\nmodified\n")
 
         result = status(project)
         assert any(
-            m.status == "M" and m.path == "knowledge/test.md"
+            m.status == "M" and m.path == "contexts/test.md"
             for m in result.modifications
         )
 
@@ -132,7 +132,7 @@ class TestStatus:
     def test_filenames_are_complete_with_leading_space_status(self, status_project):
         """Leading-space porcelain codes keep the full filename intact."""
         project, wh = status_project
-        filename = "knowledge/full-filename-regression.md"
+        filename = "contexts/full-filename-regression.md"
         target = wh / filename
         target.write_text("# Full filename\n")
 
@@ -157,12 +157,12 @@ class TestStatus:
         beacon_yaml = project / ".agentic-beacon" / "beacon.yaml"
         beacon_yaml.write_text(
             "artifacts:\n"
-            "  knowledge:\n"
-            "    - knowledge/test.md\n"
-            "    - knowledge/other.md\n"
+            "  contexts:\n"
+            "    - contexts/test.md\n"
+            "    - contexts/other.md\n"
             f"    - {filename}\n"
             "  skills: []\n"
-            "  contexts: []\n"
+            "\n"
         )
 
         result = status(project)
@@ -198,7 +198,7 @@ class TestStatus:
 
         # Make 3 local commits
         for i in range(3):
-            (wh / "knowledge" / "test.md").write_text(f"# Test\ncommit {i}\n")
+            (wh / "contexts" / "test.md").write_text(f"# Test\ncommit {i}\n")
             subprocess.run(
                 ["git", "add", "."],
                 cwd=wh,
@@ -230,9 +230,9 @@ class TestStatus:
     def test_single_file_path_returns_diff(self, status_project):
         """TC5: path argument -> returns diff string for that file."""
         project, wh = status_project
-        (wh / "knowledge" / "test.md").write_text("# Test\nmodified\n")
+        (wh / "contexts" / "test.md").write_text("# Test\nmodified\n")
 
-        result = status(project, path="knowledge/test.md")
+        result = status(project, path="contexts/test.md")
         assert result.diff is not None
         # The diff contains the modified line
         assert "modified" in result.diff

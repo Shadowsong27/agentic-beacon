@@ -28,7 +28,6 @@ class TestWarehouseValidator:
         warehouse = temp_dir / "warehouse"
         (warehouse / "agents").mkdir(parents=True)
         (warehouse / "contexts").mkdir(parents=True)
-        (warehouse / "knowledge").mkdir(parents=True)
         (warehouse / "skills").mkdir(parents=True)
         (warehouse / "docs").mkdir(parents=True)
         (warehouse / "README.md").write_text("# Warehouse")
@@ -49,11 +48,10 @@ class TestWarehouseValidator:
         result = validator.validate(str(warehouse))
 
         assert result.valid is False
-        assert len(result.errors) >= 4  # At least 4 missing directories + README
+        assert len(result.errors) >= 3  # At least 3 missing directories + README
         # Check for required directories
         error_text = " ".join(result.errors).lower()
         assert "contexts" in error_text
-        assert "knowledge" in error_text
         assert "skills" in error_text
         assert "docs" in error_text
 
@@ -95,7 +93,7 @@ class TestWarehouseValidator:
 
         assert result.valid is False
         # Should list all missing required directories + README
-        assert len(result.errors) >= 4
+        assert len(result.errors) >= 3
 
     def test_tc6_partial_structure(self, temp_dir):
         """TC6: Partial structure (only contexts/) → ValidationResult(valid=False) with 4 missing listed"""
@@ -106,14 +104,13 @@ class TestWarehouseValidator:
         result = validator.validate(str(warehouse))
 
         assert result.valid is False
-        # Should list missing directories (knowledge, skills, docs, knowledge/global)
-        assert len(result.errors) >= 3  # At least knowledge/, skills/, docs/ missing
+        # Should list missing directories (skills, docs)
+        assert len(result.errors) >= 2  # At least skills/, docs/ missing
 
     def test_tc7_absolute_path(self, temp_dir):
         """TC7: Absolute path provided → Validates correctly"""
         warehouse = temp_dir / "warehouse"
         (warehouse / "contexts").mkdir(parents=True)
-        (warehouse / "knowledge").mkdir(parents=True)
         (warehouse / "skills").mkdir(parents=True)
         (warehouse / "docs").mkdir(parents=True)
         (warehouse / "README.md").write_text("# Warehouse")
@@ -129,7 +126,6 @@ class TestWarehouseValidator:
         """TC8: Relative path provided → Resolves and validates correctly"""
         warehouse = temp_dir / "warehouse"
         (warehouse / "contexts").mkdir(parents=True)
-        (warehouse / "knowledge").mkdir(parents=True)
         (warehouse / "skills").mkdir(parents=True)
         (warehouse / "docs").mkdir(parents=True)
         (warehouse / "README.md").write_text("# Warehouse")
@@ -151,7 +147,6 @@ class TestWarehouseValidator:
         """TC9: Path with spaces and special chars → Handles correctly"""
         warehouse = temp_dir / "my warehouse (v1.0)"
         (warehouse / "contexts").mkdir(parents=True)
-        (warehouse / "knowledge").mkdir(parents=True)
         (warehouse / "skills").mkdir(parents=True)
         (warehouse / "docs").mkdir(parents=True)
         (warehouse / "README.md").write_text("# Warehouse")
@@ -197,7 +192,6 @@ class TestAgentsDirectoryValidation:
         warehouse = temp_dir / "warehouse"
         (warehouse / "agents").mkdir(parents=True)
         (warehouse / "contexts").mkdir(parents=True)
-        (warehouse / "knowledge").mkdir(parents=True)
         (warehouse / "skills").mkdir(parents=True)
         (warehouse / "docs").mkdir(parents=True)
         (warehouse / "README.md").write_text("# Warehouse")
@@ -211,7 +205,6 @@ class TestAgentsDirectoryValidation:
         """TC2: Warehouse missing agents/ dir → validation error listing agents/."""
         warehouse = temp_dir / "warehouse"
         (warehouse / "contexts").mkdir(parents=True)
-        (warehouse / "knowledge").mkdir(parents=True)
         (warehouse / "skills").mkdir(parents=True)
         (warehouse / "docs").mkdir(parents=True)
         (warehouse / "README.md").write_text("# Warehouse")
@@ -226,7 +219,6 @@ class TestAgentsDirectoryValidation:
         """TC3: Missing agents/ → error message includes mkdir upgrade instruction."""
         warehouse = temp_dir / "warehouse"
         (warehouse / "contexts").mkdir(parents=True)
-        (warehouse / "knowledge").mkdir(parents=True)
         (warehouse / "skills").mkdir(parents=True)
         (warehouse / "docs").mkdir(parents=True)
         (warehouse / "README.md").write_text("# Warehouse")

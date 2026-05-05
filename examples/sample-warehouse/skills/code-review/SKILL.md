@@ -3,6 +3,8 @@ name: code-review
 description: Perform a structured code review covering correctness, readability, security, and test coverage
 license: MIT
 compatibility: opencode, claude-code
+requires:
+  contexts: []
 ---
 
 # Skill: Code Review

@@ -2,11 +2,8 @@
 # Copy to your project's .agentic-beacon/beacon.yaml
 
 artifacts:
-  knowledge:
-    - languages/python/**/*.md
-    - global/decisions/**/*.md
-    - global/lessons/**/*.md
   skills:
-    - code-review/SKILL.md
+    - skills/code-review/
   contexts:
-    - AGENTS.global.md
+    - contexts/python.md
+    - contexts/global.md

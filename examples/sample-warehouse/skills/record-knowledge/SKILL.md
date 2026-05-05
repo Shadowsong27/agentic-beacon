@@ -3,6 +3,8 @@ name: record-knowledge
 description: Systematically capture decisions, lessons, and facts into the project knowledge base with automatic categorization and context updates
 license: MIT
 compatibility: opencode
+requires:
+  contexts: []
 ---
 
 # Skill: Record Knowledge

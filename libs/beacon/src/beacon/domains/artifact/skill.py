@@ -593,9 +593,6 @@ def update_beacon_yaml(beacon_dir: Path, files: list[str]) -> None:
         elif artifact_type == "contexts":
             if path not in settings.artifacts.contexts:
                 settings.artifacts.contexts.append(path)
-        elif artifact_type == "knowledge":
-            if path not in settings.artifacts.knowledge:
-                settings.artifacts.knowledge.append(path)
 
     settings.to_yaml(beacon_yaml)
 

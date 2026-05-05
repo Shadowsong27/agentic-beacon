@@ -68,7 +68,7 @@ def test_setup_existing_beacon_yaml_decline_preserves_file(
 ):
     project_dir, runner = _connected_project(valid_warehouse, temp_dir, monkeypatch)
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
-    original = "artifacts:\n  knowledge:\n    - knowledge/existing.md\n"
+    original = "artifacts:\n  contexts:\n    - contexts/existing.md\n"
     beacon_yaml.write_text(original)
 
     result = runner.invoke(main, ["setup"], input="n\n")
@@ -83,13 +83,13 @@ def test_setup_existing_beacon_yaml_confirm_overwrites_file(
 ):
     project_dir, runner = _connected_project(valid_warehouse, temp_dir, monkeypatch)
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
-    beacon_yaml.write_text("artifacts:\n  knowledge:\n    - knowledge/existing.md\n")
+    beacon_yaml.write_text("artifacts:\n  contexts:\n    - contexts/existing.md\n")
 
     result = runner.invoke(main, ["setup"], input="y\n")
 
     assert result.exit_code == 0, result.output
     content = yaml.safe_load(beacon_yaml.read_text())
-    assert content["artifacts"]["knowledge"] == []
+    assert "knowledge" not in content["artifacts"]
 
 
 def test_setup_template_is_valid_empty_artifact_yaml(
@@ -103,7 +103,7 @@ def test_setup_template_is_valid_empty_artifact_yaml(
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
     content = yaml.safe_load(beacon_yaml.read_text())
     assert content == {
-        "artifacts": {"knowledge": [], "skills": [], "contexts": []},
+        "artifacts": {"skills": [], "contexts": []},
     }
 
 
@@ -116,7 +116,7 @@ def test_setup_template_includes_commented_examples(
 
     assert result.exit_code == 0, result.output
     raw_text = (project_dir / ".agentic-beacon" / "beacon.yaml").read_text()
-    assert "# - knowledge/languages/python/**/*.md" in raw_text
+    assert "are machine-level global artifacts" in raw_text
     assert "# - skills/code-review/" in raw_text
     assert "# - contexts/README.md" in raw_text
 
@@ -130,7 +130,6 @@ def test_setup_template_has_no_duplicate_artifact_keys(
 
     assert result.exit_code == 0, result.output
     raw_text = (project_dir / ".agentic-beacon" / "beacon.yaml").read_text()
-    assert len(re.findall(r"^\s{2}knowledge:", raw_text, re.MULTILINE)) == 1
     assert len(re.findall(r"^\s{2}skills:", raw_text, re.MULTILINE)) == 1
     assert len(re.findall(r"^\s{2}contexts:", raw_text, re.MULTILINE)) == 1
 

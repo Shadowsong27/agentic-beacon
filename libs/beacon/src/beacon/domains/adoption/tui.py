@@ -133,10 +133,6 @@ _SECTION_META: dict[str, tuple[str, str]] = {
         "Reusable AI workflows and automations shared across projects",
         "artifact-type-matrix.md",
     ),
-    "knowledge": (
-        "Structured domain knowledge and reference documentation",
-        "artifact-type-matrix.md",
-    ),
     "agents": (
         "AI agent definitions • installed globally to ~/.claude/agents & ~/.config/opencode/agents",
         "understanding-agent-skills.md",
@@ -191,7 +187,6 @@ class AdoptApp:
         _ARTIFACT_ICONS: dict[str, str] = {
             "contexts": "📄",
             "skills": "🔧",
-            "knowledge": "📚",
             "agents": "🤖",
         }
 
@@ -290,92 +285,7 @@ class AdoptApp:
                             (path, "", True, None, True)
                         )
 
-                def _build_knowledge_subtree(
-                    parent_node, items, depth_prefix: str = ""
-                ) -> None:
-                    """Recursively build nested knowledge subtree.
-
-                    Grouping folders are pure containers — they are never selectable.
-                    Only leaf nodes (no knowledge-node children) get checkboxes.
-                    Folder labels show [x]/[-]/[ ] to reflect child selection state.
-                    """
-                    direct: list[tuple] = []
-                    subgroups: dict[str, list[tuple]] = {}
-                    for (
-                        full_path,
-                        desc,
-                        selected,
-                        commits_ago_val,
-                        orig_adopted,
-                    ) in items:
-                        rel = full_path[len("knowledge/") :]
-                        if depth_prefix:
-                            rel = rel[len(depth_prefix) + 1 :]
-                        slash_idx = rel.find("/")
-                        if slash_idx == -1:
-                            direct.append(
-                                (
-                                    full_path,
-                                    rel,
-                                    desc,
-                                    selected,
-                                    commits_ago_val,
-                                    orig_adopted,
-                                )
-                            )
-                        else:
-                            group = rel[:slash_idx]
-                            subgroups.setdefault(group, []).append(
-                                (
-                                    full_path,
-                                    desc,
-                                    selected,
-                                    commits_ago_val,
-                                    orig_adopted,
-                                )
-                            )
-                    for (
-                        full_path,
-                        name,
-                        desc,
-                        selected,
-                        commits_ago_val,
-                        orig_adopted,
-                    ) in sorted(direct, key=lambda x: x[1]):
-                        parent_node.add_leaf(
-                            _leaf_label(
-                                name,
-                                selected,
-                                commits_ago_val,
-                                orig_adopted and self_inner._show_all,
-                            ),
-                            data={
-                                "path": full_path,
-                                "display_name": name,
-                                "desc": desc,
-                                "selected": selected,
-                                "originally_adopted": orig_adopted,
-                                "commits_ago": commits_ago_val,
-                            },
-                        )
-                    for group_name in sorted(subgroups.keys()):
-                        sub_prefix = (
-                            group_name
-                            if not depth_prefix
-                            else f"{depth_prefix}/{group_name}"
-                        )
-                        sub_node = parent_node.add(
-                            _folder_label(
-                                group_name, all_selected=False, any_selected=False
-                            ),
-                            expand=True,
-                            data={"folder": group_name},
-                        )
-                        _build_knowledge_subtree(
-                            sub_node, subgroups[group_name], sub_prefix
-                        )
-
-                for atype in ["contexts", "skills", "knowledge", "agents"]:
+                for atype in ["contexts", "skills", "agents"]:
                     type_items = by_type.get(atype, [])
                     if not type_items:
                         continue
@@ -397,31 +307,28 @@ class AdoptApp:
                         expand=True,
                         data={"docs_url": docs_url, "section": atype},
                     )
-                    if atype == "knowledge":
-                        _build_knowledge_subtree(folder, type_items)
-                    else:
-                        for (
-                            path,
-                            desc,
-                            selected,
-                            commits_ago_val,
-                            orig_adopted,
-                        ) in type_items:
-                            folder.add_leaf(
-                                _leaf_label(
-                                    path,
-                                    selected,
-                                    commits_ago_val,
-                                    orig_adopted and self_inner._show_all,
-                                ),
-                                data={
-                                    "path": path,
-                                    "desc": desc,
-                                    "selected": selected,
-                                    "originally_adopted": orig_adopted,
-                                    "commits_ago": commits_ago_val,
-                                },
-                            )
+                    for (
+                        path,
+                        desc,
+                        selected,
+                        commits_ago_val,
+                        orig_adopted,
+                    ) in type_items:
+                        folder.add_leaf(
+                            _leaf_label(
+                                path,
+                                selected,
+                                commits_ago_val,
+                                orig_adopted and self_inner._show_all,
+                            ),
+                            data={
+                                "path": path,
+                                "desc": desc,
+                                "selected": selected,
+                                "originally_adopted": orig_adopted,
+                                "commits_ago": commits_ago_val,
+                            },
+                        )
 
             def on_tree_node_highlighted(
                 self_inner, event: Tree.NodeHighlighted

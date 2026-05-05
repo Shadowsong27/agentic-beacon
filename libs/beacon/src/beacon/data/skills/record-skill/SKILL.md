@@ -3,6 +3,8 @@ name: record-skill
 description: Scaffold new Beacon skills with proper frontmatter, section structure, and optional PEP 723 Python scripts.
 license: MIT
 compatibility: opencode
+requires:
+  contexts: []
 ---
 
 # SKILL: Record Skill — Scaffold New Skills

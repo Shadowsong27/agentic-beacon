@@ -37,6 +37,8 @@ name: test-skill
 description: A test skill
 license: MIT
 compatibility: opencode
+requires:
+  contexts: []
 ---
 
 # Skill: Test Skill
@@ -484,8 +486,8 @@ def full_sync_project(tmp_path, valid_warehouse):
         "  contexts:\n"
         "    - contexts/global.md\n"
         "  skills:\n"
-        "    - skills/my-skill/**/*\n"
-        "  knowledge: []\n"
+        "    - skills/my-skill/\n"
+        "\n"
     )
 
     runner = CliRunner()
@@ -498,6 +500,15 @@ def test_sync_wires_contexts_to_opencode_json(full_sync_project, monkeypatch):
     (project / "opencode.json").write_text(json.dumps({"instructions": []}))
 
     result = runner.invoke(main, ["sync"])
+
+    if result.exit_code != 0:
+        print(f"SYNC OUTPUT: {result.output}")
+        if result.exception:
+            import traceback
+
+            traceback.print_exception(
+                type(result.exception), result.exception, result.exception.__traceback__
+            )
 
     assert result.exit_code == 0
     data = json.loads((project / "opencode.json").read_text())
@@ -696,11 +707,7 @@ def skills_only_project(tmp_path, valid_warehouse):
         f'[warehouse]\nlocal_path = "{valid_warehouse}"\n'
     )
     (beacon_dir / "beacon.yaml").write_text(
-        "artifacts:\n"
-        "  contexts: []\n"
-        "  skills:\n"
-        "    - skills/my-skill/**/*\n"
-        "  knowledge: []\n"
+        "artifacts:\n  contexts: []\n  skills:\n    - skills/my-skill/\n\n"
     )
 
     runner = CliRunner()
@@ -763,7 +770,7 @@ def test_sync_skill_empty_skills_dir_no_prompt(tmp_path, valid_warehouse, monkey
         f'[warehouse]\nlocal_path = "{valid_warehouse}"\n'
     )
     (beacon_dir / "beacon.yaml").write_text(
-        "artifacts:\n  contexts: []\n  skills: []\n  knowledge: []\n"
+        "artifacts:\n  contexts: []\n  skills: []\n\n"
     )
 
     monkeypatch.chdir(project)
@@ -780,11 +787,11 @@ def test_sync_skill_empty_skills_dir_no_prompt(tmp_path, valid_warehouse, monkey
 def test_sync_skill_dir_without_skill_md_no_prompt(
     skills_only_project, monkeypatch, valid_warehouse
 ):
-    """Skill directories without SKILL.md do not trigger the no-agent-config prompt."""
+    """Skill directories without SKILL.md fail dependency resolution."""
     project, runner = skills_only_project
     monkeypatch.chdir(project)
 
-    # Remove the SKILL.md from the warehouse skill so sync copies a dir without it
+    # Remove the SKILL.md from the warehouse skill
     (valid_warehouse / "skills" / "my-skill" / "SKILL.md").unlink()
     (valid_warehouse / "skills" / "my-skill" / "README.md").write_text("# Not a skill")
 
@@ -807,19 +814,15 @@ def test_sync_skill_dir_without_skill_md_no_prompt(
     # Update beacon.yaml to match
     beacon_yaml = project / ".agentic-beacon" / "beacon.yaml"
     beacon_yaml.write_text(
-        "artifacts:\n"
-        "  contexts: []\n"
-        "  skills:\n"
-        "    - skills/my-skill/**/*\n"
-        "  knowledge: []\n"
+        "artifacts:\n  contexts: []\n  skills:\n    - skills/my-skill/\n\n"
     )
 
     with patch("beacon.cli.sync.is_interactive", return_value=False):
         result = runner.invoke(main, ["sync"])
 
-    assert result.exit_code == 0
-    # No prompt because no valid SKILL.md files
-    assert "skills synced" not in result.output.lower()
+    # Dependency resolution fails because SKILL.md is missing
+    assert result.exit_code != 0
+    assert "dependency resolution failed" in result.output.lower()
 
 
 # ---------------------------------------------------------------------------
@@ -985,6 +988,15 @@ def test_sync_fallback_wires_for_both_even_when_one_config_exists(
     (project / "opencode.json").write_text("{}")
     result = runner.invoke(main, ["sync"])
 
+    if result.exit_code != 0:
+        print(f"SYNC OUTPUT: {result.output}")
+        if result.exception:
+            import traceback
+
+            traceback.print_exception(
+                type(result.exception), result.exception, result.exception.__traceback__
+            )
+
     assert result.exit_code == 0
     assert (project / ".opencode" / "skills" / "my-skill" / "SKILL.md").exists()
     # claudecode NOT wired — detection found opencode, fallback not triggered
@@ -1027,17 +1039,19 @@ def _make_agent_project(tmp_path, monkeypatch):
     beacon_dir.mkdir()
     (beacon_dir / "config.toml").write_text(f'[warehouse]\nlocal_path = "{wh}"\n')
     (beacon_dir / "beacon.yaml").write_text(
-        "artifacts:\n  knowledge: []\n  skills: []\n  contexts: []\n"
+        "artifacts:\n\n  skills: []\n  contexts: []\n"
     )
     monkeypatch.chdir(project)
     return wh, project
 
 
-class TestSyncAgentsFromWarehouse:
-    def test_installs_agent_to_opencode_global_dir(
+class TestSyncDoesNotInstallAgents:
+    """Sync must not install agents globally (PER-109 deferred)."""
+
+    def test_sync_does_not_install_agent_to_opencode(
         self, tmp_path, monkeypatch, isolated_home
     ):
-        """abc sync links warehouse agents into ~/.config/opencode/agents/."""
+        """abc sync does NOT link warehouse agents into ~/.config/opencode/agents/."""
         (isolated_home / ".config" / "opencode").mkdir(parents=True)
         wh, project = _make_agent_project(tmp_path, monkeypatch)
 
@@ -1046,14 +1060,13 @@ class TestSyncAgentsFromWarehouse:
 
         assert result.exit_code == 0, result.output
         dest = isolated_home / ".config" / "opencode" / "agents" / "code-reviewer.md"
-        assert dest.is_symlink()
-        assert dest.resolve() == (wh / "agents" / "code-reviewer.md").resolve()
-        assert dest.read_text() == SAMPLE_AGENT_MD
+        assert not dest.is_symlink()
+        assert not dest.exists()
 
-    def test_installs_agent_to_claudecode_global_dir(
+    def test_sync_does_not_install_agent_to_claudecode(
         self, tmp_path, monkeypatch, isolated_home
     ):
-        """abc sync links warehouse agents into ~/.claude/agents/."""
+        """abc sync does NOT link warehouse agents into ~/.claude/agents/."""
         (isolated_home / ".claude").mkdir(parents=True)
         wh, project = _make_agent_project(tmp_path, monkeypatch)
 
@@ -1062,14 +1075,13 @@ class TestSyncAgentsFromWarehouse:
 
         assert result.exit_code == 0, result.output
         dest = isolated_home / ".claude" / "agents" / "code-reviewer.md"
-        assert dest.is_symlink()
-        assert dest.resolve() == (wh / "agents" / "code-reviewer.md").resolve()
-        assert dest.read_text() == SAMPLE_AGENT_MD
+        assert not dest.is_symlink()
+        assert not dest.exists()
 
-    def test_installs_to_both_tools_when_both_present(
+    def test_sync_does_not_install_to_both_tools(
         self, tmp_path, monkeypatch, isolated_home
     ):
-        """When both opencode and claudecode are installed, both get the agent."""
+        """When both tools are present, agents are not installed by sync."""
         (isolated_home / ".config" / "opencode").mkdir(parents=True)
         (isolated_home / ".claude").mkdir(parents=True)
         wh, project = _make_agent_project(tmp_path, monkeypatch)
@@ -1082,16 +1094,16 @@ class TestSyncAgentsFromWarehouse:
             isolated_home / ".config" / "opencode" / "agents" / "code-reviewer.md"
         )
         claude_dest = isolated_home / ".claude" / "agents" / "code-reviewer.md"
-        assert opencode_dest.is_symlink()
-        assert claude_dest.is_symlink()
-        assert opencode_dest.resolve() == (wh / "agents" / "code-reviewer.md").resolve()
-        assert claude_dest.resolve() == (wh / "agents" / "code-reviewer.md").resolve()
-        assert "code-reviewer" in result.output
+        assert not opencode_dest.is_symlink()
+        assert not opencode_dest.exists()
+        assert not claude_dest.is_symlink()
+        assert not claude_dest.exists()
+        assert "code-reviewer" not in result.output
 
-    def test_skips_agents_when_warehouse_has_no_agents_dir(
+    def test_sync_completes_when_warehouse_has_no_agents_dir(
         self, tmp_path, monkeypatch, isolated_home
     ):
-        """Warehouse without agents/ dir: sync completes without installing any agents."""
+        """Warehouse without agents/ dir: sync completes without error."""
         (isolated_home / ".config" / "opencode").mkdir(parents=True)
 
         wh = tmp_path / "warehouse"
@@ -1099,7 +1111,6 @@ class TestSyncAgentsFromWarehouse:
             (wh / d).mkdir(parents=True)
         (wh / "README.md").write_text("# WH")
 
-        # Init git
         subprocess.run(
             ["git", "init"], cwd=wh, env=GIT_ENV, check=True, capture_output=True
         )
@@ -1120,7 +1131,7 @@ class TestSyncAgentsFromWarehouse:
         beacon_dir.mkdir()
         (beacon_dir / "config.toml").write_text(f'[warehouse]\nlocal_path = "{wh}"\n')
         (beacon_dir / "beacon.yaml").write_text(
-            "artifacts:\n  knowledge: []\n  skills: []\n  contexts: []\n"
+            "artifacts:\n\n  skills: []\n  contexts: []\n"
         )
         monkeypatch.chdir(project)
 
@@ -1129,61 +1140,6 @@ class TestSyncAgentsFromWarehouse:
 
         assert result.exit_code == 0, result.output
         assert not (isolated_home / ".config" / "opencode" / "agents").exists()
-
-    def test_idempotent_when_already_up_to_date(
-        self, tmp_path, monkeypatch, isolated_home
-    ):
-        """Running sync twice does not re-link agent files that are already current."""
-        agents_dir = isolated_home / ".config" / "opencode" / "agents"
-        agents_dir.mkdir(parents=True)
-
-        wh, project = _make_agent_project(tmp_path, monkeypatch)
-        runner = CliRunner()
-        result = runner.invoke(main, ["sync", "--skip-git-check"])
-        assert result.exit_code == 0, result.output
-
-        dest = agents_dir / "code-reviewer.md"
-        assert dest.is_symlink()
-        mtime_before = dest.lstat().st_mtime
-
-        result = runner.invoke(main, ["sync", "--skip-git-check"])
-        assert result.exit_code == 0, result.output
-
-        mtime_after = dest.lstat().st_mtime
-        assert mtime_before == mtime_after
-
-    def test_force_overwrites_conflicting_agent(
-        self, tmp_path, monkeypatch, isolated_home
-    ):
-        """--force overwrites a diverged local agent without prompting."""
-        agents_dir = isolated_home / ".config" / "opencode" / "agents"
-        agents_dir.mkdir(parents=True)
-        (agents_dir / "code-reviewer.md").write_text("old local content\n")
-
-        wh, project = _make_agent_project(tmp_path, monkeypatch)
-        runner = CliRunner()
-        result = runner.invoke(main, ["sync", "--force", "--skip-git-check"])
-
-        assert result.exit_code == 0, result.output
-        dest = agents_dir / "code-reviewer.md"
-        assert dest.is_symlink()
-        assert dest.resolve() == (wh / "agents" / "code-reviewer.md").resolve()
-        assert dest.read_text() == SAMPLE_AGENT_MD
-
-    def test_non_interactive_conflict_skips_without_prompt(
-        self, tmp_path, monkeypatch, isolated_home
-    ):
-        """In non-interactive mode, conflicting agents are skipped automatically."""
-        agents_dir = isolated_home / ".config" / "opencode" / "agents"
-        agents_dir.mkdir(parents=True)
-        (agents_dir / "code-reviewer.md").write_text("diverged content\n")
-
-        wh, project = _make_agent_project(tmp_path, monkeypatch)
-        runner = CliRunner()
-        result = runner.invoke(main, ["sync", "--skip-git-check"])
-
-        assert result.exit_code == 0, result.output
-        assert (agents_dir / "code-reviewer.md").read_text() == "diverged content\n"
 
 
 # ---------------------------------------------------------------------------
@@ -1195,6 +1151,8 @@ SAMPLE_SKILL_MD_MULTI = """\
 ---
 name: pipeline-helper
 description: Pipeline helper skill
+requires:
+  contexts: []
 ---
 # Pipeline Helper
 """
@@ -1262,14 +1220,18 @@ class TestWireSingleSkill:
     def test_returns_true_when_file_written(self, tmp_path):
         skill_src = tmp_path / "artifacts" / "skills" / "s"
         skill_src.mkdir(parents=True)
-        (skill_src / "SKILL.md").write_text("# S\n")
+        (skill_src / "SKILL.md").write_text(
+            "---\nrequires:\n  contexts: []\n---\n# S\n"
+        )
 
         assert wire_single_skill(tmp_path, "s", skill_src, "claudecode") is True
 
     def test_returns_false_when_already_up_to_date(self, tmp_path):
         skill_src = tmp_path / "artifacts" / "skills" / "s"
         skill_src.mkdir(parents=True)
-        (skill_src / "SKILL.md").write_text("# S\n")
+        (skill_src / "SKILL.md").write_text(
+            "---\nrequires:\n  contexts: []\n---\n# S\n"
+        )
 
         wire_single_skill(tmp_path, "s", skill_src, "claudecode")
         assert wire_single_skill(tmp_path, "s", skill_src, "claudecode") is False
@@ -1277,7 +1239,9 @@ class TestWireSingleSkill:
     def test_subdirectory_files_preserved(self, tmp_path):
         skill_src = tmp_path / "artifacts" / "skills" / "s"
         (skill_src / "sub").mkdir(parents=True)
-        (skill_src / "SKILL.md").write_text("# S\n")
+        (skill_src / "SKILL.md").write_text(
+            "---\nrequires:\n  contexts: []\n---\n# S\n"
+        )
         (skill_src / "sub" / "util.py").write_text("x = 1\n")
 
         wire_single_skill(tmp_path, "s", skill_src, "claudecode")
@@ -1363,8 +1327,7 @@ class TestSyncMultiFileSkillIntegration:
         (beacon_dir / "config.toml").write_text(f'[warehouse]\nlocal_path = "{wh}"\n')
         # New directory-style entry
         (beacon_dir / "beacon.yaml").write_text(
-            "artifacts:\n  knowledge: []\n"
-            "  skills:\n    - skills/pipeline-helper/\n  contexts: []\n"
+            "artifacts:\n\n  skills:\n    - skills/pipeline-helper/\n  contexts: []\n"
         )
         (project / ".claude").mkdir()
         return project, wh
@@ -1406,7 +1369,9 @@ class TestSyncMultiFileSkillIntegration:
         (wh / "README.md").write_text("# WH")
         skill_dir = wh / "skills" / "old-style"
         skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text("# Old\n")
+        (skill_dir / "SKILL.md").write_text(
+            "---\nrequires:\n  contexts: []\n---\n# Old\n"
+        )
 
         # Init git
         subprocess.run(
@@ -1429,8 +1394,7 @@ class TestSyncMultiFileSkillIntegration:
         beacon_dir.mkdir()
         (beacon_dir / "config.toml").write_text(f'[warehouse]\nlocal_path = "{wh}"\n')
         (beacon_dir / "beacon.yaml").write_text(
-            "artifacts:\n  knowledge: []\n"
-            "  skills:\n    - skills/old-style/SKILL.md\n  contexts: []\n"
+            "artifacts:\n\n  skills:\n    - skills/old-style/SKILL.md\n  contexts: []\n"
         )
         monkeypatch.chdir(project)
 

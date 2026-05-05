@@ -35,10 +35,10 @@ def warehouse_git(tmp_path):
     wh = tmp_path / "warehouse"
     wh.mkdir()
 
-    for d in ("contexts", "knowledge", "skills", "docs"):
+    for d in ("contexts", "skills", "docs"):
         (wh / d).mkdir()
     (wh / "README.md").write_text("# Test Warehouse\n")
-    (wh / "knowledge" / "lesson.md").write_text("# Lesson\nOriginal content.\n")
+    (wh / "contexts" / "lesson.md").write_text("# Lesson\nOriginal content.\n")
 
     _git(["init"], wh)
     _git(["config", "user.email", "test@test.com"], wh)
@@ -62,11 +62,7 @@ def connected_project(tmp_path, warehouse_git, monkeypatch):
         f'[warehouse]\nlocal_path = "{warehouse_git}"\n'
     )
     (beacon_dir / "beacon.yaml").write_text(
-        "artifacts:\n"
-        "  knowledge:\n"
-        "    - knowledge/lesson.md\n"
-        "  skills: []\n"
-        "  contexts: []\n"
+        "artifacts:\n  contexts:\n    - contexts/lesson.md\n  skills: []\n\n"
     )
 
     return project, warehouse_git, CliRunner()
@@ -85,7 +81,7 @@ def test_sync_proceeds_when_warehouse_is_clean(connected_project):
 
     assert result.exit_code == 0
     assert (
-        project / ".agentic-beacon" / "artifacts" / "knowledge" / "lesson.md"
+        project / ".agentic-beacon" / "artifacts" / "contexts" / "lesson.md"
     ).exists()
 
 
@@ -137,7 +133,7 @@ def test_sync_skip_git_check_bypasses_branch_guard(connected_project):
     result = runner.invoke(main, ["sync", "--skip-git-check"])
 
     assert result.exit_code == 0
-    synced = project / ".agentic-beacon" / "artifacts" / "knowledge" / "lesson.md"
+    synced = project / ".agentic-beacon" / "artifacts" / "contexts" / "lesson.md"
     assert synced.exists()
 
 
@@ -167,7 +163,7 @@ def test_sync_proceeds_after_switching_back_to_main(connected_project):
     result = runner.invoke(main, ["sync"])
 
     assert result.exit_code == 0
-    synced = project / ".agentic-beacon" / "artifacts" / "knowledge" / "lesson.md"
+    synced = project / ".agentic-beacon" / "artifacts" / "contexts" / "lesson.md"
     assert synced.exists()
 
 
@@ -175,10 +171,10 @@ def test_sync_proceeds_on_master_branch(tmp_path, monkeypatch):
     """abc sync proceeds when the warehouse is on 'master' (accepted alias for main)."""
     wh = tmp_path / "warehouse"
     wh.mkdir()
-    for d in ("contexts", "knowledge", "skills", "docs"):
+    for d in ("contexts", "skills", "docs"):
         (wh / d).mkdir()
     (wh / "README.md").write_text("# Warehouse\n")
-    (wh / "knowledge" / "lesson.md").write_text("# Lesson\n")
+    (wh / "contexts" / "lesson.md").write_text("# Lesson\n")
 
     subprocess.run(
         ["git", "init", "-b", "master"],
@@ -198,14 +194,14 @@ def test_sync_proceeds_on_master_branch(tmp_path, monkeypatch):
     beacon_dir.mkdir()
     (beacon_dir / "config.toml").write_text(f'[warehouse]\nlocal_path = "{wh}"\n')
     (beacon_dir / "beacon.yaml").write_text(
-        "artifacts:\n  knowledge:\n    - knowledge/lesson.md\n  skills: []\n  contexts: []\n"
+        "artifacts:\n  contexts:\n    - contexts/lesson.md\n  skills: []\n\n"
     )
 
     result = CliRunner().invoke(main, ["sync"])
 
     assert result.exit_code == 0
     assert (
-        project / ".agentic-beacon" / "artifacts" / "knowledge" / "lesson.md"
+        project / ".agentic-beacon" / "artifacts" / "contexts" / "lesson.md"
     ).exists()
 
 
@@ -218,7 +214,7 @@ def test_sync_blocked_on_unstaged_modification(connected_project):
     project, warehouse, runner = connected_project
 
     # Modify a tracked file without staging
-    (warehouse / "knowledge" / "lesson.md").write_text("# Lesson\nModified.\n")
+    (warehouse / "contexts" / "lesson.md").write_text("# Lesson\nModified.\n")
 
     result = runner.invoke(main, ["sync"])
 
@@ -235,8 +231,8 @@ def test_sync_blocked_on_staged_modification(connected_project):
     """abc sync exits with an error when the warehouse has staged but uncommitted changes."""
     project, warehouse, runner = connected_project
 
-    (warehouse / "knowledge" / "lesson.md").write_text("# Lesson\nStaged change.\n")
-    _git(["add", "knowledge/lesson.md"], warehouse)
+    (warehouse / "contexts" / "lesson.md").write_text("# Lesson\nStaged change.\n")
+    _git(["add", "contexts/lesson.md"], warehouse)
 
     result = runner.invoke(main, ["sync"])
 
@@ -253,7 +249,7 @@ def test_sync_blocked_on_untracked_new_file(connected_project):
     """abc sync exits with an error when the warehouse has an untracked new file."""
     project, warehouse, runner = connected_project
 
-    (warehouse / "knowledge" / "new-article.md").write_text("# New\n")
+    (warehouse / "contexts" / "new-article.md").write_text("# New\n")
 
     result = runner.invoke(main, ["sync"])
 
@@ -270,13 +266,13 @@ def test_sync_skip_git_check_proceeds_despite_dirty_warehouse(connected_project)
     """abc sync --skip-git-check completes even when the warehouse is dirty."""
     project, warehouse, runner = connected_project
 
-    (warehouse / "knowledge" / "lesson.md").write_text("# Lesson\nDirty.\n")
+    (warehouse / "contexts" / "lesson.md").write_text("# Lesson\nDirty.\n")
 
     result = runner.invoke(main, ["sync", "--skip-git-check"])
 
     assert result.exit_code == 0
     # The file is still copied (from the dirty warehouse state)
-    synced = project / ".agentic-beacon" / "artifacts" / "knowledge" / "lesson.md"
+    synced = project / ".agentic-beacon" / "artifacts" / "contexts" / "lesson.md"
     assert synced.exists()
 
 
@@ -289,7 +285,7 @@ def test_sync_dry_run_bypasses_git_check(connected_project):
     """abc sync --dry-run does not perform the git check and exits 0."""
     project, warehouse, runner = connected_project
 
-    (warehouse / "knowledge" / "lesson.md").write_text("# Lesson\nDirty.\n")
+    (warehouse / "contexts" / "lesson.md").write_text("# Lesson\nDirty.\n")
 
     result = runner.invoke(main, ["sync", "--dry-run"])
 
@@ -307,7 +303,7 @@ def test_sync_proceeds_after_committing_warehouse_changes(connected_project):
     project, warehouse, runner = connected_project
 
     # Make dirty
-    (warehouse / "knowledge" / "lesson.md").write_text("# Lesson\nUpdated.\n")
+    (warehouse / "contexts" / "lesson.md").write_text("# Lesson\nUpdated.\n")
 
     # Verify blocked
     blocked = runner.invoke(main, ["sync"])
@@ -320,7 +316,7 @@ def test_sync_proceeds_after_committing_warehouse_changes(connected_project):
     # Now sync should proceed
     result = runner.invoke(main, ["sync"])
     assert result.exit_code == 0
-    synced = project / ".agentic-beacon" / "artifacts" / "knowledge" / "lesson.md"
+    synced = project / ".agentic-beacon" / "artifacts" / "contexts" / "lesson.md"
     assert "Updated." in synced.read_text()
 
 
@@ -334,10 +330,10 @@ def test_sync_proceeds_when_warehouse_has_no_git(tmp_path, monkeypatch):
     # Plain warehouse — no git init
     wh = tmp_path / "warehouse"
     wh.mkdir()
-    for d in ("contexts", "knowledge", "skills", "docs"):
+    for d in ("contexts", "skills", "docs"):
         (wh / d).mkdir()
     (wh / "README.md").write_text("# Warehouse\n")
-    (wh / "knowledge" / "lesson.md").write_text("# Lesson\n")
+    (wh / "contexts" / "lesson.md").write_text("# Lesson\n")
 
     project = tmp_path / "project"
     project.mkdir()
@@ -347,11 +343,7 @@ def test_sync_proceeds_when_warehouse_has_no_git(tmp_path, monkeypatch):
     beacon_dir.mkdir()
     (beacon_dir / "config.toml").write_text(f'[warehouse]\nlocal_path = "{wh}"\n')
     (beacon_dir / "beacon.yaml").write_text(
-        "artifacts:\n"
-        "  knowledge:\n"
-        "    - knowledge/lesson.md\n"
-        "  skills: []\n"
-        "  contexts: []\n"
+        "artifacts:\n  contexts:\n    - contexts/lesson.md\n  skills: []\n\n"
     )
 
     result = CliRunner().invoke(main, ["sync"])

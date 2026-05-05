@@ -78,7 +78,7 @@ Four types form the core of a warehouse, each defined by two axes: **project sco
 
 ## Interactive Artifact Adoption
 
-`abc adopt` opens an interactive TUI to browse and select warehouse artifacts. Scroll through contexts, skills, and knowledge nodes — press `Space` to select, `Enter` to confirm.
+`abc adopt` opens an interactive TUI to browse and select warehouse artifacts. Scroll through contexts, skills, and agents — press `Space` to select, `Enter` to confirm. Knowledge files are pulled in automatically based on markdown links inside adopted contexts and skills.
 
 <p align="center">
   <img src="docs/screenshots/adopt-tui.png" alt="abc adopt TUI" width="100%" />
@@ -174,6 +174,7 @@ Agentic Beacon is **bidirectional**. When an agent session produces a better app
 - **[Agentic Warehouse Design](./docs/agentic-warehouse-design.md)** — High-level design and architecture
 - **[Boot Context Design](./docs/boot-context-design/)** — AGENTS.md architecture and patterns
 - **[Spec-Driven Development](./docs/spec-driven-development.md)** — Structured approach to feature planning
+- **[Migration: Artifact Dependencies via Frontmatter](./docs/migrations/artifact-dependencies-frontmatter.md)** — Migrate warehouses to the frontmatter dependency model
 
 ### Practical Guides (guides/)
 - **[Getting Started](./guides/getting-started.md)** — Full onboarding walkthrough

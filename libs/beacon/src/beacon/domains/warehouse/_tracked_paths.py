@@ -14,9 +14,6 @@ def get_tracked_paths(warehouse_path: Path, beacon_yaml: Path) -> list[str]:
     beacon_settings = BeaconManifest.from_yaml(beacon_yaml)
     paths: list[str] = []
 
-    for pattern in beacon_settings.artifacts.knowledge:
-        paths.extend(_expand_pattern(warehouse_path, pattern))
-
     for pattern in beacon_settings.artifacts.skills:
         paths.extend(_expand_pattern(warehouse_path, pattern))
 

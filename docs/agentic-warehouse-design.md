@@ -622,12 +622,13 @@ Connect the project to a warehouse and declare which artifacts to use:
 ```bash
 abc warehouse connect --path ~/org-warehouse
 abc setup
-abc adopt            # choose contexts, knowledge, and skills
+abc adopt            # choose contexts, skills, and agents (knowledge is auto-derived)
 abc sync
 ```
 
 **Result:**
-- Artifacts copied to `.agentic-beacon/artifacts/` (contexts, knowledge, skills)
+- Artifacts symlinked to `.agentic-beacon/artifacts/` (contexts, skills, agents)
+- Knowledge files auto-derived from markdown links inside adopted contexts and skills
 - Project's `opencode.json` can reference the synced contexts
 - Project's `AGENTS.md` created for project-specific content
 
@@ -661,7 +662,7 @@ When you improve a context, knowledge file, or skill:
 
 - **Artifact location:** Synced artifacts live in `.agentic-beacon/artifacts/` within each project
 - **OpenCode native support:** The `instructions` field in `opencode.json` loads context files automatically
-- **Glob patterns supported:** `beacon.yaml` supports `knowledge/global/**/*.md` style patterns
+- **Glob patterns supported:** `beacon.yaml` supports `contexts/**/*.md` and `skills/*/` style patterns
 - **Load order matters:** Project `AGENTS.md` loads last, so it can override global patterns
 
 ---

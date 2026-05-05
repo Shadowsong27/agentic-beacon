@@ -91,7 +91,6 @@ my-project/
 ```yaml
 # .agentic-beacon/beacon.yaml
 artifacts:
-  knowledge:
     - backend/api-design-rules.md     # The "How" - rules for APIs
 
   skills:
@@ -168,7 +167,6 @@ payment-service/
 ```yaml
 # .agentic-beacon/beacon.yaml
 artifacts:
-  knowledge:
     - backend/api-security-rules.md      # How: Handle sensitive data
     - backend/error-handling-patterns.md # How: Return error responses
     - payments/pci-compliance-rules.md   # How: PCI-DSS requirements

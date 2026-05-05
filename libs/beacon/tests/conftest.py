@@ -1,5 +1,6 @@
 """pytest configuration and shared fixtures."""
 
+import logging
 import os
 import shutil
 import subprocess
@@ -7,6 +8,26 @@ import tempfile
 from pathlib import Path
 
 import pytest
+from loguru import logger as _loguru_logger
+
+
+@pytest.fixture
+def loguru_caplog(caplog):
+    """Bridge loguru → stdlib logging so pytest's caplog captures loguru records.
+
+    Loguru writes to its own sinks; without this bridge, caplog.records is
+    empty for any code path that emits via loguru. Tests that need to assert
+    on a loguru INFO/WARNING message should depend on this fixture.
+    """
+
+    class PropagateHandler(logging.Handler):
+        def emit(self, record):
+            logging.getLogger(record.name).handle(record)
+
+    handler_id = _loguru_logger.add(PropagateHandler(), format="{message}")
+    caplog.set_level(logging.DEBUG)
+    yield caplog
+    _loguru_logger.remove(handler_id)
 
 
 @pytest.fixture
@@ -44,9 +65,6 @@ def sample_beacon_yaml_complete():
     """Sample complete beacon.yaml content."""
     return """
 artifacts:
-  knowledge:
-    - languages/python/type-hints.md
-    - languages/python/async-patterns.md
   skills:
     - development/tdd-workflow.md
     - deployment/docker-compose.md
@@ -57,11 +75,11 @@ artifacts:
 
 @pytest.fixture
 def sample_beacon_yaml_partial():
-    """Sample partial beacon.yaml content with only knowledge."""
+    """Sample partial beacon.yaml content with only skills."""
     return """
 artifacts:
-  knowledge:
-    - languages/python/basics.md
+  skills:
+    - development/tdd-workflow.md
 """
 
 
@@ -70,7 +88,6 @@ def sample_beacon_yaml_empty():
     """Sample beacon.yaml with empty artifact lists."""
     return """
 artifacts:
-  knowledge: []
   skills: []
   contexts: []
 """

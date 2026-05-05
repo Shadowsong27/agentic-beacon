@@ -240,15 +240,15 @@ def test_compare_from_config_only_listed(valid_warehouse, temp_dir):
     from beacon.core.manifest.beacon import BeaconManifest
 
     artifacts_dir = temp_dir / "artifacts"
-    (artifacts_dir / "knowledge").mkdir(parents=True)
-    (valid_warehouse / "knowledge" / "listed.md").write_text("content")
-    (artifacts_dir / "knowledge" / "listed.md").write_text("content")
-    (artifacts_dir / "knowledge" / "unlisted.md").write_text("extra")
+    (artifacts_dir / "contexts").mkdir(parents=True)
+    (valid_warehouse / "contexts" / "listed.md").write_text("content")
+    (artifacts_dir / "contexts" / "listed.md").write_text("content")
+    (artifacts_dir / "contexts" / "unlisted.md").write_text("extra")
 
     # Create beacon settings with only listed.md
     beacon_yaml = temp_dir / "beacon.yaml"
     beacon_yaml.write_text(
-        "artifacts:\n  knowledge:\n    - knowledge/listed.md\n  skills: []\n  contexts: []\n"
+        "artifacts:\n  contexts:\n    - contexts/listed.md\n  skills: []\n\n"
     )
     settings = BeaconManifest.from_yaml(beacon_yaml)
 
@@ -257,7 +257,7 @@ def test_compare_from_config_only_listed(valid_warehouse, temp_dir):
 
     # Should only compare listed.md, not unlisted.md
     assert len(summary.results) == 1
-    assert summary.results[0].path == "knowledge/listed.md"
+    assert summary.results[0].path == "contexts/listed.md"
 
 
 # ========== Task 8.5: Git Diff Integration ==========
@@ -348,14 +348,14 @@ def test_compare_from_config_detects_added_file_via_glob(valid_warehouse, temp_d
     from beacon.core.manifest.beacon import BeaconManifest
 
     artifacts_dir = temp_dir / "artifacts"
-    (artifacts_dir / "knowledge").mkdir(parents=True)
+    (artifacts_dir / "contexts").mkdir(parents=True)
 
     # This file only exists locally — not in the warehouse
-    (artifacts_dir / "knowledge" / "new-lesson.md").write_text("# New Lesson\n")
+    (artifacts_dir / "contexts" / "new-lesson.md").write_text("# New Lesson\n")
 
     beacon_yaml = temp_dir / "beacon.yaml"
     beacon_yaml.write_text(
-        "artifacts:\n  knowledge:\n    - knowledge/**/*.md\n  skills: []\n  contexts: []\n"
+        "artifacts:\n  contexts:\n    - contexts/**/*.md\n  skills: []\n\n"
     )
     settings = BeaconManifest.from_yaml(beacon_yaml)
 
@@ -363,7 +363,7 @@ def test_compare_from_config_detects_added_file_via_glob(valid_warehouse, temp_d
     summary = comparator.compare_from_config(settings)
 
     added_paths = [r.path for r in summary.added]
-    assert "knowledge/new-lesson.md" in added_paths
+    assert "contexts/new-lesson.md" in added_paths
 
 
 def test_compare_from_config_detects_added_skill_via_glob(valid_warehouse, temp_dir):
@@ -381,7 +381,7 @@ def test_compare_from_config_detects_added_skill_via_glob(valid_warehouse, temp_
 
     beacon_yaml = temp_dir / "beacon.yaml"
     beacon_yaml.write_text(
-        "artifacts:\n  knowledge: []\n  skills:\n    - skills/**/*\n  contexts: []\n"
+        "artifacts:\n  contexts: []\n  skills:\n    - skills/**/*\n\n"
     )
     settings = BeaconManifest.from_yaml(beacon_yaml)
 
@@ -538,13 +538,13 @@ def test_compare_from_config_no_duplicates_for_modified(valid_warehouse, temp_di
     from beacon.core.manifest.beacon import BeaconManifest
 
     artifacts_dir = temp_dir / "artifacts"
-    (artifacts_dir / "knowledge").mkdir(parents=True)
-    (valid_warehouse / "knowledge" / "shared.md").write_text("original")
-    (artifacts_dir / "knowledge" / "shared.md").write_text("modified")
+    (artifacts_dir / "contexts").mkdir(parents=True)
+    (valid_warehouse / "contexts" / "shared.md").write_text("original")
+    (artifacts_dir / "contexts" / "shared.md").write_text("modified")
 
     beacon_yaml = temp_dir / "beacon.yaml"
     beacon_yaml.write_text(
-        "artifacts:\n  knowledge:\n    - knowledge/**/*.md\n  skills: []\n  contexts: []\n"
+        "artifacts:\n  contexts:\n    - contexts/**/*.md\n  skills: []\n\n"
     )
     settings = BeaconManifest.from_yaml(beacon_yaml)
 
@@ -552,7 +552,7 @@ def test_compare_from_config_no_duplicates_for_modified(valid_warehouse, temp_di
     summary = comparator.compare_from_config(settings)
 
     assert len(summary.results) == 1
-    assert summary.results[0].path == "knowledge/shared.md"
+    assert summary.results[0].path == "contexts/shared.md"
     assert len(summary.modified) == 1
 
 
