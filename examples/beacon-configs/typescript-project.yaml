@@ -2,11 +2,8 @@
 # Copy to your project's .agentic-beacon/beacon.yaml
 
 artifacts:
-  knowledge:
-    - languages/typescript/**/*.md
-    - global/decisions/**/*.md
-    - global/lessons/**/*.md
   skills:
-    - code-review/SKILL.md
+    - skills/code-review/
   contexts:
-    - AGENTS.global.md
+    - contexts/typescript.md
+    - contexts/global.md

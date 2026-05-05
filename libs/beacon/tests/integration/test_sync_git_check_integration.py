@@ -62,11 +62,7 @@ def connected_project(tmp_path, warehouse_git, monkeypatch):
         f'[warehouse]\nlocal_path = "{warehouse_git}"\n'
     )
     (beacon_dir / "beacon.yaml").write_text(
-        "artifacts:\n"
-        "  contexts:\n"
-        "    - contexts/lesson.md\n"
-        "  skills: []\n"
-        "  agents: []\n"
+        "artifacts:\n  contexts:\n    - contexts/lesson.md\n  skills: []\n\n"
     )
 
     return project, warehouse_git, CliRunner()
@@ -198,7 +194,7 @@ def test_sync_proceeds_on_master_branch(tmp_path, monkeypatch):
     beacon_dir.mkdir()
     (beacon_dir / "config.toml").write_text(f'[warehouse]\nlocal_path = "{wh}"\n')
     (beacon_dir / "beacon.yaml").write_text(
-        "artifacts:\n  contexts:\n    - contexts/lesson.md\n  skills: []\n  agents: []\n"
+        "artifacts:\n  contexts:\n    - contexts/lesson.md\n  skills: []\n\n"
     )
 
     result = CliRunner().invoke(main, ["sync"])
@@ -347,11 +343,7 @@ def test_sync_proceeds_when_warehouse_has_no_git(tmp_path, monkeypatch):
     beacon_dir.mkdir()
     (beacon_dir / "config.toml").write_text(f'[warehouse]\nlocal_path = "{wh}"\n')
     (beacon_dir / "beacon.yaml").write_text(
-        "artifacts:\n"
-        "  contexts:\n"
-        "    - contexts/lesson.md\n"
-        "  skills: []\n"
-        "  agents: []\n"
+        "artifacts:\n  contexts:\n    - contexts/lesson.md\n  skills: []\n\n"
     )
 
     result = CliRunner().invoke(main, ["sync"])

@@ -53,7 +53,7 @@ def contrib_project(tmp_path, contrib_warehouse, monkeypatch):
     # beacon.yaml with tracked paths
     beacon_yaml = beacon_dir / "beacon.yaml"
     beacon_yaml.write_text(
-        "artifacts:\n  contexts:\n    - contexts/test.md\n  skills: []\n  agents: []\n"
+        "artifacts:\n  contexts:\n    - contexts/test.md\n  skills: []\n\n"
     )
 
     # Create the tracked file in warehouse and commit it

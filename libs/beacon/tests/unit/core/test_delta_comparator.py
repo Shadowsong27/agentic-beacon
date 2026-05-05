@@ -248,7 +248,7 @@ def test_compare_from_config_only_listed(valid_warehouse, temp_dir):
     # Create beacon settings with only listed.md
     beacon_yaml = temp_dir / "beacon.yaml"
     beacon_yaml.write_text(
-        "artifacts:\n  contexts:\n    - contexts/listed.md\n  skills: []\n  agents: []\n"
+        "artifacts:\n  contexts:\n    - contexts/listed.md\n  skills: []\n\n"
     )
     settings = BeaconManifest.from_yaml(beacon_yaml)
 
@@ -355,7 +355,7 @@ def test_compare_from_config_detects_added_file_via_glob(valid_warehouse, temp_d
 
     beacon_yaml = temp_dir / "beacon.yaml"
     beacon_yaml.write_text(
-        "artifacts:\n  contexts:\n    - contexts/**/*.md\n  skills: []\n  agents: []\n"
+        "artifacts:\n  contexts:\n    - contexts/**/*.md\n  skills: []\n\n"
     )
     settings = BeaconManifest.from_yaml(beacon_yaml)
 
@@ -381,7 +381,7 @@ def test_compare_from_config_detects_added_skill_via_glob(valid_warehouse, temp_
 
     beacon_yaml = temp_dir / "beacon.yaml"
     beacon_yaml.write_text(
-        "artifacts:\n  contexts: []\n  skills:\n    - skills/**/*\n  agents: []\n"
+        "artifacts:\n  contexts: []\n  skills:\n    - skills/**/*\n\n"
     )
     settings = BeaconManifest.from_yaml(beacon_yaml)
 
@@ -544,7 +544,7 @@ def test_compare_from_config_no_duplicates_for_modified(valid_warehouse, temp_di
 
     beacon_yaml = temp_dir / "beacon.yaml"
     beacon_yaml.write_text(
-        "artifacts:\n  contexts:\n    - contexts/**/*.md\n  skills: []\n  agents: []\n"
+        "artifacts:\n  contexts:\n    - contexts/**/*.md\n  skills: []\n\n"
     )
     settings = BeaconManifest.from_yaml(beacon_yaml)
 

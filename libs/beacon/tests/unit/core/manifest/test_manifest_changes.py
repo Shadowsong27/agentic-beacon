@@ -1,4 +1,4 @@
-"""Tests for manifest changes: knowledge removal, agents addition, legacy drop hook.
+"""Tests for manifest changes: knowledge removal, valid artifact types.
 
 Covers tasks 3.1–3.5 from auto-pull-artifact-dependencies OpenSpec change.
 """
@@ -23,21 +23,24 @@ class TestArtifactsConfig:
         assert not hasattr(config, "knowledge")
         assert "knowledge" not in config.model_dump()
 
-    def test_tc2_agents_field_exists_with_default(self):
-        """TC2: agents field exists and defaults to empty list."""
+    def test_tc2_agents_field_removed(self):
+        """TC2: agents field is not present on ArtifactsConfig."""
         config = ArtifactsConfig()
-        assert config.agents == []
-
-    def test_tc3_agents_round_trip(self):
-        """TC3: agents list persists through model_dump."""
-        config = ArtifactsConfig(agents=["agents/foo.md"])
+        assert not hasattr(config, "agents")
         dumped = config.model_dump()
-        assert dumped["agents"] == ["agents/foo.md"]
+        assert "agents" not in dumped
+        assert "contexts" in dumped
+        assert "skills" in dumped
 
-    def test_tc4_extra_forbid_blocks_knowledge(self):
-        """TC4: extra=forbid prevents knowledge from being set."""
+    def test_tc3_extra_forbid_blocks_knowledge(self):
+        """TC3: extra=forbid prevents knowledge from being set."""
         with pytest.raises(ValidationError):
             ArtifactsConfig(knowledge=["knowledge/foo.md"])
+
+    def test_tc4_extra_forbid_blocks_agents(self):
+        """TC4: extra=forbid prevents agents from being set."""
+        with pytest.raises(ValidationError):
+            ArtifactsConfig(agents=["agents/foo.md"])
 
 
 class TestLegacyDropHook:
@@ -85,7 +88,6 @@ artifacts:
         beacon_file = tmp_path / "beacon.yaml"
         beacon_file.write_text("""
 artifacts:
-  agents: []
   contexts: []
   skills: []
 """)
@@ -164,7 +166,7 @@ artifacts:
         assert self.LEGACY_LOG_TEXT not in msgs, msgs
 
     def test_tc7_legacy_plus_extra_key(self, tmp_path):
-        """TC6: Legacy YAML with knowledge and unexpected extra key → drops knowledge, extra triggers error."""
+        """TC7: Legacy YAML with knowledge and unexpected extra key → drops knowledge, extra triggers error."""
         beacon_file = tmp_path / "beacon.yaml"
         beacon_file.write_text("""
 artifacts:
@@ -183,9 +185,25 @@ artifacts:
             "unknown" in error_str or "extra" in error_str or "unexpected" in error_str
         )
 
+    def test_tc8_legacy_with_agents_key(self, tmp_path):
+        """TC8: YAML with agents key → rejected as unknown artifact type."""
+        beacon_file = tmp_path / "beacon.yaml"
+        beacon_file.write_text("""
+artifacts:
+  agents:
+    - agents/reviewer.md
+  contexts: []
+  skills: []
+""")
+        with pytest.raises(BeaconValidationError) as exc_info:
+            BeaconManifest.from_yaml(str(beacon_file))
+
+        assert "unknown" in str(exc_info.value).lower()
+        assert "agents" in str(exc_info.value).lower()
+
 
 class TestManifestWriter:
-    """Task 3.4: Writer never serializes knowledge key."""
+    """Task 3.4: Writer never serializes knowledge or agents keys."""
 
     def test_tc1_extra_forbid_prevents_knowledge_setattr(self):
         """TC1: setattr with knowledge raises ValidationError due to extra=forbid."""
@@ -197,42 +215,58 @@ class TestManifestWriter:
         beacon_file = tmp_path / "beacon.yaml"
         manifest = BeaconManifest(
             artifacts=ArtifactsConfig(
-                agents=["agents/foo.md"], contexts=["contexts/bar.md"]
+                skills=["skills/foo/"], contexts=["contexts/bar.md"]
             )
         )
         manifest.to_yaml(str(beacon_file))
 
         content = beacon_file.read_text()
         assert "knowledge:" not in content
-        assert "agents:" in content
-        assert "contexts:" in content
+        assert "agents:" not in content
         assert "skills:" in content
+        assert "contexts:" in content
 
     def test_tc3_defaults_write_clean_yaml(self, tmp_path):
-        """TC3: Manifest with defaults writes only agents, contexts, skills keys."""
+        """TC3: Manifest with defaults writes only skills and contexts keys."""
         beacon_file = tmp_path / "beacon.yaml"
         manifest = BeaconManifest()
         manifest.to_yaml(str(beacon_file))
 
         data = yaml.safe_load(beacon_file.read_text())
         artifact_keys = set(data["artifacts"].keys())
-        assert artifact_keys == {"agents", "contexts", "skills"}
+        assert artifact_keys == {"contexts", "skills"}
 
 
 class TestBeaconManifestValidator:
     """Task 3.5: Validator uses updated artifact types."""
 
-    def test_validator_accepts_agents(self):
-        """Validator accepts agents artifact type."""
-        manifest = BeaconManifest(artifacts=ArtifactsConfig(agents=["agents/foo.md"]))
+    def test_validator_accepts_skills_and_contexts(self):
+        """Validator accepts skills and contexts artifact types."""
+        manifest = BeaconManifest(artifacts=ArtifactsConfig(skills=["skills/foo/"]))
         validator = BeaconManifestValidator()
         result = validator.validate_structure(manifest)
         assert result.valid is True
         assert result.errors == []
 
-    def test_validator_rejects_knowledge(self, tmp_path):
-        """Validator no longer knows about knowledge type."""
-        # This is tested indirectly: a manifest loaded from legacy YAML has knowledge stripped
+    def test_validator_rejects_agents(self, tmp_path):
+        """Validator rejects agents artifact type in from_yaml."""
+        beacon_file = tmp_path / "beacon.yaml"
+        beacon_file.write_text("""
+artifacts:
+  agents:
+    - agents/foo.md
+  contexts: []
+  skills: []
+""")
+        from beacon.core.exceptions import ValidationError
+
+        with pytest.raises(ValidationError) as exc_info:
+            BeaconManifest.from_yaml(str(beacon_file))
+
+        assert "unknown" in str(exc_info.value).lower()
+
+    def test_validator_drops_knowledge_on_load(self, tmp_path):
+        """Validator no longer knows about knowledge type — loaded from legacy is clean."""
         beacon_file = tmp_path / "beacon.yaml"
         beacon_file.write_text("""
 artifacts:

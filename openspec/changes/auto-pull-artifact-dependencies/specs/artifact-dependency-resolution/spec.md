@@ -1,30 +1,11 @@
 ## ADDED Requirements
 
-### Requirement: Agent frontmatter declares context and skill dependencies
-The system SHALL require every agent file (`agents/<name>.md`) in a warehouse to declare its sibling-tier dependencies via a `requires:` block in its YAML frontmatter. The `requires:` block SHALL contain two keys: `contexts:` and `skills:`, each a list of artifact names. Empty lists are permitted; absence of the `requires:` key is not.
-
-The artifact names in `requires.contexts` are filename stems of files under the warehouse's `contexts/` directory (no extension, no directory prefix). The artifact names in `requires.skills` are directory names under the warehouse's `skills/` directory.
-
-#### Scenario: Agent with populated requires
-- **WHEN** an agent file `agents/python-reviewer.md` has frontmatter `requires: { contexts: [python-standards], skills: [record-knowledge] }`
-- **THEN** the system records the agent's dependencies as contexts=[`python-standards`] and skills=[`record-knowledge`]
-
-#### Scenario: Agent with empty requires
-- **WHEN** an agent file has frontmatter `requires: { contexts: [], skills: [] }`
-- **THEN** the system treats the agent as having no sibling-tier dependencies and validation passes
-
-#### Scenario: Agent missing requires block
-- **WHEN** an adopted agent file has YAML frontmatter but no `requires:` key
-- **THEN** `abc sync` fails with an error identifying the agent and linking to `docs/migrations/artifact-dependencies-frontmatter.md`
-
-#### Scenario: Agent with no frontmatter
-- **WHEN** an adopted agent file has no YAML frontmatter at all
-- **THEN** `abc sync` fails with the same error as a missing `requires:` block
-
 ### Requirement: Skill frontmatter declares context dependencies
 The system SHALL require every skill entrypoint file (`skills/<name>/SKILL.md`) in a warehouse to declare its context dependencies via a `requires:` block in its YAML frontmatter. The `requires:` block SHALL contain the key `contexts:` as a list of context filename stems. Empty list is permitted; absence of the `requires:` key is not.
 
 Skills SHALL NOT declare dependencies on other skills in this version of the specification. The `skills:` key is not permitted inside a skill's `requires:` block.
+
+Agents are global machine-level artifacts not tracked in project `beacon.yaml`. Agent `requires:` frontmatter may exist as warehouse metadata for future groundwork (PER-109) but is not validated or read during `abc sync` in this change.
 
 #### Scenario: Skill with context dependency
 - **WHEN** a skill file `skills/python-refactor/SKILL.md` has frontmatter `requires: { contexts: [python-standards] }`
@@ -42,43 +23,28 @@ Skills SHALL NOT declare dependencies on other skills in this version of the spe
 - **WHEN** a skill entrypoint has `requires: { contexts: [...], skills: [...] }`
 - **THEN** `abc sync` fails with an error explaining that skill-to-skill dependencies are not supported
 
-### Requirement: Unadopted dependency is a hard error at sync
-The system SHALL validate at `abc sync` that every `requires.contexts` entry in an adopted agent or skill resolves to a context that is explicitly or transitively adopted, and that every `requires.skills` entry in an adopted agent resolves to an adopted skill.
+### Requirement: Required context resolution is auto-pull; missing-from-warehouse is a hard error
+The system SHALL at `abc sync` include every `requires.contexts` entry declared by an adopted skill in the effective context set transitively, even if the context is not explicitly listed in `beacon.yaml.artifacts.contexts`.
 
-If a required dependency is missing, the system SHALL refuse to sync and SHALL emit an error that (1) names the requiring artifact, (2) names the missing dependency, and (3) links to the migration document.
+If a required context exists in the warehouse (`contexts/<name>.md`), the system SHALL auto-pull and symlink it without error. If a required context does NOT exist in the warehouse, the system SHALL refuse to sync and SHALL emit an error that (1) names the requiring skill, (2) names the missing context, and (3) links to the migration document.
 
-#### Scenario: Required context not adopted
-- **WHEN** adopted agent `python-reviewer` requires context `python-standards`, and `python-standards` is not in `beacon.yaml.artifacts.contexts` nor pulled by another adopted artifact
-- **THEN** `abc sync` exits non-zero with an error: "agent 'python-reviewer' requires context 'python-standards' which is not adopted"
+#### Scenario: Required context auto-pulled from warehouse
+- **WHEN** adopted skill `python-refactor` requires context `python-standards`, `python-standards` exists in the warehouse, but is NOT in `beacon.yaml.artifacts.contexts`
+- **THEN** `abc sync` succeeds; `python-standards` is auto-pulled into the effective context set and a symlink is created
 
-#### Scenario: Required skill not adopted
-- **WHEN** adopted agent `python-reviewer` requires skill `record-knowledge`, and `record-knowledge` is not adopted
-- **THEN** `abc sync` exits non-zero with an error naming both the agent and the missing skill
+#### Scenario: Required context missing from warehouse
+- **WHEN** adopted skill `python-refactor` requires context `nonexistent`, and `nonexistent` does NOT exist as `contexts/nonexistent.md` in the warehouse
+- **THEN** `abc sync` exits non-zero with an error: "skill 'python-refactor' requires context 'nonexistent' which is not found in the warehouse"
 
 #### Scenario: Required context pulled transitively
-- **WHEN** adopted agent requires context `python-standards`, and `python-standards` is listed in `beacon.yaml.artifacts.contexts` only because another artifact pulled it
-- **THEN** `abc sync` succeeds; transitive adoption satisfies the requirement
-
-### Requirement: Adopt-time prompting for required dependencies
-The system SHALL, during interactive `abc adopt`, inspect the `requires:` frontmatter of each agent and skill the user is about to adopt, and SHALL prompt the user to also adopt any required contexts or skills that are not already adopted.
-
-#### Scenario: Adopting an agent with unadopted required contexts
-- **WHEN** user selects agent `python-reviewer` (which requires contexts=[`python-standards`]) and `python-standards` is not already adopted
-- **THEN** the TUI prompts "Agent 'python-reviewer' requires context 'python-standards'. Adopt it as well?" with default yes
-
-#### Scenario: Adopting an agent with all required contexts already adopted
-- **WHEN** user selects an agent whose required contexts are all in `beacon.yaml`
-- **THEN** no additional prompt is shown for those dependencies
-
-#### Scenario: User declines to adopt a required dependency
-- **WHEN** user declines the prompt to adopt a required dependency
-- **THEN** adoption of the agent proceeds but a warning is printed: "Agent 'X' will fail `abc sync` until 'Y' is adopted"
+- **WHEN** adopted skill requires context `python-standards`, and `python-standards` exists in the warehouse
+- **THEN** `abc sync` succeeds; the context is included in the effective set regardless of whether it is also explicitly adopted
 
 ### Requirement: Migration document exists and is referenced
-The system SHALL ship a migration document at `docs/migrations/artifact-dependencies-frontmatter.md` in the agentic-beacon repository. Every error message raised by the sync or adopt flows due to missing or malformed `requires:` frontmatter SHALL include a URL pointing to this document.
+The system SHALL ship a migration document at `docs/migrations/artifact-dependencies-frontmatter.md` in the agentic-beacon repository. Every error message raised by the sync flow due to missing or malformed `requires:` frontmatter on skills SHALL include a URL pointing to this document.
 
 #### Scenario: Error message links to migration doc
-- **WHEN** `abc sync` fails due to a missing `requires:` block on an agent or skill
+- **WHEN** `abc sync` fails due to a missing `requires:` block on a skill
 - **THEN** the error message includes the string "docs/migrations/artifact-dependencies-frontmatter.md"
 
 ### Requirement: Contexts have no frontmatter dependencies

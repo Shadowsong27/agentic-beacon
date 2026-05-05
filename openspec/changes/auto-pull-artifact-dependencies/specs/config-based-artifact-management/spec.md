@@ -3,20 +3,20 @@
 ### Requirement: Beacon.yaml grouped by artifact type
 **Reason**: Knowledge is no longer a manually-adopted artifact type. It is derived at sync time from scanning adopted contexts and skills for markdown links into `knowledge/`. The `artifacts.knowledge` field is removed from `beacon.yaml` to eliminate drift between declared and actually-referenced knowledge.
 
-**Migration**: On first `abc sync` after upgrading to this version, any existing `artifacts.knowledge` field in `beacon.yaml` is silently dropped. The rewritten `beacon.yaml` contains only `artifacts.contexts`, `artifacts.skills`, and `artifacts.agents`. Users who want specific knowledge present in their project must adopt a context or skill that references it. See `docs/migrations/artifact-dependencies-frontmatter.md`.
+**Migration**: On first `abc sync` after upgrading to this version, any existing `artifacts.knowledge` field in `beacon.yaml` is silently dropped. The rewritten `beacon.yaml` contains only `artifacts.contexts` and `artifacts.skills`. Users who want specific knowledge present in their project must adopt a context or skill that references it. See `docs/migrations/artifact-dependencies-frontmatter.md`.
 
 ## MODIFIED Requirements
 
 ### Requirement: Beacon.yaml config file for artifact dependencies
-The system SHALL support a beacon.yaml configuration file that declares which artifacts from the warehouse should be synced to the project. The file declares explicit adoptions for agents, contexts, and skills; knowledge is not declared and is computed automatically at sync time by scanning the adopted artifacts.
+The system SHALL support a beacon.yaml configuration file that declares which artifacts from the warehouse should be synced to the project. The file declares explicit adoptions for contexts and skills; knowledge is not declared and is computed automatically at sync time by scanning the adopted artifacts.
 
 #### Scenario: Create beacon.yaml in project
 - **WHEN** user runs `abc setup` after connecting to warehouse
-- **THEN** system creates `.agentic-beacon/beacon.yaml` with template structure containing `artifacts.agents`, `artifacts.contexts`, and `artifacts.skills`
+- **THEN** system creates `.agentic-beacon/beacon.yaml` with template structure containing `artifacts.contexts` and `artifacts.skills`
 
 #### Scenario: Beacon.yaml grouped by artifact type
 - **WHEN** system reads beacon.yaml
-- **THEN** artifacts are organized under `agents:`, `contexts:`, and `skills:` groups; no `knowledge:` group exists
+- **THEN** artifacts are organized under `contexts:` and `skills:` groups; no `knowledge:` group exists
 
 #### Scenario: Beacon.yaml is committed to git
 - **WHEN** user creates beacon.yaml for project
@@ -27,10 +27,10 @@ The system SHALL support a beacon.yaml configuration file that declares which ar
 - **THEN** the system emits a one-time informational log "`artifacts.knowledge` removed; knowledge is now auto-derived", drops the field, and writes the updated `beacon.yaml` without it
 
 ### Requirement: Declarative dependency specification
-The system SHALL treat beacon.yaml as the declarative specification of the project's explicit artifact adoptions for agents, contexts, and skills. Knowledge is NOT declared in beacon.yaml; it is derived at sync time.
+The system SHALL treat beacon.yaml as the declarative specification of the project's explicit artifact adoptions for contexts and skills. Knowledge is NOT declared in beacon.yaml; it is derived at sync time.
 
 #### Scenario: Artifacts list defines what should exist
-- **WHEN** beacon.yaml lists specific agents, contexts, and skills
+- **WHEN** beacon.yaml lists specific contexts and skills
 - **THEN** running `abc sync` ensures exactly those artifacts exist locally, plus all knowledge files referenced by the adopted contexts and skills
 
 #### Scenario: Removing artifact from beacon.yaml
@@ -42,19 +42,19 @@ The system SHALL treat beacon.yaml as the declarative specification of the proje
 - **THEN** system syncs that artifact, scans it for knowledge references, and creates symlinks for any newly-referenced knowledge files
 
 ### Requirement: Validation of artifact paths in beacon.yaml
-The system SHALL validate that artifact paths in beacon.yaml exist in the connected warehouse, AND that every `requires:` dependency declared by an adopted agent or skill resolves to an adopted artifact.
+The system SHALL validate that artifact paths in beacon.yaml exist in the connected warehouse, AND that every `requires:` dependency declared by an adopted skill resolves to a context that exists in the warehouse. Required contexts that exist in the warehouse are auto-pulled transitively; they need not be explicit in `beacon.yaml`.
 
 #### Scenario: Valid artifact paths
-- **WHEN** user runs `abc sync` and all beacon.yaml paths exist in warehouse and all `requires:` dependencies are satisfied
-- **THEN** system syncs artifacts successfully
+- **WHEN** user runs `abc sync` and all beacon.yaml paths exist in warehouse and all `requires:` dependencies resolve to warehouse contexts
+- **THEN** system syncs artifacts successfully; skill-required contexts are auto-pulled
 
 #### Scenario: Missing artifact in warehouse
 - **WHEN** user runs `abc sync` and beacon.yaml references a path that doesn't exist in the warehouse
 - **THEN** system displays an error listing missing artifacts and exits non-zero
 
-#### Scenario: Missing required dependency
-- **WHEN** an adopted agent declares `requires.contexts: [python-standards]` but `python-standards` is not adopted
-- **THEN** `abc sync` exits non-zero with an error naming the agent and the missing dependency, and linking to the migration document
+#### Scenario: Required context missing from warehouse
+- **WHEN** an adopted skill declares `requires.contexts: [nonexistent]` and `contexts/nonexistent.md` does not exist in the warehouse
+- **THEN** `abc sync` exits non-zero with an error naming the skill and the missing dependency, and linking to the migration document
 
 #### Scenario: Empty beacon.yaml
 - **WHEN** user runs `abc sync` with empty or minimal beacon.yaml

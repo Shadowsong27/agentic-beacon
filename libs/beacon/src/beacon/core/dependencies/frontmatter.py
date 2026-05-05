@@ -8,13 +8,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, model_validator
 
 
 class RequiresBlock(BaseModel):
     """Shared requires block for agents and skills."""
 
-    contexts: list[str] = Field(default_factory=list)
+    contexts: list[str]
 
 
 class AgentRequires(RequiresBlock):

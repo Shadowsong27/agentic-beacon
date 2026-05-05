@@ -1045,11 +1045,13 @@ def _make_agent_project(tmp_path, monkeypatch):
     return wh, project
 
 
-class TestSyncAgentsFromWarehouse:
-    def test_installs_agent_to_opencode_global_dir(
+class TestSyncDoesNotInstallAgents:
+    """Sync must not install agents globally (PER-109 deferred)."""
+
+    def test_sync_does_not_install_agent_to_opencode(
         self, tmp_path, monkeypatch, isolated_home
     ):
-        """abc sync links warehouse agents into ~/.config/opencode/agents/."""
+        """abc sync does NOT link warehouse agents into ~/.config/opencode/agents/."""
         (isolated_home / ".config" / "opencode").mkdir(parents=True)
         wh, project = _make_agent_project(tmp_path, monkeypatch)
 
@@ -1058,14 +1060,13 @@ class TestSyncAgentsFromWarehouse:
 
         assert result.exit_code == 0, result.output
         dest = isolated_home / ".config" / "opencode" / "agents" / "code-reviewer.md"
-        assert dest.is_symlink()
-        assert dest.resolve() == (wh / "agents" / "code-reviewer.md").resolve()
-        assert dest.read_text() == SAMPLE_AGENT_MD
+        assert not dest.is_symlink()
+        assert not dest.exists()
 
-    def test_installs_agent_to_claudecode_global_dir(
+    def test_sync_does_not_install_agent_to_claudecode(
         self, tmp_path, monkeypatch, isolated_home
     ):
-        """abc sync links warehouse agents into ~/.claude/agents/."""
+        """abc sync does NOT link warehouse agents into ~/.claude/agents/."""
         (isolated_home / ".claude").mkdir(parents=True)
         wh, project = _make_agent_project(tmp_path, monkeypatch)
 
@@ -1074,14 +1075,13 @@ class TestSyncAgentsFromWarehouse:
 
         assert result.exit_code == 0, result.output
         dest = isolated_home / ".claude" / "agents" / "code-reviewer.md"
-        assert dest.is_symlink()
-        assert dest.resolve() == (wh / "agents" / "code-reviewer.md").resolve()
-        assert dest.read_text() == SAMPLE_AGENT_MD
+        assert not dest.is_symlink()
+        assert not dest.exists()
 
-    def test_installs_to_both_tools_when_both_present(
+    def test_sync_does_not_install_to_both_tools(
         self, tmp_path, monkeypatch, isolated_home
     ):
-        """When both opencode and claudecode are installed, both get the agent."""
+        """When both tools are present, agents are not installed by sync."""
         (isolated_home / ".config" / "opencode").mkdir(parents=True)
         (isolated_home / ".claude").mkdir(parents=True)
         wh, project = _make_agent_project(tmp_path, monkeypatch)
@@ -1094,16 +1094,16 @@ class TestSyncAgentsFromWarehouse:
             isolated_home / ".config" / "opencode" / "agents" / "code-reviewer.md"
         )
         claude_dest = isolated_home / ".claude" / "agents" / "code-reviewer.md"
-        assert opencode_dest.is_symlink()
-        assert claude_dest.is_symlink()
-        assert opencode_dest.resolve() == (wh / "agents" / "code-reviewer.md").resolve()
-        assert claude_dest.resolve() == (wh / "agents" / "code-reviewer.md").resolve()
-        assert "code-reviewer" in result.output
+        assert not opencode_dest.is_symlink()
+        assert not opencode_dest.exists()
+        assert not claude_dest.is_symlink()
+        assert not claude_dest.exists()
+        assert "code-reviewer" not in result.output
 
-    def test_skips_agents_when_warehouse_has_no_agents_dir(
+    def test_sync_completes_when_warehouse_has_no_agents_dir(
         self, tmp_path, monkeypatch, isolated_home
     ):
-        """Warehouse without agents/ dir: sync completes without installing any agents."""
+        """Warehouse without agents/ dir: sync completes without error."""
         (isolated_home / ".config" / "opencode").mkdir(parents=True)
 
         wh = tmp_path / "warehouse"
@@ -1111,7 +1111,6 @@ class TestSyncAgentsFromWarehouse:
             (wh / d).mkdir(parents=True)
         (wh / "README.md").write_text("# WH")
 
-        # Init git
         subprocess.run(
             ["git", "init"], cwd=wh, env=GIT_ENV, check=True, capture_output=True
         )
@@ -1141,61 +1140,6 @@ class TestSyncAgentsFromWarehouse:
 
         assert result.exit_code == 0, result.output
         assert not (isolated_home / ".config" / "opencode" / "agents").exists()
-
-    def test_idempotent_when_already_up_to_date(
-        self, tmp_path, monkeypatch, isolated_home
-    ):
-        """Running sync twice does not re-link agent files that are already current."""
-        agents_dir = isolated_home / ".config" / "opencode" / "agents"
-        agents_dir.mkdir(parents=True)
-
-        wh, project = _make_agent_project(tmp_path, monkeypatch)
-        runner = CliRunner()
-        result = runner.invoke(main, ["sync", "--skip-git-check"])
-        assert result.exit_code == 0, result.output
-
-        dest = agents_dir / "code-reviewer.md"
-        assert dest.is_symlink()
-        mtime_before = dest.lstat().st_mtime
-
-        result = runner.invoke(main, ["sync", "--skip-git-check"])
-        assert result.exit_code == 0, result.output
-
-        mtime_after = dest.lstat().st_mtime
-        assert mtime_before == mtime_after
-
-    def test_force_overwrites_conflicting_agent(
-        self, tmp_path, monkeypatch, isolated_home
-    ):
-        """--force overwrites a diverged local agent without prompting."""
-        agents_dir = isolated_home / ".config" / "opencode" / "agents"
-        agents_dir.mkdir(parents=True)
-        (agents_dir / "code-reviewer.md").write_text("old local content\n")
-
-        wh, project = _make_agent_project(tmp_path, monkeypatch)
-        runner = CliRunner()
-        result = runner.invoke(main, ["sync", "--force", "--skip-git-check"])
-
-        assert result.exit_code == 0, result.output
-        dest = agents_dir / "code-reviewer.md"
-        assert dest.is_symlink()
-        assert dest.resolve() == (wh / "agents" / "code-reviewer.md").resolve()
-        assert dest.read_text() == SAMPLE_AGENT_MD
-
-    def test_non_interactive_conflict_skips_without_prompt(
-        self, tmp_path, monkeypatch, isolated_home
-    ):
-        """In non-interactive mode, conflicting agents are skipped automatically."""
-        agents_dir = isolated_home / ".config" / "opencode" / "agents"
-        agents_dir.mkdir(parents=True)
-        (agents_dir / "code-reviewer.md").write_text("diverged content\n")
-
-        wh, project = _make_agent_project(tmp_path, monkeypatch)
-        runner = CliRunner()
-        result = runner.invoke(main, ["sync", "--skip-git-check"])
-
-        assert result.exit_code == 0, result.output
-        assert (agents_dir / "code-reviewer.md").read_text() == "diverged content\n"
 
 
 # ---------------------------------------------------------------------------

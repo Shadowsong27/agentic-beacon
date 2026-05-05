@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from beacon.core.dependencies.frontmatter import (
-    AgentFrontmatter,
     SkillFrontmatter,
     parse_frontmatter,
 )
@@ -29,7 +28,6 @@ class EffectiveSet:
     knowledge: frozenset[str]
     explicit_contexts: frozenset[str]
     explicit_skills: frozenset[str]
-    explicit_agents: frozenset[str]
 
 
 @dataclass(frozen=True)
@@ -44,8 +42,8 @@ def compute_effective_set(
 ) -> EffectiveSet | ResolutionFailure:
     """Compute the effective set of artifacts for a project.
 
-    Walks adopted agents and skills to transitively include required contexts
-    and skills, then scans all contexts and skills for knowledge references.
+    Walks adopted skills to transitively include required contexts,
+    then scans all contexts and skills for knowledge references.
 
     Args:
         beacon: Loaded beacon manifest.
@@ -59,33 +57,13 @@ def compute_effective_set(
 
     explicit_contexts = frozenset(beacon.artifacts.contexts)
     explicit_skills = frozenset(beacon.artifacts.skills)
-    explicit_agents = frozenset(beacon.artifacts.agents)
 
     effective_contexts: set[str] = set(explicit_contexts)
     effective_skills: set[str] = set(explicit_skills)
 
-    # Phase 1: Walk adopted agents (6.3)
-    for agent_name in explicit_agents:
-        agent_path = warehouse / "agents" / f"{agent_name}.md"
-        if not agent_path.exists():
-            error_set.add(f"Agent '{agent_name}' not found in warehouse: {agent_path}")
-            continue
+    context_required_by: dict[str, list[str]] = {}
 
-        result = parse_frontmatter(agent_path)
-        if not result.success:
-            error_set.add(f"Agent '{agent_name}' frontmatter error: {result.message}")
-            continue
-
-        try:
-            agent_fm = AgentFrontmatter.model_validate(result.data)
-        except Exception as exc:
-            error_set.add(f"Agent '{agent_name}' frontmatter validation failed: {exc}")
-            continue
-
-        effective_contexts.update(agent_fm.requires.contexts)
-        effective_skills.update(agent_fm.requires.skills)
-
-    # Phase 2: Walk skills (explicit + transitively required by agents) (6.4)
+    # Phase 1: Walk skills (6.4)
     skills_to_walk = list(effective_skills)
     for skill_name in skills_to_walk:
         skill_path = warehouse / "skills" / skill_name / "SKILL.md"
@@ -104,13 +82,24 @@ def compute_effective_set(
             error_set.add(f"Skill '{skill_name}' frontmatter validation failed: {exc}")
             continue
 
-        effective_contexts.update(skill_fm.requires.contexts)
+        for ctx_name in skill_fm.requires.contexts:
+            effective_contexts.add(ctx_name)
+            context_required_by.setdefault(ctx_name, []).append(skill_name)
 
     # Phase 3: Validate all effective artifacts exist in warehouse (6.6)
     for ctx_name in effective_contexts:
         ctx_path = warehouse / "contexts" / f"{ctx_name}.md"
         if not ctx_path.exists():
-            error_set.add(f"Context '{ctx_name}' not found in warehouse: {ctx_path}")
+            if ctx_name in context_required_by:
+                skills = ", ".join(context_required_by[ctx_name])
+                error_set.add(
+                    f"Skill(s) '{skills}' require context '{ctx_name}' "
+                    f"which is not found in the warehouse: {ctx_path}"
+                )
+            else:
+                error_set.add(
+                    f"Context '{ctx_name}' not found in warehouse: {ctx_path}"
+                )
 
     for skill_name in effective_skills:
         skill_path = warehouse / "skills" / skill_name / "SKILL.md"
@@ -136,7 +125,6 @@ def compute_effective_set(
         knowledge=frozenset(knowledge),
         explicit_contexts=explicit_contexts,
         explicit_skills=explicit_skills,
-        explicit_agents=explicit_agents,
     )
 
 

@@ -3,23 +3,22 @@
 ### Requirement: Sync resolves dependencies before copying
 The system SHALL, at the start of every `abc sync`, compute the full dependency set from `beacon.yaml` and warehouse artifacts before creating or pruning any files. The dependency set includes:
 
-1. The explicitly-adopted agents, contexts, and skills listed in `beacon.yaml`.
-2. Every context and skill required (via `requires:` frontmatter) by an adopted agent.
-3. Every context required (via `requires:` frontmatter) by an adopted skill.
-4. The derived knowledge set computed by scanning every adopted context and skill for markdown links resolving to warehouse paths under `knowledge/`.
+1. The explicitly-adopted contexts and skills listed in `beacon.yaml`.
+2. Every context required (via `requires:` frontmatter) by an adopted skill.
+3. The derived knowledge set computed by scanning every adopted context and skill for markdown links resolving to warehouse paths under `knowledge/`.
 
-The system SHALL halt with a hard error if any step of dependency resolution detects an unadopted required dependency, a malformed frontmatter, or a context/skill with no `requires:` block.
+The system SHALL halt with a hard error if any step of dependency resolution detects a required context that does not exist in the warehouse, or a skill with no `requires:` block or malformed frontmatter. Required contexts that exist in the warehouse are auto-pulled transitively even if not explicit in `beacon.yaml`.
 
 #### Scenario: Dependency resolution runs first
 - **WHEN** `abc sync` is invoked
-- **THEN** the system computes the full dependency set (explicit adoptions + required transitive + derived knowledge) before any file copy, symlink creation, or pruning occurs
+- **THEN** the system computes the full dependency set (explicit adoptions + skill-required transitive contexts + derived knowledge) before any file copy, symlink creation, or pruning occurs
 
-#### Scenario: Sync halts on missing required dependency
-- **WHEN** dependency resolution detects an adopted agent requires a context that is not adopted explicitly or transitively
+#### Scenario: Sync halts on required context missing from warehouse
+- **WHEN** dependency resolution detects an adopted skill requires a context that does not exist in the warehouse
 - **THEN** `abc sync` exits non-zero before touching any files, and no partial sync state results
 
 #### Scenario: Sync halts on malformed frontmatter
-- **WHEN** an adopted agent or skill file has unparseable YAML frontmatter
+- **WHEN** an adopted skill file has unparseable YAML frontmatter
 - **THEN** `abc sync` exits non-zero with an error naming the file and the YAML parse error
 
 ### Requirement: Sync prunes orphaned knowledge symlinks

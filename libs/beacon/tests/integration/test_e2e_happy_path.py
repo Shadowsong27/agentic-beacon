@@ -194,7 +194,7 @@ def test_e2e_setup_manual_template(e2e_project):
 
     # Must be valid YAML with exactly one of each artifact key
     parsed = yaml.safe_load(beacon_yaml.read_text())
-    assert parsed["artifacts"]["agents"] == []
+    assert "skills" in parsed["artifacts"]
     assert parsed["artifacts"]["skills"] == []
     assert parsed["artifacts"]["contexts"] == []
 
@@ -218,7 +218,7 @@ def test_e2e_setup_manual_template(e2e_project):
         "    - contexts/python/standards.md\n"
         "    - contexts/decisions/use-uv.md\n"
         "    - contexts/README.md\n"
-        "  agents: []\n"
+        ""
         "  skills:\n"
         "    - skills/code-review/\n"
     )
@@ -241,11 +241,7 @@ def test_e2e_sync_is_idempotent(e2e_project):
 
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
     beacon_yaml.write_text(
-        "artifacts:\n"
-        "  contexts:\n"
-        "    - contexts/python/standards.md\n"
-        "  agents: []\n"
-        "  skills: []\n"
+        "artifacts:\n  contexts:\n    - contexts/python/standards.md\n  skills: []\n"
     )
 
     runner.invoke(main, ["sync"])
@@ -257,7 +253,7 @@ def test_e2e_sync_is_idempotent(e2e_project):
 
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
     beacon_yaml.write_text(
-        "artifacts:\n  contexts:\n    - contexts/**/*.md\n  agents: []\n  skills: []\n"
+        "artifacts:\n  contexts:\n    - contexts/**/*.md\n  skills: []\n"
     )
 
     result = runner.invoke(main, ["sync"])
@@ -319,11 +315,7 @@ def test_e2e_warehouse_status_clean(e2e_project):
 
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
     beacon_yaml.write_text(
-        "artifacts:\n"
-        "  contexts:\n"
-        "    - contexts/python/standards.md\n"
-        "  agents: []\n"
-        "  skills: []\n"
+        "artifacts:\n  contexts:\n    - contexts/python/standards.md\n  skills: []\n"
     )
     runner.invoke(main, ["sync"])
 
@@ -334,11 +326,7 @@ def test_e2e_warehouse_status_clean(e2e_project):
 
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
     beacon_yaml.write_text(
-        "artifacts:\n"
-        "  contexts:\n"
-        "    - contexts/python/standards.md\n"
-        "  agents: []\n"
-        "  skills: []\n"
+        "artifacts:\n  contexts:\n    - contexts/python/standards.md\n  skills: []\n"
     )
     runner.invoke(main, ["sync"])
 
@@ -447,18 +435,14 @@ def test_e2e_delta_skill_per_agent_detail_in_output(e2e_project):
         "  contexts:\n"
         "    - contexts/python/standards.md\n"
         "    - contexts/decisions/use-uv.md\n"
-        "  agents: []\n"
+        ""
         "  skills: []\n"
     )
     runner.invoke(main, ["sync"])
 
     # Drop one artifact
     beacon_yaml.write_text(
-        "artifacts:\n"
-        "  contexts:\n"
-        "    - contexts/python/standards.md\n"
-        "  agents: []\n"
-        "  skills: []\n"
+        "artifacts:\n  contexts:\n    - contexts/python/standards.md\n  skills: []\n"
     )
 
     # Auto-prune: confirm deletion with "y"
@@ -491,11 +475,7 @@ def test_e2e_delta_skill_per_agent_detail_in_output(e2e_project):
 
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
     beacon_yaml.write_text(
-        "artifacts:\n"
-        "  contexts:\n"
-        "    - contexts/python/standards.md\n"
-        "  agents: []\n"
-        "  skills: []\n"
+        "artifacts:\n  contexts:\n    - contexts/python/standards.md\n  skills: []\n"
     )
     runner.invoke(main, ["sync"])
 
@@ -524,11 +504,7 @@ def test_e2e_delta_skill_per_agent_detail_in_output(e2e_project):
 
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
     beacon_yaml.write_text(
-        "artifacts:\n"
-        "  contexts:\n"
-        "    - contexts/python/standards.md\n"
-        "  agents: []\n"
-        "  skills: []\n"
+        "artifacts:\n  contexts:\n    - contexts/python/standards.md\n  skills: []\n"
     )
     runner.invoke(main, ["sync"])
     assert (project_dir / ".agentic-beacon" / "artifacts").exists()

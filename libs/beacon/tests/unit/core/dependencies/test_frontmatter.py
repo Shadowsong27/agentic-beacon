@@ -115,6 +115,12 @@ class TestAgentFrontmatter:
             AgentFrontmatter.model_validate({"requires": {"contexts": ["foo"]}})
         assert "skills" in str(exc_info.value).lower()
 
+    def test_tc4b_agent_missing_contexts_key(self):
+        """TC4b: Agent with requires but missing contexts → ValidationError."""
+        with pytest.raises(ValidationError) as exc_info:
+            AgentFrontmatter.model_validate({"requires": {"skills": ["foo"]}})
+        assert "contexts" in str(exc_info.value).lower()
+
     def test_tc8_agent_contexts_is_string(self):
         """TC8: Agent with requires.contexts as string not list → ValidationError."""
         with pytest.raises(ValidationError):
@@ -148,6 +154,12 @@ class TestSkillFrontmatter:
         """TC7: Skill missing requires entirely → ValidationError."""
         with pytest.raises(ValidationError):
             SkillFrontmatter.model_validate({})
+
+    def test_tc7b_skill_missing_contexts_key(self):
+        """TC7b: Skill with requires but missing contexts → ValidationError."""
+        with pytest.raises(ValidationError) as exc_info:
+            SkillFrontmatter.model_validate({"requires": {}})
+        assert "contexts" in str(exc_info.value).lower()
 
 
 class TestValidateRequiresAgainstWarehouse:

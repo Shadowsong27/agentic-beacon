@@ -14,7 +14,6 @@ Patterns in `beacon.yaml` are matched against the warehouse root. Only files (no
 |---------|---------|
 | `skills/code-review/**/*` | All files under a skill directory |
 | `contexts/teams/*/AGENTS.md` | One `AGENTS.md` per team subdirectory |
-| `agents/*.md` | All agent files in one directory |
 
 ### Practical Examples
 
@@ -31,10 +30,6 @@ artifacts:
 
     # Multi-level wildcard - all team contexts
     - contexts/teams/*/AGENTS.md
-
-  agents:
-    # All agents in the warehouse
-    - agents/*.md
 ```
 
 ### Pattern Doesn't Match?
@@ -42,15 +37,15 @@ artifacts:
 If a pattern matches nothing, `abc sync` will warn but not fail:
 
 ```
-Warning: No files matched pattern: knowledge/python/fastapi.md
+Warning: No files matched pattern: contexts/teams/mobile/AGENTS.md
 ```
 
 Debug it by listing the warehouse:
 
 ```bash
-ls /path/to/warehouse/knowledge/python/
+ls /path/to/warehouse/contexts/teams/
 # or
-find /path/to/warehouse/knowledge/python/ -name "*.md"
+find /path/to/warehouse/contexts/ -name "*.md"
 ```
 
 ---

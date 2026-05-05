@@ -15,11 +15,10 @@ from loguru import logger
 from beacon.core.dependencies.resolver import ResolutionFailure, compute_effective_set
 from beacon.core.exceptions import BeaconSyncError
 from beacon.core.gitignore import GitignoreManager
-from beacon.core.manifest.beacon import ArtifactsConfig, BeaconManifest
+from beacon.core.manifest.beacon import BeaconManifest
 from beacon.core.preconditions import ensure_sync_ready
 from beacon.domains.adoption.discovery import count_unadopted_since
 from beacon.domains.artifact.agent import (
-    sync_agents_from_warehouse,
     update_agent_gitignores,
 )
 from beacon.domains.artifact.skill import (
@@ -96,17 +95,13 @@ def _normalize_beacon_for_resolver(
     Resolver expects context names without 'contexts/' prefix and '.md' suffix,
     and skill names without 'skills/' prefix and trailing slash.
     Also expands glob patterns to concrete entries.
+
+    Skill globs like skills/code-review/**/* normalize to the unique skill
+    directory name (code-review), not individual files.
     """
     sync_engine = SyncEngine(
         warehouse_path=warehouse_path, artifacts_path=Path("/dev/null")
     )
-
-    normalized_agents: list[str] = []
-    for a in beacon.artifacts.agents:
-        if "*" in a or "?" in a or "[" in a:
-            normalized_agents.extend(sync_engine.expand_glob(a))
-        else:
-            normalized_agents.append(Path(a).stem if a.startswith("agents/") else a)
 
     normalized_contexts: list[str] = []
     for c in beacon.artifacts.contexts:
@@ -124,19 +119,24 @@ def _normalize_beacon_for_resolver(
                 normalized_contexts.append(c)
 
     normalized_skills: list[str] = []
+    seen_skills: set[str] = set()
     for s in beacon.artifacts.skills:
         if "*" in s or "?" in s or "[" in s:
             for match in sync_engine.expand_glob(s):
-                normalized_skills.append(match.replace("skills/", "").rstrip("/"))
+                # Glob matches may be files like skills/code-review/SKILL.md
+                # Extract unique skill directory name
+                norm = match.replace("skills/", "", 1).split("/")[0]
+                if norm and norm not in seen_skills:
+                    normalized_skills.append(norm)
+                    seen_skills.add(norm)
         else:
-            normalized_skills.append(s.replace("skills/", "").rstrip("/"))
+            norm = s.replace("skills/", "").rstrip("/").split("/")[0]
+            if norm and norm not in seen_skills:
+                normalized_skills.append(norm)
+                seen_skills.add(norm)
 
     normalized = BeaconManifest(
-        artifacts=ArtifactsConfig(
-            agents=normalized_agents,
-            contexts=normalized_contexts,
-            skills=normalized_skills,
-        ),
+        artifacts={"contexts": normalized_contexts, "skills": normalized_skills},
         ignore=beacon.ignore,
     )
     return normalized
@@ -250,10 +250,8 @@ def run_sync(
         effective_set, sync_engine, warehouse_path, verbose
     )
 
-    total_explicit = (
-        len(beacon_settings.artifacts.agents)
-        + len(beacon_settings.artifacts.skills)
-        + len(beacon_settings.artifacts.contexts)
+    total_explicit = len(beacon_settings.artifacts.skills) + len(
+        beacon_settings.artifacts.contexts
     )
     no_artifacts = total_explicit == 0
 
@@ -409,7 +407,6 @@ def run_sync(
         )
         wired_skills = wired_skills + bundled_wired
         wire_errors = wire_errors + bundled_wire_errors
-        sync_agents_from_warehouse(warehouse_path, force=force)
     else:
         bundled_installed, bundled_skipped = [], []
         bundled_wired, bundled_wire_errors = [], []
