@@ -21,7 +21,7 @@ Agentic Beacon provides:
 
 ## The Problem
 
-When a team adopts AI coding agents, each project accumulates its own `AGENTS.md` or `.cursorrules`. Standards diverge. A pattern discovered in one repo never reaches the others. When guidelines change, someone copy-pastes updates into 15 repos and misses three.
+When a team adopts AI coding agents, each project accumulates its own `AGENTS.md` or `CLAUDE.md`. Standards diverge. A pattern discovered in one repo never reaches the others. When guidelines change, someone copy-pastes updates into 15 repos and misses three.
 
 This is **Context Drift** — the same DRY problem that version control solved for code, except it hasn't been solved yet for agentic engineering artifacts.
 
