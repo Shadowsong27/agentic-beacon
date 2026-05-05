@@ -455,7 +455,7 @@ pytest tests/ -v --tb=short
 <!-- opsx:tdd:7.3:begin -->
   - **Reason removed**: Agents are global machine-level artifacts. `abc adopt` may show agents as global-install candidates and installs them globally immediately without updating project `beacon.yaml`. PER-109 adds persistent selected-global-agent state and `abc sync` installing those selected global agents.
 <!-- opsx:tdd:7.3:end -->
-- [ ] 7.4 [REMOVED] Dependency prompting during adopt is deferred to PER-109 (no agent category to prompt for)
+- [ ] 7.4 [REMOVED] Dependency prompting during adopt is deferred to PER-109 (agents may appear as global-install candidates in `abc adopt`; project-scoped dependency prompting for agent `requires` is deferred to PER-109; no agent dependencies are written to project `beacon.yaml`)
 <!-- opsx:tdd:7.4:begin -->
   - **Reason removed**: Without agents as a selectable category in the TUI, there is no adopt-time triggering context for dependency prompting. Skill-context dependency validation happens at sync time.
 <!-- opsx:tdd:7.4:end -->
