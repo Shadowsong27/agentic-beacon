@@ -16,7 +16,7 @@ Project-level instructions for AI agents working on the Agentic Beacon framework
 
 **This is NOT a warehouse** - it's the framework itself. Users create warehouses with `abc warehouse init`.
 
-**Read:** [Repository Structure](knowledge/facts/repository-structure.md)
+**Read:** [Repository Structure](.agentic-beacon/artifacts/knowledge/facts/repository-structure.md)
 
 ---
 
@@ -31,7 +31,7 @@ Project-level instructions for AI agents working on the Agentic Beacon framework
 - Cross-project visibility of harness edits on a single machine is **intended**, not a leak: editing a skill through Project A's symlink is editing the warehouse working tree, so Project B's agent sees the edit immediately.
 - Platform: macOS / Linux only. Windows is rejected.
 
-**Read:** [Decision: Single Warehouse Write Entrypoint](knowledge/decisions/single-warehouse-write-entrypoint.md)
+**Read:** [Decision: Single Warehouse Write Entrypoint](.agentic-beacon/artifacts/knowledge/decisions/single-warehouse-write-entrypoint.md)
 
 ### Configuration Management Patterns
 
@@ -45,8 +45,8 @@ Project-level instructions for AI agents working on the Agentic Beacon framework
 - Custom structures: Manual parsing with Pydantic validation (beacon.yaml)
 
 **Read:**
-- [Decision: Settings Module Structure](knowledge/decisions/settings-module-structure.md)
-- [Decision: Pydantic Settings Patterns](knowledge/decisions/pydantic-settings-patterns.md)
+- [Decision: Settings Module Structure](.agentic-beacon/artifacts/knowledge/decisions/settings-module-structure.md)
+- [Decision: Pydantic Settings Patterns](.agentic-beacon/artifacts/knowledge/decisions/pydantic-settings-patterns.md)
 
 ## Development Guidelines
 
@@ -56,7 +56,7 @@ Project-level instructions for AI agents working on the Agentic Beacon framework
 
 **Examples:** Session handoff docs, implementation checklists, agent-to-agent context files, one-off decision documents.
 
-**Read:** [Decision: No Temporary Docs in Repository](knowledge/decisions/no-temporary-docs.md)
+**Read:** [Decision: No Temporary Docs in Repository](.agentic-beacon/artifacts/knowledge/decisions/no-temporary-docs.md)
 
 ### Working with the CLI Package
 
@@ -77,7 +77,7 @@ abc --version
 abc warehouse init test-warehouse
 ```
 
-**Read:** [CLI Development Workflow](knowledge/facts/cli-development-workflow.md)
+**Read:** [CLI Development Workflow](.agentic-beacon/artifacts/knowledge/facts/cli-development-workflow.md)
 
 ### Domain Layer
 
@@ -100,15 +100,15 @@ The `beacon` package uses a four-layer architecture: `cli/` → `domains/` → `
 
 **Brief:** Standard workflow: `uv sync --group dev` at repo root → `pytest` (no cd into libs/beacon required)
 
-**Read:** [Fact: Unit Testing Workflow](knowledge/facts/unit-testing-workflow.md)
+**Read:** [Fact: Unit Testing Workflow](.agentic-beacon/artifacts/knowledge/facts/unit-testing-workflow.md)
 
 **Rule:** ALL tests must be resolved before marking tasks complete - either fixed, removed with justification, or skipped with documented reason.
 
-**Read:** [Lesson: Complete Test Resolution Before Marking Tasks Done](knowledge/lessons/complete-test-resolution.md)
+**Read:** [Lesson: Complete Test Resolution Before Marking Tasks Done](.agentic-beacon/artifacts/knowledge/lessons/complete-test-resolution.md)
 
 **Rule:** After unit tests pass, verify happy path functionality with real-world usage to ensure the feature actually works.
 
-**Read:** [Lesson: Verify Both Unit Tests and Happy Path Functionality](knowledge/lessons/verify-unit-tests-and-happy-path.md)
+**Read:** [Lesson: Verify Both Unit Tests and Happy Path Functionality](.agentic-beacon/artifacts/knowledge/lessons/verify-unit-tests-and-happy-path.md)
 
 ### Release Process
 
@@ -129,7 +129,7 @@ The `beacon` package uses a four-layer architecture: `cli/` → `domains/` → `
 
 **Note:** Release branches are permanent snapshots — never delete them.
 
-**Read:** [Release Workflow](knowledge/facts/release-workflow.md)
+**Read:** [Release Workflow](.agentic-beacon/artifacts/knowledge/facts/release-workflow.md)
 
 ---
 
@@ -148,7 +148,7 @@ Follow the global Python standards from the user's AGENTS.md context:
 
 **Rule:** `__init__.py` files must **not** re-export names or define `__all__`. They are empty package markers (docstring only). Import directly from the module that defines the name: `from beacon.core.manifest.beacon import BeaconManifest`, not `from beacon.core.manifest import BeaconManifest`.
 
-**Read:** [Decision: Follow Global Python Standards](knowledge/decisions/follow-global-python-standards.md)
+**Read:** [Decision: Follow Global Python Standards](.agentic-beacon/artifacts/knowledge/decisions/follow-global-python-standards.md)
 
 ### Documentation Standards
 
@@ -158,7 +158,7 @@ Follow the global Python standards from the user's AGENTS.md context:
 - Update both README and package-specific docs when needed
 - Warehouse context files use **free descriptive names** — not the `AGENTS.*` prefix
 
-**Read:** [Lesson: Warehouse Context Files Use Free Naming](knowledge/lessons/warehouse-context-free-naming.md)
+**Read:** [Lesson: Warehouse Context Files Use Free Naming](.agentic-beacon/artifacts/knowledge/lessons/warehouse-context-free-naming.md)
 
 ---
 
@@ -168,13 +168,13 @@ Follow the global Python standards from the user's AGENTS.md context:
 
 **Brief:** Add handler in `cli/<group>.py` → Implement domain logic in `domains/<name>/` → Add tests → Update docs → Test thoroughly
 
-**Read:** [Lesson: Adding CLI Command](knowledge/lessons/adding-cli-command.md)
+**Read:** [Lesson: Adding CLI Command](.agentic-beacon/artifacts/knowledge/lessons/adding-cli-command.md)
 
 ### Updating Warehouse Structure
 
 **Brief:** Update `domains/setup/initializer.py` → Regenerate `examples/sample-warehouse/` → Update docs → Test `abc warehouse init` and `abc setup`
 
-**Read:** [Lesson: Updating Warehouse Structure](knowledge/lessons/updating-warehouse-structure.md)
+**Read:** [Lesson: Updating Warehouse Structure](.agentic-beacon/artifacts/knowledge/lessons/updating-warehouse-structure.md)
 
 ---
 
@@ -203,7 +203,7 @@ Follow the global Python standards from the user's AGENTS.md context:
 - **Test before release** - Always test CLI commands locally before pushing
 - **Document breaking changes** - Use `feat!:` or `fix!:` commits for breaking changes
 
-**Read:** [Lesson: Critical Project Safeguards](knowledge/lessons/critical-safeguards.md)
+**Read:** [Lesson: Critical Project Safeguards](.agentic-beacon/artifacts/knowledge/lessons/critical-safeguards.md)
 
 ---
 
