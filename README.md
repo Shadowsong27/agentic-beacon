@@ -13,21 +13,84 @@
 
 > *Git for AI Prompts. DRY for AI Agents.*
 
-Agentic Beacon provides:
-1. 🗂️ **A methodology** for managing contexts, knowledge, and skills — the core agentic engineering artifacts worthy of standardization and team-wide distribution
-2. 🛠️ **CLI tooling (`abc`)** for initializing warehouses, managing connections, and distributing artifacts across projects
+## Quickstart
 
-> **Built for multiplayer.** Agentic Beacon is designed as a team tool first. The warehouse model is built around shared ownership, bidirectional contribution, and the compounding benefits of a growing knowledge base — value that scales with the number of people and projects contributing to it. Solo use is fully supported (many start that way), but the tool was built with multiplayer in mind.
+### Installation
+
+```bash
+# Recommended — install once, use anywhere
+uv tool install agentic-beacon
+
+# Alternatives: pipx install agentic-beacon  |  pip install agentic-beacon
+# Offline / air-gapped: download a platform bundle from the GitHub Releases page
+```
+
+### First-time Setup
+
+**Starting fresh (no warehouse exists yet)**
+
+```bash
+# 1. Create your team warehouse — a git repo that holds shared agent artifacts
+abc warehouse init my-org-warehouse
+cd my-org-warehouse
+# add contexts, knowledge, skills — then push to git
+
+# 2. Connect a project to the warehouse
+cd ~/my-project
+abc warehouse connect --path ~/my-org-warehouse
+
+# 3. Pick artifacts and sync
+abc adopt   # interactive TUI — browse and select contexts, skills, agents
+abc sync    # creates per-file symlinks, wires contexts into Claude Code / OpenCode
+```
+
+**Joining a team that already has a warehouse**
+
+```bash
+git clone git@github.com:your-org/warehouse.git ~/my-org-warehouse
+
+cd ~/my-project
+abc warehouse connect --path ~/my-org-warehouse
+abc adopt
+abc sync
+```
+
+### Day-to-day Workflow
+
+```
+abc adopt                               — pick up new artifacts from the warehouse
+abc sync                                — repair symlinks after beacon.yaml changes
+
+code with agent                         — agent reads symlinked contexts, knowledge, and skills
+
+abc warehouse status                    — see warehouse edits you've made this session
+abc warehouse contribute -m "…" --push  — commit and push back to the warehouse
+teammates git pull                      — they get the update immediately, no resync needed
+```
+
+`abc sync` is only needed when your `beacon.yaml` changes or symlinks drift — not on every warehouse pull.
+
+## Interactive Artifact Adoption
+
+`abc adopt` opens an interactive TUI to browse warehouse artifacts. Press `Space` to select, `Enter` to confirm. `beacon.yaml` is updated with your selections; knowledge files referenced inside contexts and skills are pulled in automatically on the next `abc sync`.
+
+<p align="center">
+  <img src="docs/screenshots/adopt-tui.png" alt="abc adopt TUI" width="100%" />
+</p>
+
+| Key | Action |
+|-----|--------|
+| `Space` | Toggle selection |
+| `Enter` | Confirm and write to beacon.yaml |
+| `a` / `n` | Select all / Select none |
+| `t` | Toggle show-all (view already-adopted artifacts) |
+| `Esc` / `q` | Cancel |
 
 ## The Problem
 
 When a team adopts AI coding agents, each project accumulates its own `AGENTS.md` or `CLAUDE.md`. Standards diverge. A pattern discovered in one repo never reaches the others. When guidelines change, someone copy-pastes updates into 15 repos and misses three.
 
-This is **Context Drift** — the same DRY problem that version control solved for code, except it hasn't been solved yet for agentic engineering artifacts.
-
-- **Reinvention at every project.** Context files get written from scratch for each new repo, with variations that accumulate over time.
-- **Knowledge stays siloed.** Lessons learned in one project never leave that developer's laptop.
-- **No feedback loop.** When an agent session produces a better approach, there's no workflow to share it.
+This is **Context Drift** — the same DRY problem that version control solved for code, except it hasn't been solved for agentic engineering artifacts yet.
 
 ## How It Works
 
@@ -52,25 +115,17 @@ agents/      ── abc agents sync   ──►  ~/.claude/agents/<name>.md
              (symlink)                  ~/.config/opencode/agents/<name>.md
 ```
 
-`abc sync` reads `beacon.yaml` and creates per-file **symlinks** from `.agentic-beacon/artifacts/` into your local warehouse clone, then wires skills into each detected tool's live directories. One logical artifact, one physical file per machine — no duplicate copies, no merge-back cycle.
+Everything is a per-file **symlink** into the warehouse clone — one physical file per artifact per machine, no duplicate copies. Edits made through any symlink (project artifacts or global agent files) land directly in the warehouse working tree. Commit with `abc warehouse contribute` and teammates get it through their existing symlinks on the next `git pull` — no per-project resync.
 
-**Knowledge is auto-derived.** There is no `knowledge:` key in `beacon.yaml`. Instead, `abc sync` scans markdown links inside your adopted contexts and skills, resolves any that point to warehouse knowledge files, and symlinks them transitively. Add a knowledge file to a context — it appears on next sync. Remove the last reference — the symlink is pruned automatically.
+**Knowledge is auto-derived.** There is no `knowledge:` key in `beacon.yaml`. `abc sync` scans markdown links inside adopted contexts and skills, resolves warehouse knowledge references, and symlinks them transitively. Add a reference — it appears. Remove the last one — the symlink is pruned.
 
-**Frontmatter dependencies.** Agents and skills can declare `requires:` in YAML frontmatter to express cross-artifact dependencies. `abc sync` validates that every required context or skill is adopted and errors early if any are missing.
+**Frontmatter dependencies.** Skills and agents can declare `requires:` in YAML frontmatter. `abc sync` validates all declared dependencies are adopted and errors early if any are missing.
 
-**Agents are symlinked.** Like other artifacts, global agent files are per-file symlinks into the warehouse clone, not copies. Edits made in `~/.claude/agents/` or `~/.config/opencode/agents/` land directly in the warehouse working tree. Install them with `abc agents sync` (all at once) or `abc install agents/<name>.md` (one at a time).
+> **Read:** [Decision — Single Warehouse Write Entrypoint](./knowledge/decisions/single-warehouse-write-entrypoint.md) for the full design rationale.
 
-When a session produces something worth sharing, you edit the file in place — the edit lands directly in the warehouse working tree through the symlink — and commit it with `abc warehouse contribute -m "…"`. Teammates pull the warehouse and the new content is visible through their existing project symlinks with no per-project resync.
-
-> **Read:** [Decision — Single Warehouse Write Entrypoint](./knowledge/decisions/single-warehouse-write-entrypoint.md) for why the model works this way.
-
-> **Platform support:** macOS and Linux only. Windows is not supported by `abc sync`.
-
-> See **[Getting Started](./guides/getting-started.md)** for a full walkthrough with examples.
+> **Platform support:** macOS and Linux only.
 
 ## Artifact Types
-
-Four types form the core of a warehouse, each defined by two axes: **project scope** and **tool specificity**:
 
 |  | Tool-agnostic | Tool-specific |
 |---|---|---|
@@ -78,82 +133,11 @@ Four types form the core of a warehouse, each defined by two axes: **project sco
 | **Global** | — | 🤖 Agents |
 
 - **Contexts** — boot instructions and coding standards; wired into `opencode.json` / `AGENTS.md` automatically on sync.
-- **Knowledge** — atomic decisions, lessons, and facts; symlinked under `.agentic-beacon/artifacts/` and referenced from contexts.
+- **Knowledge** — atomic decisions, lessons, and facts; auto-derived from markdown links in contexts and skills.
 - **Skills** — reusable workflows wired as slash commands into each tool's live directories.
-- **Agents** — sub-agent definitions installed as symlinks into global tool directories (`~/.claude/agents/`, `~/.config/opencode/agents/`) and available across every project. Edits flow back to the warehouse through the symlink — same write model as other artifact types.
+- **Agents** — sub-agent definitions symlinked into global tool directories (`~/.claude/agents/`, `~/.config/opencode/agents/`); edits flow back to the warehouse through the symlink.
 
-> See **[Artifact Type Matrix](./docs/artifact-type-matrix.md)** for the full design rationale and how this drives command behaviour.
-
-## Interactive Artifact Adoption
-
-`abc adopt` opens an interactive TUI to browse and select warehouse artifacts. Scroll through contexts, skills, and agents — press `Space` to select, `Enter` to confirm. `beacon.yaml` is updated with your selections; knowledge is derived automatically on the next `abc sync` based on markdown links inside the adopted artifacts.
-
-<p align="center">
-  <img src="docs/screenshots/adopt-tui.png" alt="abc adopt TUI" width="100%" />
-</p>
-
-**Keyboard shortcuts:**
-
-| Key | Action |
-|-----|--------|
-| `Space` | Toggle selection |
-| `Enter` | Confirm and write to beacon.yaml |
-| `a` / `n` | Select all / Select none |
-| `t` | Toggle show-all (view already-adopted artifacts) |
-| `Esc` / `q` | Cancel |
-
-## Quickstart
-
-### Installation
-
-```bash
-# Recommended — install once, use anywhere
-uv tool install agentic-beacon
-
-# Alternatives: pipx install agentic-beacon  |  pip install agentic-beacon
-# Offline / air-gapped: download a platform bundle from the GitHub Releases page
-```
-
-### Get Started
-
-**Starting fresh (no warehouse exists yet)**
-
-```bash
-# 1. Create your team warehouse
-abc warehouse init my-org-warehouse
-cd my-org-warehouse
-# add contexts, knowledge, skills — then push to git
-
-# 2. Connect a project (warehouse must be a local clone)
-cd ~/my-project
-abc warehouse connect --path ~/my-org-warehouse
-
-# 3. Adopt artifacts interactively, then sync
-abc adopt            # browse + select artifacts via TUI, writes beacon.yaml
-abc sync             # creates symlinks into the warehouse clone, wires agent config
-```
-
-**Joining a team that already has a warehouse**
-
-```bash
-git clone git@github.com:your-org/warehouse.git ~/my-org-warehouse
-
-cd ~/my-project
-abc warehouse connect --path ~/my-org-warehouse
-abc adopt
-abc sync
-```
-
-### Day-to-day Workflow
-
-```
-1. code with agent                          — agent uses the symlinked contexts, knowledge, and skills
-2. abc warehouse status                     — see warehouse edits you've made (scoped by beacon.yaml)
-3. abc warehouse contribute -m "…" --push   — commit and push the edits in the warehouse
-4. teammates git pull                       — updated content visible through their existing symlinks immediately
-```
-
-`abc sync` is only needed again when your `beacon.yaml` changes (new artifacts declared) or when symlinks drift (missing/broken targets) — not per warehouse update.
+> See **[Artifact Type Matrix](./docs/artifact-type-matrix.md)** for the full design rationale.
 
 ## When to Use Agentic Beacon
 
@@ -162,7 +146,7 @@ abc sync
 | You have multiple projects that should share the same agent instructions | You have a single project with no plans to standardize across repos |
 | Your team keeps rewriting the same contexts and skills from scratch in each repo | You need a one-off codebase bundle to feed into a chat session |
 | Knowledge from one coding session should compound across the whole team | You need production observability for LLM calls in a deployed app |
-| You want agent edits from any session to flow back into a shared, version-controlled source | Your team has no shared git workflow or central warehouse makes no sense for your setup |
+| You want agent edits from any session to flow back into a shared, version-controlled source | Your team has no shared git workflow or a central warehouse makes no sense for your setup |
 | You're running multiple AI tools (Claude Code, OpenCode) and want one source of truth for all of them | |
 
 ## Documentation
