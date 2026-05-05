@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="agentic-beacon-banner.png" alt="Agentic Beacon" width="100%" />
+  <img src="agentic-beacon-banner.png?v=2" alt="Agentic Beacon" width="100%" />
 </p>
 
 <p align="center">
