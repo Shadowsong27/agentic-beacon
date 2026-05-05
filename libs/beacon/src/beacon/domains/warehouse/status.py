@@ -8,8 +8,8 @@ import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from beacon.core.preconditions import ensure_sync_ready
 from beacon.domains.warehouse._tracked_paths import get_tracked_paths
+from beacon.domains.warehouse.preconditions import ensure_sync_ready
 
 
 @dataclass

@@ -16,7 +16,6 @@ from beacon.core.dependencies.resolver import ResolutionFailure, compute_effecti
 from beacon.core.exceptions import BeaconSyncError
 from beacon.core.gitignore import GitignoreManager
 from beacon.core.manifest.beacon import BeaconManifest
-from beacon.core.preconditions import ensure_sync_ready
 from beacon.domains.adoption.discovery import count_unadopted_since
 from beacon.domains.artifact.agent import (
     update_agent_gitignores,
@@ -47,6 +46,7 @@ from beacon.domains.warehouse.git_health import (
     check_warehouse_git_clean,
     check_warehouse_on_main_branch,
 )
+from beacon.domains.warehouse.preconditions import ensure_sync_ready
 from beacon.utils.git import find_project_root
 
 MIGRATION_DOC_URL = "docs/migrations/artifact-dependencies-frontmatter.md"

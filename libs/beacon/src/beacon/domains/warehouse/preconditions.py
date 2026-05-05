@@ -3,7 +3,8 @@
 from pathlib import Path
 
 from beacon.core.exceptions import BeaconSyncError
-from beacon.core.warehouse_path import (
+from beacon.core.manifest.workspace import WorkspaceConfig
+from beacon.domains.warehouse.warehouse_path import (
     WarehousePathMissing,
     WarehousePathNotARepo,
     validate_warehouse_path,
@@ -30,8 +31,6 @@ def ensure_sync_ready(project_root: Path) -> Path:
             "No warehouse connected.\n"
             "Run 'abc warehouse connect --path <warehouse>' first."
         )
-
-    from beacon.core.manifest.workspace import WorkspaceConfig
 
     warehouse_settings = WorkspaceConfig()
     raw_path = warehouse_settings.warehouse.local_path

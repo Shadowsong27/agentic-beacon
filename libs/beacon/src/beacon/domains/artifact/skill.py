@@ -10,7 +10,7 @@ from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 
-from beacon.core.file_filter import SKILL_IGNORE_PATTERNS, is_skill_file
+from beacon.core.file_filter import ARTIFACT_IGNORE_PATTERNS, is_artifact_file
 from beacon.core.manifest.beacon import ArtifactsConfig, BeaconManifest
 from beacon.domains.artifact.agent import detect_agents
 from beacon.utils.interaction import OverwriteDecision, resolve_conflict
@@ -134,7 +134,7 @@ def install_bundled_skills_globally() -> tuple[list[str], list[str]]:
                 shutil.copytree(
                     skill_dir,
                     dest_dir,
-                    ignore=shutil.ignore_patterns(*SKILL_IGNORE_PATTERNS),
+                    ignore=shutil.ignore_patterns(*ARTIFACT_IGNORE_PATTERNS),
                 )
                 installed.append(f"{name} ({agent})")
             except Exception as e:
@@ -413,7 +413,7 @@ def wire_single_skill(
 
     any_written = False
     for src_file in sorted(skill_src_dir.rglob("*")):
-        if not is_skill_file(src_file):
+        if not is_artifact_file(src_file):
             continue
         rel = src_file.relative_to(skill_src_dir)
         dest_file = dest_root / rel
@@ -492,7 +492,7 @@ def wire_skills_post_sync(
     for skill_dir in skill_dirs:
         name = skill_dir.name
         for src_file in sorted(skill_dir.rglob("*")):
-            if not is_skill_file(src_file):
+            if not is_artifact_file(src_file):
                 continue
             rel_within_skill = src_file.relative_to(skill_dir)
             for agent in agents:
