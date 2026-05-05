@@ -7,6 +7,7 @@
   <a href="https://pypi.org/project/agentic-beacon/"><img src="https://img.shields.io/pypi/pyversions/agentic-beacon" alt="Python Version" /></a>
   <a href="https://github.com/Shadowsong27/agentic-beacon/stargazers"><img src="https://img.shields.io/github/stars/Shadowsong27/agentic-beacon" alt="GitHub Stars" /></a>
   <a href="https://github.com/Shadowsong27/agentic-beacon/pulls"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome" /></a>
+  <a href="https://shadowsong27.github.io/agentic-beacon/"><img src="https://img.shields.io/badge/docs-online-blue.svg" alt="Documentation" /></a>
 </p>
 
 **The package manager for AI coding agents. Centrally manage and distribute contexts, knowledge, and skills across your team — with native support for Claude Code and OpenCode.**
@@ -18,12 +19,10 @@
 ### Installation
 
 ```bash
-# Recommended — install once, use anywhere
 uv tool install agentic-beacon
-
-# Alternatives: pipx install agentic-beacon  |  pip install agentic-beacon
-# Offline / air-gapped: download a platform bundle from the GitHub Releases page
 ```
+
+> Air-gapped? Download the wheel from the [Releases page](https://github.com/Shadowsong27/agentic-beacon/releases) and run `uv tool install ./agentic-beacon-*.whl`.
 
 ### First-time Setup
 

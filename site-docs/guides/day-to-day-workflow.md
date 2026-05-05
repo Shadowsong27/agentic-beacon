@@ -1,13 +1,11 @@
 # Day-to-Day Workflow
 
-Once your project is connected and initially synced, the recurring loop is straightforward.
-
-## The Loop
+Once your project is connected and initially synced, the recurring loop is:
 
 ```
 1. abc sync                     — pull the latest artifacts from the warehouse
 2. code with agent              — agent uses synced contexts, knowledge, and skills
-3. abc warehouse status         — see what has changed in the warehouse working tree
+3. abc warehouse status         — see what changed in the warehouse working tree
 4. abc warehouse contribute     — commit improvements back to the warehouse
 5. repeat
 ```
@@ -16,110 +14,145 @@ Once your project is connected and initially synced, the recurring loop is strai
 
 ## Step 1: Pull Warehouse Updates
 
-When the warehouse changes (a teammate added a new context, improved a skill, etc.):
+When a teammate adds a new context or improves a skill, pull and re-sync:
 
 ```bash
-# Pull warehouse updates
-cd ~/my-org-warehouse && git pull
-
-# Re-sync your project
-cd my-project && abc sync
+cd ~/team-warehouse && git pull
+cd ~/projects/my-service && abc sync
 ```
-
-After sync, if new artifacts are available that you haven't adopted yet:
 
 ```
 ✓ Sync complete
-  Created: 2 symlinks
-  Up to date: 8 symlinks
-
-1 new artifact(s) available — run abc adopt to review
+  Updated: 1 symlink   (skills/code-review/SKILL.md)
+  Created: 0 symlinks
+  Up to date: 11 symlinks
 ```
 
-Run `abc adopt` to open the TUI and select new artifacts interactively.
+If the warehouse has new artifacts you haven't adopted yet:
+
+```
+✓ Sync complete
+  Up to date: 11 symlinks
+
+2 new artifact(s) available — run abc adopt to review
+```
+
+Run `abc adopt` to open the TUI and selectively add them.
 
 ---
 
 ## Step 2: Code with Your Agent
 
-Your AI agent now reads:
+Your agent reads at session start:
 
-- Contexts wired into `CLAUDE.md` or `opencode.json` (loaded at session start)
-- Knowledge files auto-derived from markdown links and symlinked into `artifacts/`
-- Skills available as slash commands (e.g. `/code-review`, `/generate-tests`)
-- Global agents available in any project (`/reviewer`, etc.)
+- **Contexts** wired into `CLAUDE.md` / `opencode.json` — loaded automatically
+- **Knowledge** — markdown files symlinked into `artifacts/`
+- **Skills** — available as slash commands (`/code-review`, `/generate-tests`, etc.)
 
 No extra setup needed — everything is in place after `abc sync`.
 
+### Example: agent improves a knowledge file mid-session
+
+You ask the agent to document a new error handling pattern. It writes the explanation
+directly into `artifacts/contexts/knowledge/error-handling.md`. Because that file
+is a symlink into your warehouse clone, the warehouse working tree is updated immediately.
+
+No copy step needed — the improvement is already in the warehouse.
+
 ---
 
-## Step 3: Review Warehouse Working Tree Changes
+## Step 3: Review Warehouse Changes
 
-After a coding session, your agent may have improved synced artifacts. Since artifacts are symlinks into the warehouse, check with:
+After a coding session, check what the agent touched:
 
 ```bash
 abc warehouse status
 ```
 
-Shows modifications to warehouse files tracked by resolved artifacts:
-
 ```
-Modified files:
-  modified  knowledge/python/type-hints.md
+Modified files in warehouse:
+  modified  knowledge/python/error-handling.md
   modified  skills/code-review/SKILL.md
 ```
 
-Inspect a specific file:
+Inspect a specific file before committing:
 
 ```bash
-abc warehouse status knowledge/python/type-hints.md
+abc warehouse status knowledge/python/error-handling.md
 ```
 
-Shows a line-by-line diff.
+```diff
+--- a/knowledge/python/error-handling.md
++++ b/knowledge/python/error-handling.md
+@@ -12,6 +12,14 @@
+ ## Targeted try/except
+
+ Keep `try` blocks small and targeted — one concern per block.
++
++## Retrying with tenacity
++
++Use `@retry` from tenacity instead of manual sleep loops:
++
++```python
++@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=1, max=10))
++def fetch_data(url: str) -> dict: ...
++```
+```
 
 ---
 
-## Step 4: Commit Changes Back
+## Step 4: Contribute Changes Back
 
-If improvements are worth sharing:
-
-```bash
-abc warehouse contribute -m "Improve type hints guide with Python 3.12+ patterns"
-```
-
-This stages and commits all files tracked by resolved artifacts that have uncommitted changes in the warehouse.
-
-Push immediately:
+### Contribute everything at once
 
 ```bash
-abc warehouse contribute -m "Fix typo in error handling" --push
+abc warehouse contribute -m "docs: add tenacity retry pattern to error handling"
 ```
 
-Once in the warehouse, teammates get the improvements on their next sync.
+This stages all modified warehouse files tracked by `beacon.yaml`, commits them, and exits.
+
+### Contribute and push immediately
+
+```bash
+abc warehouse contribute -m "docs: add tenacity retry pattern" --push
+```
+
+Teammates get the update on their next `git pull && abc sync`.
+
+### Contribute only specific files
+
+Use plain git inside the warehouse clone to stage selectively:
+
+```bash
+cd ~/team-warehouse
+git add knowledge/python/error-handling.md
+git commit -m "docs: add tenacity retry pattern"
+git push
+```
+
+Leave `skills/code-review/SKILL.md` unstaged if you're not ready to share that change yet.
+
+### Discard a change you don't want to keep
+
+```bash
+cd ~/team-warehouse
+git checkout -- skills/code-review/SKILL.md
+```
+
+The symlink reflects the restored file immediately in your project.
+
+---
+
+!!! tip "Want a full walkthrough?"
+    **[Tutorial: Your First Contribution](../tutorials/first-contribution.md)** — step-by-step from morning sync to pushing an improvement back to the warehouse.
 
 ---
 
 ## Checking Project Health
 
 ```bash
-abc status
-```
-
-Shows the connected warehouse, configured contexts and skills (with ✓/✗ for synced status), and total synced file count.
-
-```bash
-abc doctor
-```
-
-Validates the full setup and reports any issues. Use `--fix` to auto-migrate stale paths.
-
----
-
-## Listing Installed Artifacts
-
-```bash
-abc list              # list synced artifacts
-abc list agents       # list globally installed agents
+abc status      # connected warehouse, synced artifacts, ✓/✗ per item
+abc doctor      # full validation; --fix to auto-resolve stale paths
 ```
 
 ---
@@ -130,16 +163,19 @@ abc list agents       # list globally installed agents
 |-----------|---------|
 | Pull warehouse updates | `cd ~/warehouse && git pull && cd project && abc sync` |
 | Discover new artifacts | `abc adopt` |
-| Check warehouse tree changes | `abc warehouse status` |
-| Share improvements | `abc warehouse contribute -m "message"` |
+| Review warehouse changes | `abc warehouse status` |
+| Review a specific file diff | `abc warehouse status <path>` |
+| Contribute all changes | `abc warehouse contribute -m "message"` |
+| Contribute and push | `abc warehouse contribute -m "message" --push` |
+| Contribute selectively | `cd ~/warehouse && git add <file> && git commit` |
+| Discard a change | `cd ~/warehouse && git checkout -- <file>` |
 | Check project health | `abc status` |
 | Diagnose issues | `abc doctor` |
-| Reset all artifacts | `abc reset` |
 
 ---
 
 ## Next Steps
 
-- **[Contributing Back](contributing-back.md)** — the contribution workflow in depth
+- **[Contributing Back](contributing-back.md)** — contribution workflow in depth
 - **[Advanced Patterns](advanced-patterns.md)** — glob patterns and advanced configuration
 - **[Team Collaboration](team-collaboration.md)** — coordinating across a team
