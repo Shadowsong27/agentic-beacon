@@ -4,7 +4,7 @@ Today Agentic Beacon tracks three categories of adoptable artifact in `beacon.ya
 
 This separation breaks the moment a context links to a knowledge file. The link is plain markdown; no code reads it, validates it, or pulls the target. The concrete failure mode lives in this repository right now: `.agentic-beacon/artifacts/contexts/python-standards.md` contains 12+ links into `../knowledge/python-standards/...`, but `beacon.yaml.artifacts.knowledge` is `[]`. The links dangle against nothing.
 
-Agents are global machine-level artifacts, not project-scoped symlinks, and are not tracked in project `beacon.yaml`. Agent dependency resolution is deferred to PER-109. This change focuses on the container tiers: contexts, skills, and auto-derived knowledge.
+Agents are global machine-level artifacts, not project-scoped symlinks, and are not tracked in project `beacon.yaml` (which contains only contexts and skills). `abc adopt` may show agents as global-install candidates; selecting an agent installs it globally immediately. `abc sync` does not read agent `requires` in this change. This change focuses on the container tiers: contexts, skills, and auto-derived knowledge.
 
 Stakeholders: warehouse maintainers (Shadowsong27 and any future warehouse owners), project users who consume a warehouse, and the Beacon CLI itself which must enforce consistency.
 
@@ -45,7 +45,7 @@ Contexts, Skills  --(markdown links)-->  Knowledge
 
 Frontmatter `requires:` expresses sibling-tier (skill→context) dependencies. Markdown links express leaf-tier (knowledge) dependencies. Context files do not declare `requires:` frontmatter. Skill files declare `requires.contexts` only (no `skills` key).
 
-Agents are global machine-level artifacts deferred to PER-109. Their `requires:` frontmatter is warehouse metadata for future groundwork, not read by `abc sync` in this change.
+Agents are global machine-level artifacts. Their `requires:` frontmatter is warehouse metadata for future groundwork (PER-109), not read by `abc sync` in this change. `abc adopt` and `abc install agents/<name>.md` already install agents globally.
 
 **Why this shape:**
 - Knowledge is naturally inline-cited in context/skill prose ("See [X]"). Markdown links match how authors already write.

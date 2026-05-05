@@ -158,9 +158,9 @@ pytest tests/ -v --tb=short
   - **Expected Output**: `ArtifactsConfig` contains only `contexts`, `skills` fields; `knowledge` attribute raises `AttributeError`.
   - **Validation**: `uv run python -c 'from beacon.core.manifest.beacon import ArtifactsConfig; a = ArtifactsConfig(); assert not hasattr(a, "knowledge"), "knowledge still present"'` exits 0.
 <!-- opsx:tdd:3.1:end -->
-- [x] 3.2 [REMOVED] `agents:` field on `ArtifactsConfig` is NOT added (agents are global, not tracked in project `beacon.yaml`; PER-109)
+- [x] 3.2 [REMOVED] `agents:` field on `ArtifactsConfig` is NOT added (agents are global, not tracked in project `beacon.yaml`; `abc adopt` may install agents globally; PER-109 adds persistent selected-global-agent state for `abc sync`)
 <!-- opsx:tdd:3.2:begin -->
-  - **Reason removed**: Agents are global machine-level artifacts, not project-scoped symlinks, and are not tracked in project `beacon.yaml`. Selective global agent installation is deferred to PER-109.
+  - **Reason removed**: Agents are global machine-level artifacts, not project-scoped symlinks, and are not tracked in project `beacon.yaml`. `abc adopt` may show agents as global-install candidates; selecting one installs it globally immediately. PER-109 adds persistent selected-global-agent state and `abc sync` installing those selected global agents.
 <!-- opsx:tdd:3.2:end -->
 - [x] 3.3 Add a legacy-drop migration hook in the manifest loader: on read, if the YAML contains `artifacts.knowledge`, remove it from the parsed dict before Pydantic validation and emit a one-shot info log
 <!-- opsx:tdd:3.3:begin -->
@@ -195,7 +195,7 @@ pytest tests/ -v --tb=short
 ## 4. Frontmatter parsing and validation
 
 <!-- opsx:phase-summary:4:begin -->
-**Goal**: Introduce machine-readable `requires:` parsing for skills with strict schema enforcement. Agent frontmatter is NOT validated at sync time (agent install is deferred to PER-109).
+**Goal**: Introduce machine-readable `requires:` parsing for skills with strict schema enforcement. Agent frontmatter is NOT validated at sync time (agent `requires:` is warehouse metadata for future groundwork; `abc adopt` and `abc install agents/<name>.md` already support global agent install. PER-109 adds persistent selected-global-agent state and `abc sync` consuming agent `requires`).
 **Input**: Pydantic v2 in the project dependency tree; PyYAML already available; specs from `openspec/changes/auto-pull-artifact-dependencies/specs/artifact-dependency-resolution/spec.md`.
 **Output**: `SkillFrontmatter` Pydantic model with validators; `parse_frontmatter()` and `validate_requires_against_warehouse()` callable; unit tests cover valid / missing / malformed / forbidden-key cases.
 **Validation**: `pytest libs/beacon/tests/unit/core/dependencies/` (or equivalent path) returns zero failures; parser correctly rejects a skill with a forbidden `skills:` key; parser produces structured errors for malformed YAML.
@@ -432,7 +432,7 @@ pytest tests/ -v --tb=short
 ## 7. Adoption domain changes
 
 <!-- opsx:phase-summary:7:begin -->
-**Goal**: Remove knowledge from discovery/TUI. Agents are NOT added as a selectable category (agents are global, not project-scoped; PER-109).
+**Goal**: Remove knowledge from discovery/TUI. Agents are NOT added as a project-scoped selectable category in `beacon.yaml` (agents are global, not project-scoped). `abc adopt` may show agents as global-install candidates and installs them globally immediately without updating `beacon.yaml`. PER-109 adds persistent selected-global-agent state and `abc sync` installing those selected global agents.
 **Input**: Current `libs/beacon/src/beacon/domains/adoption/` with knowledge as a tier in discovery, TUI, and apply.
 **Output**: Knowledge references purged from adoption; TUI shows only contexts and skills.
 **Validation**: Unit tests return expected adoption sets; the removed `KNOWLEDGE_SUBTYPES` constant (or equivalent) has zero remaining references via `rg KNOWLEDGE_SUBTYPES libs/beacon/src`.
@@ -451,9 +451,9 @@ pytest tests/ -v --tb=short
   - **Expected Output**: TUI renders two sections (Contexts, Skills); no knowledge section or tree widget appears.
   - **Validation**: Snapshot test or direct widget introspection: top-level tree has exactly two roots, none named 'Knowledge'.
 <!-- opsx:tdd:7.2:end -->
-- [ ] 7.3 [REMOVED] Agents are NOT added as a selectable category (agents are global, not project-scoped; PER-109)
+- [ ] 7.3 [REMOVED] Agents may appear as global-install candidates in `abc adopt` but are not a project-scoped selectable category in `beacon.yaml` (agents are global, not project-scoped; PER-109 adds persistent selected-global-agent state for `abc sync`)
 <!-- opsx:tdd:7.3:begin -->
-  - **Reason removed**: Agents are global machine-level artifacts. Selective global agent installation is deferred to PER-109.
+  - **Reason removed**: Agents are global machine-level artifacts. `abc adopt` may show agents as global-install candidates and installs them globally immediately without updating project `beacon.yaml`. PER-109 adds persistent selected-global-agent state and `abc sync` installing those selected global agents.
 <!-- opsx:tdd:7.3:end -->
 - [ ] 7.4 [REMOVED] Dependency prompting during adopt is deferred to PER-109 (no agent category to prompt for)
 <!-- opsx:tdd:7.4:begin -->
@@ -468,9 +468,9 @@ pytest tests/ -v --tb=short
   - **Expected Output**: All scenarios pass; beacon.yaml final state matches expected for each (no `knowledge:` key, no `agents:` key).
   - **Validation**: `uv run pytest libs/beacon/tests/unit/domains/adoption/ -v` → pass.
 <!-- opsx:tdd:7.8:end -->
-- [ ] 7.9 [REMOVED] Integration test for TUI dependency prompting removed (no agent category)
+- [ ] 7.9 [REMOVED] Integration test for TUI dependency prompting removed (no agent category in `beacon.yaml`; agents may be shown as global-install candidates in `abc adopt`)
 <!-- opsx:tdd:7.9:begin -->
-  - **Reason removed**: Dependency prompting at adopt time is out of scope. Agent global install is deferred to PER-109.
+  - **Reason removed**: Dependency prompting at adopt time for project-scoped artifacts is out of scope. Agents appear as global-install candidates in `abc adopt` and install globally immediately; agent dependency prompting is deferred to PER-109 alongside persistent selected-global-agent state.
 <!-- opsx:tdd:7.9:end -->
 
 ## 8. Distribution / sync orchestrator changes
@@ -556,9 +556,9 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:9:end -->
 
 
-- [ ] 9.1 [REMOVED] Agent frontmatter in sample warehouse is deferred to PER-109
+- [ ] 9.1 [REMOVED] Agent frontmatter in sample warehouse is warehouse metadata for future groundwork (PER-109); `abc install agents/<name>.md` and `abc adopt` already install agents globally
 <!-- opsx:tdd:9.1:begin -->
-  - **Reason removed**: Agents are not part of project `beacon.yaml`; agent `requires:` frontmatter is warehouse metadata for future groundwork. Adding it to sample warehouse agents is deferred to PER-109.
+  - **Reason removed**: Agents are not part of project `beacon.yaml`; agent `requires:` frontmatter is warehouse metadata for future groundwork (PER-109). `abc install agents/<name>.md` and `abc adopt` already support global agent install. PER-109 adds persistent selected-global-agent state and `abc sync` consuming agent `requires`.
 <!-- opsx:tdd:9.1:end -->
 - [ ] 9.2 Add `requires:` frontmatter to every skill under `examples/sample-warehouse/skills/`
 <!-- opsx:tdd:9.2:begin -->

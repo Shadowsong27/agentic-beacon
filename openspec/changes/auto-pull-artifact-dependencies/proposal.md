@@ -9,7 +9,7 @@ This change makes cross-artifact dependencies explicit and machine-resolved: kno
 - **BREAKING**: Remove the `artifacts.knowledge` field from `beacon.yaml`. On first `abc sync` after upgrade, the field is silently dropped and regenerated output omits it.
 - **BREAKING**: Skill files (`skills/<name>/SKILL.md`) must declare `requires: { contexts: [...] }` in YAML frontmatter. Skills cannot declare skill-to-skill dependencies in this version.
 - Knowledge is derived at sync time by scanning adopted contexts and skills for markdown links that resolve to paths under `<warehouse-root>/knowledge/`. Derived knowledge is symlinked into `.agentic-beacon/artifacts/knowledge/`. Orphaned knowledge symlinks (no remaining referrer) are pruned.
-- `abc adopt` removes knowledge as a selectable category. Contexts and skills remain as the two selectable project artifact types. Agent global install is deferred to PER-109.
+- `abc adopt` removes knowledge as a selectable category. Contexts and skills remain as the two selectable project artifact types. `abc adopt` may show agents as global-install candidates; selecting an agent installs it globally immediately and does not update project `beacon.yaml`. PER-109 adds persistent selected-global-agent state and `abc sync` installing those selected global agents.
 - `abc sync` validates that every adopted skill's `requires.contexts` resolves to a context that exists in the warehouse. Required contexts that exist in the warehouse are auto-pulled transitively; a required context missing from the warehouse is a hard error.
 - Context files are not scanned for frontmatter dependencies; contexts have no sibling-tier `requires`. Context-to-context dependencies are not supported.
 - Context transitive provenance is derived from skill-required contexts: a context pulled only because an adopted skill requires it is pruned when the skill is unadopted.
@@ -49,4 +49,4 @@ This change makes cross-artifact dependencies explicit and machine-resolved: kno
 - Context-to-context dependencies (explicitly rejected).
 - Legacy / transition mode for warehouses without frontmatter (explicitly rejected).
 - Skill-to-skill dependencies (explicitly deferred; revisit case-by-case on user request).
-- Agent installation or agent dependency resolution — deferred to PER-109.
+- Persistent selected-global-agent state and `abc sync` consuming agent `requires` — deferred to PER-109. Agent global install via `abc install agents/<name>.md` and `abc adopt` already exists.

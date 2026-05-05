@@ -156,13 +156,13 @@ Test that the agent is using the artifacts by asking it a question that your kno
 ### Pattern matches nothing
 
 ```
-Warning: No files matched pattern: knowledge/python/fastapi.md
+Warning: No files matched pattern: contexts/teams/backend/AGENTS.md
 ```
 
 Check that the path actually exists in your warehouse:
 
 ```bash
-ls /path/to/warehouse/knowledge/
+ls /path/to/warehouse/contexts/teams/
 ```
 
 Adjust the pattern to match the real structure. See [Advanced Patterns](./advanced-patterns.md) for glob syntax.

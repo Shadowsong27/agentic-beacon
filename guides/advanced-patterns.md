@@ -37,15 +37,15 @@ artifacts:
 If a pattern matches nothing, `abc sync` will warn but not fail:
 
 ```
-Warning: No files matched pattern: knowledge/python/fastapi.md
+Warning: No files matched pattern: contexts/teams/mobile/AGENTS.md
 ```
 
 Debug it by listing the warehouse:
 
 ```bash
-ls /path/to/warehouse/knowledge/python/
+ls /path/to/warehouse/contexts/teams/
 # or
-find /path/to/warehouse/knowledge/python/ -name "*.md"
+find /path/to/warehouse/contexts/ -name "*.md"
 ```
 
 ---
