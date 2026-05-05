@@ -4,7 +4,7 @@ Today Agentic Beacon tracks three categories of adoptable artifact in `beacon.ya
 
 This separation breaks the moment a context links to a knowledge file. The link is plain markdown; no code reads it, validates it, or pulls the target. The concrete failure mode lives in this repository right now: `.agentic-beacon/artifacts/contexts/python-standards.md` contains 12+ links into `../knowledge/python-standards/...`, but `beacon.yaml.artifacts.knowledge` is `[]`. The links dangle against nothing.
 
-The same shape of problem exists one tier up. Agents sit outside the project (global Claude/Cursor agent directories), cannot rely on relative markdown paths, and currently reference contexts and skills only in prose. Sync does nothing to validate that a claimed dependency actually exists in `beacon.yaml`.
+Agents are global machine-level artifacts, not project-scoped symlinks, and are not tracked in project `beacon.yaml`. Agent dependency resolution is deferred to PER-109. This change focuses on the container tiers: contexts, skills, and auto-derived knowledge.
 
 Stakeholders: warehouse maintainers (Shadowsong27 and any future warehouse owners), project users who consume a warehouse, and the Beacon CLI itself which must enforce consistency.
 
@@ -20,9 +20,9 @@ Current state on disk:
 - Make cross-artifact dependencies explicit and machine-resolvable.
 - Eliminate silent drift between declared adoption and actually-referenced artifacts.
 - Remove the tedium of manually adopting knowledge.
-- Preserve clean layered semantics: agents → {contexts, skills} → knowledge, no horizontal edges.
+- Preserve clean layered semantics: skills → contexts → knowledge, no horizontal edges.
 - Loud errors with remediation pointers for any warehouse or project not in the new model.
-- Preserve user agency at the sibling tier: users still pick agents, contexts, skills explicitly.
+- Preserve user agency: users still pick contexts and skills explicitly.
 
 **Non-Goals:**
 - `abc doctor` validation command — separate follow-up change.
@@ -34,28 +34,26 @@ Current state on disk:
 
 ## Decisions
 
-### D1. Three-tier dependency graph with two expression mechanisms
+### D1. Two-tier dependency graph within project scope, with two expression mechanisms
 
-The graph has exactly three tiers and two kinds of edges:
+The graph within project scope has two tiers and two kinds of edges:
 
 ```
-Agents  --(frontmatter.requires)-->  Contexts, Skills
 Skills  --(frontmatter.requires)-->  Contexts
 Contexts, Skills  --(markdown links)-->  Knowledge
 ```
 
-Frontmatter `requires:` expresses sibling-tier dependencies. Markdown links express leaf-tier (knowledge) dependencies. Agent files do not participate in knowledge scanning. Context files do not declare `requires:` frontmatter. Skill files declare `requires.contexts` only (no `skills` key).
+Frontmatter `requires:` expresses sibling-tier (skill→context) dependencies. Markdown links express leaf-tier (knowledge) dependencies. Context files do not declare `requires:` frontmatter. Skill files declare `requires.contexts` only (no `skills` key).
+
+Agents are global machine-level artifacts deferred to PER-109. Their `requires:` frontmatter is warehouse metadata for future groundwork, not read by `abc sync` in this change.
 
 **Why this shape:**
-- Agents live globally; relative markdown paths don't work for them. Frontmatter is location-independent and YAML-parseable.
 - Knowledge is naturally inline-cited in context/skill prose ("See [X]"). Markdown links match how authors already write.
+- Skill→context is the natural composition edge: a skill depends on standards/context that it references.
 - Two expression mechanisms maps cleanly to two dependency directions (horizontal sibling vs. downward leaf).
 
 **Alternative considered — one uniform mechanism (all deps in frontmatter):**
 Simpler parser, but forces authors to duplicate every knowledge reference into both a markdown link and a frontmatter entry. Authors would drift.
-
-**Alternative considered — one uniform mechanism (all deps as markdown links):**
-Breaks for agents, whose files live in `~/.claude/agents/` where `../knowledge/...` is nonsense.
 
 **Alternative considered — URI scheme like `beacon://knowledge/foo/bar`:**
 Location-independent like frontmatter, but introduces a new syntax with a new parser for every markdown renderer. Too much infrastructure for a per-project change.
@@ -98,54 +96,51 @@ Links that fail the classifier — including links to files outside the warehous
 - Survives alternate warehouse layouts as long as they keep the canonical `knowledge/` top-level dir.
 - Single classifier rule applies uniformly to contexts and skills regardless of nesting depth.
 
-### D5. Frontmatter schema and validation
+### D5. Frontmatter schema and validation (skills only)
 
 ```yaml
 ---
-name: <string, matches filename stem / dir name>
+name: <string, matches dir name>
 description: <optional string>
 requires:
   contexts: [<stem>, ...]
-  skills: [<dir-name>, ...]     # agents only; not permitted on skills
 ---
 ```
 
 Validation rules:
-- `requires:` key is mandatory on agents and skill entrypoints. Absence is a hard error.
+- `requires:` key is mandatory on skill entrypoints. Absence is a hard error.
 - `requires.contexts` is a list of strings; empty list is permitted.
-- `requires.skills` is a list of strings; permitted on agents, forbidden on skills.
-- Each name must resolve to a file that exists in the warehouse (`contexts/<name>.md` or `skills/<name>/SKILL.md`).
-- Each name must correspond to an adopted artifact at sync time (checked after dependency resolution).
+- `requires.skills` is not permitted on skills.
+- Each name must resolve to a file that exists in the warehouse (`contexts/<name>.md`).
+- Each name must correspond to an adopted context at sync time (checked after dependency resolution).
 
-Validation is a separate pass before sync. Errors are collected and presented together where possible ("agent X requires A, B, C which are not adopted") rather than failing on the first miss.
+Agent `requires:` frontmatter may exist as warehouse metadata for future groundwork (PER-109) but is not validated or read during `abc sync`.
 
-### D6. Explicit vs transitive provenance for contexts and skills
+Validation is a separate pass before sync. Errors are collected and presented together where possible ("skill X requires context A which is not adopted") rather than failing on the first miss.
 
-`beacon.yaml.artifacts.contexts` and `beacon.yaml.artifacts.skills` continue to hold explicit user adoptions. Sync computes a larger "effective set" for each tier:
+### D6. Explicit vs transitive provenance for contexts
+
+`beacon.yaml.artifacts.contexts` continues to hold explicit user adoptions. Sync computes a larger "effective set":
 
 ```
 effective_contexts = explicit_contexts
-                   ∪ required_by_adopted_agents
                    ∪ required_by_adopted_skills
-effective_skills   = explicit_skills
-                   ∪ required_by_adopted_agents
 ```
 
-Symlinks are created for the effective set. On unadoption, pruning uses set logic: a context's symlink is removed only when it is in neither `explicit_contexts` nor required by any artifact in the new effective set.
+Symlinks are created for the effective set. On unadoption, pruning uses set logic: a context's symlink is removed only when it is in neither `explicit_contexts` nor required by any adopted skill in the new effective set.
 
 This is the same pattern as knowledge, one tier up. It preserves the invariant that explicit adoption is user-visible in `beacon.yaml`, while transitive adoption is auditable only through dependency walks.
 
 **Alternative considered — mark provenance in `beacon.yaml` with metadata:**
 `contexts: [{name: python-standards, source: transitive}]`. Rejected because YAML becomes noisy, diffs get uglier, and the information is trivially recomputable from the graph. Provenance is machine state, not user-visible state.
 
-### D7. Agents reference skills, skills do not reference skills
+### D7. Skill-to-skill dependencies not supported
 
-Agents may list skills in `requires.skills`. Skills may not — the `skills:` key is rejected at parse time on skill frontmatter.
+Skills may not declare `requires.skills` — the `skills:` key is rejected at parse time on skill frontmatter.
 
-**Why the asymmetry:**
-- Agent→skill is orchestration: an agent uses a skill the way a function calls another function. Common, legitimate.
-- Skill→skill is composition: a skill "uses" another skill. The use cases we surveyed all reduce to either (a) duplicating the other skill's content, (b) extracting the shared part into a context, or (c) making the agent require both skills and let the agent orchestrate. Case (c) is cleaner than introducing a skill-to-skill edge.
-- If real skill→skill cases appear, the restriction is easy to lift in a future change. Shipping without it keeps the graph shallow.
+**Why the restriction:**
+- Skill-to-skill is composition: a skill "uses" another skill. The use cases we surveyed all reduce to either (a) duplicating the other skill's content, (b) extracting the shared part into a context, or (c) having the agent require both skills and let the agent orchestrate (future PER-109).
+- If real skill-to-skill cases appear, the restriction is easy to lift in a future change. Shipping without it keeps the graph shallow.
 
 ### D8. Error reporting format
 
@@ -173,7 +168,7 @@ Errors are surfaced via `loguru` at `ERROR` level and via non-zero exit codes fr
 - **[Risk] Markdown link resolution has edge cases (URL-encoded characters, anchors like `file.md#section`).**
   → Mitigation: strip anchors before classification; use `urllib.parse.unquote` on the link target before resolving. Tested explicitly.
 
-- **[Trade-off] Frontmatter authors must remember the contract.**
+- **[Trade-off] Skill maintainers must remember the frontmatter contract.**
   → Accepted. It's a one-line contract documented in the migration doc. Loud errors at sync time catch omissions immediately. The alternative (scanning prose) would be worse by every measure.
 
 - **[Trade-off] No `abc doctor` command in this change means validation only runs on `abc sync`.**
@@ -190,21 +185,20 @@ Errors are surfaced via `loguru` at `ERROR` level and via non-zero exit codes fr
 ### Phase 1 — Code change (this OpenSpec change)
 
 1. Add `docs/migrations/artifact-dependencies-frontmatter.md` (already drafted).
-2. Implement frontmatter parser and validator for agents and skills.
+2. Implement frontmatter parser and validator for skills.
 3. Implement knowledge reference scanner.
 4. Update `ArtifactsConfig` to remove `knowledge` field and add legacy-drop migration hook.
-5. Update adoption domain: remove knowledge from discovery/TUI; add `requires:` validation and prompting.
+5. Update adoption domain: remove knowledge from discovery/TUI; add transitive/orphan provenance tracking for contexts.
 6. Update distribution orchestrator: compute effective sets, run validation, derive knowledge, prune orphans.
-7. Add `agents:` field to `ArtifactsConfig` if not present (required because we now track adopted agents explicitly for dependency resolution).
-8. Update `examples/sample-warehouse/` so every agent and skill carries the new frontmatter.
-9. Tests: unit tests for parser, scanner, dependency resolver; integration test for a full sync that exercises a multi-tier graph.
+7. Update `examples/sample-warehouse/` so every skill carries the new frontmatter; remove `knowledge:` from sample `beacon.yaml`.
+8. Tests: unit tests for parser, scanner, dependency resolver; integration test for a full sync that exercises a skill→context→knowledge graph.
 
 ### Phase 2 — Rollout
 
 1. Merge code change to `main`.
 2. Release-Please PR bumps version; merge.
 3. Users on old CLI + new warehouse: their sync still works because the old CLI ignores frontmatter.
-4. Users on new CLI + old warehouse: their sync errors loudly with a pointer to the migration doc.
+4. Users on new CLI + old warehouse: their sync errors loudly (skills missing `requires:`) with a pointer to the migration doc.
 5. Users on new CLI + new warehouse: silent happy path.
 
 ### Rollback
