@@ -72,7 +72,7 @@ Each in `libs/beacon/src/beacon/domains/<name>/`:
 |---|---|
 | `warehouse` | connect / validate / catalog; git health; `abc warehouse status / contribute` |
 | `setup` | `abc warehouse init` / `abc setup`; CLAUDE.md / opencode wiring |
-| `adoption` | `abc adopt` flow |
+| `adoption` | `abc adopt` flow: three-way (accept/reject/defer) TUI, confirm screen, atomic commit with rollback, `pending.yaml` + `.last-adopt` management |
 | `distribution` | warehouse→project symlink sync, migration, upgrades |
 | `artifact` | agent / skill / rule artifact operations |
 
@@ -85,10 +85,27 @@ Each in `libs/beacon/src/beacon/domains/<name>/`:
 The locally-cloned warehouse is the **single write entrypoint** for every harness artifact on a machine. Projects reference it via per-file symlinks under `.agentic-beacon/artifacts/`.
 
 - `abc sync` creates symlinks, not copies. One logical artifact = one physical file per machine.
-- `abc warehouse contribute` is the **only** supported write path back to the warehouse.
+- `abc warehouse contribute` is the primary way to push warehouse working-tree changes back upstream.
+- Authoring skills (`record-knowledge`, `record-skill`) also write directly to the warehouse and append entries to `.agentic-beacon/pending.yaml`; wiring into `beacon.yaml` happens later via `abc adopt`.
 - Cross-project visibility of harness edits on a single machine is **intended**: editing a skill through Project A's symlink edits the warehouse working tree; Project B sees the change immediately.
 - Platform: macOS / Linux only. Windows is rejected.
 - Agents are declared per-project in `beacon.yaml.artifacts.agents` **AND** installed globally via symlinks into `~/.config/opencode/agents/` and `~/.claude/agents/`.
+
+### Pending Artifacts
+
+`.agentic-beacon/pending.yaml` tracks warehouse artifacts authored in the current project but not yet wired into `beacon.yaml`. It is gitignored. Use `abc adopt` to review and accept/reject/defer pending entries.
+
+**`abc adopt` three-way actions:**
+
+| Action | Effect |
+|---|---|
+| **accept** | Add to `beacon.yaml`, sync symlinks, remove from `pending.yaml` |
+| **reject** | Remove from `pending.yaml` only; warehouse file untouched |
+| **defer** (default) | Keep in `pending.yaml`; no `beacon.yaml` change |
+
+After marking entries, a confirm screen shows the projected mutations before any filesystem writes. All writes are atomic — a mid-commit failure restores `beacon.yaml`, `pending.yaml`, and `.last-adopt` to their pre-commit state.
+
+**Pending alert:** Every `abc` subcommand prints a one-line stderr notice when `pending.yaml` is non-empty. This does not affect the subcommand's exit code.
 
 ---
 
@@ -159,4 +176,4 @@ git push origin refs/tags/agentic-beacon@vX.X.X:refs/heads/release/vX.X.X
 
 ---
 
-**Last Updated:** 2026-05-05
+**Last Updated:** 2026-05-06

@@ -468,38 +468,38 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:9:end -->
 
 
-- [ ] 9.1 Integration test: author knowledge (no pointer) → one pending entry → `abc adopt` accept → beacon.yaml unchanged (knowledge is not a beacon.yaml artifact), pending.yaml empty, `.last-adopt` advanced.
+- [x] 9.1 Integration test: author knowledge (no pointer) → one pending entry → `abc adopt` accept → beacon.yaml unchanged (knowledge is not a beacon.yaml artifact), pending.yaml empty, `.last-adopt` advanced.
 <!-- opsx:tdd:9.1:begin -->
   - **Input**: pytest libs/beacon/tests/integration/test_pending_e2e.py::test_knowledge_no_pointer -q
   - **Expected Output**: Test simulates record-knowledge → pending append → abc adopt accept. Asserts: beacon.yaml unchanged, pending.yaml empty, .last-adopt advanced past pre-test value.
   - **Validation**: Test green. No flakiness.
   - **Note**: 9.1's 'beacon.yaml unchanged' invariant only applies because knowledge is not a beacon.yaml artifact. Confirm this with the supervisor before D4 — see review note flagged in D1 design discussion.
 <!-- opsx:tdd:9.1:end -->
-- [ ] 9.2 Integration test: author knowledge (with pointer) → two pending entries → `abc adopt` accept both → context file symlink reflects the updated body in the project.
+- [x] 9.2 Integration test: author knowledge (with pointer) → two pending entries → `abc adopt` accept both → context file symlink reflects the updated body in the project.
 <!-- opsx:tdd:9.2:begin -->
   - **Input**: pytest libs/beacon/tests/integration/test_pending_e2e.py::test_knowledge_with_pointer -q
   - **Expected Output**: Test creates context pointer entry + knowledge entry, accepts both, asserts the project's symlinked context file includes the new pointer (transitive update via symlink).
   - **Validation**: Test green.
 <!-- opsx:tdd:9.2:end -->
-- [ ] 9.3 Integration test: author skill → one pending entry → `abc adopt` accept → beacon.yaml has new `skills/<name>/` entry, symlink created, pending.yaml empty.
+- [x] 9.3 Integration test: author skill → one pending entry → `abc adopt` accept → beacon.yaml has new `skills/<name>/` entry, symlink created, pending.yaml empty.
 <!-- opsx:tdd:9.3:begin -->
   - **Input**: pytest libs/beacon/tests/integration/test_pending_e2e.py::test_skill_create -q
   - **Expected Output**: Test simulates record-skill → pending → adopt accept. Asserts beacon.yaml has new artifact entry, project-side symlink resolves to warehouse skill dir, pending.yaml empty.
   - **Validation**: Test green.
 <!-- opsx:tdd:9.3:end -->
-- [ ] 9.4 Integration test: hand-edit a warehouse context file → no `pending.yaml` change → `abc adopt` picks up via `.last-adopt` diff → user accepts → handled correctly.
+- [x] 9.4 Integration test: hand-edit a warehouse context file → no `pending.yaml` change → `abc adopt` picks up via `.last-adopt` diff → user accepts → handled correctly.
 <!-- opsx:tdd:9.4:begin -->
   - **Input**: pytest libs/beacon/tests/integration/test_pending_e2e.py::test_warehouse_modified_via_last_adopt -q
   - **Expected Output**: Test edits warehouse context file directly (skipping pending.yaml), runs adopt, asserts the warehouse-modified entry surfaces in TUI with `source='warehouse-modified'`. After accept, `.last-adopt` advances; subsequent run does not re-show the entry.
   - **Validation**: Test green.
 <!-- opsx:tdd:9.4:end -->
-- [ ] 9.5 Integration test: run `abc warehouse status` in a project with non-empty `pending.yaml` → alert line appears first on stderr, command output follows, exit code unaffected.
+- [x] 9.5 Integration test: run `abc warehouse status` in a project with non-empty `pending.yaml` → alert line appears first on stderr, command output follows, exit code unaffected.
 <!-- opsx:tdd:9.5:begin -->
   - **Input**: pytest libs/beacon/tests/integration/test_pending_e2e.py::test_alert_visibility -q
   - **Expected Output**: Subprocess invocation of `abc warehouse status`: first stderr line matches `^⚠ \d+ pending artifacts\. Run 'abc adopt' to wire them\.$`. stdout shows normal `warehouse status` output. Exit code 0 (or whatever status would have been without the alert).
   - **Validation**: Test green.
 <!-- opsx:tdd:9.5:end -->
-- [ ] 9.6 Integration test: run `record-knowledge` in a project without `.agentic-beacon/config.toml` → hard error with documented text, no file writes.
+- [x] 9.6 Integration test: run `record-knowledge` in a project without `.agentic-beacon/config.toml` → hard error with documented text, no file writes.
 <!-- opsx:tdd:9.6:begin -->
   - **Input**: pytest libs/beacon/tests/integration/test_pending_e2e.py::test_missing_warehouse_hard_error -q
   - **Expected Output**: Subprocess invocation of resolve_warehouse.py (or equivalent integration entry) from a directory with no config.toml: exit non-zero, stderr matches the documented error text from spec, no files created in cwd or anywhere.
@@ -516,10 +516,10 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:10:end -->
 
 
-- [ ] 10.1 Add `docs/migrations/pending-artifacts-flow-and-record-revamp.md` covering: what `pending.yaml` is, how authoring skills changed, how `abc adopt` changed, breaking changes for `record-*` users, rollback path.
-- [ ] 10.2 Update root `AGENTS.md` to reflect new `abc adopt` three-way actions and the pending alert.
-- [ ] 10.3 Update site-docs page describing `.agentic-beacon/` layout to list `pending.yaml` and `.last-adopt`.
-- [ ] 10.4 Regenerate `examples/sample-warehouse/` if anything structural changed (verify via `abc warehouse init` fresh-diff).
+- [x] 10.1 Add `docs/migrations/pending-artifacts-flow-and-record-revamp.md` covering: what `pending.yaml` is, how authoring skills changed, how `abc adopt` changed, breaking changes for `record-*` users, rollback path.
+- [x] 10.2 Update root `AGENTS.md` to reflect new `abc adopt` three-way actions and the pending alert.
+- [x] 10.3 Update site-docs page describing `.agentic-beacon/` layout to list `pending.yaml` and `.last-adopt`.
+- [x] 10.4 Regenerate `examples/sample-warehouse/` if anything structural changed (verify via `abc warehouse init` fresh-diff).
 <!-- opsx:tdd:10.4:begin -->
   - **Input**: abc warehouse init /tmp/regen-check && diff -r /tmp/regen-check examples/sample-warehouse
   - **Expected Output**: Diff is empty (modulo .git/ if present in the temp dir).
