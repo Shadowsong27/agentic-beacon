@@ -14,7 +14,7 @@ from beacon.domains.adoption.apply import (
     cleanup_unadopted_artifacts,
     warehouse_uncommitted_paths,
 )
-from beacon.domains.adoption.discovery import discover_adoptable, is_agent_installed
+from beacon.domains.adoption.discovery import discover_adoptable
 from beacon.domains.adoption.models import AdoptCandidate
 from beacon.domains.adoption.tui import AdoptApp
 from beacon.domains.artifact.agent import (
@@ -23,7 +23,6 @@ from beacon.domains.artifact.agent import (
     read_agent_definition,
 )
 from beacon.domains.artifact.skill import wire_skills_post_sync
-from beacon.domains.distribution.distributor import WarehouseDistributor
 from beacon.domains.distribution.sync_engine import SyncEngine
 from beacon.domains.setup.wiring import (
     wire_contexts_claudecode,
@@ -114,17 +113,15 @@ def adopt(*, dry_run: bool) -> None:
         )
         return
 
+    # Per Decision 1: artifacts.agents is a per-project dependency pointer, not
+    # an install filter. The adopt TUI represents project intent — pre-tick
+    # state must reflect beacon.yaml, not the global install dirs (which can
+    # contain agents declared by other projects on the same machine).
     adopted_paths: list[str] = (
-        beacon_settings.artifacts.contexts + beacon_settings.artifacts.skills
+        beacon_settings.artifacts.contexts
+        + beacon_settings.artifacts.skills
+        + beacon_settings.artifacts.agents
     )
-    try:
-        distributor = WarehouseDistributor(
-            warehouse_root=warehouse_path, target_root=warehouse_path
-        )
-        available_agents = distributor.list_available().get("agents", [])
-        adopted_paths += [p for p in available_agents if is_agent_installed(p)]
-    except Exception:
-        pass
 
     app = AdoptApp(
         candidates,

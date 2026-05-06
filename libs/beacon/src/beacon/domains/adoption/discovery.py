@@ -340,10 +340,15 @@ def discover_all(
                 )
             )
 
-    # Agents — list_available returns paths like "agents/code-reviewer.md"
-    # "adopted" means declared in beacon.yaml.artifacts.agents AND globally installed
+    # Agents — list_available returns paths like "agents/code-reviewer.md".
+    # Per Decision 1, "adopted" for the adopt TUI means "declared in
+    # beacon.yaml.artifacts.agents". Global install state is a side effect of
+    # ticking — not the source of truth for project membership. Filtering on
+    # global state would hide globally-installed agents from existing users
+    # running `abc adopt` post-upgrade to opt into per-project tracking (the
+    # migration path documented in design.md Decision 4).
     for agent_path in available.get("agents", []):
-        if not is_agent_installed(agent_path):
+        if not is_adopted(agent_path, beacon_settings):
             desc = extract_description(warehouse_path, agent_path)
             candidates.append(
                 AdoptCandidate(
