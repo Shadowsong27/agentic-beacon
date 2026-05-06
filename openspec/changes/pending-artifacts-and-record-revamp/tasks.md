@@ -536,7 +536,7 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:11:end -->
 
 
-- [ ] 11.1 Run full test suite from repo root: `pytest` passes.
+- [x] 11.1 Run full test suite from repo root: `pytest` passes.
 <!-- opsx:tdd:11.1:begin -->
   - **Input**: uv run pytest -q (from /Users/ypei/Documents/oss/agentic-beacon)
   - **Expected Output**: All collected tests pass. Skipped tests have justifications. No new regressions vs the base branch baseline.
@@ -560,7 +560,7 @@ pytest tests/ -v --tb=short
   - **Expected Output**: Both skills execute end-to-end. record-knowledge produces 1–2 pending entries depending on pointer choice. record-skill produces 1 pending entry. abc adopt resolves them. beacon.yaml + pending.yaml + symlinks reflect expected post-adopt state.
   - **Validation**: Manual inspection. No traceback, no orphaned files in /tmp/smoke-project beyond what's committed.
 <!-- opsx:tdd:11.4:end -->
-- [ ] 11.5 Update CHANGELOG with breaking-change callout for `record-*` skills.
+- [x] 11.5 Update CHANGELOG with breaking-change callout for `record-*` skills.
 <!-- opsx:tdd:11.5:begin -->
   - **Input**: grep -A3 -B1 'BREAKING' CHANGELOG.md (or whatever changelog the repo uses)
   - **Expected Output**: New entry for the next release contains a `### BREAKING CHANGES` section calling out (a) record-knowledge no longer writes to `.agentic-beacon/artifacts/knowledge/` (warehouse-target only); (b) record-skill no longer invokes create_skill.py; (c) both skills hard-error without a connected warehouse.
