@@ -368,7 +368,7 @@ pytest tests/ -v --tb=short
     - TC2: Press `n` after `a` → fully empty state, provenance cleared
     - TC3: Press `a` twice → idempotent, no double-provenance entries
 <!-- opsx:tdd:5.7:end -->
-- [x] 5.8 TUI snapshot tests or headless runs (textual's test harness) covering: tick agent → skills auto-tick with provenance; untick skill while agent ticked → blocked; untick agent → skill auto-unticks unless user-explicit; multi-agent shared skill provenance.
+- [ ] 5.8 TUI snapshot tests or headless runs (textual's test harness) covering: tick agent → skills auto-tick with provenance; untick skill while agent ticked → blocked; untick agent → skill auto-unticks unless user-explicit; multi-agent shared skill provenance.
 <!-- opsx:tdd:5.8:begin -->
   - **Input**: `pytest libs/beacon/tests/unit/domains/adoption/test_tui*.py -v`.
   - **Expected Output**: Four snapshot/state cases green; failures produce clear diff output.
