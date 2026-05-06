@@ -1017,6 +1017,7 @@ def _make_agent_project(tmp_path, monkeypatch):
         (wh / d).mkdir(parents=True)
     (wh / "README.md").write_text("# WH")
     (wh / "agents" / "code-reviewer.md").write_text(SAMPLE_AGENT_MD)
+    (wh / "agents" / "agents.yaml").write_text("code-reviewer:\n  skills: []\n")
 
     # Init git
     subprocess.run(

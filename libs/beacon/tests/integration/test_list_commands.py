@@ -347,6 +347,7 @@ def test_warehouse_list_agents_section(tmp_path, monkeypatch):
     (wh / "agents" / "code-reviewer.md").write_text(
         "---\nname: code-reviewer\n---\n# Agent"
     )
+    (wh / "agents" / "agents.yaml").write_text("code-reviewer:\n  skills: []\n")
     (wh / "docs").mkdir()
     (wh / "contexts").mkdir()
     (wh / "skills").mkdir()
@@ -375,6 +376,7 @@ def test_warehouse_list_filter_agents(tmp_path, monkeypatch):
     (wh / "agents" / "code-reviewer.md").write_text(
         "---\nname: code-reviewer\n---\n# Agent"
     )
+    (wh / "agents" / "agents.yaml").write_text("code-reviewer:\n  skills: []\n")
     (wh / "docs").mkdir()
     (wh / "contexts").mkdir()
     (wh / "skills").mkdir()

@@ -18,6 +18,7 @@ TEMPLATE_FILES: list[str] = [
     ".gitignore",
     "README.md",
     "agents/README.md",
+    "agents/agents.yaml",
     "contexts/README.md",
     "docs/architecture.md",
     "docs/contribution-guide.md",
@@ -118,10 +119,14 @@ class WarehouseInitializer:
         return content.replace("{org_name}", org_name)
 
     def _create_agents(self) -> None:
-        """Create agents directory with README template."""
+        """Create agents directory with README and agents.yaml templates."""
         self._write_if_missing(
             self.warehouse_path / "agents" / "README.md",
             (TEMPLATES_DIR / "agents" / "README.md").read_text(encoding="utf-8"),
+        )
+        self._write_if_missing(
+            self.warehouse_path / "agents" / "agents.yaml",
+            (TEMPLATES_DIR / "agents" / "agents.yaml").read_text(encoding="utf-8"),
         )
 
     def _create_contexts(self) -> None:
