@@ -128,6 +128,7 @@ def adopt(*, dry_run: bool) -> None:
         adopted_paths,
         project_name=project_root.name,
         warehouse_name=warehouse_path.name,
+        warehouse_path=warehouse_path,
     )
     result = app.run()
 
