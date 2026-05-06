@@ -12,6 +12,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+import yaml
 from beacon.cli.main import main
 from click.testing import CliRunner
 
@@ -100,14 +101,16 @@ def warehouse_with_knowledge_refs(tmp_path):
         "---\nrequires:\n  contexts: []\n---\n# Skill: Code Review\n"
     )
 
-    # Create an agent that requires the team context
+    # Create agent files (no requires: frontmatter — dependencies live in agents.yaml)
     (wh / "agents" / "reviewer.md").write_text(
-        "---\nrequires:\n  contexts: [team]\n  skills: []\n---\n# Reviewer Agent\n"
+        "---\nname: reviewer\n---\n# Reviewer Agent\n"
     )
 
-    # Create an agent with an unresolvable dependency
-    (wh / "agents" / "broken.md").write_text(
-        "---\nrequires:\n  contexts: [missing-context]\n  skills: []\n---\n# Broken Agent\n"
+    (wh / "agents" / "broken.md").write_text("---\nname: broken\n---\n# Broken Agent\n")
+
+    # Create agents.yaml matching the agent files
+    (wh / "agents" / "agents.yaml").write_text(
+        yaml.safe_dump({"reviewer": {"skills": []}, "broken": {"skills": []}})
     )
 
     _git_init(wh)

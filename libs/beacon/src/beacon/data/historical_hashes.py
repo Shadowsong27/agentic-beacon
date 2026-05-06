@@ -26,6 +26,12 @@ KNOWN_TEMPLATE_HASHES: dict[str, list[str]] = {
         "db6db08eef486e4dbf5713474262ff2f1caa6d3680df053b17c4b695d2274122",
         # v3.0 — global agents switched from copies to symlinks
         "6b99ed582044fab280e9a6ae6fd72fa48d05a15c4c53446337fc1c92f2274e4c",
+        # v3.x — move-agent-requires-to-warehouse-manifest
+        "5ee9768984c954f7ef8a3157018f283828f3ac10ea45b3b3a56053e13c7d4b42",
+    ],
+    "agents/agents.yaml": [
+        # v3.x — move-agent-requires-to-warehouse-manifest
+        "9f03ec77cf08ad3296d640d70a65038e0cdf46a3335e887f6ee130ce314077e2",
     ],
     "README.md": [
         # v2.x

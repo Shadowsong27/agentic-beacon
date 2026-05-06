@@ -24,11 +24,40 @@ description: What this agent does and when to use it
 Detailed instructions for the agent go here.
 ```
 
+**Important:** `requires:` must **not** appear in agent frontmatter.
+Dependencies are declared in `agents/agents.yaml` instead (see below).
+
+## Agent Dependency Manifest (`agents/agents.yaml`)
+
+The `agents/agents.yaml` file maps each agent to the skills it depends on.
+
+Example:
+
+```yaml
+# Beacon agent dependency manifest.
+# Each top-level key maps an agent (agents/<key>.md) to its required skills.
+#
+# Example:
+# spec-planner:
+#   skills:
+#     - opsx-enhance-tasks
+#     - openspec-propose
+#
+# pipeline-developer:
+#   skills: []
+```
+
+- Each top-level key must match the stem of an `.md` file under `agents/` (excluding `README.md`).
+- `skills:` is a list of skill directory names under `skills/`.
+- `requires:` in agent frontmatter is forbidden — move dependencies to `agents.yaml`.
+
 ## Structure
 
 ```
 agents/
-└── agent-name.md    # Agent definition with frontmatter
+├── README.md
+├── agents.yaml          # Agent dependency manifest
+└── agent-name.md        # Agent definition with frontmatter
 ```
 
 ## Installing Agents

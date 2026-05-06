@@ -248,3 +248,64 @@ migration with your consumers: land the frontmatter changes in the
 warehouse on the same day the consumers upgrade their `agentic-beacon`
 CLI. Until both sides move, consumers on the new CLI will error against
 the old warehouse.
+
+---
+
+## Agent requires move (frontmatter → agents.yaml)
+
+**Applies to:** Warehouses used with `agentic-beacon >= X.Y.0`
+
+### The bug
+
+Agent `requires:` blocks in frontmatter caused provider-level unknown-key
+rejection errors because some AI coding assistants validate frontmatter
+strictly. Moving dependencies out of agent frontmatter and into a
+standalone `agents/agents.yaml` file fixes this while keeping the
+dependency graph machine-readable.
+
+### What changed
+
+| Before | After |
+|---|---|
+| `requires:` inside each `agents/*.md` frontmatter | `agents/agents.yaml` maps agent names to skill lists |
+| Agents declare both `contexts:` and `skills:` | Agents declare only `skills:`; `contexts:` are project-level |
+
+### Migration steps
+
+1. Ensure your warehouse is on a clean git branch.
+2. Run the migration script:
+
+   ```bash
+   python scripts/migrate-agent-requires.py /path/to/warehouse
+   ```
+
+3. Review the diff:
+   - `agents/agents.yaml` should contain one entry per agent with its `skills:` list.
+   - `contexts:` from frontmatter are **dropped** (they were project-level and never
+     belonged in agent files).
+   - `requires:` is stripped from every `agents/*.md` frontmatter.
+
+4. Commit the changes:
+
+   ```bash
+   git add agents/
+   git commit -m "chore: move agent requires to agents.yaml"
+   ```
+
+### Why contexts: are dropped
+
+`contexts:` in agent frontmatter were a design mistake. Contexts are
+**project-level** artifacts — an agent may be used in projects with
+different context sets. Declaring context dependencies at the agent level
+created false coupling. If an agent genuinely needs a context, the
+project's `beacon.yaml` should adopt that context; the agent only needs
+to know which **skills** it invokes.
+
+### Rollback
+
+If something goes wrong, restore from git:
+
+```bash
+git checkout -- agents/
+git rm agents/agents.yaml
+```

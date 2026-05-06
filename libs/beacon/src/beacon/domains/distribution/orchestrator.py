@@ -12,6 +12,13 @@ from pathlib import Path
 
 from loguru import logger
 
+from beacon.core.dependencies.manifest import (
+    AgentManifestError,
+    load_agent_manifest,
+    validate_agent_frontmatter_clean,
+    validate_agents_directory,
+    validate_declared_skills,
+)
 from beacon.core.dependencies.resolver import ResolutionFailure, compute_effective_set
 from beacon.core.exceptions import BeaconSyncError
 from beacon.core.gitignore import GitignoreManager
@@ -209,6 +216,25 @@ def run_sync(
     project_root = project_root or find_project_root()
 
     warehouse_path = ensure_sync_ready(project_root)
+
+    # Validate agent manifest (only when agents/ has content)
+    agents_dir = warehouse_path / "agents"
+    if agents_dir.exists() and agents_dir.is_dir():
+        has_agent_files = any(
+            f.is_file() and f.suffix == ".md" and f.name != "README.md"
+            for f in agents_dir.iterdir()
+        )
+        if has_agent_files:
+            try:
+                manifest = load_agent_manifest(warehouse_path)
+                validate_agents_directory(warehouse_path, manifest)
+                validate_agent_frontmatter_clean(warehouse_path)
+                if manifest is not None:
+                    validate_declared_skills(warehouse_path, manifest)
+            except AgentManifestError as exc:
+                raise BeaconSyncError(
+                    f"Warehouse agent manifest validation failed:\n{exc}"
+                ) from exc
 
     if not dry_run and not skip_git_check:
         git_result = check_warehouse_git_clean(warehouse_path)
