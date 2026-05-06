@@ -65,11 +65,15 @@ Agent install follows the same soft-block model as `abc sync` and `abc install` 
 - **THEN** the symlink is repaired to point at the warehouse file without prompting
 
 ### Requirement: Install does not modify beacon.yaml
-Agent install SHALL NOT add any entry to `beacon.yaml` under any artifact type key.
+`abc install agents/<name>.md` SHALL NOT add any entry to `beacon.yaml` under any artifact type key. This command remains available as a power-user escape hatch for global agent installation without project-level declaration; the project-scoped entry point for agent adoption is `abc adopt` (see `artifact-adoption` capability).
 
 #### Scenario: beacon.yaml unchanged after agent install
 - **WHEN** `abc install agents/<name>.md` completes successfully
-- **THEN** the project's `beacon.yaml` (if present) is identical to before the command was run
+- **THEN** the project's `beacon.yaml` (if present) is identical to before the command was run — `artifacts.agents` is not modified
+
+#### Scenario: Global install coexists with project declaration
+- **WHEN** a user runs `abc install agents/spec-planner.md` in a project where `beacon.yaml.artifacts.agents` does NOT include `agents/spec-planner.md`
+- **THEN** the agent is globally symlinked and `beacon.yaml` is unchanged; a subsequent `abc adopt` invocation will show the agent as an unadopted candidate that the user can opt into declaring
 
 ### Requirement: Global agent detection uses a dedicated helper
 A dedicated function `_detect_agents_global()` SHALL be introduced in `cli.py`, separate from the existing `_detect_agents(project_root)`. It MUST check home-directory paths only: `~/.config/opencode/` and `~/.claude/`.

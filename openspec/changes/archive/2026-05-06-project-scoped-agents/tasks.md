@@ -464,13 +464,13 @@ pytest tests/ -v --tb=short
   - **Expected Output**: All cases pass: cli/ → domains/ → core/, utils/ layering still respected; new code does not violate dependency rule.
   - **Validation**: Pytest exit 0.
 <!-- opsx:tdd:9.2:end -->
-- [ ] 9.3 **[MANUAL]** Manual smoke #1: fresh project, `abc setup`, `abc adopt` — agents appear, auto-tick works, hard-lock works, `beacon.yaml` updated correctly.
+- [x] 9.3 **[MANUAL]** Manual smoke #1: fresh project, `abc setup`, `abc adopt` — agents appear, auto-tick works, hard-lock works, `beacon.yaml` updated correctly.
 <!-- opsx:tdd:9.3:begin -->
   - **Input**: Fresh tmp dir; `abc warehouse init wh && cd /tmp/proj && abc setup && abc adopt` (interactive).
   - **Expected Output**: TUI shows Agents section; ticking the example agent auto-ticks its required skill with provenance; attempting to untick the skill is blocked with status message; on confirm, `beacon.yaml.artifacts.agents` and `.skills` both contain the new entries.
   - **Validation**: Diff `beacon.yaml` before/after confirms both agent and required skill recorded; global symlinks under `~/.config/opencode/agents/` and `~/.claude/agents/` exist.
 <!-- opsx:tdd:9.3:end -->
-- [ ] 9.4 **[MANUAL]** Manual smoke #2: project with `beacon.yaml.artifacts.agents` declared, hand-remove a required skill, run `abc sync` — prompt fires, Y accepts, `beacon.yaml` updated, sync completes.
+- [x] 9.4 **[MANUAL]** Manual smoke #2: project with `beacon.yaml.artifacts.agents` declared, hand-remove a required skill, run `abc sync` — prompt fires, Y accepts, `beacon.yaml` updated, sync completes.
 <!-- opsx:tdd:9.4:begin -->
   - **Input**: Hand-edit `beacon.yaml` to remove a required skill from `artifacts.skills` while keeping the agent in `artifacts.agents`; run `abc sync` interactively.
   - **Expected Output**: Prompt: `Add 'skills/<name>/' to beacon.yaml and sync it? [y/N]`; press y → skill re-appended, sync proceeds, exit 0.
@@ -483,13 +483,13 @@ pytest tests/ -v --tb=short
   - **Validation**: `echo $?` non-zero; `git diff beacon.yaml` empty; `.agentic-beacon/artifacts/` byte-identical.
   - **Note**: Then re-run with `--yes`: `abc sync --yes < /dev/null` — should auto-accept and complete (sanity check on the `--yes` plumbing).
 <!-- opsx:tdd:9.5:end -->
-- [ ] 9.6 **[MANUAL]** Manual smoke #4: upgrade existing project that used `abc adopt` for agents pre-this-change — confirm `beacon.yaml.artifacts.agents` is empty and `abc sync` still works (global agents remain symlinked).
+- [X] 9.6 **[MANUAL]** Manual smoke #4: upgrade existing project that used `abc adopt` for agents pre-this-change — confirm `beacon.yaml.artifacts.agents` is empty and `abc sync` still works (global agents remain symlinked).
 <!-- opsx:tdd:9.6:begin -->
   - **Input**: Use a real existing project (one of the user's homelab repos that previously ran `abc adopt`); upgrade Beacon; run `abc sync` without re-running adopt.
   - **Expected Output**: `beacon.yaml.artifacts.agents` is `[]` (or absent and treated as empty); `abc sync` completes successfully; pre-existing global agent symlinks remain in `~/.config/opencode/agents/` and `~/.claude/agents/`.
   - **Validation**: Pre-upgrade backup of `~/.config/opencode/agents/` matches post-sync state (no symlinks removed); `abc sync` exits 0.
 <!-- opsx:tdd:9.6:end -->
-- [ ] 9.7 **[MANUAL]** Release notes: call out the new field, the breaking change to `abc adopt` behaviour (records in `beacon.yaml`), and the repair prompt in `abc sync`.
+- [X] 9.7 **[MANUAL]** Release notes: call out the new field, the breaking change to `abc adopt` behaviour (records in `beacon.yaml`), and the repair prompt in `abc sync`.
 
 <!-- opsx:metadata:begin -->
 ---
