@@ -229,7 +229,7 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:4:end -->
 
 
-- [ ] 4.1 Extend `libs/beacon/src/beacon/domains/adoption/discovery.py` to merge two sources into one candidate list: entries from `pending.yaml`, and warehouse files modified since `.last-adopt` (via existing git-diff machinery).
+- [x] 4.1 Extend `libs/beacon/src/beacon/domains/adoption/discovery.py` to merge two sources into one candidate list: entries from `pending.yaml`, and warehouse files modified since `.last-adopt` (via existing git-diff machinery).
 <!-- opsx:tdd:4.1:begin -->
   - **Input**: discovery.discover_candidates(project_root) with a fixture project containing 2 pending.yaml entries + 1 warehouse-modified file (since `.last-adopt`).
   - **Expected Output**: Returns 3 candidates (no dedup needed for this case). Each carries enough metadata for the TUI to render (path, type, action, source, created_at when available).
@@ -241,7 +241,7 @@ pytest tests/ -v --tb=short
     - TC4: `.last-adopt` absent → all warehouse files post-baseline are candidates (per spec)
     - TC5: Existing discovery callers still work (regression check)
 <!-- opsx:tdd:4.1:end -->
-- [ ] 4.2 Implement dedup by `path`: when both sources present, prefer the `pending.yaml` entry's metadata (source, created_at, action).
+- [x] 4.2 Implement dedup by `path`: when both sources present, prefer the `pending.yaml` entry's metadata (source, created_at, action).
 <!-- opsx:tdd:4.2:begin -->
   - **Input**: discovery.discover_candidates with same `path` in both pending.yaml and warehouse-diff.
   - **Expected Output**: Result has exactly one row for that path. Its `source`, `created_at`, `action` come from the pending.yaml entry — not from warehouse-diff.
@@ -252,7 +252,7 @@ pytest tests/ -v --tb=short
     - TC3: Different paths in both sources → 2 rows, no dedup
     - TC4: Two pending entries with same path (degenerate input) → behaviour defined and tested (last-write-wins or error)
 <!-- opsx:tdd:4.2:end -->
-- [ ] 4.3 Annotate warehouse-diff-only entries with `source = "warehouse-modified"` (display-only; not written back to `pending.yaml`).
+- [x] 4.3 Annotate warehouse-diff-only entries with `source = "warehouse-modified"` (display-only; not written back to `pending.yaml`).
 <!-- opsx:tdd:4.3:begin -->
   - **Input**: discovery.discover_candidates with one warehouse-only candidate; inspect returned candidate's source field; verify pending.yaml is unchanged after discover.
   - **Expected Output**: Warehouse-only row has `source == 'warehouse-modified'`. `pending.yaml` content is byte-identical before/after `discover_candidates` call.
@@ -262,7 +262,7 @@ pytest tests/ -v --tb=short
     - TC2: pending.yaml byte-equal pre/post discover (no write-back)
     - TC3: Mixed sources → only warehouse-only rows get the annotation
 <!-- opsx:tdd:4.3:end -->
-- [ ] 4.4 Unit tests: pending-only entry, warehouse-only entry, both-sources dedup, empty-both case.
+- [x] 4.4 Unit tests: pending-only entry, warehouse-only entry, both-sources dedup, empty-both case.
 <!-- opsx:tdd:4.4:begin -->
   - **Input**: pytest libs/beacon/tests/unit/test_discovery.py -q -k pending or merge or dedup
   - **Expected Output**: All four scenarios covered. Zero failed.
@@ -279,7 +279,7 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:5:end -->
 
 
-- [ ] 5.1 Extend `libs/beacon/src/beacon/domains/adoption/tui.py` per-entry action model from binary (accept/skip) to three-way (accept/reject/defer); update key bindings.
+- [x] 5.1 Extend `libs/beacon/src/beacon/domains/adoption/tui.py` per-entry action model from binary (accept/skip) to three-way (accept/reject/defer); update key bindings.
 <!-- opsx:tdd:5.1:begin -->
   - **Input**: TUI test harness pressing key bindings on each candidate row; inspect resulting session state.
   - **Expected Output**: Three distinct keybindings (a = accept, r = reject, d = defer or per design). Session state records the chosen action per row. Default state for unmarked rows = defer (per spec scenario 'Defer is the no-op default').
@@ -291,8 +291,8 @@ pytest tests/ -v --tb=short
     - TC4: Toggle accept→reject→defer same row → final state correct, no leakage
     - TC5: Default (no key) state → 'defer'
 <!-- opsx:tdd:5.1:end -->
-- [ ] 5.2 Add visual affordance showing each entry's current mark + its `source` label.
-- [ ] 5.3 Ensure marking choices only update in-memory session state; no filesystem or config mutation during mark phase.
+- [x] 5.2 Add visual affordance showing each entry's current mark + its `source` label.
+- [x] 5.3 Ensure marking choices only update in-memory session state; no filesystem or config mutation during mark phase.
 <!-- opsx:tdd:5.3:begin -->
   - **Input**: Snapshot byte-content of `beacon.yaml`, `pending.yaml`, `.last-adopt` before TUI session; perform 3 marks; cancel before Apply; re-snapshot.
   - **Expected Output**: All three files byte-identical before and after the mark phase.
@@ -302,7 +302,7 @@ pytest tests/ -v --tb=short
     - TC2: Mark all rows accept then cancel → still byte-identical
     - TC3: No marks then cancel → still byte-identical (defensive baseline)
 <!-- opsx:tdd:5.3:end -->
-- [ ] 5.4 TUI unit/snapshot tests for the three-way mark transitions and display layout.
+- [x] 5.4 TUI unit/snapshot tests for the three-way mark transitions and display layout.
 <!-- opsx:tdd:5.4:begin -->
   - **Input**: pytest libs/beacon/tests/unit/test_tui.py -q (or wherever TUI tests live)
   - **Expected Output**: Tests for transitions (5.1 TC1-TC5), display layout (visible mark + source label per row), and the 5.3 byte-equality invariant — all green.
@@ -319,13 +319,13 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:6:end -->
 
 
-- [ ] 6.1 Add Apply key binding that transitions to a confirm screen summarising `N accepted / N rejected / N deferred` with projected mutations (beacon.yaml adds, symlink syncs, pending.yaml reductions).
+- [x] 6.1 Add Apply key binding that transitions to a confirm screen summarising `N accepted / N rejected / N deferred` with projected mutations (beacon.yaml adds, symlink syncs, pending.yaml reductions).
 <!-- opsx:tdd:6.1:begin -->
   - **Input**: TUI session with 2 accept / 1 reject / 1 defer; press Apply key; inspect rendered confirm screen.
   - **Expected Output**: Confirm screen displays exact totals `2 accepted / 1 rejected / 1 deferred` and the projected mutations: beacon.yaml additions list, symlink sync paths, pending.yaml reductions. Waits for explicit confirm/cancel input.
   - **Validation**: Snapshot test of confirm screen content; manual interaction confirms wait-for-input behaviour.
 <!-- opsx:tdd:6.1:end -->
-- [ ] 6.2 Implement commit transaction in `libs/beacon/src/beacon/domains/adoption/apply.py`: pre-snapshot `beacon.yaml`, `pending.yaml`, `.last-adopt`; apply accepts (beacon.yaml + symlink sync); apply rejects (drop from pending.yaml only, warehouse untouched); keep defers in pending.yaml; advance `.last-adopt`.
+- [x] 6.2 Implement commit transaction in `libs/beacon/src/beacon/domains/adoption/apply.py`: pre-snapshot `beacon.yaml`, `pending.yaml`, `.last-adopt`; apply accepts (beacon.yaml + symlink sync); apply rejects (drop from pending.yaml only, warehouse untouched); keep defers in pending.yaml; advance `.last-adopt`.
 <!-- opsx:tdd:6.2:begin -->
   - **Input**: apply.commit(session_state, project_root) with a fixture project. Pre-record byte-content of beacon.yaml/pending.yaml/.last-adopt + warehouse file content for the rejected entry's path.
   - **Expected Output**: After successful commit: beacon.yaml has new entries for accepted candidates (correct artifact category). Symlinks for accepted entries exist and resolve to warehouse. pending.yaml contains ONLY the deferred entries (rejected entries removed, accepted entries removed). `.last-adopt` set to commit timestamp. Warehouse files for rejected entries are byte-identical to pre-commit.
@@ -338,7 +338,7 @@ pytest tests/ -v --tb=short
     - TC5: Committing twice in succession (idempotency) — second call is a no-op or handles empty session correctly
     - TC6: `.last-adopt` advances ONLY on successful commit, never on partial state
 <!-- opsx:tdd:6.2:end -->
-- [ ] 6.3 Implement rollback: on any mutation failure mid-commit, restore all three files to their pre-snapshot contents and surface a clear error identifying the failing entry.
+- [x] 6.3 Implement rollback: on any mutation failure mid-commit, restore all three files to their pre-snapshot contents and surface a clear error identifying the failing entry.
 <!-- opsx:tdd:6.3:begin -->
   - **Input**: apply.commit with a fixture that monkey-patches symlink_sync to raise on the second accepted entry. Pre-record byte-content of all three files.
   - **Expected Output**: Function raises with a clear error citing the failing entry's path and the underlying cause. After the raise: beacon.yaml, pending.yaml, .last-adopt are byte-identical to pre-commit snapshots.
@@ -350,19 +350,19 @@ pytest tests/ -v --tb=short
     - TC4: Error message includes the failing entry's path
     - TC5: Rollback is idempotent (calling rollback twice on already-restored state is a no-op)
 <!-- opsx:tdd:6.3:end -->
-- [ ] 6.4 Cancel from confirm screen leaves filesystem unchanged; verify by byte-equality of the three files before/after.
+- [x] 6.4 Cancel from confirm screen leaves filesystem unchanged; verify by byte-equality of the three files before/after.
 <!-- opsx:tdd:6.4:begin -->
   - **Input**: Open TUI, mark some rows, hit Apply, hit Cancel on confirm screen. Snapshot byte-content of the three files before TUI session.
   - **Expected Output**: After cancel: beacon.yaml, pending.yaml, .last-adopt byte-identical to pre-session snapshot.
   - **Validation**: `filecmp.cmp(snapshot, current, shallow=False)` returns True for all three files.
 <!-- opsx:tdd:6.4:end -->
-- [ ] 6.5 Integration test: 2 accept / 1 reject / 1 defer happy path → post-state matches expectations.
+- [x] 6.5 Integration test: 2 accept / 1 reject / 1 defer happy path → post-state matches expectations.
 <!-- opsx:tdd:6.5:begin -->
   - **Input**: pytest libs/beacon/tests/integration/test_adopt_apply.py::test_happy_path -q
   - **Expected Output**: Test exercises the full TUI → confirm → commit flow against a fixture project. Asserts all 4 invariants from 6.2 TC4.
   - **Validation**: Test green. No flakiness over 3 consecutive runs.
 <!-- opsx:tdd:6.5:end -->
-- [ ] 6.6 Integration test: induced symlink-sync failure mid-commit → all three files restored to pre-state; error message identifies failing entry.
+- [x] 6.6 Integration test: induced symlink-sync failure mid-commit → all three files restored to pre-state; error message identifies failing entry.
 <!-- opsx:tdd:6.6:begin -->
   - **Input**: pytest libs/beacon/tests/integration/test_adopt_apply.py::test_rollback_on_symlink_failure -q
   - **Expected Output**: Test injects symlink failure at entry 2 of 3, asserts raise with entry path in message, asserts all three files restored byte-identically.

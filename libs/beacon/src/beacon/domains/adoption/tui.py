@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
+from textual.screen import ModalScreen
 from textual.widgets import Footer, Header, Static, Tree
 
 from beacon.domains.adoption.discovery import classify_artifact_type
@@ -148,7 +149,60 @@ _ARTIFACT_ICONS: dict[str, str] = {
     "contexts": "📄",
     "skills": "🔧",
     "agents": "🤖",
+    "knowledge": "📚",
 }
+
+# Three-way action visual marks
+_ACTION_MARKS: dict[str, str] = {
+    "accept": "[bold green]\\[A][/bold green]",
+    "reject": "[bold red]\\[R][/bold red]",
+    "defer": "[dim]\\[D][/dim]",
+}
+
+
+class _ConfirmScreen(ModalScreen):
+    """Modal confirm screen showing N accepted / N rejected / N deferred."""
+
+    BINDINGS = [
+        Binding("enter", "confirm", "Proceed", priority=True),
+        Binding("escape", "cancel", "Cancel", priority=True),
+        Binding("q", "cancel", "Cancel"),
+    ]
+
+    CSS = """
+    _ConfirmScreen {
+        align: center middle;
+    }
+    #confirm-panel {
+        width: 60;
+        height: auto;
+        padding: 2 4;
+        background: $surface;
+        border: thick $primary;
+    }
+    """
+
+    def __init__(self, n_accept: int, n_reject: int, n_defer: int) -> None:
+        super().__init__()
+        self._n_accept = n_accept
+        self._n_reject = n_reject
+        self._n_defer = n_defer
+
+    def compose(self) -> ComposeResult:
+        yield Static(
+            f"[bold]Apply pending session?[/bold]\n\n"
+            f"  [bold green]{self._n_accept}[/bold green] accept  "
+            f"[bold red]{self._n_reject}[/bold red] reject  "
+            f"[dim]{self._n_defer}[/dim] defer\n\n"
+            f"[dim]Enter[/dim] to proceed  [dim]Escape[/dim] to cancel",
+            id="confirm-panel",
+        )
+
+    def action_confirm(self) -> None:
+        self.dismiss(True)
+
+    def action_cancel(self) -> None:
+        self.dismiss(False)
 
 
 def make_cb_id(path: str) -> str:
@@ -182,9 +236,18 @@ def _leaf_label(
     commits_ago: int | None = None,
     adopted_tag: bool = False,
     provenance: str = "",
+    action: str | None = None,
+    source: str | None = None,
 ) -> str:
-    checkbox = "[bold cyan]\\[x][/bold cyan]" if selected else "[dim]\\[ ][/dim]"
-    label = f"{checkbox} [cyan]{path}[/cyan]"
+    if action is not None:
+        mark = _ACTION_MARKS.get(action, "[dim]\\[ ][/dim]")
+    elif selected:
+        mark = "[bold cyan]\\[x][/bold cyan]"
+    else:
+        mark = "[dim]\\[ ][/dim]"
+    label = f"{mark} [cyan]{path}[/cyan]"
+    if source:
+        label += f" [dim](via {source})[/dim]"
     if provenance:
         label += f" [dim yellow]{provenance}[/dim yellow]"
     if commits_ago is not None:
@@ -203,12 +266,17 @@ class AdoptInnerApp(App[AdoptResult]):
     TITLE = "Agentic Beacon"
     SUB_TITLE = "Artifact Adoption"
     BINDINGS = [  # type: ignore[assignment]
-        Binding("enter", "confirm", "Confirm", priority=True),
+        Binding("enter", "apply", "Apply", priority=True),
         Binding("escape", "cancel", "Cancel", priority=True),
         Binding("q", "cancel", "Quit"),
         Binding("space", "toggle_selection", "Toggle", priority=True),
-        Binding("a", "select_all", "Select All"),
-        Binding("n", "select_none", "Select None"),
+        # Three-way mark bindings
+        Binding("a", "mark_accept", "Accept"),
+        Binding("r", "mark_reject", "Reject"),
+        Binding("d", "mark_defer", "Defer"),
+        # Bulk selection (shifted)
+        Binding("A", "select_all", "All"),
+        Binding("n", "select_none", "None"),
         Binding("t", "toggle_view", "Show All"),
         Binding("o", "open_docs", "Open Docs"),
     ]
@@ -234,6 +302,8 @@ class AdoptInnerApp(App[AdoptResult]):
         self._required_by: dict[str, list[str]] = {}
         self._user_explicit: dict[str, bool] = {}
         self._status_message: str = ""
+        # Three-way pending-workflow session state (path → "accept"|"reject"|"defer")
+        self._session_actions: dict[str, str] = {}
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
@@ -281,17 +351,18 @@ class AdoptInnerApp(App[AdoptResult]):
         tree.show_root = False
         tree.root.expand()
 
+        # Tuples: (path, desc, selected, commits_ago, orig_adopted, source)
         by_type: dict[str, list[tuple]] = {}
 
         if not self._show_all:
             for c in self._candidates:
                 by_type.setdefault(c.artifact_type, []).append(
-                    (c.path, c.description, False, c.commits_ago, False)
+                    (c.path, c.description, False, c.commits_ago, False, c.source)
                 )
         else:
             for c in self._candidates:
                 by_type.setdefault(c.artifact_type, []).append(
-                    (c.path, c.description, False, c.commits_ago, False)
+                    (c.path, c.description, False, c.commits_ago, False, c.source)
                 )
             unadopted_paths = {c.path for c in self._candidates}
             for path in self._adopted_paths:
@@ -300,9 +371,9 @@ class AdoptInnerApp(App[AdoptResult]):
                 atype = classify_artifact_type(path)
                 if atype is None:
                     atype = path.split("/")[0] if "/" in path else "contexts"
-                by_type.setdefault(atype, []).append((path, "", True, None, True))
+                by_type.setdefault(atype, []).append((path, "", True, None, True, None))
 
-        for atype in ["contexts", "skills", "agents"]:
+        for atype in ["contexts", "skills", "agents", "knowledge"]:
             type_items = by_type.get(atype, [])
             if not type_items:
                 continue
@@ -328,11 +399,13 @@ class AdoptInnerApp(App[AdoptResult]):
                 selected,
                 commits_ago_val,
                 orig_adopted,
+                source,
             ) in type_items:
                 prov = ""
                 if atype == "skills":
                     req_list = self._required_by.get(path, [])
                     prov = _format_provenance(req_list)
+                action = self._session_actions.get(path) if not orig_adopted else None
                 folder.add_leaf(
                     _leaf_label(
                         path,
@@ -340,6 +413,8 @@ class AdoptInnerApp(App[AdoptResult]):
                         commits_ago_val,
                         orig_adopted and self._show_all,
                         provenance=prov,
+                        action=action,
+                        source=source,
                     ),
                     data={
                         "path": path,
@@ -348,6 +423,7 @@ class AdoptInnerApp(App[AdoptResult]):
                         "originally_adopted": orig_adopted,
                         "commits_ago": commits_ago_val,
                         "artifact_type": atype,
+                        "source": source,
                     },
                 )
 
@@ -485,23 +561,86 @@ class AdoptInnerApp(App[AdoptResult]):
         tree = self.query_one("#tree", Tree)
         self._toggle_node_selection(tree.cursor_node)
 
+    def action_mark_accept(self) -> None:
+        tree = self.query_one("#tree", Tree)
+        self._mark_action(tree.cursor_node, "accept")
+
+    def action_mark_reject(self) -> None:
+        tree = self.query_one("#tree", Tree)
+        self._mark_action(tree.cursor_node, "reject")
+
+    def action_mark_defer(self) -> None:
+        tree = self.query_one("#tree", Tree)
+        self._mark_action(tree.cursor_node, "defer")
+
+    def action_apply(self) -> None:
+        """Show confirm screen summarising N accepted / N rejected / N deferred."""
+        n_accept = sum(1 for a in self._session_actions.values() if a == "accept")
+        n_reject = sum(1 for a in self._session_actions.values() if a == "reject")
+        n_defer = len(self._candidates) - n_accept - n_reject
+
+        def _on_confirm(proceed: bool | None) -> None:
+            if proceed:
+                self.action_confirm()
+
+        self.push_screen(_ConfirmScreen(n_accept, n_reject, n_defer), _on_confirm)
+
     def on_tree_node_selected(self, event) -> None:
         self._toggle_node_selection(event.node)
+
+    def _mark_action(self, node, action: str) -> None:
+        """Set the three-way action for a leaf node and update its visual mark."""
+        if node is None or node.data is None or "path" not in node.data:
+            return
+        path = node.data["path"]
+        self._session_actions[path] = action
+        node.data["selected"] = action == "accept"
+        source = node.data.get("source")
+        atype = node.data.get("artifact_type", "")
+        node.set_label(
+            _leaf_label(
+                node.data.get("display_name") or path,
+                node.data["selected"],
+                node.data.get("commits_ago"),
+                node.data.get("originally_adopted", False) and self._show_all,
+                provenance=_format_provenance(self._required_by.get(path, []))
+                if atype == "skills"
+                else "",
+                action=action,
+                source=source,
+            )
+        )
+        _refresh_ancestor_folders(node)
 
     def action_confirm(self) -> None:
         tree = self.query_one("#tree", Tree)
         to_adopt: list[str] = []
         to_unadopt: list[str] = []
+        to_reject: list[str] = []
+        to_defer: list[str] = []
         for section_node in tree.root.children:
             for leaf in iter_selectable_leaves(section_node):
                 path = leaf.data["path"]
                 selected = leaf.data.get("selected", False)
                 orig_adopted = leaf.data.get("originally_adopted", False)
-                if not orig_adopted and selected:
-                    to_adopt.append(path)
-                elif orig_adopted and not selected:
+                if orig_adopted and not selected:
                     to_unadopt.append(path)
-        self.exit(AdoptResult(to_adopt=to_adopt, to_unadopt=to_unadopt))
+                elif not orig_adopted:
+                    session_action = self._session_actions.get(path, "defer")
+                    if session_action == "accept":
+                        to_adopt.append(path)
+                    elif session_action == "reject":
+                        to_reject.append(path)
+                    else:
+                        to_defer.append(path)
+        self.exit(
+            AdoptResult(
+                to_adopt=to_adopt,
+                to_unadopt=to_unadopt,
+                to_reject=to_reject,
+                to_defer=to_defer,
+            )
+        )
 
     def action_cancel(self) -> None:
         self.exit(AdoptResult())

@@ -5,6 +5,7 @@ Provides:
 - find_knowledge_node_for_file(): locate knowledge nodes from file paths
 - list_knowledge_nodes(): scan warehouse for all knowledge nodes
 - discover_adoptable(): full-scan discovery with recent-commit annotation
+- discover_candidates(): pending.yaml + warehouse-diff merge (pending workflow)
 - count_unadopted_since(): lightweight count for sync notification
 - is_adopted(): check whether a path is already declared in beacon.yaml
 - build_candidates(): construct AdoptCandidate lists from file paths
@@ -15,6 +16,7 @@ from __future__ import annotations
 import fnmatch
 import re
 import subprocess
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -393,6 +395,134 @@ def discover_adoptable(
     candidates = discover_all(warehouse_path, beacon_settings)
     annotate_with_commits_ago(candidates, warehouse_path)
     return candidates, []
+
+
+# ─────────────────────────────────────────────────────────────
+# Pending-workflow discovery: pending.yaml + warehouse-diff merge
+# ─────────────────────────────────────────────────────────────
+
+# Maps PendingEntry.type (singular) → AdoptCandidate.artifact_type (plural)
+_PENDING_TYPE_TO_ARTIFACT_TYPE: dict[str, str] = {
+    "knowledge": "knowledge",
+    "skill": "skills",
+    "context": "contexts",
+    "agent": "agents",
+}
+
+# Extended set of known warehouse top-level dirs (includes knowledge)
+_WAREHOUSE_ARTIFACT_DIRS = ("contexts", "skills", "agents", "knowledge")
+
+
+def _classify_warehouse_path_extended(path: str) -> str | None:
+    """Classify a warehouse-relative path into an artifact type including knowledge."""
+    for atype in _WAREHOUSE_ARTIFACT_DIRS:
+        if path.startswith(atype + "/"):
+            return atype
+    return None
+
+
+def _get_warehouse_modified_paths(
+    warehouse_path: Path,
+    since: datetime | None,
+) -> list[str]:
+    """Return warehouse-relative paths of files added/modified since *since*.
+
+    When *since* is None, uses epoch (1970-01-01) to return all git-tracked files.
+    """
+    if since is None:
+        since_str = "1970-01-01T00:00:00+00:00"
+    else:
+        since_dt = since.astimezone(timezone.utc)
+        since_str = since_dt.strftime("%Y-%m-%dT%H:%M:%S+00:00")
+
+    cmd = [
+        "git",
+        "-C",
+        str(warehouse_path),
+        "log",
+        f"--since={since_str}",
+        "--diff-filter=AM",
+        "--name-only",
+        "--pretty=format:",
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return []
+    if result.returncode != 0:
+        return []
+    return [p.strip() for p in result.stdout.splitlines() if p.strip()]
+
+
+def discover_candidates(
+    project_root: Path,
+    warehouse_path: Path,
+) -> list[AdoptCandidate]:
+    """Discover adopt candidates by merging pending.yaml with warehouse-modified-since-.last-adopt.
+
+    Rules:
+    - pending.yaml entries are always included.
+    - Warehouse files modified since .last-adopt (or all if absent) are included.
+    - Dedup by path: when both sources have the same path, pending.yaml metadata wins.
+    - Warehouse-only entries are annotated with source='warehouse-modified'.
+    - pending.yaml is never mutated by this function.
+    """
+    from beacon.core.manifest.pending import PendingManifest
+    from beacon.domains.adoption.last_adopt import read_last_adopt
+
+    pending_path = project_root / ".agentic-beacon" / "pending.yaml"
+    manifest = PendingManifest.from_yaml(pending_path)
+
+    # Build candidate dict from pending entries (path → AdoptCandidate).
+    # Later entries with the same path overwrite earlier ones (last-write-wins).
+    candidates: dict[str, AdoptCandidate] = {}
+    for entry in manifest.pending:
+        atype = _PENDING_TYPE_TO_ARTIFACT_TYPE.get(entry.type, entry.type)
+        candidates[entry.path] = AdoptCandidate(
+            artifact_type=atype,
+            path=entry.path,
+            description="",
+            source=entry.source,
+            action=entry.action,
+            created_at=entry.created_at,
+        )
+
+    since = read_last_adopt(project_root)
+    modified_paths = _get_warehouse_modified_paths(warehouse_path, since)
+
+    seen_skill_dirs: set[str] = set()
+    for path in modified_paths:
+        atype = _classify_warehouse_path_extended(path)
+        if atype is None:
+            continue
+
+        if atype == "skills":
+            skill_path = skill_dir_from_path(path)
+            skill_key = skill_path.rstrip("/")
+            if skill_key in seen_skill_dirs:
+                continue
+            seen_skill_dirs.add(skill_key)
+            if skill_path in candidates:
+                continue  # pending.yaml entry takes precedence
+            candidates[skill_path] = AdoptCandidate(
+                artifact_type=atype,
+                path=skill_path,
+                description="",
+                source="warehouse-modified",
+                action="modified",
+            )
+        else:
+            if path in candidates:
+                continue  # pending.yaml entry takes precedence
+            candidates[path] = AdoptCandidate(
+                artifact_type=atype,
+                path=path,
+                description="",
+                source="warehouse-modified",
+                action="modified",
+            )
+
+    return list(candidates.values())
 
 
 def count_unadopted_since(
