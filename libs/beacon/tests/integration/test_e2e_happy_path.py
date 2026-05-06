@@ -134,7 +134,10 @@ def test_e2e_warehouse_init_installs_record_skill(e2e_warehouse):
     """warehouse init bundles record-skill as a distributable warehouse skill."""
     assert (e2e_warehouse / "skills" / "record-skill" / "SKILL.md").exists()
     assert (
-        e2e_warehouse / "skills" / "record-skill" / "scripts" / "create_skill.py"
+        e2e_warehouse / "skills" / "record-skill" / "scripts" / "resolve_warehouse.py"
+    ).exists()
+    assert (
+        e2e_warehouse / "skills" / "record-skill" / "scripts" / "append_pending.py"
     ).exists()
 
 

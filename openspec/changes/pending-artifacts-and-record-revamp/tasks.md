@@ -379,7 +379,7 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:7:end -->
 
 
-- [ ] 7.1 Create `libs/beacon/src/beacon/data/skills/record-knowledge/scripts/resolve_warehouse.py` (PEP 723): walks up from `$PWD` for `.agentic-beacon/config.toml`, parses `[warehouse] local_path`, prints absolute path or errors to stderr and exits non-zero with the documented error text.
+- [x] 7.1 Create `libs/beacon/src/beacon/data/skills/record-knowledge/scripts/resolve_warehouse.py` (PEP 723): walks up from `$PWD` for `.agentic-beacon/config.toml`, parses `[warehouse] local_path`, prints absolute path or errors to stderr and exits non-zero with the documented error text.
 <!-- opsx:tdd:7.1:begin -->
   - **Input**: uv run libs/beacon/src/beacon/data/skills/record-knowledge/scripts/resolve_warehouse.py with PWD set to (a) project with config.toml, (b) nested subdir, (c) directory with no config.toml.
   - **Expected Output**: (a)+(b): exit 0, stdout = absolute warehouse path, stderr empty. (c): exit non-zero, stderr = `Error: no warehouse connected. Run 'abc warehouse connect <path>' first.`
@@ -392,7 +392,7 @@ pytest tests/ -v --tb=short
     - TC5: config.toml exists with `[warehouse]` but no `local_path` → exit non-zero, parse error citing missing field
     - TC6: PEP 723 metadata block valid (script runs via `uv run` without manual deps)
 <!-- opsx:tdd:7.1:end -->
-- [ ] 7.2 Create `libs/beacon/src/beacon/data/skills/record-knowledge/scripts/append_pending.py` (PEP 723): CLI flags `--path --type --action --source`; auto-stamps `created_at`; resolves project root via cwd-walk; appends to `.agentic-beacon/pending.yaml`; creates the file if absent.
+- [x] 7.2 Create `libs/beacon/src/beacon/data/skills/record-knowledge/scripts/append_pending.py` (PEP 723): CLI flags `--path --type --action --source`; auto-stamps `created_at`; resolves project root via cwd-walk; appends to `.agentic-beacon/pending.yaml`; creates the file if absent.
 <!-- opsx:tdd:7.2:begin -->
   - **Input**: uv run append_pending.py --path knowledge/lessons/x.md --type knowledge --action created --source record-knowledge (with PWD inside a project).
   - **Expected Output**: Exit 0. `.agentic-beacon/pending.yaml` exists and contains the new entry at the end. `created_at` is current UTC ISO-8601. Field order on dump is path/type/action/source/created_at.
@@ -406,8 +406,8 @@ pytest tests/ -v --tb=short
     - TC6: `--source` accepts free-form string (no enum check)
     - TC7: created_at is timezone-aware UTC, not naive
 <!-- opsx:tdd:7.2:end -->
-- [ ] 7.3 Rewrite `record-knowledge/SKILL.md`: warehouse-target write flow, pointer-target prompt restricted to `<warehouse>/contexts/*.md` + "skip", diff-confirm before writing pointer, append-pending for both files (or just knowledge) depending on pointer decision, hard-error path when `resolve_warehouse.py` fails.
-- [ ] 7.4 Explicitly remove all mention of writing to `.agentic-beacon/artifacts/knowledge/` and of updating `AGENTS.md` from the SKILL.md.
+- [x] 7.3 Rewrite `record-knowledge/SKILL.md`: warehouse-target write flow, pointer-target prompt restricted to `<warehouse>/contexts/*.md` + "skip", diff-confirm before writing pointer, append-pending for both files (or just knowledge) depending on pointer decision, hard-error path when `resolve_warehouse.py` fails.
+- [x] 7.4 Explicitly remove all mention of writing to `.agentic-beacon/artifacts/knowledge/` and of updating `AGENTS.md` from the SKILL.md.
 <!-- opsx:tdd:7.4:begin -->
   - **Input**: grep -E '\.agentic-beacon/artifacts/knowledge|AGENTS\.md' libs/beacon/src/beacon/data/skills/record-knowledge/SKILL.md
   - **Expected Output**: Zero matches. (Acceptance grep — must be empty.)
@@ -430,7 +430,7 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:8:end -->
 
 
-- [ ] 8.1 Create `libs/beacon/src/beacon/data/skills/record-skill/scripts/resolve_warehouse.py` (PEP 723): independent copy of the record-knowledge helper.
+- [x] 8.1 Create `libs/beacon/src/beacon/data/skills/record-skill/scripts/resolve_warehouse.py` (PEP 723): independent copy of the record-knowledge helper.
 <!-- opsx:tdd:8.1:begin -->
   - **Input**: Compare `record-knowledge/scripts/resolve_warehouse.py` and `record-skill/scripts/resolve_warehouse.py`.
   - **Expected Output**: Both files exist independently (per design.md decision 7: 'duplication over coupling'). Functional behaviour matches 7.1's contract.
@@ -438,19 +438,19 @@ pytest tests/ -v --tb=short
   - **TDD Test Cases (write these first):**
     - TC1: Same scenarios as 7.1 (TC1–TC6) — duplicated test module under record-skill/ tests directory or shared parametrised test
 <!-- opsx:tdd:8.1:end -->
-- [ ] 8.2 Create `libs/beacon/src/beacon/data/skills/record-skill/scripts/append_pending.py` (PEP 723): independent copy of the record-knowledge helper.
+- [x] 8.2 Create `libs/beacon/src/beacon/data/skills/record-skill/scripts/append_pending.py` (PEP 723): independent copy of the record-knowledge helper.
 <!-- opsx:tdd:8.2:begin -->
   - **Input**: Same as 7.2.
   - **Expected Output**: File exists independently from record-knowledge counterpart. Contract matches 7.2.
   - **Validation**: Same TC1–TC7 as 7.2 against this file.
 <!-- opsx:tdd:8.2:end -->
-- [ ] 8.3 Delete `libs/beacon/src/beacon/data/skills/record-skill/scripts/create_skill.py` and its compiled `__pycache__/create_skill.cpython-312.pyc`.
+- [x] 8.3 Delete `libs/beacon/src/beacon/data/skills/record-skill/scripts/create_skill.py` and its compiled `__pycache__/create_skill.cpython-312.pyc`.
 <!-- opsx:tdd:8.3:begin -->
   - **Input**: find libs/beacon/src/beacon/data/skills/record-skill -name 'create_skill.py' -o -name 'create_skill.cpython-312.pyc'
   - **Expected Output**: Empty result (zero matches). `git log -- libs/beacon/src/beacon/data/skills/record-skill/scripts/create_skill.py | head -1` shows the deletion commit.
   - **Validation**: Find returns nothing. The deletion is captured in this change's commit.
 <!-- opsx:tdd:8.3:end -->
-- [ ] 8.4 Rewrite `record-skill/SKILL.md`: LLM-driven flow gathering name / description / invocation / include-script; warehouse context scan for `requires.contexts` suggestion with accept / edit / skip; warehouse-target SKILL.md write (+ optional `scripts/<name>.py` PEP 723 scaffold); append-pending with `type: skill action: created source: record-skill`; hard-error path when `resolve_warehouse.py` fails.
+- [x] 8.4 Rewrite `record-skill/SKILL.md`: LLM-driven flow gathering name / description / invocation / include-script; warehouse context scan for `requires.contexts` suggestion with accept / edit / skip; warehouse-target SKILL.md write (+ optional `scripts/<name>.py` PEP 723 scaffold); append-pending with `type: skill action: created source: record-skill`; hard-error path when `resolve_warehouse.py` fails.
 - [ ] 8.5 **[MANUAL]** Manual happy-path test: run `record-skill` in this repo; verify skill directory lands in warehouse, `requires.contexts` suggestion surfaces correctly, `pending.yaml` receives entry.
 <!-- opsx:tdd:8.5:begin -->
   - **Input**: [MANUAL] In agentic-beacon repo, invoke `record-skill` via Claude Code/opencode. Describe a new skill purpose (e.g. 'validate deployment readiness checklist').
