@@ -8,7 +8,7 @@ The system SHALL require every skill entrypoint file (`skills/<name>/SKILL.md`) 
 
 Skills SHALL NOT declare dependencies on other skills in this version of the specification. The `skills:` key is not permitted inside a skill's `requires:` block.
 
-Agents are global machine-level artifacts not tracked in project `beacon.yaml`. Agent `requires:` frontmatter may exist as warehouse metadata for future groundwork (PER-109) but is not validated or read during `abc sync` in this change.
+Agents are global machine-level artifacts not tracked in project `beacon.yaml`. Agent dependency metadata SHALL live in the warehouse-level manifest `<warehouse>/agents/agents.yaml` (see the `agent-requires-manifest` capability) and SHALL NOT be carried in agent YAML frontmatter. The contents of `agents.yaml` are validated at warehouse-read time but are not read during project `abc sync` in this change; their consumption by `abc sync` is deferred to the follow-up `project-scoped-agents` change.
 
 #### Scenario: Skill with context dependency
 - **WHEN** a skill file `skills/python-refactor/SKILL.md` has frontmatter `requires: { contexts: [python-standards] }`
@@ -25,6 +25,10 @@ Agents are global machine-level artifacts not tracked in project `beacon.yaml`. 
 #### Scenario: Skill declares skill dependency
 - **WHEN** a skill entrypoint has `requires: { contexts: [...], skills: [...] }`
 - **THEN** `abc sync` fails with an error explaining that skill-to-skill dependencies are not supported
+
+#### Scenario: Agent file with leftover requires block
+- **WHEN** an `agents/<name>.md` file in the warehouse contains a `requires:` block in its YAML frontmatter
+- **THEN** `abc warehouse status` and `abc sync` both fail with an error instructing the user to move the block into `agents/agents.yaml` and linking to the migration document
 
 ### Requirement: Required context resolution is auto-pull; missing-from-warehouse is a hard error
 The system SHALL at `abc sync` include every `requires.contexts` entry declared by an adopted skill in the effective context set transitively, even if the context is not explicitly listed in `beacon.yaml.artifacts.contexts`.
