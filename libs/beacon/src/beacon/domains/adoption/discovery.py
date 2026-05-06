@@ -341,7 +341,7 @@ def discover_all(
             )
 
     # Agents — list_available returns paths like "agents/code-reviewer.md"
-    # "adopted" means installed in a global agent directory, not beacon.yaml
+    # "adopted" means declared in beacon.yaml.artifacts.agents AND globally installed
     for agent_path in available.get("agents", []):
         if not is_agent_installed(agent_path):
             desc = extract_description(warehouse_path, agent_path)

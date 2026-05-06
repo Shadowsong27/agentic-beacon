@@ -6,8 +6,8 @@ Reusable coding agent definitions for distribution to team members.
 
 Agent definition files are markdown files with YAML frontmatter that configure
 AI coding assistants (OpenCode, Claude Code) with specialized instructions and
-roles. Unlike other artifact types, agents are **globally installed** on the
-developer's machine — not scoped to a single project.
+roles. Agents are declared per-project in `beacon.yaml.artifacts.agents` AND **globally
+installed** — available everywhere on the developer's machine.
 
 ## Frontmatter Format
 
@@ -75,7 +75,7 @@ This links agents to the globally detected tool directories:
 
 ## Notes
 
-- Agents are **not** tracked in `beacon.yaml` (they are globally installed)
+- Agents are declared per-project in `beacon.yaml.artifacts.agents` AND globally installed via symlinks
 - Global agent files are per-file symlinks to this warehouse, so edits land in the warehouse working tree
 - View installed agents: `abc list agents`
 - View available warehouse agents: `abc warehouse list agents`

@@ -23,14 +23,42 @@ artifacts:
 
   contexts:
     - <pattern-or-path>
+
+  agents:
+    - agents/<name>.md    # per-project agent declaration
 ```
 
-Only two artifact types are declared in `beacon.yaml`:
+Three artifact types are declared in `beacon.yaml`:
 
 - **Skills** — declared at directory level (trailing `/`), must have `requires: { contexts: [...] }` frontmatter in their `SKILL.md`
 - **Contexts** — file or glob patterns, wired into agent config on sync
+- **Agents** — declared per-project AND installed globally via symlinks into `~/.claude/agents/` and `~/.config/opencode/agents/`
 
 **Knowledge files are NOT declared in beacon.yaml.** They are auto-derived from markdown links (`[text](knowledge/...)`) found in adopted contexts and skills. The dependency resolver scans all adopted artifacts and syncs every referenced knowledge file automatically.
+
+---
+
+## `artifacts.agents`
+
+Agents are declared per-project in `beacon.yaml` and also installed globally.
+
+```yaml
+artifacts:
+  agents:
+    - agents/spec-planner.md
+    - agents/registra-developer.md
+```
+
+!!! info "Agent Dependency Manifest"
+    Agent dependencies are declared in `agents/agents.yaml` (not in agent frontmatter). `abc sync`
+    loads this manifest to validate that required skills are adopted. If a declared agent requires
+    a skill not in `beacon.yaml.artifacts.skills`, `abc sync` prompts:
+    ```
+    Agent '<name>' (declared in beacon.yaml) requires skill '<skill>',
+    which is not declared in this project.
+    Add 'skills/<skill>/' to beacon.yaml and sync it? [y/N]
+    ```
+    Answer Y to auto-append the skill and proceed, or pass `--yes` for non-interactive acceptance.
 
 ---
 
@@ -129,6 +157,9 @@ artifacts:
   contexts:
     - contexts/global.md
     - contexts/teams/backend/AGENTS.md
+
+  agents:
+    - agents/spec-planner.md
 ```
 
 Knowledge files referenced by those contexts and skills will be auto-derived and synced automatically.
@@ -142,6 +173,7 @@ artifacts:
   skills: []
   contexts:
     - contexts/global.md
+  agents: []
 ```
 
 An empty `skills` list is valid — skills simply won't be synced.
@@ -166,7 +198,7 @@ An empty `skills` list is valid — skills simply won't be synced.
 - The file does not exist → run `abc setup`
 - The YAML is malformed (syntax error)
 - The `artifacts` key is missing
-- Any of `skills` or `contexts` is not a list
+- Any of `skills`, `contexts`, or `agents` is not a list
 - A skill entry is a file path rather than a directory path
 - Any adopted skill is missing required `requires:` frontmatter
 - Any required context does not exist in the warehouse

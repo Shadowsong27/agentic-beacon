@@ -28,6 +28,8 @@ KNOWN_TEMPLATE_HASHES: dict[str, list[str]] = {
         "6b99ed582044fab280e9a6ae6fd72fa48d05a15c4c53446337fc1c92f2274e4c",
         # v3.x — move-agent-requires-to-warehouse-manifest
         "5ee9768984c954f7ef8a3157018f283828f3ac10ea45b3b3a56053e13c7d4b42",
+        # project-scoped-agents — dual agent semantics
+        "6f05be87226b2892c20d1a75bee24b682590506ee22dbdc2c911f959ff625590",
     ],
     "agents/agents.yaml": [
         # v3.x — move-agent-requires-to-warehouse-manifest
@@ -42,6 +44,8 @@ KNOWN_TEMPLATE_HASHES: dict[str, list[str]] = {
         "7d819ebc3f73c2380b128edf888dc47bb44ca8a767cff7c2621fca4b6979a430",
         # v3.0 — setup simplified around abc adopt
         "e7d52b2e8fc6725079fc11afd3a7ee9435229d399eeb71b0bf9ebf74e1284aaa",
+        # project-scoped-agents — dual agent semantics
+        "052846a397d19d160ab86287a7bc211e92c4943bcea72ca34909155aa78ebf1a",
     ],
     "contexts/README.md": [
         # v2.2+ (current)
@@ -72,6 +76,8 @@ KNOWN_TEMPLATE_HASHES: dict[str, list[str]] = {
         "abbf8a13d85ec87c77cc164673ab7924de6b44ead33482bedcf9765c88837179",
         # v3.0 — symlink-based sync migration: `abc install skills/` → declare in beacon.yaml + `abc sync`
         "be570d20bec7563e77762095c45af6aff2367bcf122cc46514ead6265b0af6fb",
+        # project-scoped-agents — added agents: to beacon.yaml snippet
+        "91759e4e3657b1aaa570b0d2bcb09c2a12b46f34f19147ca2b288e9cfd4ed39f",
     ],
 }
 

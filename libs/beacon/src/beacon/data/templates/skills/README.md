@@ -63,6 +63,8 @@ Declare the skill in your project's `beacon.yaml` and sync:
 artifacts:
   skills:
     - skills/deploy-production/**/*
+  agents:
+    - agents/deployer.md
 ```
 
 ```bash
