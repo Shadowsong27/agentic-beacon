@@ -24,7 +24,7 @@ abc setup             # creates .agentic-beacon/beacon.yaml
 abc adopt             # select relevant warehouse artifacts
 abc sync              # creates symlinks into the warehouse clone
 
-# 5. (Optional) Install global agents from this warehouse
+# 5. (Optional) Install agents globally from this warehouse
 abc agents sync
 ```
 

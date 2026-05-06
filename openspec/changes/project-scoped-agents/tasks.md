@@ -411,7 +411,7 @@ pytest tests/ -v --tb=short
 
 - [ ] 7.1 **[MANUAL]** Update `examples/sample-warehouse/agents/agents.yaml` to declare an example agent with a skill requirement, demonstrating the feature end-to-end.
 - [ ] 7.2 **[MANUAL]** If the sample warehouse lacks a sample skill matching the declared requirement, add one (minimal `skills/<name>/SKILL.md`).
-- [ ] 7.3 **[MANUAL]** Append a "Project-scoped agents" section to `docs/migrations/artifact-dependencies-frontmatter.md` describing the new field, the `abc adopt` flow, the repair prompt at sync, and the zero-friction "re-run adopt" migration for existing users.
+- [x] 7.3 **[MANUAL]** Append a "Project-scoped agents" section to `docs/migrations/artifact-dependencies-frontmatter.md` describing the new field, the `abc adopt` flow, the repair prompt at sync, and the zero-friction "re-run adopt" migration for existing users.
 
 ## 8. AGENTS.md & site-docs sync
 
@@ -423,10 +423,10 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:8:end -->
 
 
-- [ ] 8.1 **[MANUAL]** Update `AGENTS.md` at the repo root to describe the new agent declaration field and remove any language asserting "agents are not tracked in beacon.yaml."
-- [ ] 8.2 **[MANUAL]** Update relevant pages under `site-docs/` that describe `beacon.yaml` schema or the adoption flow. This is the single MkDocs refresh covering both this change and the predecessor `move-agent-requires-to-warehouse-manifest` — the docs surface is updated once at the end.
-- [ ] 8.3 **[MANUAL]** Ensure any README snippets in the repo showing `beacon.yaml` examples include the new `agents:` line where relevant.
-- [ ] 8.4 **[MANUAL]** Clean up stale "agents are global-only / not in beacon.yaml" language across the code. Concrete spots:
+- [x] 8.1 **[MANUAL]** Update `AGENTS.md` at the repo root to describe the new agent declaration field and remove any language asserting "agents are not tracked in beacon.yaml."
+- [x] 8.2 **[MANUAL]** Update relevant pages under `site-docs/` that describe `beacon.yaml` schema or the adoption flow. This is the single MkDocs refresh covering both this change and the predecessor `move-agent-requires-to-warehouse-manifest` — the docs surface is updated once at the end.
+- [x] 8.3 **[MANUAL]** Ensure any README snippets in the repo showing `beacon.yaml` examples include the new `agents:` line where relevant.
+- [x] 8.4 **[MANUAL]** Clean up stale "agents are global-only / not in beacon.yaml" language across the code. Concrete spots:
 <!-- opsx:tdd:8.4:begin -->
   - **Input**: After edits: `grep -rn -E 'agents are (managed|installed) globally|not in beacon\.yaml|installed globally to' libs/beacon/src/ libs/beacon/src/beacon/data/templates/`.
   - **Expected Output**: Zero matches outside changelog/migration history.

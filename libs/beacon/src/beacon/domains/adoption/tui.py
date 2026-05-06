@@ -139,7 +139,7 @@ _SECTION_META: dict[str, tuple[str, str]] = {
         "artifact-type-matrix.md",
     ),
     "agents": (
-        "AI agent definitions • installed globally to ~/.claude/agents & ~/.config/opencode/agents",
+        "AI agent definitions • declared per-project in beacon.yaml & installed globally",
         "understanding-agent-skills.md",
     ),
 }

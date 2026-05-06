@@ -41,12 +41,12 @@ Each project that consumes warehouse artifacts has a `.agentic-beacon/` director
 ```
 my-project/
 └── .agentic-beacon/
-    ├── beacon.yaml       ← committed to git: declares which contexts and skills this project needs
+    ├── beacon.yaml       ← committed to git: declares which contexts, skills, and agents this project needs
     ├── config.toml       ← gitignored: local warehouse path
     └── artifacts/        ← gitignored: symlink tree into warehouse
 ```
 
-`beacon.yaml` declares two types of artifacts:
+`beacon.yaml` declares three types of artifacts:
 
 ```yaml
 artifacts:
@@ -57,6 +57,9 @@ artifacts:
   contexts:
     - contexts/global.md
     - contexts/teams/backend/AGENTS.md
+
+  agents:
+    - agents/spec-planner.md
 ```
 
 `config.toml` stores the local path to the warehouse (e.g. `~/my-org-warehouse`). It is gitignored because warehouse paths vary per machine.
@@ -67,11 +70,11 @@ artifacts:
 
 `abc sync` runs a multi-phase pipeline:
 
-1. **Read `beacon.yaml`** — loads the declared contexts and skills
-2. **Resolve dependencies** — reads `requires:` frontmatter from each skill's `SKILL.md` to compute the full set of required contexts
+1. **Read `beacon.yaml`** — loads the declared contexts, skills, and agents
+2. **Resolve dependencies** — reads `requires:` frontmatter from each skill's `SKILL.md` and agent dependencies from `agents/agents.yaml` to compute the full set of required artifacts
 3. **Auto-derive knowledge** — scans every adopted context and skill for markdown links to `knowledge/` paths and adds them to the sync set
 4. **Create symlinks** — creates per-file symlinks under `.agentic-beacon/artifacts/` pointing into the warehouse clone
-5. **Wire artifacts** — adds context references to `CLAUDE.md` or `opencode.json`, installs skills into tool directories
+5. **Wire artifacts** — adds context references to `CLAUDE.md` or `opencode.json`, installs skills into tool directories, installs agents globally
 6. **Prune orphans** — removes symlinks for artifacts no longer referenced
 
 | Artifact type | How it's configured | What sync does |
@@ -79,7 +82,7 @@ artifacts:
 | **Contexts** | Declared in `beacon.yaml` | Symlinks + wiring into agent config |
 | **Skills** | Declared in `beacon.yaml` | Symlinks + install into tool directories |
 | **Knowledge** | Auto-derived from markdown links in contexts/skills | Symlinks only (referenced from contexts) |
-| **Agents** | Read from warehouse `agents/` directory | Install into global tool directories |
+| **Agents** | Declared in `beacon.yaml` | Symlinks + install into global tool directories |
 
 ---
 

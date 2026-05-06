@@ -40,10 +40,11 @@ The TUI opens in your terminal, showing all warehouse artifacts grouped by type 
 
 When you press `Enter`:
 
-1. Selected artifacts are appended to `.agentic-beacon/beacon.yaml`
+1. Selected artifacts (contexts, skills, and agents) are appended to `.agentic-beacon/beacon.yaml`
 2. `abc sync` runs automatically for the newly selected artifacts
 3. Contexts are wired into your agent config
 4. Skills are installed into each detected tool's directories
+5. Agents are installed globally into `~/.claude/agents/` and `~/.config/opencode/agents/`
 
 The entire workflow — select → write config → sync — happens in one step.
 
