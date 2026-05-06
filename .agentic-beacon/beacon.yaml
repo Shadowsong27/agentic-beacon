@@ -3,6 +3,7 @@ artifacts:
   - skills/opsx-enhance-tasks/
   - skills/delegate-to-oc/
   - skills/release-py-lib/
+  - skills/linear-connect/
   contexts:
   - contexts/python-standards.md
   - contexts/openspec-workflow.md
