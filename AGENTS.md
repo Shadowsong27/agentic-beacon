@@ -88,6 +88,7 @@ The locally-cloned warehouse is the **single write entrypoint** for every harnes
 - `abc warehouse contribute` is the **only** supported write path back to the warehouse.
 - Cross-project visibility of harness edits on a single machine is **intended**: editing a skill through Project A's symlink edits the warehouse working tree; Project B sees the change immediately.
 - Platform: macOS / Linux only. Windows is rejected.
+- Agents are declared per-project in `beacon.yaml.artifacts.agents` **AND** installed globally via symlinks into `~/.config/opencode/agents/` and `~/.claude/agents/`.
 
 ---
 

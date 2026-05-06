@@ -17,7 +17,7 @@ The system SHALL derive knowledge references by scanning the warehouse source fi
 ### Requirement: Scanner inspects adopted contexts and skills only
 The system SHALL scan for knowledge references only in files that are (1) adopted contexts listed in `beacon.yaml.artifacts.contexts`, and (2) adopted skill entrypoints (`SKILL.md` files) under directories listed in `beacon.yaml.artifacts.skills`.
 
-The system SHALL NOT scan agent files for knowledge references. Agents reach knowledge only transitively through the contexts and skills they declare as dependencies in their frontmatter.
+The system SHALL NOT scan agent files for knowledge references. Agents reach knowledge only transitively through the skills they declare as dependencies in the warehouse-level `agents/agents.yaml` manifest. Agent dependency declarations SHALL NOT carry a `contexts:` list; agents do not natively require contexts, because contexts are a project-level concern declared via `beacon.yaml.artifacts.contexts`.
 
 The system SHALL NOT scan files outside the warehouse (e.g., the project's own `AGENTS.md`, documentation, or unrelated files).
 

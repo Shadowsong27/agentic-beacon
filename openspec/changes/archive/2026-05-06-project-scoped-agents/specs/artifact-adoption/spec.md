@@ -73,10 +73,3 @@ Agent adoption SHALL:
 #### Scenario: Multiple types adopted at once
 - **WHEN** user selects 1 context, 1 skill, and 1 agent
 - **THEN** `beacon.yaml` is updated with all three entries under their respective types in a single write; no `knowledge:` list is created or modified
-
-## REMOVED Requirements
-
-### Requirement: Agent TUI handling is global-install-only
-**Reason**: Superseded by project-scoped agent adoption. Agents now follow the same flow as contexts and skills — selection records the agent in `beacon.yaml.artifacts.agents` AND triggers global install (formerly, it did global install only). The "MAY show agents as global-install candidates... does NOT update project `beacon.yaml`" language in the previous requirement is replaced by the new agent handling in the `Interactive TUI for artifact selection` requirement above.
-
-**Migration**: Existing projects that previously globally-installed agents via `abc adopt` have no record of which agents they depend on. Users re-run `abc adopt` after upgrading Beacon; agents appear as selectable candidates, auto-tick their required skills, and update `beacon.yaml.artifacts.agents`. The `abc install agents/<name>.md` command remains available as an escape hatch for pure global install without project declaration (see `global-agent-install` capability).

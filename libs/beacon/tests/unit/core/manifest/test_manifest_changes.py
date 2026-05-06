@@ -23,12 +23,12 @@ class TestArtifactsConfig:
         assert not hasattr(config, "knowledge")
         assert "knowledge" not in config.model_dump()
 
-    def test_tc2_agents_field_removed(self):
-        """TC2: agents field is not present on ArtifactsConfig."""
+    def test_tc2_agents_field_present(self):
+        """TC2: agents field is present on ArtifactsConfig."""
         config = ArtifactsConfig()
-        assert not hasattr(config, "agents")
+        assert hasattr(config, "agents")
         dumped = config.model_dump()
-        assert "agents" not in dumped
+        assert "agents" in dumped
         assert "contexts" in dumped
         assert "skills" in dumped
 
@@ -37,10 +37,10 @@ class TestArtifactsConfig:
         with pytest.raises(ValidationError):
             ArtifactsConfig(knowledge=["knowledge/foo.md"])
 
-    def test_tc4_extra_forbid_blocks_agents(self):
-        """TC4: extra=forbid prevents agents from being set."""
-        with pytest.raises(ValidationError):
-            ArtifactsConfig(agents=["agents/foo.md"])
+    def test_tc4_agents_field_accepted(self):
+        """TC4: agents field is accepted on ArtifactsConfig."""
+        config = ArtifactsConfig(agents=["agents/foo.md"])
+        assert config.agents == ["agents/foo.md"]
 
 
 class TestLegacyDropHook:
@@ -186,7 +186,7 @@ artifacts:
         )
 
     def test_tc8_legacy_with_agents_key(self, tmp_path):
-        """TC8: YAML with agents key → rejected as unknown artifact type."""
+        """TC8: YAML with agents key → accepted as valid artifact type."""
         beacon_file = tmp_path / "beacon.yaml"
         beacon_file.write_text("""
 artifacts:
@@ -195,11 +195,8 @@ artifacts:
   contexts: []
   skills: []
 """)
-        with pytest.raises(BeaconValidationError) as exc_info:
-            BeaconManifest.from_yaml(str(beacon_file))
-
-        assert "unknown" in str(exc_info.value).lower()
-        assert "agents" in str(exc_info.value).lower()
+        manifest = BeaconManifest.from_yaml(str(beacon_file))
+        assert manifest.artifacts.agents == ["agents/reviewer.md"]
 
 
 class TestManifestWriter:
@@ -222,19 +219,19 @@ class TestManifestWriter:
 
         content = beacon_file.read_text()
         assert "knowledge:" not in content
-        assert "agents:" not in content
+        assert "agents:" in content
         assert "skills:" in content
         assert "contexts:" in content
 
     def test_tc3_defaults_write_clean_yaml(self, tmp_path):
-        """TC3: Manifest with defaults writes only skills and contexts keys."""
+        """TC3: Manifest with defaults writes contexts, skills, and agents keys."""
         beacon_file = tmp_path / "beacon.yaml"
         manifest = BeaconManifest()
         manifest.to_yaml(str(beacon_file))
 
         data = yaml.safe_load(beacon_file.read_text())
         artifact_keys = set(data["artifacts"].keys())
-        assert artifact_keys == {"contexts", "skills"}
+        assert artifact_keys == {"contexts", "skills", "agents"}
 
 
 class TestBeaconManifestValidator:
@@ -248,8 +245,8 @@ class TestBeaconManifestValidator:
         assert result.valid is True
         assert result.errors == []
 
-    def test_validator_rejects_agents(self, tmp_path):
-        """Validator rejects agents artifact type in from_yaml."""
+    def test_validator_accepts_agents(self, tmp_path):
+        """Validator accepts agents artifact type in from_yaml."""
         beacon_file = tmp_path / "beacon.yaml"
         beacon_file.write_text("""
 artifacts:
@@ -258,12 +255,10 @@ artifacts:
   contexts: []
   skills: []
 """)
-        from beacon.core.exceptions import ValidationError
-
-        with pytest.raises(ValidationError) as exc_info:
-            BeaconManifest.from_yaml(str(beacon_file))
-
-        assert "unknown" in str(exc_info.value).lower()
+        manifest = BeaconManifest.from_yaml(str(beacon_file))
+        validator = BeaconManifestValidator()
+        result = validator.validate_structure(manifest)
+        assert result.valid is True
 
     def test_validator_drops_knowledge_on_load(self, tmp_path):
         """Validator no longer knows about knowledge type — loaded from legacy is clean."""

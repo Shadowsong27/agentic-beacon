@@ -309,3 +309,66 @@ If something goes wrong, restore from git:
 git checkout -- agents/
 git rm agents/agents.yaml
 ```
+
+---
+
+## Project-scoped agents
+
+**Applies to:** Warehouses used with `agentic-beacon >= X.Y.0`
+
+### The new field
+
+`beacon.yaml.artifacts.agents: list[str]` declares which agents this project
+needs. It defaults to `[]` — projects without the field continue to work.
+
+```yaml
+# .agentic-beacon/beacon.yaml
+artifacts:
+  skills:
+    - skills/record-knowledge/
+  contexts:
+    - contexts/global.md
+  agents:
+    - agents/spec-planner.md
+    - agents/registra-developer.md
+```
+
+Agents declared here are **also** installed globally (symlinks into
+`~/.config/opencode/agents/` and `~/.claude/agents/`), so the same physical
+file serves both the per-project declaration and machine-wide availability.
+
+### `abc adopt` flow change
+
+Before this change, `abc adopt` only installed agents globally. Now it also
+**records** the selected agent in `beacon.yaml.artifacts.agents`. The global
+symlink install still happens — both paths fire. If you unadopt an agent
+from `beacon.yaml`, the global symlink is intentionally **not** removed
+(agents can serve multiple projects on the same machine).
+
+### The repair prompt at `abc sync`
+
+When a declared agent's required skill is missing from
+`beacon.yaml.artifacts.skills`, `abc sync` prompts:
+
+```
+Agent '<name>' (declared in beacon.yaml) requires skill '<skill>',
+which is not declared in this project.
+Add 'skills/<skill>/' to beacon.yaml and sync it? [y/N]
+```
+
+Answer **Y** and the skill is appended to `beacon.yaml`, the resolver
+re-runs, and sync proceeds. Answer **N** (or just press Enter — the default)
+and `abc sync` exits with a hard error pointing at this migration doc.
+
+In non-interactive mode (no TTY, piped stdin): the prompt is skipped. `abc sync`
+errors out unless `--yes` is passed, which auto-accepts all gaps.
+
+### Zero-friction migration for existing users
+
+Existing projects whose `beacon.yaml` lacks `artifacts.agents` are unaffected —
+the field defaults to `[]` and `abc sync` behaves exactly as before.
+
+To start tracking your existing globally-installed agents per-project, **re-run
+`abc adopt`** and tick the agents you want declared. Nothing breaks — the
+global symlinks already exist, and `abc sync` adds the `beacon.yaml` entries
+alongside them.

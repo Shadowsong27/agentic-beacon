@@ -37,8 +37,9 @@ def apply_adoption(
 
     for candidate in selections:
         if candidate.artifact_type == "agents":
-            continue  # agents are managed globally, not via beacon.yaml
-        if candidate.artifact_type == "contexts":
+            if candidate.path not in beacon_settings.artifacts.agents:
+                beacon_settings.artifacts.agents.append(candidate.path)
+        elif candidate.artifact_type == "contexts":
             if candidate.path not in beacon_settings.artifacts.contexts:
                 beacon_settings.artifacts.contexts.append(candidate.path)
         elif candidate.artifact_type == "skills":
@@ -55,6 +56,9 @@ def apply_adoption(
         ]
         beacon_settings.artifacts.skills = [
             p for p in beacon_settings.artifacts.skills if p.rstrip("/") != norm
+        ]
+        beacon_settings.artifacts.agents = [
+            p for p in beacon_settings.artifacts.agents if p.rstrip("/") != norm
         ]
 
     beacon_settings.to_yaml(beacon_yaml_path)
@@ -98,6 +102,13 @@ def cleanup_unadopted_artifacts(
 
     for entry in unadoptions:
         entry_clean = entry.rstrip("/")
+
+        # Decision 7: removing an agent from beacon.yaml does NOT uninstall the
+        # global symlink (~/.config/opencode/agents/, ~/.claude/agents/).
+        # Global install state is managed separately from project declaration.
+        if entry_clean.startswith("agents/"):
+            continue
+
         local_entry = artifacts_dir / entry_clean
 
         if local_entry.is_dir():

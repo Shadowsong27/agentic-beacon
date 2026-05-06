@@ -25,14 +25,14 @@ from pathlib import Path
 # Update this dict whenever the starter warehouse is re-generated.
 STARTER_WAREHOUSE_PINNED_TEMPLATE_HASHES: dict[str, str] = {
     ".gitignore": "84eeaf600db2a2b5aaa963c05e4ea13af92dc973a6b63740554212fec1701cb7",
-    "agents/README.md": "5ee9768984c954f7ef8a3157018f283828f3ac10ea45b3b3a56053e13c7d4b42",
+    "agents/README.md": "6f05be87226b2892c20d1a75bee24b682590506ee22dbdc2c911f959ff625590",
     "agents/agents.yaml": "9f03ec77cf08ad3296d640d70a65038e0cdf46a3335e887f6ee130ce314077e2",
-    "README.md": "e7d52b2e8fc6725079fc11afd3a7ee9435229d399eeb71b0bf9ebf74e1284aaa",
+    "README.md": "052846a397d19d160ab86287a7bc211e92c4943bcea72ca34909155aa78ebf1a",
     "contexts/README.md": "90dfeb30f5844e16596302291d9f9770e2f714a35733d525ab7fe913be49912b",
     "docs/architecture.md": "d92c1da4c0d7647b70add95aba1dfeb49513ce18035116b9346f11b406bdc391",
     "docs/contribution-guide.md": "68f697984db7052f5179f495d6349fcd38452b8924269bd0a3337449b1f8fa58",
     "knowledge/README.md": "fb2fa6a609bc234b37f87268c2322b66b529aabd5cdf41b5ccd88dab5ed026fc",
-    "skills/README.md": "be570d20bec7563e77762095c45af6aff2367bcf122cc46514ead6265b0af6fb",
+    "skills/README.md": "91759e4e3657b1aaa570b0d2bcb09c2a12b46f34f19147ca2b288e9cfd4ed39f",
 }
 
 _TEMPLATES_DIR = Path(__file__).parent.parent.parent / "src/beacon/data/templates"

@@ -78,7 +78,11 @@ def is_adopted(path: str, beacon_settings: BeaconManifest) -> bool:
     Skill directory paths are matched with and without trailing slash.
     """
     normalized = path.rstrip("/")
-    all_beacon = beacon_settings.artifacts.contexts + beacon_settings.artifacts.skills
+    all_beacon = (
+        beacon_settings.artifacts.contexts
+        + beacon_settings.artifacts.skills
+        + beacon_settings.artifacts.agents
+    )
     for bp in all_beacon:
         bp_norm = bp.rstrip("/")
         if bp_norm == normalized:
@@ -336,10 +340,15 @@ def discover_all(
                 )
             )
 
-    # Agents — list_available returns paths like "agents/code-reviewer.md"
-    # "adopted" means installed in a global agent directory, not beacon.yaml
+    # Agents — list_available returns paths like "agents/code-reviewer.md".
+    # Per Decision 1, "adopted" for the adopt TUI means "declared in
+    # beacon.yaml.artifacts.agents". Global install state is a side effect of
+    # ticking — not the source of truth for project membership. Filtering on
+    # global state would hide globally-installed agents from existing users
+    # running `abc adopt` post-upgrade to opt into per-project tracking (the
+    # migration path documented in design.md Decision 4).
     for agent_path in available.get("agents", []):
-        if not is_agent_installed(agent_path):
+        if not is_adopted(agent_path, beacon_settings):
             desc = extract_description(warehouse_path, agent_path)
             candidates.append(
                 AdoptCandidate(

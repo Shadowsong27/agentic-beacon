@@ -53,5 +53,5 @@ def setup() -> None:
         "  • [cyan]knowledge[/cyan], [cyan]contexts[/cyan], [cyan]skills[/cyan] — project-scoped, tracked in beacon.yaml"
     )
     console.print(
-        "  • [magenta]agents[/magenta] — globally linked on your machine with 'abc agents sync' (not in beacon.yaml)"
+        "  • [magenta]agents[/magenta] — declared per-project in beacon.yaml & globally linked with 'abc agents sync'"
     )

@@ -67,3 +67,9 @@ class AgentManifestError(ConfigurationError):
     """Raised when the agent manifest (agents/agents.yaml) is invalid or malformed."""
 
     pass
+
+
+class DependencyError(ConfigurationError):
+    """Raised when a declared agent's required skill is missing from the project."""
+
+    pass

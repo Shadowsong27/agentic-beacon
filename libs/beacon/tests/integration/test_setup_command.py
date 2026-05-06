@@ -103,7 +103,7 @@ def test_setup_template_is_valid_empty_artifact_yaml(
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
     content = yaml.safe_load(beacon_yaml.read_text())
     assert content == {
-        "artifacts": {"skills": [], "contexts": []},
+        "artifacts": {"skills": [], "contexts": [], "agents": []},
     }
 
 
@@ -116,9 +116,10 @@ def test_setup_template_includes_commented_examples(
 
     assert result.exit_code == 0, result.output
     raw_text = (project_dir / ".agentic-beacon" / "beacon.yaml").read_text()
-    assert "are machine-level global artifacts" in raw_text
+    assert "declared per-project in beacon.yaml.artifacts.agents" in raw_text
     assert "# - skills/code-review/" in raw_text
     assert "# - contexts/README.md" in raw_text
+    assert "# - agents/spec-planner.md" in raw_text
 
 
 def test_setup_template_has_no_duplicate_artifact_keys(

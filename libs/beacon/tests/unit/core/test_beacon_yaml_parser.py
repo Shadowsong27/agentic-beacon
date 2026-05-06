@@ -33,7 +33,8 @@ class TestBeaconYAMLParser:
         settings = BeaconManifest.from_yaml(str(beacon_file))
 
         assert isinstance(settings, BeaconManifest)
-        assert not hasattr(settings.artifacts, "agents")
+        assert hasattr(settings.artifacts, "agents")
+        assert settings.artifacts.agents == []
         assert len(settings.artifacts.skills) == 2
         assert "development/tdd-workflow.md" in settings.artifacts.skills
         assert len(settings.artifacts.contexts) == 1
@@ -47,7 +48,8 @@ class TestBeaconYAMLParser:
         settings = BeaconManifest.from_yaml(str(beacon_file))
 
         assert isinstance(settings, BeaconManifest)
-        assert not hasattr(settings.artifacts, "agents")
+        assert hasattr(settings.artifacts, "agents")
+        assert settings.artifacts.agents == []
         assert len(settings.artifacts.skills) == 1
         assert settings.artifacts.skills[0] == "development/tdd-workflow.md"
         assert len(settings.artifacts.contexts) == 0
@@ -60,7 +62,8 @@ class TestBeaconYAMLParser:
         settings = BeaconManifest.from_yaml(str(beacon_file))
 
         assert isinstance(settings, BeaconManifest)
-        assert not hasattr(settings.artifacts, "agents")
+        assert hasattr(settings.artifacts, "agents")
+        assert settings.artifacts.agents == []
         assert len(settings.artifacts.skills) == 0
         assert len(settings.artifacts.contexts) == 0
 
@@ -111,8 +114,8 @@ artifacts:
             or "type" in str(exc_info.value).lower()
         )
 
-    def test_tc7_unknown_artifact_type(self, temp_dir):
-        """TC7: Unknown artifact type → Raises ValidationError listing unknown type"""
+    def test_tc7_agents_artifact_type_accepted(self, temp_dir):
+        """TC7: agents is now a valid artifact type → parses successfully"""
         beacon_file = temp_dir / "beacon.yaml"
         beacon_file.write_text("""
 artifacts:
@@ -120,13 +123,8 @@ artifacts:
     - valid.md
 """)
 
-        with pytest.raises(ValidationError) as exc_info:
-            BeaconManifest.from_yaml(str(beacon_file))
-
-        error_str = str(exc_info.value).lower()
-        assert (
-            "unknown" in error_str or "extra" in error_str or "unexpected" in error_str
-        )
+        settings = BeaconManifest.from_yaml(str(beacon_file))
+        assert settings.artifacts.agents == ["valid.md"]
 
     def test_tc8_file_not_found(self, temp_dir):
         """TC8: File not found → Raises FileNotFoundError with helpful message"""

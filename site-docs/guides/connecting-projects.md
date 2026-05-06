@@ -65,7 +65,7 @@ Opens a TUI where you browse artifacts grouped by type. Press `Space` to select,
 abc setup
 ```
 
-Creates a `beacon.yaml` template at `.agentic-beacon/beacon.yaml`. Edit it manually to declare which contexts and skills you need:
+Creates a `beacon.yaml` template at `.agentic-beacon/beacon.yaml`. Edit it manually to declare which contexts, skills, and agents you need:
 
 ```yaml
 artifacts:
@@ -74,6 +74,9 @@ artifacts:
 
   contexts:
     - contexts/global.md
+
+  agents:
+    - agents/code-reviewer.md
 ```
 
 **Knowledge is auto-derived** — knowledge files referenced by markdown links in your contexts and skills are synced automatically. No manual knowledge configuration needed.
@@ -91,7 +94,7 @@ Reads `beacon.yaml`, resolves skill→context dependencies via frontmatter, auto
 - **Contexts** → symlinked into `.agentic-beacon/artifacts/contexts/` and wired into `CLAUDE.md` or `opencode.json`
 - **Skills** → symlinked into `.agentic-beacon/artifacts/skills/` and installed into each detected tool's directories
 - **Knowledge** → auto-derived from markdown links and symlinked into `.agentic-beacon/artifacts/knowledge/`
-- **Agents** → installed into global tool directories
+- **Agents** → declared per-project in `beacon.yaml` and installed into global tool directories
 
 ---
 

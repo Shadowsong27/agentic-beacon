@@ -6,8 +6,8 @@ Agentic Beacon organizes warehouse artifacts along two independent axes — **pr
 
 |  | Tool-agnostic | Tool-specific |
 |---|---|---|
-| **Project-scoped** | 📄 Contexts · 🧠 Knowledge | ⚡ Skills |
-| **Global** | — | 🤖 Agents |
+| **Project-scoped** | 📄 Contexts · 🧠 Knowledge · 🤖 Agents | ⚡ Skills |
+| **Global** | — | — |
 
 The bottom-left cell (global + tool-agnostic) is intentionally empty: a globally shared, tool-agnostic artifact would have no natural installation location, which is not a pattern Agentic Beacon supports.
 
@@ -96,20 +96,27 @@ Missing frontmatter causes sync to fail with a hard error — all required conte
 
 ---
 
-## 🤖 Agents — Global, Tool-specific
+## 🤖 Agents — Project-scoped, Tool-specific
 
 Agent definitions are sub-agent profiles — specialized agents that can be invoked from any project (code reviewer, test writer, PR description generator, etc.).
 
-**Global** because a specialized agent should be available everywhere without per-project configuration.
+**Project-scoped** because agents are declared per-project in `beacon.yaml.artifacts.agents`.
 
-**Tool-specific** because each tool has its own global agent directory:
+**Tool-specific** because each tool has its own global agent directory. Declared agents are symlinked into both:
 
 | Tool | Global agent directory |
 |------|----------------------|
 | Claude Code | `~/.claude/agents/` |
 | OpenCode | `~/.config/opencode/agents/` |
 
-`abc agents sync` installs agent definitions from the warehouse into both directories. No `beacon.yaml` required.
+**Declared in `beacon.yaml`:**
+```yaml
+agents:
+  - agents/code-reviewer.md
+  - agents/spec-planner.md
+```
+
+`abc agents sync` installs agent definitions from the warehouse into both tool directories. Agents can also be adopted interactively via `abc adopt`, which records the selection in `beacon.yaml`.
 
 ---
 
@@ -124,7 +131,7 @@ Applies different logic per type:
 | Contexts | Symlink to `.agentic-beacon/artifacts/contexts/`; wire into agent config |
 | Skills | Symlink to artifacts; install into each detected tool's live directories |
 | Knowledge | Auto-derived from markdown links; symlink to `.agentic-beacon/artifacts/knowledge/` |
-| Agents | Install directly into global tool directories |
+| Agents | Symlink to `.agentic-beacon/artifacts/agents/` and install into global tool directories |
 
 ### `abc warehouse status`
 

@@ -29,7 +29,7 @@ Two moving parts:
 
 **Warehouse** — a single git repository owned by your team. It holds the shared source of truth: contexts, knowledge, skills, and agent definitions.
 
-**Beacon** — a per-project connector. Running `abc warehouse connect` creates `.agentic-beacon/` in your project with a `beacon.yaml` that declares which contexts and skills this project needs. Knowledge files are auto-derived from markdown links in contexts and skills.
+**Beacon** — a per-project connector. Running `abc warehouse connect` creates `.agentic-beacon/` in your project with a `beacon.yaml` that declares which contexts, skills, and agents this project needs. Knowledge files are auto-derived from markdown links in contexts and skills.
 
 ```
 Warehouse (shared git repo)                 Your project / global
@@ -53,13 +53,13 @@ Four types form the core of a warehouse, organized by two axes: **project scope*
 
 |  | Tool-agnostic | Tool-specific |
 |---|---|---|
-| **Project-scoped** | 📄 Contexts · 🧠 Knowledge | ⚡ Skills |
-| **Global** | — | 🤖 Agents |
+| **Project-scoped** | 📄 Contexts · 🧠 Knowledge · 🤖 Agents | ⚡ Skills |
+| **Global** | — | — |
 
 - **Contexts** — boot instructions and coding standards; declared in `beacon.yaml`, wired into `opencode.json` / `CLAUDE.md` on sync
 - **Knowledge** — decisions, lessons, and facts; auto-derived from markdown links in contexts and skills — no manual configuration needed
 - **Skills** — reusable workflows with frontmatter `requires:` dependencies; installed as slash commands
-- **Agents** — sub-agent definitions installed once into global tool directories (`~/.claude/agents/`, `~/.config/opencode/agents/`)
+- **Agents** — sub-agent definitions declared per-project in `beacon.yaml` and installed into global tool directories (`~/.claude/agents/`, `~/.config/opencode/agents/`)
 
 ---
 

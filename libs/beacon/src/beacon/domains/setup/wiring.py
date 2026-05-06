@@ -18,8 +18,8 @@ def create_beacon_template(path: Path) -> None:
 # Run 'abc sync' after editing to download artifacts.
 #
 # Skills are tracked at the directory level: skills/code-review/
-# Agents are machine-level global artifacts — use 'abc install agents/<name>.md'
-# or 'abc adopt' to install them directly into your agent tool directories.
+# Agents are declared per-project in beacon.yaml.artifacts.agents AND installed globally.
+# Use 'abc adopt' to select agents and record them in beacon.yaml.
 
 artifacts:
   skills: []
@@ -34,6 +34,11 @@ artifacts:
     # Examples:
     # - contexts/README.md
     # - contexts/teams/backend/README.md
+
+  agents: []
+    # Examples:
+    # - agents/spec-planner.md
+    # - agents/code-reviewer.md
 
 # ignore: Suppress skills installed by external tools (e.g. openspec) from
 #   appearing in warehouse-status reports. Supports fnmatch patterns.
