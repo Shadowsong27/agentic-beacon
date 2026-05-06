@@ -45,11 +45,11 @@
 
 ## 5. Personal warehouse migration (manual, outside this repo)
 
-- [ ] 5.1 In `~/Code/knowledge/hl-knowledge-market/`, create branch `agent-requires-manifest-migration`.
-- [ ] 5.2 Run migration script from Section 4 against the warehouse.
-- [ ] 5.3 Review `git diff` — sanity-check generated `agents/agents.yaml`; confirm stripped frontmatter is clean; confirm dropped `contexts:` entries are genuinely project-level and don't lose meaningful metadata.
-- [ ] 5.4 Locally install the Beacon feature branch via uv workspace; run `abc warehouse status` against the migrated warehouse; confirm validation passes.
-- [ ] 5.5 Commit and push the warehouse migration branch. (Warehouse merge to main happens independently after Beacon release.)
+- [x] 5.1 In `~/Code/knowledge/hl-knowledge-market/`, create branch `agent-requires-manifest-migration`.
+- [x] 5.2 Run migration script from Section 4 against the warehouse.
+- [x] 5.3 Review `git diff` — sanity-check generated `agents/agents.yaml`; confirm stripped frontmatter is clean; confirm dropped `contexts:` entries are genuinely project-level and don't lose meaningful metadata.
+- [x] 5.4 Locally install the Beacon feature branch via uv workspace; run `abc warehouse status` against the migrated warehouse; confirm validation passes.
+- [x] 5.5 Commit and push the warehouse migration branch. (Warehouse merge to main happens independently after Beacon release.)
 
 ## 6. Documentation & release
 
@@ -57,4 +57,4 @@
 - [x] 6.2 Update any site-docs pages under `site-docs/` describing warehouse agent files.
 - [x] 6.3 Add an entry to release notes describing the breaking change: warehouses must migrate before Beacon upgrade.
 - [x] 6.4 Run full test suite (`pytest` from repo root) — all passing.
-- [ ] 6.5 Manual smoke: `abc warehouse init test-warehouse` → confirm scaffolded `agents.yaml`; `abc warehouse status` in sample-warehouse → passes; `abc sync` against migrated personal warehouse → passes with no `requires:`-related errors.
+- [x] 6.5 Manual smoke: `abc warehouse init test-warehouse` → confirm scaffolded `agents.yaml`; `abc warehouse status` in sample-warehouse → passes; `abc sync` against migrated personal warehouse → passes with no `requires:`-related errors.
