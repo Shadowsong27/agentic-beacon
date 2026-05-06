@@ -78,7 +78,7 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:1:end -->
 
 
-- [ ] 1.1 Create `libs/beacon/src/beacon/core/manifest/pending.py` with `PendingEntry` Pydantic model (fields: `path: str`, `type: Literal["knowledge", "skill", "context", "agent"]`, `action: Literal["created", "modified"]`, `source: str`, `created_at: datetime`) and `PendingManifest` (wraps `pending: list[PendingEntry]`).
+- [x] 1.1 Create `libs/beacon/src/beacon/core/manifest/pending.py` with `PendingEntry` Pydantic model (fields: `path: str`, `type: Literal["knowledge", "skill", "context", "agent"]`, `action: Literal["created", "modified"]`, `source: str`, `created_at: datetime`) and `PendingManifest` (wraps `pending: list[PendingEntry]`).
 <!-- opsx:tdd:1.1:begin -->
   - **Input**: from beacon.core.manifest.pending import PendingEntry, PendingManifest; PendingEntry(path='knowledge/lessons/x.md', type='knowledge', action='created', source='record-knowledge', created_at=datetime.now(timezone.utc))
   - **Expected Output**: Constructs without error. All five fields required (no defaults except where the spec explicitly allows). `type` and `action` reject values outside their Literal set. `PendingManifest(pending=[entry]).pending == [entry]`.
@@ -93,7 +93,7 @@ pytest tests/ -v --tb=short
     - TC7: `created_at` as naive datetime vs UTC-aware → behaviour documented (UTC required)
     - TC8: `PendingManifest(pending=[])` → empty manifest constructs
 <!-- opsx:tdd:1.1:end -->
-- [ ] 1.2 Implement `PendingManifest.from_yaml(path: Path) -> PendingManifest` that tolerates absent file (returns empty manifest) and raises clear validation errors on schema violations.
+- [x] 1.2 Implement `PendingManifest.from_yaml(path: Path) -> PendingManifest` that tolerates absent file (returns empty manifest) and raises clear validation errors on schema violations.
 <!-- opsx:tdd:1.2:begin -->
   - **Input**: PendingManifest.from_yaml(Path('/tmp/nonexistent.yaml')) and PendingManifest.from_yaml(Path('/tmp/malformed.yaml'))
   - **Expected Output**: Absent path → `PendingManifest(pending=[])`. Malformed YAML or schema violation → ValidationError identifying the offending entry index and field.
@@ -108,7 +108,7 @@ pytest tests/ -v --tb=short
     - TC7: YAML at top level missing `pending` key → ValidationError
     - TC8: Non-YAML garbage in file → parse error surfaced clearly
 <!-- opsx:tdd:1.2:end -->
-- [ ] 1.3 Implement `PendingManifest.to_yaml(path: Path) -> None` preserving field order (path / type / action / source / created_at) and pretty-printing with trailing newline.
+- [x] 1.3 Implement `PendingManifest.to_yaml(path: Path) -> None` preserving field order (path / type / action / source / created_at) and pretty-printing with trailing newline.
 <!-- opsx:tdd:1.3:begin -->
   - **Input**: manifest.to_yaml(tmp_path/'pending.yaml'); content = (tmp_path/'pending.yaml').read_text()
   - **Expected Output**: File ends with `\n`. Field order on each entry: `path` then `type` then `action` then `source` then `created_at`. `PendingManifest.from_yaml(path)` returns a manifest equal to the source.
@@ -120,7 +120,7 @@ pytest tests/ -v --tb=short
     - TC4: Round-trip from_yaml(to_yaml(m)) == m for non-trivial manifest
     - TC5: ISO-8601 UTC timestamp serialises in canonical format (no float, no naive)
 <!-- opsx:tdd:1.3:end -->
-- [ ] 1.4 Implement `PendingManifest.append(entry: PendingEntry) -> None` with in-memory mutation (persistence via `to_yaml`).
+- [x] 1.4 Implement `PendingManifest.append(entry: PendingEntry) -> None` with in-memory mutation (persistence via `to_yaml`).
 <!-- opsx:tdd:1.4:begin -->
   - **Input**: manifest.append(entry); manifest.to_yaml(path); reloaded = PendingManifest.from_yaml(path)
   - **Expected Output**: After append: `manifest.pending[-1] == entry`. After to_yaml + from_yaml: reloaded manifest contains the appended entry at the end. Append does NOT touch disk.
@@ -131,20 +131,20 @@ pytest tests/ -v --tb=short
     - TC3: Append then to_yaml then from_yaml → reloaded has same entries in same order
     - TC4: Append does not call write/open (verify via mock or `tmp_path` non-existence post-append)
 <!-- opsx:tdd:1.4:end -->
-- [ ] 1.5 Unit tests: round-trip serialization, missing-field validation, invalid-enum validation, append-then-dump ordering, empty-file handling.
+- [x] 1.5 Unit tests: round-trip serialization, missing-field validation, invalid-enum validation, append-then-dump ordering, empty-file handling.
 <!-- opsx:tdd:1.5:begin -->
   - **Input**: pytest libs/beacon/tests/unit/test_pending.py -q
   - **Expected Output**: All test scenarios listed in 1.5 covered (round-trip, missing-field, invalid-enum, append-then-dump ordering, empty-file). Zero failed tests, zero skipped tests.
   - **Validation**: Coverage of `core/manifest/pending.py` ≥ 90% (`pytest --cov=beacon.core.manifest.pending`).
 <!-- opsx:tdd:1.5:end -->
-- [ ] 1.6 Update `libs/beacon/src/beacon/core/gitignore.py` template to include `.agentic-beacon/pending.yaml` and `.agentic-beacon/.last-adopt` alongside the existing `config.toml` entry.
+- [x] 1.6 Update `libs/beacon/src/beacon/core/gitignore.py` template to include `.agentic-beacon/pending.yaml` and `.agentic-beacon/.last-adopt` alongside the existing `config.toml` entry.
 <!-- opsx:tdd:1.6:begin -->
   - **Input**: Inspect `libs/beacon/src/beacon/core/gitignore.py` and any test that asserts on the entries.
   - **Expected Output**: `GITIGNORE_ENTRIES` (or the equivalent project-level template) contains `.agentic-beacon/pending.yaml` and `.agentic-beacon/.last-adopt` alongside the existing `.agentic-beacon/config.toml` entry. Order: existing entries first, new entries appended.
   - **Validation**: `grep -n 'pending.yaml' libs/beacon/src/beacon/core/gitignore.py` returns the new entry. Existing gitignore tests still pass.
   - **Note**: Design ambiguity resolved during D1: the new entries belong in project-level `GITIGNORE_ENTRIES`, NOT the warehouse-template gitignore. The two surfaces are different — see design.md §1 (config.toml as warehouse pointer) and §10 (alert suppressed outside a project).
 <!-- opsx:tdd:1.6:end -->
-- [ ] 1.7 Regenerate `examples/sample-warehouse/` gitignore output to reflect 1.6.
+- [x] 1.7 Regenerate `examples/sample-warehouse/` gitignore output to reflect 1.6.
 <!-- opsx:tdd:1.7:begin -->
   - **Input**: abc warehouse init /tmp/sample-warehouse-regen-test && diff /tmp/sample-warehouse-regen-test/.gitignore examples/sample-warehouse/.gitignore
   - **Expected Output**: Diff is empty. The committed sample exactly matches a fresh `abc warehouse init` output.
@@ -162,7 +162,7 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:2:end -->
 
 
-- [ ] 2.1 Add helper `libs/beacon/src/beacon/domains/adoption/last_adopt.py` with `read_last_adopt(project_root: Path) -> datetime | None` and `write_last_adopt(project_root: Path, when: datetime) -> None`. Format: single ISO-8601 UTC line.
+- [x] 2.1 Add helper `libs/beacon/src/beacon/domains/adoption/last_adopt.py` with `read_last_adopt(project_root: Path) -> datetime | None` and `write_last_adopt(project_root: Path, when: datetime) -> None`. Format: single ISO-8601 UTC line.
 <!-- opsx:tdd:2.1:begin -->
   - **Input**: from beacon.domains.adoption.last_adopt import read_last_adopt, write_last_adopt; write_last_adopt(tmp_path, datetime(2026,5,6,15,0,0,tzinfo=timezone.utc)); read_last_adopt(tmp_path)
   - **Expected Output**: After write: `<tmp_path>/.agentic-beacon/.last-adopt` exists with content `2026-05-06T15:00:00+00:00\n` (or canonical ISO-8601 UTC equivalent). After read: returns equal aware datetime. If file absent: returns None. If malformed: raises with clear message.
@@ -175,7 +175,7 @@ pytest tests/ -v --tb=short
     - TC5: Write to non-existent project_root → creates `.agentic-beacon/` dir then file
     - TC6: Write same path twice → second write overwrites (not appended)
 <!-- opsx:tdd:2.1:end -->
-- [ ] 2.2 Unit tests: absent file returns `None`, write-then-read round-trips exactly, malformed file raises a clear error.
+- [x] 2.2 Unit tests: absent file returns `None`, write-then-read round-trips exactly, malformed file raises a clear error.
 <!-- opsx:tdd:2.2:begin -->
   - **Input**: pytest libs/beacon/tests/unit/test_last_adopt.py -q
   - **Expected Output**: All 2.1 scenarios covered. Zero failed.
@@ -192,7 +192,7 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:3:end -->
 
 
-- [ ] 3.1 Add helper `libs/beacon/src/beacon/cli/pending_alert.py` with `maybe_emit_pending_alert(cwd: Path) -> None` that walks up for `.agentic-beacon/config.toml`, reads `pending.yaml` if present, and emits the one-line stderr notice when entries exist.
+- [x] 3.1 Add helper `libs/beacon/src/beacon/cli/pending_alert.py` with `maybe_emit_pending_alert(cwd: Path) -> None` that walks up for `.agentic-beacon/config.toml`, reads `pending.yaml` if present, and emits the one-line stderr notice when entries exist.
 <!-- opsx:tdd:3.1:begin -->
   - **Input**: maybe_emit_pending_alert(tmp_path) with various states of `.agentic-beacon/config.toml` and `pending.yaml` present/absent under tmp_path. Capture stderr via pytest `capsys`.
   - **Expected Output**: Stderr contains `⚠ N pending artifacts. Run 'abc adopt' to wire them.` (with N matching count) when both files exist and pending.yaml is non-empty. Stderr empty in suppression cases (no config.toml, or pending.yaml absent/empty).
@@ -206,13 +206,13 @@ pytest tests/ -v --tb=short
     - TC6: pending.yaml malformed → does NOT raise; degrades gracefully (silent or warning, never blocking)
     - TC7: Function returns None and never raises (verified: invoking before subcommand must not abort)
 <!-- opsx:tdd:3.1:end -->
-- [ ] 3.2 Wire the helper into the Click group entry in `libs/beacon/src/beacon/cli/main.py` (or root command decorator) so it runs before every `abc` subcommand.
+- [x] 3.2 Wire the helper into the Click group entry in `libs/beacon/src/beacon/cli/main.py` (or root command decorator) so it runs before every `abc` subcommand.
 <!-- opsx:tdd:3.2:begin -->
   - **Input**: Inspect `cli/main.py`; run `abc --help` from within a project that has non-empty pending.yaml.
   - **Expected Output**: `maybe_emit_pending_alert(Path.cwd())` is called inside the root `@click.group` `main()` function before any subcommand-specific logic. `abc --help` and `abc warehouse status` both show the alert (stderr) followed by their normal output (stdout).
   - **Validation**: `grep -n 'maybe_emit_pending_alert' libs/beacon/src/beacon/cli/main.py` returns one match in the group entry. Manual run: `abc --help 2>&1 >/dev/null` shows the alert when applicable.
 <!-- opsx:tdd:3.2:end -->
-- [ ] 3.3 Unit tests: alert fires with correct count, alert suppressed when `pending.yaml` absent or empty, alert suppressed when no `config.toml` in cwd-walk chain, alert does not block subcommand execution.
+- [x] 3.3 Unit tests: alert fires with correct count, alert suppressed when `pending.yaml` absent or empty, alert suppressed when no `config.toml` in cwd-walk chain, alert does not block subcommand execution.
 <!-- opsx:tdd:3.3:begin -->
   - **Input**: pytest libs/beacon/tests/unit/test_pending_alert.py -q
   - **Expected Output**: All four scenarios covered. Zero failed.
