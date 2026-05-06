@@ -6,7 +6,6 @@ OpenSpec change.
 
 from pathlib import Path
 
-import pytest
 from beacon.core.dependencies.resolver import (
     EffectiveSet,
     ResolutionFailure,
@@ -114,12 +113,10 @@ class TestComputeEffectiveSet:
         assert any("missing" in e for e in result.errors)
         assert any("refactor" in e for e in result.errors)
 
-    def test_tc8_unknown_artifact_type_is_rejected(self, tmp_path):
-        """TC8: beacon.yaml with agents key -> rejected (agents not a valid type)."""
-        from pydantic import ValidationError
-
-        with pytest.raises(ValidationError):
-            BeaconManifest(artifacts={"agents": ["reviewer"]})
+    def test_tc8_agents_artifact_type_accepted(self, tmp_path):
+        """TC8: beacon.yaml with agents key -> accepted (agents is a valid type)."""
+        manifest = BeaconManifest(artifacts={"agents": ["reviewer"]})
+        assert manifest.artifacts.agents == ["reviewer"]
 
     def test_idempotent(self, tmp_path):
         """Calling twice with same inputs yields equal results."""
@@ -180,12 +177,19 @@ class TestIsTransitivelyRequired:
     """Task 6.7: is_transitively_required — TDD test cases."""
 
     def _make_eff(self, contexts, skills, explicit_contexts, explicit_skills):
+        provenance = {}
+        for skill in skills:
+            if skill in explicit_skills:
+                provenance[skill] = frozenset({"explicit"})
+            else:
+                provenance[skill] = frozenset()
         return EffectiveSet(
             contexts=frozenset(contexts),
             skills=frozenset(skills),
             knowledge=frozenset(),
             explicit_contexts=frozenset(explicit_contexts),
             explicit_skills=frozenset(explicit_skills),
+            skill_provenance=provenance,
         )
 
     def test_tc1_explicit_context(self):

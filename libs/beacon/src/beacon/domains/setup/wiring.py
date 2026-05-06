@@ -35,6 +35,11 @@ artifacts:
     # - contexts/README.md
     # - contexts/teams/backend/README.md
 
+  agents: []
+    # Examples:
+    # - agents/spec-planner.md
+    # - agents/code-reviewer.md
+
 # ignore: Suppress skills installed by external tools (e.g. openspec) from
 #   appearing in warehouse-status reports. Supports fnmatch patterns.
 #

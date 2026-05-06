@@ -7,7 +7,7 @@ import click
 from loguru import logger
 from rich.console import Console
 
-from beacon.core.exceptions import BeaconSyncError, ResetError
+from beacon.core.exceptions import BeaconSyncError, DependencyError, ResetError
 from beacon.core.manifest.beacon import BeaconManifest
 from beacon.core.manifest.workspace import WorkspaceConfig
 from beacon.domains.artifact.skill import (
@@ -59,6 +59,11 @@ console = Console()
     is_flag=True,
     help="Non-interactive: discard all modified local files and replace with symlinks",
 )
+@click.option(
+    "--yes",
+    is_flag=True,
+    help="Auto-accept adding missing agent-required skills to beacon.yaml",
+)
 def sync(
     *,
     force: bool,
@@ -67,6 +72,7 @@ def sync(
     skip_git_check: bool,
     contribute_local: bool,
     discard_local: bool,
+    yes: bool,
 ) -> None:
     """
     Sync artifacts from warehouse to project.
@@ -117,6 +123,15 @@ def sync(
             default=True,
         )
 
+    def _gap_prompt(gap) -> bool:
+        msg = (
+            f"\nAgent '{gap.requiring_agent}' (declared in beacon.yaml) "
+            f"requires skill '{gap.missing_skill}', "
+            f"which is not declared in this project.\n\n"
+            f"Add 'skills/{gap.missing_skill}/' to beacon.yaml and sync it?"
+        )
+        return click.confirm(msg, default=False)
+
     try:
         result = run_sync(
             force=force,
@@ -130,7 +145,12 @@ def sync(
             skill_conflict_callback=(
                 _resolve_skill_conflicts if is_interactive() else None
             ),
+            auto_accept_gaps=yes,
+            gap_prompt_callback=_gap_prompt if is_interactive() else None,
         )
+    except DependencyError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
     except BeaconSyncError as e:
         console.print(f"[red]Error:[/red] {e}")
         if e.hint:
