@@ -21,7 +21,6 @@ from beacon.domains.artifact.agent import (
     detect_agents_global,
     install_agent_global,
     read_agent_definition,
-    uninstall_agent_global,
 )
 from beacon.domains.artifact.skill import wire_skills_post_sync
 from beacon.domains.distribution.distributor import WarehouseDistributor
@@ -151,7 +150,18 @@ def adopt(*, dry_run: bool) -> None:
         p for p in result.to_unadopt if not p.startswith("agents/")
     ]
 
-    apply_adoption(beacon_yaml, non_agent_selections, unadoptions=non_agent_unadoptions)
+    # All selections (agents + non-agents) are recorded in beacon.yaml via
+    # apply_adoption. Agents additionally get a global symlink install below.
+    # Per Decision 7, removing an agent from beacon.yaml does NOT uninstall the
+    # global symlink — global install state is managed independently of project
+    # declaration so an agent can serve multiple projects on the same machine.
+    agent_selections = [
+        path_to_candidate[p] for p in agent_adoptions if p in path_to_candidate
+    ]
+    all_selections = non_agent_selections + agent_selections
+    all_unadoptions = non_agent_unadoptions + agent_unadoptions
+
+    apply_adoption(beacon_yaml, all_selections, unadoptions=all_unadoptions)
     if non_agent_selections:
         console.print(
             f"[green]✓[/green] Added {len(non_agent_selections)} artifact(s) to beacon.yaml"
@@ -174,19 +184,21 @@ def adopt(*, dry_run: bool) -> None:
             installed_count += 1
         if installed_count:
             console.print(
-                f"[green]✓[/green] Installed {installed_count} agent(s) globally"
+                f"[green]✓[/green] Recorded {installed_count} agent(s) in beacon.yaml "
+                f"and installed globally"
                 + (f" for: {', '.join(tools)}" if tools else "")
             )
 
     if agent_unadoptions:
-        removed_count = 0
-        for agent_path in agent_unadoptions:
-            agent_name = Path(agent_path).name
-            removed_count += uninstall_agent_global(agent_name)
-        if removed_count:
-            console.print(
-                f"[yellow]−[/yellow] Uninstalled {removed_count} agent(s) from global directories"
-            )
+        # Decision 7: do NOT uninstall global symlinks here. The agent has been
+        # removed from beacon.yaml.artifacts.agents (via apply_adoption above);
+        # global symlinks remain because other projects on this machine may
+        # still depend on them. To explicitly uninstall globally, use
+        # `abc agents uninstall <name>` (separate command).
+        console.print(
+            f"[yellow]−[/yellow] Removed {len(agent_unadoptions)} agent(s) from beacon.yaml "
+            f"[dim](global install retained per Decision 7)[/dim]"
+        )
 
     if non_agent_selections:
         try:
