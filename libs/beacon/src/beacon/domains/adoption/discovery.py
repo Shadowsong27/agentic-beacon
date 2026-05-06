@@ -78,7 +78,11 @@ def is_adopted(path: str, beacon_settings: BeaconManifest) -> bool:
     Skill directory paths are matched with and without trailing slash.
     """
     normalized = path.rstrip("/")
-    all_beacon = beacon_settings.artifacts.contexts + beacon_settings.artifacts.skills
+    all_beacon = (
+        beacon_settings.artifacts.contexts
+        + beacon_settings.artifacts.skills
+        + beacon_settings.artifacts.agents
+    )
     for bp in all_beacon:
         bp_norm = bp.rstrip("/")
         if bp_norm == normalized:

@@ -19,8 +19,12 @@ from beacon.core.dependencies.manifest import (
     validate_agents_directory,
     validate_declared_skills,
 )
-from beacon.core.dependencies.resolver import ResolutionFailure, compute_effective_set
-from beacon.core.exceptions import BeaconSyncError
+from beacon.core.dependencies.resolver import (
+    ResolutionFailure,
+    SkillGap,
+    compute_effective_set,
+)
+from beacon.core.exceptions import BeaconSyncError, DependencyError
 from beacon.core.gitignore import GitignoreManager
 from beacon.core.manifest.beacon import BeaconManifest
 from beacon.domains.adoption.discovery import count_unadopted_since
@@ -143,7 +147,11 @@ def _normalize_beacon_for_resolver(
                 seen_skills.add(norm)
 
     normalized = BeaconManifest(
-        artifacts={"contexts": normalized_contexts, "skills": normalized_skills},
+        artifacts={
+            "contexts": normalized_contexts,
+            "skills": normalized_skills,
+            "agents": beacon.artifacts.agents,
+        },
         ignore=beacon.ignore,
     )
     return normalized
@@ -202,6 +210,8 @@ def run_sync(
     log_fn: Callable[[str], None] | None = None,
     resolve_callback: Callable[[str, str], str] | None = None,
     skill_conflict_callback: Callable[[list[str]], bool] | None = None,
+    auto_accept_gaps: bool = False,
+    gap_prompt_callback: Callable[[SkillGap], bool] | None = None,
 ) -> SyncOrchestrationResult:
     """Run the full sync pipeline.
 
@@ -254,6 +264,46 @@ def run_sync(
     # 8.1: Dependency resolution as FIRST step — before any file I/O
     normalized_beacon = _normalize_beacon_for_resolver(beacon_settings, warehouse_path)
     effective_result = compute_effective_set(normalized_beacon, warehouse_path)
+
+    # Handle agent-required skill gaps (project-scoped-agents feature)
+    if isinstance(effective_result, ResolutionFailure) and effective_result.gaps:
+        gaps = effective_result.gaps
+        if auto_accept_gaps:
+            gaps_to_accept = list(gaps)
+        elif gap_prompt_callback is not None:
+            # Collect answers for all gaps first to preserve atomicity
+            answers = [gap_prompt_callback(gap) for gap in gaps]
+            if all(answers):
+                gaps_to_accept = list(gaps)
+            else:
+                # Atomic rejection: if any gap is rejected, reject all
+                gap_names = ", ".join(g.missing_skill for g in gaps)
+                raise DependencyError(
+                    f"Missing required skills for declared agents: {gap_names}. "
+                    f"See {MIGRATION_DOC_URL} for migration instructions."
+                )
+        else:
+            # Non-interactive without --yes
+            gap_names = ", ".join(g.missing_skill for g in gaps)
+            raise DependencyError(
+                f"Missing required skills for declared agents: {gap_names}. "
+                f"See {MIGRATION_DOC_URL} for migration instructions."
+            )
+
+        if gaps_to_accept and not dry_run:
+            # Append normalised skill paths to beacon.yaml
+            for gap in gaps_to_accept:
+                skill_entry = f"skills/{gap.missing_skill}/"
+                if skill_entry not in beacon_settings.artifacts.skills:
+                    beacon_settings.artifacts.skills.append(skill_entry)
+            beacon_settings.to_yaml(beacon_yaml)
+
+            # Re-run resolver with updated state
+            normalized_beacon = _normalize_beacon_for_resolver(
+                beacon_settings, warehouse_path
+            )
+            effective_result = compute_effective_set(normalized_beacon, warehouse_path)
+
     if isinstance(effective_result, ResolutionFailure):
         # 8.2: Exit with structured error containing migration doc URL
         error_msg = (

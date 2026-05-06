@@ -77,7 +77,7 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:1:end -->
 
 
-- [ ] 1.1 Add `agents: list[str]` field to `ArtifactsConfig` in `libs/beacon/src/beacon/core/manifest/beacon.py`. Default `[]`. Include in schema serialisation.
+- [x] 1.1 Add `agents: list[str]` field to `ArtifactsConfig` in `libs/beacon/src/beacon/core/manifest/beacon.py`. Default `[]`. Include in schema serialisation.
 <!-- opsx:tdd:1.1:begin -->
   - **Input**: Edit `libs/beacon/src/beacon/core/manifest/beacon.py`; add `agents: list[str] = Field(default_factory=list)` to `ArtifactsConfig`. Run `pytest libs/beacon/tests/unit/core/manifest/ -v`.
   - **Expected Output**: All existing manifest tests pass; new instances of `ArtifactsConfig()` expose `.agents == []`; loading a `beacon.yaml` lacking the key still parses (defaulting to `[]`).
@@ -89,7 +89,7 @@ pytest tests/ -v --tb=short
     - TC4: `beacon.yaml` with `artifacts.agents: null` → parses as `[]` or raises clear validation error (document chosen behaviour)
     - TC5: `beacon.yaml` with `artifacts.agents: 'not-a-list'` → Pydantic ValidationError with field name in message
 <!-- opsx:tdd:1.1:end -->
-- [ ] 1.2 Update `BeaconManifest.to_yaml()` to emit the `agents:` key in the grouped `artifacts:` section, ordered after `contexts:` and `skills:`.
+- [x] 1.2 Update `BeaconManifest.to_yaml()` to emit the `agents:` key in the grouped `artifacts:` section, ordered after `contexts:` and `skills:`.
 <!-- opsx:tdd:1.2:begin -->
   - **Input**: Run `pytest libs/beacon/tests/unit/core/manifest/ -k to_yaml -v` after editing the serialiser.
   - **Expected Output**: Serialised YAML for a populated manifest contains lines in order: `contexts:` → `skills:` → `agents:` under `artifacts:`.
@@ -100,7 +100,7 @@ pytest tests/ -v --tb=short
     - TC3: Round-trip: `from_yaml(to_yaml(m))` equals `m` for a manifest with mixed agent paths
     - TC4: Existing manifests without agents still serialise identically to today plus a trailing `agents: []`
 <!-- opsx:tdd:1.2:end -->
-- [ ] 1.3 Unit tests for `BeaconManifest` round-trip with and without `agents:` (absence is valid, empty list is valid, populated list is valid).
+- [x] 1.3 Unit tests for `BeaconManifest` round-trip with and without `agents:` (absence is valid, empty list is valid, populated list is valid).
 <!-- opsx:tdd:1.3:begin -->
   - **Input**: Add tests in `libs/beacon/tests/unit/core/manifest/test_beacon.py`; run `pytest libs/beacon/tests/unit/core/manifest/test_beacon.py -v`.
   - **Expected Output**: Three new test cases pass covering absent / empty / populated `agents` round-trips.
@@ -111,7 +111,7 @@ pytest tests/ -v --tb=short
     - TC3: Round-trip with two paths → preserves order and exact strings
     - TC4: Round-trip after mutating `m.artifacts.agents.append(...)` → new entry appears in YAML
 <!-- opsx:tdd:1.3:end -->
-- [ ] 1.4 Update `libs/beacon/src/beacon/domains/setup/initializer.py` so `abc setup` writes `beacon.yaml` with the `agents: []` field in the scaffold template.
+- [x] 1.4 Update `libs/beacon/src/beacon/domains/setup/initializer.py` so `abc setup` writes `beacon.yaml` with the `agents: []` field in the scaffold template.
 <!-- opsx:tdd:1.4:begin -->
   - **Input**: `abc warehouse init /tmp/wh-test && cat /tmp/wh-test/.agentic-beacon/beacon.yaml`.
   - **Expected Output**: Scaffolded `beacon.yaml` contains `artifacts.agents: []` under the `artifacts:` block.
@@ -129,7 +129,7 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:2:end -->
 
 
-- [ ] 2.1 Extend `libs/beacon/src/beacon/core/dependencies/resolver.py` to accept declared agents from `beacon.yaml.artifacts.agents`. For each declared agent, load `agents.yaml` (via the loader added in the predecessor change), resolve its `skills:` list.
+- [x] 2.1 Extend `libs/beacon/src/beacon/core/dependencies/resolver.py` to accept declared agents from `beacon.yaml.artifacts.agents`. For each declared agent, load `agents.yaml` (via the loader added in the predecessor change), resolve its `skills:` list.
 <!-- opsx:tdd:2.1:begin -->
   - **Input**: `pytest libs/beacon/tests/unit/core/dependencies/test_resolver.py -v` against a fixture project with one declared agent.
   - **Expected Output**: Resolver returns the agent's required skills (from `agents.yaml`) merged into the candidate skill set.
@@ -141,7 +141,7 @@ pytest tests/ -v --tb=short
     - TC4: No declared agents → resolver behaves identically to pre-change baseline
     - TC5: Declared agent missing from `agents.yaml` → handled by validator in 2.2 (this resolver step propagates the structured error, does not raise)
 <!-- opsx:tdd:2.1:end -->
-- [ ] 2.2 Add `validate_declared_agents_in_manifest(beacon_settings, agent_manifest)` — every path in `artifacts.agents` must have a key in `agents.yaml`; missing key is a hard error with migration URL.
+- [x] 2.2 Add `validate_declared_agents_in_manifest(beacon_settings, agent_manifest)` — every path in `artifacts.agents` must have a key in `agents.yaml`; missing key is a hard error with migration URL.
 <!-- opsx:tdd:2.2:begin -->
   - **Input**: `pytest libs/beacon/tests/unit/core/dependencies/test_validate_declared_agents.py -v`.
   - **Expected Output**: Function returns cleanly when every declared agent path has a matching `agents.yaml` entry; raises a structured error naming offending paths and the migration URL otherwise.
@@ -154,7 +154,7 @@ pytest tests/ -v --tb=short
     - TC5: Declared path uses bare name without `agents/` prefix → either normalises and matches, or raises a clear schema error (document chosen behaviour)
     - TC6: `agents.yaml` itself missing/malformed → propagates the predecessor change's parse error unchanged (do not double-wrap)
 <!-- opsx:tdd:2.2:end -->
-- [ ] 2.3 Compute the transitive skill closure: declared explicit skills + skills required by declared agents. Carry provenance (explicit vs required-by-agent) through the resolver's data model.
+- [x] 2.3 Compute the transitive skill closure: declared explicit skills + skills required by declared agents. Carry provenance (explicit vs required-by-agent) through the resolver's data model.
 <!-- opsx:tdd:2.3:begin -->
   - **Input**: `pytest libs/beacon/tests/unit/core/dependencies/test_closure.py -v`.
   - **Expected Output**: Closure object reports each skill once with a provenance set: `{'explicit'}`, `{'required-by-agent:<name>', ...}`, or both. Order is deterministic.
@@ -167,7 +167,7 @@ pytest tests/ -v --tb=short
     - TC5: Closure ordering is deterministic across runs (sort by `(skill_path,)`)
     - TC6: Skill required by an agent but missing from warehouse → resolver yields a structured error, does not crash
 <!-- opsx:tdd:2.3:end -->
-- [ ] 2.4 Unit tests covering: no agents declared, one agent with skills, one agent with empty skills, agent not in manifest, skill not in warehouse, multi-agent overlapping skill requirements.
+- [x] 2.4 Unit tests covering: no agents declared, one agent with skills, one agent with empty skills, agent not in manifest, skill not in warehouse, multi-agent overlapping skill requirements.
 <!-- opsx:tdd:2.4:begin -->
   - **Input**: `pytest libs/beacon/tests/unit/core/dependencies/ -v`.
   - **Expected Output**: Six new parametrised cases, all green.
@@ -191,8 +191,8 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:3:end -->
 
 
-- [ ] 3.1 Add a new error/warning shape in `libs/beacon/src/beacon/core/dependencies/` that carries the gap info (requiring agent, missing skill, warehouse skill path).
-- [ ] 3.2 In the sync flow (sync command in `domains/warehouse/` or equivalent), intercept the gap before any file operation. In interactive mode, prompt Y/N default N using `click.confirm` or existing interaction helper.
+- [x] 3.1 Add a new error/warning shape in `libs/beacon/src/beacon/core/dependencies/` that carries the gap info (requiring agent, missing skill, warehouse skill path).
+- [x] 3.2 In the sync flow (sync command in `domains/warehouse/` or equivalent), intercept the gap before any file operation. In interactive mode, prompt Y/N default N using `click.confirm` or existing interaction helper.
 <!-- opsx:tdd:3.2:begin -->
   - **Input**: `pytest libs/beacon/tests/unit/cli/test_sync.py -k 'gap and interactive' -v` using `click.testing.CliRunner` with `monkeypatch.setattr(sys.stdin, 'isatty', lambda: True)` and `input='y\n'` / `input='n\n'`.
   - **Expected Output**: Prompt fires with text naming the requiring agent and missing skill; default answer is N; no symlinks created until response received.
@@ -205,7 +205,7 @@ pytest tests/ -v --tb=short
     - TC5: Two gaps, first Y second N → `beacon.yaml` untouched (atomic rejection), exit non-zero
     - TC6: Prompt fires BEFORE any symlink/prune/file op (assert ordering via spy on sync helper)
 <!-- opsx:tdd:3.2:end -->
-- [ ] 3.3 On Y: append the normalised skill path (`skills/<name>/`) to `beacon.yaml.artifacts.skills`, persist with `BeaconManifest.to_yaml()`, re-run the resolver with the updated state, proceed to sync.
+- [x] 3.3 On Y: append the normalised skill path (`skills/<name>/`) to `beacon.yaml.artifacts.skills`, persist with `BeaconManifest.to_yaml()`, re-run the resolver with the updated state, proceed to sync.
 <!-- opsx:tdd:3.3:begin -->
   - **Input**: Run sync against a fixture project with a declared agent missing one required skill; respond `y`.
   - **Expected Output**: `beacon.yaml.artifacts.skills` contains `skills/<name>/` after sync; resolver re-runs and pulls transitive contexts silently; sync exits 0.
@@ -216,13 +216,13 @@ pytest tests/ -v --tb=short
     - TC3: Skill with transitive context requirement → context auto-pulled silently after re-run (no second prompt)
     - TC4: Two gaps both Y → single atomic write of both skill entries, single re-resolve
 <!-- opsx:tdd:3.3:end -->
-- [ ] 3.4 On N (or Enter on default): raise a `DependencyError` carrying the migration URL; let the normal error-printing path surface it; exit non-zero.
+- [x] 3.4 On N (or Enter on default): raise a `DependencyError` carrying the migration URL; let the normal error-printing path surface it; exit non-zero.
 <!-- opsx:tdd:3.4:begin -->
   - **Input**: Sync with one gap, respond `N`.
   - **Expected Output**: `DependencyError` raised; CLI exits non-zero; stderr contains the migration URL.
   - **Validation**: `result.exit_code != 0`; `migration` URL substring present in stderr; `beacon.yaml` byte-identical to pre-sync; `.agentic-beacon/artifacts/` byte-identical.
 <!-- opsx:tdd:3.4:end -->
-- [ ] 3.5 Non-interactive mode (no TTY): skip the prompt; raise the same error unless `--yes` is passed.
+- [x] 3.5 Non-interactive mode (no TTY): skip the prompt; raise the same error unless `--yes` is passed.
 <!-- opsx:tdd:3.5:begin -->
   - **Input**: `abc sync < /dev/null` against fixture with a gap; then again with `abc sync --yes < /dev/null`.
   - **Expected Output**: First run: hard error, exit non-zero, `beacon.yaml` untouched. Second run: auto-accept, `beacon.yaml` updated, exit 0.
@@ -233,8 +233,8 @@ pytest tests/ -v --tb=short
     - TC3: No TTY, no gaps → sync proceeds normally regardless of `--yes`
     - TC4: Piped stdin (e.g. `echo y | abc sync`) detected as non-interactive → behaves per TC1, NOT as if user typed Y
 <!-- opsx:tdd:3.5:end -->
-- [ ] 3.6 Add `--yes` flag to `abc sync` CLI handler. Plumb into the resolver's prompt logic as auto-accept.
-- [ ] 3.7 Unit tests for each branch: interactive Y, interactive N, interactive default-Enter, non-interactive no-flag, non-interactive with `--yes`. Use `pytest`'s `monkeypatch` to fake TTY detection and `click.testing.CliRunner` for CLI input.
+- [x] 3.6 Add `--yes` flag to `abc sync` CLI handler. Plumb into the resolver's prompt logic as auto-accept.
+- [x] 3.7 Unit tests for each branch: interactive Y, interactive N, interactive default-Enter, non-interactive no-flag, non-interactive with `--yes`. Use `pytest`'s `monkeypatch` to fake TTY detection and `click.testing.CliRunner` for CLI input.
 <!-- opsx:tdd:3.7:begin -->
   - **Input**: `pytest libs/beacon/tests/unit/cli/test_sync.py -k 'repair' -v`.
   - **Expected Output**: Five parametrised cases green covering each branch.
@@ -251,7 +251,7 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:4:end -->
 
 
-- [ ] 4.1 In `libs/beacon/src/beacon/domains/adoption/apply.py::apply_adoption()`, remove the `if candidate.artifact_type == "agents": continue` skip. Extend the branch to append `candidate.path` (form `agents/<name>.md`) to `beacon_settings.artifacts.agents`; deduplicate.
+- [x] 4.1 In `libs/beacon/src/beacon/domains/adoption/apply.py::apply_adoption()`, remove the `if candidate.artifact_type == "agents": continue` skip. Extend the branch to append `candidate.path` (form `agents/<name>.md`) to `beacon_settings.artifacts.agents`; deduplicate.
 <!-- opsx:tdd:4.1:begin -->
   - **Input**: `pytest libs/beacon/tests/unit/domains/adoption/test_apply.py -k agent -v` after editing `apply.py`.
   - **Expected Output**: Selected agent is appended to `beacon.yaml.artifacts.agents` (no duplicate on re-adopt); persisted via `to_yaml()`.
@@ -262,19 +262,19 @@ pytest tests/ -v --tb=short
     - TC3: Adopt one agent + one context + one skill in same run → all three appear under their respective lists in a single write
     - TC4: Path normalisation: candidate.path is stored as `agents/<name>.md` (matches Decision 6 / spec scenario)
 <!-- opsx:tdd:4.1:end -->
-- [ ] 4.2 Ensure the existing global install call path for selected agents (from the adopt apply flow) continues to fire — agents still symlink into `~/.config/opencode/agents/` and `~/.claude/agents/`.
+- [x] 4.2 Ensure the existing global install call path for selected agents (from the adopt apply flow) continues to fire — agents still symlink into `~/.config/opencode/agents/` and `~/.claude/agents/`.
 <!-- opsx:tdd:4.2:begin -->
   - **Input**: Run `apply_adoption` against a tmp HOME with the agent install helper; inspect `~/.config/opencode/agents/` and `~/.claude/agents/`.
   - **Expected Output**: Both directories contain a symlink to the warehouse agent file.
   - **Validation**: `os.path.islink(~/.config/opencode/agents/<name>.md) == True` and target resolves into the warehouse working tree.
 <!-- opsx:tdd:4.2:end -->
-- [ ] 4.3 Update `libs/beacon/src/beacon/domains/adoption/discovery.py::is_adopted()` to check `beacon_settings.artifacts.agents` in addition to contexts and skills.
+- [x] 4.3 Update `libs/beacon/src/beacon/domains/adoption/discovery.py::is_adopted()` to check `beacon_settings.artifacts.agents` in addition to contexts and skills.
 <!-- opsx:tdd:4.3:begin -->
   - **Input**: `pytest libs/beacon/tests/unit/domains/adoption/test_discovery.py -k is_adopted -v`.
   - **Expected Output**: Agent path returns True when in `artifacts.agents`, False otherwise; symmetric with contexts/skills behaviour.
   - **Validation**: All three artifact types share one parametrised test confirming identical adoption-check semantics.
 <!-- opsx:tdd:4.3:end -->
-- [ ] 4.4 Update `cleanup_unadopted_artifacts()` (and any unadopt helpers) so that removing an agent from `beacon.yaml.artifacts.agents` does NOT uninstall the global symlink; explicit comment in the code stating this is intentional (Decision 7).
+- [x] 4.4 Update `cleanup_unadopted_artifacts()` (and any unadopt helpers) so that removing an agent from `beacon.yaml.artifacts.agents` does NOT uninstall the global symlink; explicit comment in the code stating this is intentional (Decision 7).
 <!-- opsx:tdd:4.4:begin -->
   - **Input**: `pytest libs/beacon/tests/unit/domains/adoption/test_cleanup.py -k 'agent and unadopt' -v`.
   - **Expected Output**: After removing an agent from `beacon.yaml` and running cleanup, both global symlinks (opencode + claude) still exist; no uninstall side effect.
@@ -284,7 +284,7 @@ pytest tests/ -v --tb=short
     - TC2: Same scenario but with two projects sharing the same global agent → other project's `is_adopted` still True; symlinks persist
     - TC3: Code comment explicitly cites Decision 7 (grepable marker) — guards against future regression by removal
 <!-- opsx:tdd:4.4:end -->
-- [ ] 4.5 Unit tests for apply_adoption with agent selections; assert `beacon.yaml` updated, global install triggered, no global uninstall on unadoption.
+- [x] 4.5 Unit tests for apply_adoption with agent selections; assert `beacon.yaml` updated, global install triggered, no global uninstall on unadoption.
 <!-- opsx:tdd:4.5:begin -->
   - **Input**: `pytest libs/beacon/tests/unit/domains/adoption/ -v`.
   - **Expected Output**: All new tests green; coverage on the agent branch of `apply_adoption` and on `cleanup_unadopted_artifacts` ≥ 90%.
@@ -301,13 +301,13 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:5:end -->
 
 
-- [ ] 5.1 In `libs/beacon/src/beacon/domains/adoption/tui.py`, add an "Agents" section alongside "Contexts" and "Skills". Populate with agent candidates from `discovery.py`.
+- [x] 5.1 In `libs/beacon/src/beacon/domains/adoption/tui.py`, add an "Agents" section alongside "Contexts" and "Skills". Populate with agent candidates from `discovery.py`.
 <!-- opsx:tdd:5.1:begin -->
   - **Input**: Textual headless test driving the TUI with a fixture that has 1 context, 1 skill, 1 agent.
   - **Expected Output**: Rendered tree contains three section headings: 'Contexts', 'Skills', 'Agents'; each populated with its candidate.
   - **Validation**: Snapshot matches; the 'Agents' section header is present even when zero candidates exist (empty section, not missing).
 <!-- opsx:tdd:5.1:end -->
-- [ ] 5.2 When an agent is ticked, read `agents.yaml` (via the warehouse client), resolve `skills:` list, programmatically tick the corresponding skill checkboxes. Record a `required_by` provenance map keyed on skill name → list of requiring agents.
+- [x] 5.2 When an agent is ticked, read `agents.yaml` (via the warehouse client), resolve `skills:` list, programmatically tick the corresponding skill checkboxes. Record a `required_by` provenance map keyed on skill name → list of requiring agents.
 <!-- opsx:tdd:5.2:begin -->
   - **Input**: Headless run: tick `spec-planner` whose `agents.yaml` entry lists `[opsx-enhance-tasks]`.
   - **Expected Output**: After tick event, the `opsx-enhance-tasks` checkbox is checked; `required_by['opsx-enhance-tasks'] == ['spec-planner']`.
@@ -319,7 +319,7 @@ pytest tests/ -v --tb=short
     - TC4: Tick agent then untick same agent immediately → skill un-ticks (per 5.5), provenance cleared
     - TC5: Required skill missing from warehouse → propagation logs/surfaces a TUI error per `agent-skill-dependency-sync` spec; `abc adopt` should refuse to render in this case (see Scenario 'Malformed warehouse blocks adopt TUI')
 <!-- opsx:tdd:5.2:end -->
-- [ ] 5.3 Render provenance next to each skill checkbox when non-empty (e.g. ``(required by spec-planner, registra-developer)``). Cap display to first 3 agents with `+N more` if the list is longer.
+- [x] 5.3 Render provenance next to each skill checkbox when non-empty (e.g. ``(required by spec-planner, registra-developer)``). Cap display to first 3 agents with `+N more` if the list is longer.
 <!-- opsx:tdd:5.3:begin -->
   - **Input**: Headless run: tick four agents that all require the same skill.
   - **Expected Output**: Skill row text reads `(required by A, B, C +1 more)` (first 3 + count).
@@ -330,7 +330,7 @@ pytest tests/ -v --tb=short
     - TC3: 4+ requirers → `(required by A, B, C +N more)` with N = total - 3
     - TC4: 0 requirers (skill ticked explicitly only) → no provenance text
 <!-- opsx:tdd:5.3:end -->
-- [ ] 5.4 Implement hard-lock: when a skill's `required_by` list is non-empty, the checkbox rejects toggle-off events. Show a transient status message ``"Required by: <agent> — untick agent first"``.
+- [x] 5.4 Implement hard-lock: when a skill's `required_by` list is non-empty, the checkbox rejects toggle-off events. Show a transient status message ``"Required by: <agent> — untick agent first"``.
 <!-- opsx:tdd:5.4:begin -->
   - **Input**: Headless run: tick agent (auto-ticks skill); attempt to untick the skill.
   - **Expected Output**: Skill remains ticked; status bar shows `Required by: <agent> — untick agent first`.
@@ -341,7 +341,7 @@ pytest tests/ -v --tb=short
     - TC3: Skill with `required_by == []` (user-explicit only) → toggle works normally
     - TC4: Status message clears after configurable transient interval (or next user input)
 <!-- opsx:tdd:5.4:end -->
-- [ ] 5.5 When an agent is unticked, remove it from every skill's `required_by` list. If a skill's `required_by` becomes empty AND the user never explicitly ticked it (tracked separately as `user_explicit`), auto-untick the skill.
+- [x] 5.5 When an agent is unticked, remove it from every skill's `required_by` list. If a skill's `required_by` becomes empty AND the user never explicitly ticked it (tracked separately as `user_explicit`), auto-untick the skill.
 <!-- opsx:tdd:5.5:begin -->
   - **Input**: Headless run: tick agent → skill auto-ticks; untick agent.
   - **Expected Output**: Skill auto-unticks; `required_by[skill]` cleared; `user_explicit[skill]` is False.
@@ -352,13 +352,13 @@ pytest tests/ -v --tb=short
     - TC3: User explicitly ticks skill, then ticks agent (which would also require it), then unticks agent → skill stays ticked because `user_explicit` is True (per Open Q1 in design)
     - TC4: User explicitly ticks skill, agent ticking adds redundant provenance, untick all agents → skill stays ticked
 <!-- opsx:tdd:5.5:end -->
-- [ ] 5.6 When a skill is ticked directly by the user, set `user_explicit[skill] = True`. This survives subsequent agent unticks.
+- [x] 5.6 When a skill is ticked directly by the user, set `user_explicit[skill] = True`. This survives subsequent agent unticks.
 <!-- opsx:tdd:5.6:begin -->
   - **Input**: Headless run: user clicks skill checkbox directly (no agent ticked yet).
   - **Expected Output**: `user_explicit[skill] == True`; later agent untick does not auto-clear the skill.
   - **Validation**: Snapshot after the sequence (explicit-tick → tick-agent → untick-agent) shows skill still ticked.
 <!-- opsx:tdd:5.6:end -->
-- [ ] 5.7 Update the `select all` (`a`) and `select none` (`n`) keybindings: select-all triggers agent-auto-tick propagation; select-none clears everything including provenance.
+- [x] 5.7 Update the `select all` (`a`) and `select none` (`n`) keybindings: select-all triggers agent-auto-tick propagation; select-none clears everything including provenance.
 <!-- opsx:tdd:5.7:begin -->
   - **Input**: Headless run: press `a`; then press `n`.
   - **Expected Output**: After `a`: every checkbox ticked, agent-auto-tick still propagated (no inconsistent state). After `n`: every checkbox un-ticked, `required_by` and `user_explicit` maps both empty.
@@ -368,7 +368,7 @@ pytest tests/ -v --tb=short
     - TC2: Press `n` after `a` → fully empty state, provenance cleared
     - TC3: Press `a` twice → idempotent, no double-provenance entries
 <!-- opsx:tdd:5.7:end -->
-- [ ] 5.8 TUI snapshot tests or headless runs (textual's test harness) covering: tick agent → skills auto-tick with provenance; untick skill while agent ticked → blocked; untick agent → skill auto-unticks unless user-explicit; multi-agent shared skill provenance.
+- [x] 5.8 TUI snapshot tests or headless runs (textual's test harness) covering: tick agent → skills auto-tick with provenance; untick skill while agent ticked → blocked; untick agent → skill auto-unticks unless user-explicit; multi-agent shared skill provenance.
 <!-- opsx:tdd:5.8:begin -->
   - **Input**: `pytest libs/beacon/tests/unit/domains/adoption/test_tui*.py -v`.
   - **Expected Output**: Four snapshot/state cases green; failures produce clear diff output.
@@ -385,14 +385,14 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:6:end -->
 
 
-- [ ] 6.1 Extend `libs/beacon/src/beacon/domains/warehouse/validator.py` so `abc warehouse status` reports declared agents whose `agents.yaml` entries have missing skills, as part of the existing warehouse integrity report.
+- [x] 6.1 Extend `libs/beacon/src/beacon/domains/warehouse/validator.py` so `abc warehouse status` reports declared agents whose `agents.yaml` entries have missing skills, as part of the existing warehouse integrity report.
 <!-- opsx:tdd:6.1:begin -->
   - **Input**: `abc warehouse status` against a fixture warehouse with one declared agent whose `agents.yaml` requires a skill that does not exist in the warehouse.
   - **Expected Output**: Report includes a section listing the offending agent + missing skill; exit non-zero (matching existing integrity-failure semantics).
   - **Validation**: Stdout contains substrings for the agent name AND the missing skill; clean fixture produces no such section.
 <!-- opsx:tdd:6.1:end -->
-- [ ] 6.2 Confirm the "declared agent not in `agents.yaml`" error (per `validate_declared_agents_in_manifest`) surfaces with clear output.
-- [ ] 6.3 Smoke tests using a fixture warehouse + project fixture.
+- [x] 6.2 Confirm the "declared agent not in `agents.yaml`" error (per `validate_declared_agents_in_manifest`) surfaces with clear output.
+- [x] 6.3 Smoke tests using a fixture warehouse + project fixture.
 <!-- opsx:tdd:6.3:begin -->
   - **Input**: `pytest libs/beacon/tests/integration/test_warehouse_status_agents.py -v` (or unit-level if integration framework is overkill).
   - **Expected Output**: Smoke covers: clean warehouse, missing-skill warehouse, declared-agent-missing warehouse — each with expected report output and exit code.

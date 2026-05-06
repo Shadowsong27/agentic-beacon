@@ -21,8 +21,9 @@ class ArtifactsConfig(BaseModel):
 
     model_config = {"extra": "forbid"}
 
-    skills: list[str] = Field(default_factory=list)
     contexts: list[str] = Field(default_factory=list)
+    skills: list[str] = Field(default_factory=list)
+    agents: list[str] = Field(default_factory=list)
 
 
 class IgnoreConfig(BaseModel):
@@ -91,7 +92,7 @@ class BeaconManifest(BaseModel):
             del artifacts_data["knowledge"]
             legacy_knowledge_removed = True
 
-        valid_types = {"skills", "contexts"}
+        valid_types = {"skills", "contexts", "agents"}
         for artifact_type, items in artifacts_data.items():
             if artifact_type not in valid_types:
                 raise ValidationError(
@@ -157,7 +158,7 @@ class ValidationResult(BaseModel):
 class BeaconManifestValidator:
     """Validator for beacon.yaml structure and content."""
 
-    VALID_ARTIFACT_TYPES = {"skills", "contexts"}
+    VALID_ARTIFACT_TYPES = {"skills", "contexts", "agents"}
 
     def validate_structure(self, manifest: BeaconManifest) -> ValidationResult:
         """Validate beacon manifest structure."""

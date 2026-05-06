@@ -8,6 +8,7 @@ Provides:
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from beacon.domains.adoption.discovery import classify_artifact_type
@@ -145,6 +146,26 @@ def make_cb_id(path: str) -> str:
     return "cb_" + re.sub(r"[^a-zA-Z0-9_-]", "_", path.rstrip("/"))
 
 
+def _agent_name_from_path(path: str) -> str:
+    """Extract agent stem from path like 'agents/name.md'."""
+    if path.startswith("agents/"):
+        path = path[7:]
+    if path.endswith(".md"):
+        path = path[:-3]
+    return path
+
+
+def _format_provenance(required_by: list[str]) -> str:
+    """Format provenance text, capping at 3 agents + '+N more'."""
+    if not required_by:
+        return ""
+    display = required_by[:3]
+    suffix = ""
+    if len(required_by) > 3:
+        suffix = f" +{len(required_by) - 3} more"
+    return f" (required by {', '.join(display)}{suffix})"
+
+
 class AdoptApp:
     """Textual TUI for interactive artifact selection and unadoption.
 
@@ -167,11 +188,13 @@ class AdoptApp:
         adopted_paths: list[str],
         project_name: str = "",
         warehouse_name: str = "",
+        warehouse_path: Path | None = None,
     ) -> None:
         self.candidates = candidates
         self.adopted_paths = adopted_paths
         self.project_name = project_name
         self.warehouse_name = warehouse_name
+        self.warehouse_path = warehouse_path
 
     def run(self) -> AdoptResult:
         """Launch TUI and return AdoptResult (empty lists on cancel)."""
@@ -183,6 +206,7 @@ class AdoptApp:
         adopted_paths = self.adopted_paths
         project_name = self.project_name
         warehouse_name = self.warehouse_name
+        warehouse_path = self.warehouse_path
 
         _ARTIFACT_ICONS: dict[str, str] = {
             "contexts": "📄",
@@ -195,11 +219,14 @@ class AdoptApp:
             selected: bool,
             commits_ago: int | None = None,
             adopted_tag: bool = False,
+            provenance: str = "",
         ) -> str:
             checkbox = (
                 "[bold cyan]\\[x][/bold cyan]" if selected else "[dim]\\[ ][/dim]"
             )
             label = f"{checkbox} [cyan]{path}[/cyan]"
+            if provenance:
+                label += f" [dim yellow]{provenance}[/dim yellow]"
             if commits_ago is not None:
                 plural = "s" if commits_ago != 1 else ""
                 label += f" [dim yellow]\\[added {commits_ago} commit{plural} ago][/dim yellow]"
@@ -226,6 +253,10 @@ class AdoptApp:
                 self_inner._adopted_paths = adopted_paths
                 self_inner._show_all = False
                 self_inner._current_docs_url: str = ""
+                # Project-scoped-agents state
+                self_inner._required_by: dict[str, list[str]] = {}
+                self_inner._user_explicit: dict[str, bool] = {}
+                self_inner._status_message: str = ""
 
             def compose(self_inner) -> ComposeResult:  # noqa: N805
                 yield Header(show_clock=False)
@@ -236,7 +267,6 @@ class AdoptApp:
 
             def on_mount(self_inner) -> None:  # noqa: N805
                 self_inner.theme = "catppuccin-mocha"
-                # Meta panel: project + warehouse info
                 parts: list[str] = []
                 if project_name:
                     parts.append(f"[dim]project:[/dim] [bold]{project_name}[/bold]")
@@ -252,13 +282,30 @@ class AdoptApp:
                 )
                 self_inner._rebuild_tree()
 
+            def _load_agent_skills(self_inner, agent_path: str) -> list[str]:  # noqa: N805
+                """Load required skills for an agent from agents.yaml."""
+                if warehouse_path is None:
+                    return []
+                try:
+                    from beacon.core.dependencies.manifest import load_agent_manifest
+
+                    manifest = load_agent_manifest(warehouse_path)
+                    if manifest is None:
+                        return []
+                    agent_name = _agent_name_from_path(agent_path)
+                    entry = manifest.agents.get(agent_name)
+                    if entry is None:
+                        return []
+                    return list(entry.skills)
+                except Exception:
+                    return []
+
             def _rebuild_tree(self_inner) -> None:  # noqa: N805
                 tree = self_inner.query_one("#tree", Tree)
                 tree.root.remove_children()
                 tree.show_root = False
                 tree.root.expand()
 
-                # Build display items based on current view mode
                 by_type: dict[str, list[tuple]] = {}
 
                 if not self_inner._show_all:
@@ -267,19 +314,16 @@ class AdoptApp:
                             (c.path, c.description, False, c.commits_ago, False)
                         )
                 else:
-                    # Unadopted candidates (unchecked)
                     for c in self_inner._candidates:
                         by_type.setdefault(c.artifact_type, []).append(
                             (c.path, c.description, False, c.commits_ago, False)
                         )
-                    # Adopted paths (pre-checked)
                     unadopted_paths = {c.path for c in self_inner._candidates}
                     for path in self_inner._adopted_paths:
                         if path in unadopted_paths:
                             continue
                         atype = classify_artifact_type(path)
                         if atype is None:
-                            # Infer type from first path segment
                             atype = path.split("/")[0] if "/" in path else "contexts"
                         by_type.setdefault(atype, []).append(
                             (path, "", True, None, True)
@@ -314,12 +358,17 @@ class AdoptApp:
                         commits_ago_val,
                         orig_adopted,
                     ) in type_items:
+                        prov = ""
+                        if atype == "skills":
+                            req_list = self_inner._required_by.get(path, [])
+                            prov = _format_provenance(req_list)
                         folder.add_leaf(
                             _leaf_label(
                                 path,
                                 selected,
                                 commits_ago_val,
                                 orig_adopted and self_inner._show_all,
+                                provenance=prov,
                             ),
                             data={
                                 "path": path,
@@ -327,6 +376,7 @@ class AdoptApp:
                                 "selected": selected,
                                 "originally_adopted": orig_adopted,
                                 "commits_ago": commits_ago_val,
+                                "artifact_type": atype,
                             },
                         )
 
@@ -336,7 +386,6 @@ class AdoptApp:
                 data = event.node.data
                 panel = self_inner.query_one("#desc-panel", Static)
                 if data and data.get("docs_url"):
-                    # Folder/section node — show docs URL + open hint
                     self_inner._current_docs_url = data["docs_url"]
                     panel.update(
                         f"[dim]docs:[/dim]  {data['docs_url']}  "
@@ -347,26 +396,100 @@ class AdoptApp:
                     panel.update(f"[dim]desc:[/dim]  {data['desc']}")
                 else:
                     self_inner._current_docs_url = ""
-                    mode = "all" if self_inner._show_all else "unadopted"
-                    panel.update(
-                        f"[dim]showing {mode} — "
-                        "[dim]space[/dim] toggle  [dim]enter[/dim] confirm  "
-                        "[dim]a[/dim] all  [dim]n[/dim] none  [dim]t[/dim] toggle view"
-                    )
+                    if self_inner._status_message:
+                        panel.update(f"[yellow]{self_inner._status_message}[/yellow]")
+                        self_inner._status_message = ""
+                    else:
+                        mode = "all" if self_inner._show_all else "unadopted"
+                        panel.update(
+                            f"[dim]showing {mode} — "
+                            "[dim]space[/dim] toggle  [dim]enter[/dim] confirm  "
+                            "[dim]a[/dim] all  [dim]n[/dim] none  [dim]t[/dim] toggle view"
+                        )
+
+            def _set_skill_selected(
+                self_inner, skill_path: str, selected: bool
+            ) -> None:  # noqa: N805
+                """Update a skill leaf's selected state by path."""
+                tree = self_inner.query_one("#tree", Tree)
+                for section_node in tree.root.children:
+                    for leaf in iter_selectable_leaves(section_node):
+                        if leaf.data.get("path") == skill_path:
+                            leaf.data["selected"] = selected
+                            req_list = self_inner._required_by.get(skill_path, [])
+                            prov = _format_provenance(req_list)
+                            leaf.set_label(
+                                _leaf_label(
+                                    skill_path,
+                                    selected,
+                                    leaf.data.get("commits_ago"),
+                                    leaf.data.get("originally_adopted", False)
+                                    and self_inner._show_all,
+                                    provenance=prov,
+                                )
+                            )
+                            _refresh_ancestor_folders(leaf)
+                            break
 
             def _toggle_node_selection(self_inner, node) -> None:  # noqa: N805
-                """Toggle a leaf node's selection state.
-
-                For pure grouping folders (data has ``"folder"`` key), toggle all
-                descendant leaves instead: if any are unselected, select all; if all
-                are already selected, deselect all.
-                """
                 if node is None:
                     return
                 data = node.data
                 if data is not None and "selected" in data:
-                    # Leaf node — toggle it and refresh ancestor folder labels.
-                    data["selected"] = not data["selected"]
+                    atype = data.get("artifact_type", "")
+                    path = data["path"]
+
+                    # Hard-lock: reject unticking a skill that is required by an agent
+                    if atype == "skills" and data["selected"]:
+                        req_list = self_inner._required_by.get(path, [])
+                        if req_list:
+                            agents = ", ".join(req_list[:3])
+                            if len(req_list) > 3:
+                                agents += f" +{len(req_list) - 3} more"
+                            self_inner._status_message = (
+                                f"Required by: {agents} — untick agent first"
+                            )
+                            panel = self_inner.query_one("#desc-panel", Static)
+                            panel.update(
+                                f"[yellow]{self_inner._status_message}[/yellow]"
+                            )
+                            return
+
+                    new_state = not data["selected"]
+                    data["selected"] = new_state
+
+                    # Track user_explicit for skills
+                    if atype == "skills":
+                        if new_state:
+                            self_inner._user_explicit[path] = True
+
+                    # Agent tick propagation
+                    if atype == "agents" and new_state:
+                        skills = self_inner._load_agent_skills(path)
+                        for skill_name in skills:
+                            skill_path = f"skills/{skill_name}/"
+                            self_inner._required_by.setdefault(skill_path, [])
+                            if path not in self_inner._required_by[skill_path]:
+                                self_inner._required_by[skill_path].append(path)
+                            self_inner._set_skill_selected(skill_path, True)
+                    elif atype == "agents" and not new_state:
+                        # Agent untick: remove from required_by
+                        skills = self_inner._load_agent_skills(path)
+                        for skill_name in skills:
+                            skill_path = f"skills/{skill_name}/"
+                            if skill_path in self_inner._required_by:
+                                self_inner._required_by[skill_path] = [
+                                    p
+                                    for p in self_inner._required_by[skill_path]
+                                    if p != path
+                                ]
+                                if not self_inner._required_by[
+                                    skill_path
+                                ] and not self_inner._user_explicit.get(
+                                    skill_path, False
+                                ):
+                                    self_inner._set_skill_selected(skill_path, False)
+
                     node.set_label(
                         _leaf_label(
                             data.get("display_name") or data["path"],
@@ -374,11 +497,15 @@ class AdoptApp:
                             data.get("commits_ago"),
                             data.get("originally_adopted", False)
                             and self_inner._show_all,
+                            provenance=_format_provenance(
+                                self_inner._required_by.get(path, [])
+                            )
+                            if atype == "skills"
+                            else "",
                         )
                     )
                     _refresh_ancestor_folders(node)
                 elif data is not None and "folder" in data:
-                    # Grouping folder — toggle all descendant leaves.
                     leaves = list(iter_selectable_leaves(node))
                     new_state = not all(lf.data.get("selected", False) for lf in leaves)
                     for lf in leaves:
@@ -392,7 +519,6 @@ class AdoptApp:
                                 and self_inner._show_all,
                             )
                         )
-                    # Refresh this folder and its ancestors.
                     any_sel = new_state
                     all_sel = new_state
                     node.set_label(_folder_label(data["folder"], all_sel, any_sel))
@@ -445,6 +571,10 @@ class AdoptApp:
                 for section_node in tree.root.children:
                     for leaf in iter_selectable_leaves(section_node):
                         leaf.data["selected"] = True
+                        path = leaf.data["path"]
+                        atype = leaf.data.get("artifact_type", "")
+                        if atype == "skills":
+                            self_inner._user_explicit[path] = True
                         leaf.set_label(
                             _leaf_label(
                                 leaf.data.get("display_name") or leaf.data["path"],
@@ -471,6 +601,8 @@ class AdoptApp:
                             )
                         )
                     _refresh_all_folders(section_node)
+                self_inner._required_by.clear()
+                self_inner._user_explicit.clear()
 
         result = _InnerApp().run()
         return result if result is not None else AdoptResult()
