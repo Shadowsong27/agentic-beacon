@@ -1,6 +1,6 @@
 """Unit tests for warehouse path validation."""
 
-from beacon.core.warehouse_path import (
+from beacon.domains.warehouse.warehouse_path import (
     WarehousePathMissing,
     WarehousePathNotARepo,
     WarehousePathOK,

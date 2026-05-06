@@ -3,40 +3,22 @@
 ## Requirements
 
 - **Python 3.12 or higher**
-- One of: `uv`, `pipx`, or `pip`
+- `uv` — [install uv](https://docs.astral.sh/uv/getting-started/installation/)
 
-## Install Methods
+## Install
 
-=== "uv (Recommended)"
+```bash
+uv tool install agentic-beacon
+```
 
-    ```bash
-    uv tool install agentic-beacon
-    ```
-
-    `uv tool install` creates an isolated environment and puts `abc` on your PATH. Best for tools you want available everywhere.
-
-=== "pipx"
-
-    ```bash
-    pipx install agentic-beacon
-    ```
-
-    `pipx` is equivalent to `uv tool install` for isolated tool environments.
-
-=== "pip"
-
-    ```bash
-    pip install agentic-beacon
-    ```
-
-    Use this if you're installing into an existing virtual environment.
+`uv tool install` creates an isolated environment and puts `abc` on your PATH globally — no virtual environment activation needed.
 
 === "Offline / Air-gapped"
 
-    Download a platform bundle from the [GitHub Releases page](https://github.com/Shadowsong27/agentic-beacon/releases) and install from the local file:
+    Download the wheel from the [GitHub Releases page](https://github.com/Shadowsong27/agentic-beacon/releases), then install it as a tool from the local file:
 
     ```bash
-    pip install agentic-beacon-*.whl
+    uv tool install ./agentic-beacon-*.whl
     ```
 
 ## Verify
@@ -49,23 +31,9 @@ You should see the current version (`2.7.1` or higher).
 
 ## Upgrade
 
-=== "uv"
-
-    ```bash
-    uv tool upgrade agentic-beacon
-    ```
-
-=== "pipx"
-
-    ```bash
-    pipx upgrade agentic-beacon
-    ```
-
-=== "pip"
-
-    ```bash
-    pip install --upgrade agentic-beacon
-    ```
+```bash
+uv tool upgrade agentic-beacon
+```
 
 ## What Gets Installed
 

@@ -1,0 +1,11 @@
+# Beacon agent dependency manifest.
+# Each top-level key maps an agent (agents/<key>.md) to its required skills.
+#
+# Example:
+# spec-planner:
+#   skills:
+#     - opsx-enhance-tasks
+#     - openspec-propose
+#
+# pipeline-developer:
+#   skills: []

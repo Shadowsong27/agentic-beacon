@@ -90,6 +90,8 @@ nav:
     - Creating Skills: guides/creating-skills.md
     - Team Collaboration: guides/team-collaboration.md
     - Advanced Patterns: guides/advanced-patterns.md
+  - Tutorials:
+    - Your First Contribution: tutorials/first-contribution.md
   - Reference:
     - beacon.yaml: reference/beacon-yaml.md
     - CLI Reference: reference/cli.md

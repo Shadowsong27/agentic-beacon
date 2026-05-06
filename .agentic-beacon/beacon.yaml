@@ -6,3 +6,4 @@ artifacts:
   contexts:
   - contexts/python-standards.md
   - contexts/openspec-workflow.md
+  - contexts/agent-practices.md

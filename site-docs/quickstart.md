@@ -22,6 +22,7 @@ This creates the required structure:
 
 ```
 my-org-warehouse/
+├── agents/
 ├── contexts/
 ├── knowledge/
 ├── skills/
@@ -68,15 +69,7 @@ abc warehouse connect --path ~/my-org-warehouse
 abc adopt          # opens interactive TUI — Space to select, Enter to confirm
 ```
 
-This writes your selections to `.agentic-beacon/beacon.yaml`.
-
-### 6. Sync
-
-```bash
-abc sync
-```
-
-Artifacts are symlinked into `.agentic-beacon/artifacts/`, wired into your agent config, and skills installed as slash commands. Knowledge files referenced by markdown links in your contexts and skills are auto-derived and synced automatically.
+`abc adopt` writes your selections to `beacon.yaml` and syncs them immediately — symlinks are created, agent config is wired, and skills are installed as slash commands. No separate `abc sync` needed.
 
 ---
 
@@ -90,11 +83,8 @@ git clone git@github.com:your-org/warehouse.git ~/my-org-warehouse
 cd ~/my-project
 abc warehouse connect --path ~/my-org-warehouse
 
-# 3. Browse and select artifacts
+# 3. Browse and select artifacts — syncs automatically
 abc adopt
-
-# 4. Sync
-abc sync
 ```
 
 Done. Your agent now has the team's contexts, knowledge, and skills loaded.
@@ -106,7 +96,8 @@ Done. Your agent now has the team's contexts, knowledge, and skills loaded.
 Once set up, the recurring loop is:
 
 ```
-1. abc sync                     — pull the latest from the warehouse
+1. git pull (in warehouse)      — fetch teammates' updates
+   abc sync                     — re-sync symlinks after manual beacon.yaml edits or global artifact installs
 2. code with agent              — agent uses synced contexts, knowledge, and skills
 3. abc warehouse status         — see what has changed in the warehouse working tree
 4. abc warehouse contribute     — commit improvements back to the warehouse

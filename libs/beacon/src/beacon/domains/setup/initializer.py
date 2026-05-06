@@ -6,7 +6,7 @@ from typing import Any
 
 from loguru import logger
 
-from beacon.core.file_filter import is_skill_file
+from beacon.core.file_filter import is_artifact_file
 from beacon.domains.artifact.checksums import compute_sha256, write_checksums
 
 _DATA_DIR = Path(__file__).parent.parent.parent / "data"
@@ -18,6 +18,7 @@ TEMPLATE_FILES: list[str] = [
     ".gitignore",
     "README.md",
     "agents/README.md",
+    "agents/agents.yaml",
     "contexts/README.md",
     "docs/architecture.md",
     "docs/contribution-guide.md",
@@ -118,10 +119,14 @@ class WarehouseInitializer:
         return content.replace("{org_name}", org_name)
 
     def _create_agents(self) -> None:
-        """Create agents directory with README template."""
+        """Create agents directory with README and agents.yaml templates."""
         self._write_if_missing(
             self.warehouse_path / "agents" / "README.md",
             (TEMPLATES_DIR / "agents" / "README.md").read_text(encoding="utf-8"),
+        )
+        self._write_if_missing(
+            self.warehouse_path / "agents" / "agents.yaml",
+            (TEMPLATES_DIR / "agents" / "agents.yaml").read_text(encoding="utf-8"),
         )
 
     def _create_contexts(self) -> None:
@@ -172,7 +177,7 @@ class WarehouseInitializer:
             dest_dir = self.warehouse_path / "skills" / skill_dir.name
             dest_dir.mkdir(parents=True, exist_ok=True)
             for src_file in sorted(skill_dir.rglob("*")):
-                if not is_skill_file(src_file):
+                if not is_artifact_file(src_file):
                     continue
                 if "__pycache__" in src_file.parts:
                     continue

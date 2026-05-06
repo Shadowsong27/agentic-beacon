@@ -6,7 +6,7 @@ from typing import Any
 
 from loguru import logger
 
-from beacon.core.file_filter import SKILL_IGNORE_PATTERNS
+from beacon.core.file_filter import ARTIFACT_IGNORE_PATTERNS
 
 
 class WarehouseDistributor:
@@ -290,7 +290,7 @@ class WarehouseDistributor:
                 shutil.copytree(
                     src_dir,
                     dst_dir,
-                    ignore=shutil.ignore_patterns(*SKILL_IGNORE_PATTERNS),
+                    ignore=shutil.ignore_patterns(*ARTIFACT_IGNORE_PATTERNS),
                 )
 
                 # Count files
@@ -319,7 +319,7 @@ class WarehouseDistributor:
                 shutil.copytree(
                     src_dir,
                     dst_dir,
-                    ignore=shutil.ignore_patterns(*SKILL_IGNORE_PATTERNS),
+                    ignore=shutil.ignore_patterns(*ARTIFACT_IGNORE_PATTERNS),
                 )
 
                 logger.debug(f"Copied skill: {skill_name}")

@@ -17,6 +17,7 @@ cd my-warehouse
 
 ```
 my-warehouse/
+├── agents/
 ├── contexts/
 ├── knowledge/
 ├── skills/

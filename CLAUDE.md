@@ -9,3 +9,5 @@
 @.agentic-beacon/artifacts/contexts/openspec-workflow.md
 
 @.agentic-beacon/artifacts/contexts/cicd-flow.md
+
+@.agentic-beacon/artifacts/contexts/agent-practices.md

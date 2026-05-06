@@ -61,3 +61,9 @@ class ContributeError(BeaconError):
     """Raised when a contribute operation cannot proceed."""
 
     pass
+
+
+class AgentManifestError(ConfigurationError):
+    """Raised when the agent manifest (agents/agents.yaml) is invalid or malformed."""
+
+    pass

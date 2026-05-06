@@ -8,8 +8,15 @@ import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from beacon.core.preconditions import ensure_sync_ready
+from beacon.core.dependencies.manifest import (
+    AgentManifestError,
+    load_agent_manifest,
+    validate_agent_frontmatter_clean,
+    validate_agents_directory,
+    validate_declared_skills,
+)
 from beacon.domains.warehouse._tracked_paths import get_tracked_paths
+from beacon.domains.warehouse.preconditions import ensure_sync_ready
 
 
 @dataclass
@@ -60,6 +67,23 @@ def status(
         StatusResult with modifications and ahead/behind counts.
     """
     warehouse_path = ensure_sync_ready(project_root)
+
+    # Validate agent manifest (only when agents/ has content)
+    agents_dir = warehouse_path / "agents"
+    if agents_dir.exists() and agents_dir.is_dir():
+        has_agent_files = any(
+            f.is_file() and f.suffix == ".md" and f.name != "README.md"
+            for f in agents_dir.iterdir()
+        )
+        if has_agent_files:
+            try:
+                manifest = load_agent_manifest(warehouse_path)
+                validate_agents_directory(warehouse_path, manifest)
+                validate_agent_frontmatter_clean(warehouse_path)
+                if manifest is not None:
+                    validate_declared_skills(warehouse_path, manifest)
+            except AgentManifestError as exc:
+                raise ValueError(str(exc)) from exc
 
     result = StatusResult()
 
