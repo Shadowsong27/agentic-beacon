@@ -409,8 +409,8 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:7:end -->
 
 
-- [ ] 7.1 **[MANUAL]** Update `examples/sample-warehouse/agents/agents.yaml` to declare an example agent with a skill requirement, demonstrating the feature end-to-end.
-- [ ] 7.2 **[MANUAL]** If the sample warehouse lacks a sample skill matching the declared requirement, add one (minimal `skills/<name>/SKILL.md`).
+- [x] 7.1 **[MANUAL]** Update `examples/sample-warehouse/agents/agents.yaml` to declare an example agent with a skill requirement, demonstrating the feature end-to-end.
+- [x] 7.2 **[MANUAL]** If the sample warehouse lacks a sample skill matching the declared requirement, add one (minimal `skills/<name>/SKILL.md`).
 - [x] 7.3 **[MANUAL]** Append a "Project-scoped agents" section to `docs/migrations/artifact-dependencies-frontmatter.md` describing the new field, the `abc adopt` flow, the repair prompt at sync, and the zero-friction "re-run adopt" migration for existing users.
 
 ## 8. AGENTS.md & site-docs sync
@@ -452,13 +452,13 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:9:end -->
 
 
-- [ ] 9.1 **[MANUAL]** Run full `pytest` suite from repo root — all tests pass.
+- [x] 9.1 **[MANUAL]** Run full `pytest` suite from repo root — all tests pass.
 <!-- opsx:tdd:9.1:begin -->
   - **Input**: From repo root: `uv run pytest`.
   - **Expected Output**: Exit 0; zero failures; zero collection errors.
   - **Validation**: `echo $?` returns 0 immediately after pytest.
 <!-- opsx:tdd:9.1:end -->
-- [ ] 9.2 **[MANUAL]** Run architecture test (`libs/beacon/tests/unit/test_architecture.py`) — still green.
+- [x] 9.2 **[MANUAL]** Run architecture test (`libs/beacon/tests/unit/test_architecture.py`) — still green.
 <!-- opsx:tdd:9.2:begin -->
   - **Input**: `uv run pytest libs/beacon/tests/unit/test_architecture.py -v`.
   - **Expected Output**: All cases pass: cli/ → domains/ → core/, utils/ layering still respected; new code does not violate dependency rule.
@@ -476,7 +476,7 @@ pytest tests/ -v --tb=short
   - **Expected Output**: Prompt: `Add 'skills/<name>/' to beacon.yaml and sync it? [y/N]`; press y → skill re-appended, sync proceeds, exit 0.
   - **Validation**: `beacon.yaml.artifacts.skills` regrew the entry; symlink for the skill exists under `.agentic-beacon/artifacts/`; transitive contexts (if any) auto-pulled silently.
 <!-- opsx:tdd:9.4:end -->
-- [ ] 9.5 **[MANUAL]** Manual smoke #3: same setup as #4 but in non-interactive mode (e.g. `abc sync < /dev/null`) — hard error, `beacon.yaml` unchanged.
+- [x] 9.5 **[MANUAL]** Manual smoke #3: same setup as #4 but in non-interactive mode (e.g. `abc sync < /dev/null`) — hard error, `beacon.yaml` unchanged.
 <!-- opsx:tdd:9.5:begin -->
   - **Input**: Same fixture as smoke #2; `abc sync < /dev/null` (no TTY, no `--yes`).
   - **Expected Output**: Hard error mentioning the agent + missing skill + migration URL; exit non-zero; `beacon.yaml` byte-identical to pre-run.
