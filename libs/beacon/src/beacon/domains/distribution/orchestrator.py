@@ -29,7 +29,7 @@ from beacon.core.gitignore import GitignoreManager
 from beacon.core.manifest.beacon import BeaconManifest
 from beacon.domains.adoption.discovery import count_unadopted_since
 from beacon.domains.artifact.agent import (
-    detect_agents,
+    detect_agent_targets,
     update_agent_gitignores,
 )
 from beacon.domains.artifact.skill import (
@@ -442,7 +442,7 @@ def run_sync(
 
     # Wire declared agents into project-local tool directories
     if not dry_run:
-        detected_tools = detect_agents(project_root)
+        detected_tools = detect_agent_targets(project_root)
         for agent_entry in beacon_settings.artifacts.agents:
             # agent_entry is like "agents/spec-planner.md"
             artifact_file = artifacts_dir / agent_entry

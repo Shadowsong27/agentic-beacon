@@ -31,6 +31,20 @@ def detect_agents(project_root: Path, *, fallback_to_all: bool = False) -> list[
     return agents
 
 
+def detect_agent_targets(project_root: Path) -> list[str]:
+    """Return tool keys whose project-local agent directories exist.
+
+    For agent wiring per project-agent-wiring spec: gate on directory existence,
+    NOT on tool config files (which is what detect_agents() checks).
+    """
+    targets = []
+    if (project_root / ".claude").exists():
+        targets.append("claudecode")
+    if (project_root / ".opencode").exists():
+        targets.append("opencode")
+    return targets
+
+
 def update_agent_gitignores(project_root: Path) -> None:
     """Append .claude/agents/ and .opencode/agents/ entries to the project .gitignore.
 
