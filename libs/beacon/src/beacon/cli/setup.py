@@ -6,7 +6,6 @@ from pathlib import Path
 import click
 from rich.console import Console
 
-from beacon.domains.artifact.agent import update_agent_gitignores
 from beacon.domains.setup.wiring import create_beacon_template
 
 console = Console()
@@ -43,7 +42,10 @@ def setup() -> None:
             sys.exit(0)
 
     create_beacon_template(beacon_yaml)
-    update_agent_gitignores(Path.cwd())
+    # Note: .gitignore entries for .claude/agents/ and .opencode/agents/ are
+    # added later by `abc sync` or `abc adopt` accept when agents are first
+    # declared. Doing it here unconditionally would dirty the .gitignore on
+    # projects that never declare agents.
     console.print("\n[bold green]✓ Created beacon.yaml template[/bold green]")
     console.print(f"  [blue]Location:[/blue] {beacon_yaml}")
     console.print("\n[bold]Next Steps:[/bold]")

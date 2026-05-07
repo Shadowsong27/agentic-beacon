@@ -336,10 +336,12 @@ def run_sync(
     for agent_entry in beacon_settings.artifacts.agents:
         artifact_paths.append(agent_entry)
 
-    total_explicit = len(beacon_settings.artifacts.skills) + len(
-        beacon_settings.artifacts.contexts
+    total_explicit = (
+        len(beacon_settings.artifacts.skills)
+        + len(beacon_settings.artifacts.contexts)
+        + len(beacon_settings.artifacts.agents)
     )
-    no_artifacts = total_explicit == 0 and not beacon_settings.artifacts.agents
+    no_artifacts = total_explicit == 0
 
     if not no_artifacts:
         try:

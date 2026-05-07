@@ -7,6 +7,7 @@ import click
 from rich.console import Console
 from rich.table import Table
 
+from beacon.core.manifest.workspace import WorkspaceConfig
 from beacon.domains.distribution.sync_engine import SyncEngine
 
 console = Console()
@@ -39,8 +40,18 @@ def list_cmd(*, artifact_type: str | None) -> None:
     beacon_dir = Path.cwd() / ".agentic-beacon"
     artifacts_dir = beacon_dir / "artifacts"
 
+    # SyncEngine.list_artifacts() only reads artifacts_path, but the engine's
+    # __post_init__ resolves warehouse_path. Read the connected warehouse from
+    # WorkspaceConfig when available; if the project isn't connected (or the
+    # config is unreadable), fall back to beacon_dir so the engine doesn't end
+    # up with a semantically-wrong Path.cwd().
+    try:
+        warehouse_path = Path(WorkspaceConfig().warehouse.local_path)
+    except Exception:
+        warehouse_path = beacon_dir
+
     if artifact_type == "agents":
-        engine = SyncEngine(warehouse_path=Path.cwd(), artifacts_path=artifacts_dir)
+        engine = SyncEngine(warehouse_path=warehouse_path, artifacts_path=artifacts_dir)
         artifacts = engine.list_artifacts("agents")
         agent_files = artifacts.get("agents", [])
         if not agent_files:
@@ -67,7 +78,7 @@ def list_cmd(*, artifact_type: str | None) -> None:
         "skills": ("Synced Skills", "yellow", "Skill"),
     }
 
-    engine = SyncEngine(warehouse_path=Path.cwd(), artifacts_path=artifacts_dir)
+    engine = SyncEngine(warehouse_path=warehouse_path, artifacts_path=artifacts_dir)
     artifacts = engine.list_artifacts(artifact_type)
 
     for section, files in artifacts.items():
