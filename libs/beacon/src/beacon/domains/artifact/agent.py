@@ -248,7 +248,16 @@ def sync_agents_from_warehouse(
 
     tools = detect_agents_global()
     if not tools:
-        return
+        # Fresh machine: neither ~/.config/opencode/ nor ~/.claude/ exists yet.
+        # The user explicitly invoked agent sync, so install to canonical paths
+        # for every known tool — install_agent_global creates parent dirs.
+        tools = list(_ALL_KNOWN_AGENTS)
+        console.print(
+            "[yellow]No agent tools detected[/yellow] "
+            "(neither ~/.config/opencode/ nor ~/.claude/ exists).\n"
+            "Installing to canonical paths so agents are ready when you "
+            "set up Claude Code or OpenCode."
+        )
 
     agent_dirs = global_agent_dirs()
 
