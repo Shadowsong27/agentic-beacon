@@ -313,24 +313,6 @@ def reset_cmd(*, project: Path | None) -> None:
         sys.exit(1)
 
 
-@click.command(name="update", hidden=True)
-@click.option(
-    "--project",
-    type=click.Path(exists=True, file_okay=False, path_type=Path),
-    help="Path to project root (auto-detected if not provided)",
-)
-def update(*, project: Path | None) -> None:
-    """[Deprecated] Use 'abc reset' instead.
-
-    Update existing synced artifacts from warehouse (re-runs sync, overwrites changes).
-    """
-    console.print(
-        "[yellow]Deprecation warning:[/yellow] 'abc update' is deprecated. "
-        "Use 'abc reset' instead."
-    )
-    reset_cmd.callback(project=project)
-
-
 @click.command()
 @click.option(
     "--project",

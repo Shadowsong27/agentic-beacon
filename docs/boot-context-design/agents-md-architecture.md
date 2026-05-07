@@ -552,8 +552,8 @@ git commit -m "feat: add JSON schema validation standard to Python context"
 **Post-merge:**
 ```bash
 # Update projects to get new standard
-cd project-alpha && abc update
-cd project-beta && abc update
+cd project-alpha && abc sync
+cd project-beta && abc sync
 ```
 
 **Result:** Pattern is now organizational standard, benefits all projects, user-level AGENTS.md stays minimal.

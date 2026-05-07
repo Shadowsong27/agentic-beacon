@@ -48,7 +48,7 @@ abc sync
 1. Make changes in warehouse repository
 2. Test with Beacon CLI
 3. Submit pull request
-4. After merge, teams run `abc update` to sync
+4. After merge, teams run `abc sync` to sync
 
 ## Maintenance
 

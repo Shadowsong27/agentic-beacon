@@ -35,8 +35,9 @@ def isolated_home(tmp_path, monkeypatch):
     """Redirect Path.home() to a clean temp directory.
 
     Use this fixture in tests that invoke CLI commands which call
-    detect_agents_global() or build_agents_paths(), to prevent real global
-    agent installs from leaking into the test.
+    detect_agents_global() or otherwise touch ~/.config/opencode/ or
+    ~/.claude/, to prevent real global agent installs from leaking into
+    the test.
     """
     home = tmp_path / "home"
     home.mkdir()

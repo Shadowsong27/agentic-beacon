@@ -2,7 +2,7 @@
 
 Runs the complete user workflow in a single chained test:
   warehouse init → list → warehouse connect → setup → sync →
-  status → warehouse status → sync → sync --prune → update → clean
+  status → warehouse status → sync → sync --prune → sync (upstream pull) → clean
 
 This test is the automated equivalent of the manual e2e walkthrough done
 before each release. If this test passes, the core user journey works.
@@ -297,19 +297,8 @@ def test_e2e_status_shows_check_marks_for_synced(e2e_project):
 
 
 # ---------------------------------------------------------------------------
-# Step 7 — warehouse status and delta shim behavior
+# Step 7 — warehouse status reports clean and modified working trees
 # ---------------------------------------------------------------------------
-
-
-def test_e2e_delta_shim_redirects_to_warehouse_status(e2e_project):
-    project_dir, warehouse, runner = e2e_project
-    runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
-
-    result = runner.invoke(main, ["delta"])
-
-    assert result.exit_code == 1
-    assert "has been removed" in result.output
-    assert "warehouse status" in result.output
 
 
 def test_e2e_warehouse_status_clean(e2e_project):
@@ -405,28 +394,10 @@ def test_e2e_delta_skill_detects_live_modification(e2e_project):
     assert "skills/code-review/SKILL.md" in result.output
 
 
-def test_e2e_delta_skill_snapshot_identical_but_live_modified(e2e_project):
-    """abc delta now redirects users to abc warehouse status."""
+def test_e2e_sync_auto_prune_and_upstream_pull(e2e_project):
+    """Sync auto-prune drops removed artifacts; subsequent sync pulls upstream changes."""
     project_dir, warehouse, runner = e2e_project
     runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
-
-    result = runner.invoke(main, ["delta"])
-
-    assert result.exit_code == 1
-    assert "has been removed" in result.output
-    assert "warehouse status" in result.output
-
-
-def test_e2e_delta_skill_per_agent_detail_in_output(e2e_project):
-    """abc delta no longer exposes per-agent live-dir detail and redirects instead."""
-    project_dir, warehouse, runner = e2e_project
-    runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
-
-    result = runner.invoke(main, ["delta"])
-
-    assert result.exit_code == 1
-    assert "has been removed" in result.output
-    assert "warehouse status" in result.output
 
     # ---------------------------------------------------------------------------
     # Step 9 — sync auto-prune removes artifacts dropped from beacon.yaml
@@ -473,7 +444,7 @@ def test_e2e_delta_skill_per_agent_detail_in_output(e2e_project):
     assert kept.exists()
 
     # ---------------------------------------------------------------------------
-    # Step 10 — update pulls in an upstream warehouse change
+    # Step 10 — sync pulls in an upstream warehouse change (symlink resolves to new content)
     # ---------------------------------------------------------------------------
 
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
@@ -486,11 +457,6 @@ def test_e2e_delta_skill_per_agent_detail_in_output(e2e_project):
     standards = warehouse / "contexts" / "python" / "standards.md"
     standards.write_text(standards.read_text() + "- No bare excepts\n")
 
-    result = runner.invoke(main, ["update"])
-
-    assert result.exit_code == 0
-    assert result.exit_code == 0  # deprecated abc update still works
-
     synced = (
         project_dir
         / ".agentic-beacon"
@@ -499,6 +465,7 @@ def test_e2e_delta_skill_per_agent_detail_in_output(e2e_project):
         / "python"
         / "standards.md"
     )
+    # Symlink-based sync — the warehouse edit is visible immediately, no re-sync needed.
     assert "No bare excepts" in synced.read_text()
 
     # ---------------------------------------------------------------------------
@@ -549,30 +516,6 @@ def test_e2e_contribute_skill_live_modification_goes_to_warehouse(e2e_project):
     assert "Local Guardrail" in warehouse_skill.read_text()
 
 
-def test_e2e_contribute_skill_regression_stale_snapshot(e2e_project):
-    """Old abc contribute redirects users to abc warehouse contribute."""
-    project_dir, warehouse, runner = e2e_project
-    runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
-
-    result = runner.invoke(main, ["contribute"])
-
-    assert result.exit_code == 1
-    assert "has been removed" in result.output
-    assert "warehouse contribute" in result.output
-
-
-def test_e2e_contribute_all_skill_live_modification(e2e_project):
-    """Old fileless abc contribute also redirects users to abc warehouse contribute."""
-    project_dir, warehouse, runner = e2e_project
-    runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
-
-    result = runner.invoke(main, ["contribute"])
-
-    assert result.exit_code == 1
-    assert "has been removed" in result.output
-    assert "warehouse contribute" in result.output
-
-
 def test_e2e_contribute_skill_identical_live_is_noop(e2e_project):
     """abc warehouse contribute reports nothing to contribute when live matches warehouse."""
     project_dir, warehouse, runner = e2e_project
@@ -591,14 +534,3 @@ def test_e2e_contribute_skill_identical_live_is_noop(e2e_project):
 
     assert result.exit_code == 0
     assert "no uncommitted changes to contribute" in result.output.lower()
-
-
-def test_e2e_contribute_skill_multi_agent_conflict_prompts(e2e_project):
-    """Old abc contribute shim redirects users to abc warehouse contribute."""
-    project_dir, warehouse, runner = e2e_project
-    runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
-    result = runner.invoke(main, ["contribute"])
-
-    assert result.exit_code == 1
-    assert "has been removed" in result.output
-    assert "warehouse contribute" in result.output
