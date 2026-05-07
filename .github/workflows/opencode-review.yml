@@ -32,7 +32,7 @@ jobs:
         run: git fetch origin ${{ github.base_ref }}
 
       - name: Generate PR diff
-        run: git diff --merge-base origin/${{ github.base_ref }} HEAD > /tmp/opencode-pr.diff
+        run: git diff --merge-base origin/${{ github.base_ref }} HEAD > opencode-pr.diff
 
       - name: Run OpenCode review
         env:
@@ -58,7 +58,7 @@ jobs:
           If there are no findings, say so explicitly.
           Keep the review concise and actionable.
           EOF
-          )" --file /tmp/opencode-pr.diff | tee /tmp/opencode-review.md
+          )" --file opencode-pr.diff | tee /tmp/opencode-review.md
 
       - name: Publish step summary
         run: |
