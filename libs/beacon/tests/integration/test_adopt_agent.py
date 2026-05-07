@@ -354,3 +354,101 @@ def test_reject_agent_missing_tool_symlinks_no_error(project: tuple, warehouse: 
 
     loaded = yaml.safe_load(beacon_yaml.read_text())
     assert loaded["artifacts"]["agents"] == []
+
+
+# ---------------------------------------------------------------------------
+# TC6: accept fails mid-commit (wire failure) → all writes rolled back (TC3 spec)
+# ---------------------------------------------------------------------------
+
+
+def test_accept_agent_rollback_on_wire_failure(
+    project: tuple, warehouse: Path, monkeypatch
+):
+    """TC3 from spec project-agent-wiring: accept fails mid-commit → all writes rolled back.
+
+    Forces wire_agent_opencode to raise OSError after wire_agent_claudecode succeeds.
+    Asserts that beacon.yaml, pending.yaml, the artifact symlink, and the partially-
+    created .claude/agents/ symlink are all restored to pre-commit state.
+    """
+    project_root, artifacts_path, beacon_yaml = project
+
+    # Both .claude/ and .opencode/ present so both wiring paths are attempted
+    (project_root / ".opencode").mkdir()
+
+    pre_beacon_bytes = beacon_yaml.read_bytes()
+
+    agent_candidate = AdoptCandidate(
+        artifact_type="agents",
+        path="agents/spec-planner.md",
+        description="Plans specs",
+    )
+
+    # Monkeypatch wire_agent_opencode to raise on first call.
+    # This lets _default_post_sync_wiring run normally (populating created_paths)
+    # so claudecode wiring succeeds and opencode wiring fails — partial state.
+    import beacon.domains.setup.wiring as wiring_mod
+
+    call_count = {"n": 0}
+
+    def _failing_wire_opencode(project_root_arg, artifact_file):
+        call_count["n"] += 1
+        raise OSError("forced wire failure")
+
+    monkeypatch.setattr(wiring_mod, "wire_agent_opencode", _failing_wire_opencode)
+
+    from beacon.domains.adoption.apply import CommitError
+
+    with pytest.raises(CommitError):
+        commit_session(
+            to_adopt=["agents/spec-planner.md"],
+            to_unadopt=[],
+            pending_accept=[],
+            pending_reject=[],
+            candidates=[agent_candidate],
+            pending_entries=[],
+            project_root=project_root,
+            warehouse_path=warehouse,
+            artifacts_path=artifacts_path,
+            beacon_yaml_path=beacon_yaml,
+        )
+
+    # beacon.yaml restored to pre-commit state
+    assert beacon_yaml.read_bytes() == pre_beacon_bytes, (
+        "beacon.yaml was not rolled back after accept failure"
+    )
+
+    # Artifact symlink rolled back
+    artifact = artifacts_path / "agents" / "spec-planner.md"
+    assert not artifact.is_symlink() and not artifact.exists(), (
+        "Artifact symlink should be rolled back after accept failure"
+    )
+
+    # .claude/agents/ symlink rolled back (was created before the opencode failure)
+    claude_link = project_root / ".claude" / "agents" / "spec-planner.md"
+    assert not claude_link.is_symlink() and not claude_link.exists(), (
+        ".claude/agents/spec-planner.md should be rolled back after accept failure"
+    )
+
+    # .opencode/agents/ symlink never created (that was the failing call)
+    oc_link = project_root / ".opencode" / "agents" / "spec-planner.md"
+    assert not oc_link.is_symlink() and not oc_link.exists(), (
+        ".opencode/agents/spec-planner.md should not exist after accept failure"
+    )
+
+    # Confirm the failing call was reached
+    assert call_count["n"] >= 1
+
+
+# ---------------------------------------------------------------------------
+# TC7: reject mid-commit artifact symlink restored on failure
+# ---------------------------------------------------------------------------
+
+
+def test_reject_agent_artifact_symlink_restored_on_failure(
+    project: tuple, warehouse: Path, monkeypatch
+):
+    """Reject with mid-commit failure restores artifact symlink and tool symlinks."""
+    pytest.skip(
+        "TODO: patching Path.unlink to force a failure mid-reject is too brittle "
+        "without a dedicated injectable hook in the reject path; skipping per spec allowance."
+    )

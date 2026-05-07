@@ -212,6 +212,10 @@ def commit_session(
 
     sync_fn = _symlink_sync_fn or _default_symlink_sync
 
+    # Accumulators for filesystem rollback (Bug 2 fix)
+    created_paths: list[Path] = []
+    removed_paths_with_target: list[tuple[Path, Path]] = []
+
     def _default_post_sync_wiring(accepted: list[AdoptCandidate]) -> None:
         has_contexts = any(c.artifact_type == "contexts" for c in accepted)
         has_skills = any(c.artifact_type == "skills" for c in accepted)
@@ -232,24 +236,26 @@ def commit_session(
             wire_skills_post_sync(project_root, artifacts_path)
 
         if agent_candidates:
-            from beacon.domains.artifact.agent import detect_agents
+            from beacon.domains.artifact.agent import detect_agent_targets
             from beacon.domains.setup.wiring import (
                 wire_agent_claudecode,
                 wire_agent_opencode,
             )
 
-            detected_tools = detect_agents(project_root)
+            detected_tools = detect_agent_targets(project_root)
             for candidate in agent_candidates:
                 artifact_file = artifacts_path / candidate.path
                 if "claudecode" in detected_tools:
-                    wire_agent_claudecode(project_root, artifact_file)
+                    dest = wire_agent_claudecode(project_root, artifact_file)
+                    created_paths.append(dest)
                 if "opencode" in detected_tools:
-                    wire_agent_opencode(project_root, artifact_file)
+                    dest = wire_agent_opencode(project_root, artifact_file)
+                    created_paths.append(dest)
 
     post_sync_wiring_fn = _post_sync_wiring_fn or _default_post_sync_wiring
 
     def _rollback() -> None:
-        """Restore beacon.yaml and pending.yaml to their pre-commit state."""
+        """Restore beacon.yaml, pending.yaml, and filesystem state to pre-commit."""
         if pre_beacon:
             beacon_yaml_path.write_bytes(pre_beacon)
         elif beacon_yaml_path.exists():
@@ -258,6 +264,12 @@ def commit_session(
             pending_path.write_bytes(pre_pending)
         elif pending_path.exists():
             pending_path.unlink()
+        for path in created_paths:
+            if path.is_symlink() or path.exists():
+                path.unlink()
+        for path, target in removed_paths_with_target:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.symlink_to(target)
 
     try:
         # 1. Update beacon.yaml — add adopts + pending accepts, remove unadopts.
@@ -268,6 +280,8 @@ def commit_session(
 
         # 2. Sync symlinks per accepted path (one call per path for testability).
         for path in paths_to_sync:
+            artifact_link = artifacts_path / path
+            existed_before = artifact_link.is_symlink() or artifact_link.exists()
             try:
                 sync_fn(
                     [path],
@@ -279,18 +293,32 @@ def commit_session(
                     f"Symlink sync failed for '{path}': {exc}",
                     failed_entry=path,
                 ) from exc
+            if not existed_before and (
+                artifact_link.is_symlink() or artifact_link.exists()
+            ):
+                created_paths.append(artifact_link)
 
         if beacon_adds:
             post_sync_wiring_fn(beacon_adds)
 
-        # 2b. Unwire project-local tool symlinks for unadopted agents.
+        # 2b. Unwire project-local tool symlinks for unadopted agents (Bug 1 + 2 fix).
         agent_unadoptions = [p for p in to_unadopt if p.startswith("agents/")]
         if agent_unadoptions:
-            from beacon.domains.setup.wiring import unwire_agent
+            from beacon.domains.setup.wiring import unwire_agent_with_undo
 
             for agent_path in agent_unadoptions:
                 agent_name = Path(agent_path).stem
-                unwire_agent(project_root, agent_name)
+                removed = unwire_agent_with_undo(project_root, agent_name)
+                removed_paths_with_target.extend(removed)
+
+                # Bug 1 fix: also remove the artifact symlink atomically
+                artifact_symlink = artifacts_path / agent_path
+                if artifact_symlink.is_symlink():
+                    target = artifact_symlink.readlink()
+                    artifact_symlink.unlink()
+                    removed_paths_with_target.append((artifact_symlink, target))
+                elif artifact_symlink.exists():
+                    artifact_symlink.unlink()
 
         # 3. Rewrite pending.yaml (drop accepted + rejected; keep deferred).
         if pending_resolved or pre_pending:

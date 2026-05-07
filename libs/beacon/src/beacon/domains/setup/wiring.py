@@ -418,6 +418,41 @@ def unwire_agent(project_root: Path, agent_name: str) -> None:
             logger.debug("Unwired agent: {}", dest)
 
 
+def unwire_agent_with_undo(
+    project_root: Path, agent_name: str
+) -> list[tuple[Path, Path]]:
+    """Remove project-local agent symlinks, returning (path, target) pairs for rollback.
+
+    Like unwire_agent but returns a list of (removed_path, original_target) tuples
+    for each symlink removed, enabling callers to reconstruct them on rollback.
+
+    Args:
+        project_root: Project root directory.
+        agent_name: Stem name of the agent (without .md extension), or full filename.
+
+    Returns:
+        List of (path, target) pairs for each symlink successfully removed.
+    """
+    leaf = Path(agent_name).name
+    if not leaf.endswith(".md"):
+        leaf = leaf + ".md"
+
+    removed: list[tuple[Path, Path]] = []
+    for dest in (
+        project_root / ".claude" / "agents" / leaf,
+        project_root / ".opencode" / "agents" / leaf,
+    ):
+        if dest.is_symlink():
+            target = dest.readlink()
+            dest.unlink()
+            removed.append((dest, target))
+            logger.debug("Unwired agent: {}", dest)
+        elif dest.exists():
+            dest.unlink()
+            logger.debug("Unwired agent (non-symlink): {}", dest)
+    return removed
+
+
 def has_synced_contexts(artifacts_dir: Path) -> bool:
     """Check if any context files exist in the artifacts directory."""
     contexts_dir = artifacts_dir / "contexts"
