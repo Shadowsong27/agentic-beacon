@@ -503,9 +503,9 @@ def run_sync(
         if opencode_dir.is_dir():
             GitignoreManager(opencode_dir).ensure_entries(["skills/", "command/"])
 
-    # PER-113 (Finding 2): run unconditionally during real syncs so agents-only
-    # projects also get the project-root .gitignore protections.
-    if not dry_run:
+    # PER-113: gate on declared agents so contexts-only or skills-only projects
+    # don't dirty their .gitignore with unused agent dir entries.
+    if not dry_run and beacon_settings.artifacts.agents:
         update_agent_gitignores(project_root)
 
     if not dry_run:

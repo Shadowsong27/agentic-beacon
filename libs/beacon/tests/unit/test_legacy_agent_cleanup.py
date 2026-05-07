@@ -129,12 +129,12 @@ class TestCleanupLegacyGlobalAgentSymlinks:
         with _patch_home(home):
             count = cleanup_legacy_global_agent_symlinks(warehouse)
 
-        # A dangling symlink that resolves under warehouse/agents/ is still removed
-        # because resolve(strict=False) returns the path even if it doesn't exist
-        # This is the correct behavior per design decision 3
-        # (clean up anything pointing into warehouse/agents/, even if dangling)
-        assert count == 1 or count == 0  # implementation may vary
-        # The key invariant: no exception is raised
+        # A dangling symlink whose target path resolves under warehouse/agents/
+        # IS removed: resolve(strict=False) returns the canonical target path
+        # whether or not it exists, and that path is under warehouse_agents.
+        # Cleanup intent is "any symlink whose target points into the warehouse"
+        # so dangling-into-warehouse links are correctly classified as legacy.
+        assert count == 1
 
     def test_tc7_subdirectory_not_recursed(self, tmp_path):
         """TC7: subdirectory containing symlinks → not recursed into; nested entries preserved."""

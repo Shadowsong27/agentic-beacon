@@ -297,6 +297,43 @@ def test_sync_with_only_agents_updates_gitignore(
     )
 
 
+def test_sync_with_no_agents_declared_does_not_mutate_gitignore(
+    project_dir: Path, warehouse: Path, monkeypatch
+):
+    """A sync with zero declared agents must NOT add agent entries to .gitignore.
+
+    Regression guard for the round-5 over-correction where update_agent_gitignores
+    was hoisted to run on every real sync, dirtying contexts-only and skills-only
+    repos with unused .claude/agents/ / .opencode/agents/ entries.
+    """
+    runner = CliRunner()
+    monkeypatch.chdir(project_dir)
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text("artifacts:\n  contexts: []\n  skills: []\n  agents: []\n")
+
+    # Reset .gitignore to a clean state with no agent dir entries so we can
+    # detect whether sync mutates it. (The fixture's default .gitignore may
+    # already contain agent entries from a prior setup step.)
+    gitignore_path = project_dir / ".gitignore"
+    clean_content = "# Test fixture — clean gitignore for regression check\n"
+    gitignore_path.write_text(clean_content)
+
+    r = runner.invoke(main, ["sync", "--skip-git-check"])
+    assert r.exit_code == 0, f"sync failed: {r.output}"
+
+    post_state = gitignore_path.read_text()
+    # The orchestrator's broader gitignore manager may append unrelated
+    # .agentic-beacon/* entries; we only assert that THE AGENT-DIR entries
+    # weren't added, since update_agent_gitignores is the gated function.
+    assert ".claude/agents/" not in post_state, (
+        f"sync with agents=[] must not add .claude/agents/ to .gitignore: {post_state!r}"
+    )
+    assert ".opencode/agents/" not in post_state, (
+        f"sync with agents=[] must not add .opencode/agents/ to .gitignore: {post_state!r}"
+    )
+
+
 def test_sync_unwires_removed_agent(project_dir: Path, warehouse: Path, monkeypatch):
     """Removing an agent from beacon.yaml and re-syncing removes all three paths.
 
