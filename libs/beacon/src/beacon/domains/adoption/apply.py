@@ -12,12 +12,10 @@ from __future__ import annotations
 
 import subprocess
 from collections.abc import Callable
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
 
 from beacon.domains.adoption.models import AdoptCandidate
-
 
 # ─────────────────────────────────────────────────────────────
 # Commit error
@@ -34,6 +32,7 @@ class CommitError(Exception):
     def __init__(self, message: str, failed_entry: str | None = None) -> None:
         self.failed_entry = failed_entry
         super().__init__(message)
+
 
 # ─────────────────────────────────────────────────────────────
 # Public API: beacon.yaml update
@@ -102,7 +101,9 @@ def _default_symlink_sync(
     """Sync symlinks for the given artifact paths using SyncEngine."""
     from beacon.domains.distribution.sync_engine import SyncEngine
 
-    sync_engine = SyncEngine(warehouse_path=warehouse_path, artifacts_path=artifacts_path)
+    sync_engine = SyncEngine(
+        warehouse_path=warehouse_path, artifacts_path=artifacts_path
+    )
 
     expanded: list[str] = []
     for path in artifact_paths:
@@ -129,6 +130,7 @@ def commit_pending_session(
     *,
     commit_time: datetime | None = None,
     _symlink_sync_fn: Callable[..., None] | None = None,
+    _post_sync_wiring_fn: Callable[..., None] | None = None,
 ) -> None:
     """Atomically commit a pending-workflow session.
 
@@ -145,6 +147,7 @@ def commit_pending_session(
         beacon_yaml_path: Path to beacon.yaml.
         commit_time: Override the commit timestamp (used in tests; defaults to now).
         _symlink_sync_fn: Injectable sync function for testing rollback scenarios.
+        _post_sync_wiring_fn: Injectable post-sync wiring hook for testing.
     """
     from beacon.core.manifest.pending import PendingManifest
     from beacon.domains.adoption.last_adopt import write_last_adopt
@@ -167,18 +170,41 @@ def commit_pending_session(
     beacon_accepts = [
         candidate_map[p]
         for p in accepted_paths
-        if p in candidate_map and candidate_map[p].artifact_type in _BEACON_ARTIFACT_TYPES
+        if p in candidate_map
+        and candidate_map[p].artifact_type in _BEACON_ARTIFACT_TYPES
     ]
 
     # New pending: remove accepted + rejected, keep deferred
     paths_to_remove = set(accepted_paths) | rejected_paths
     existing_manifest = PendingManifest.from_yaml(pending_path)
-    new_pending_entries = [e for e in existing_manifest.pending if e.path not in paths_to_remove]
+    new_pending_entries = [
+        e for e in existing_manifest.pending if e.path not in paths_to_remove
+    ]
 
     if commit_time is None:
-        commit_time = datetime.now(tz=timezone.utc)
+        commit_time = datetime.now(tz=UTC)
 
     sync_fn = _symlink_sync_fn or _default_symlink_sync
+
+    def _default_post_sync_wiring(accepted: list[AdoptCandidate]) -> None:
+        has_contexts = any(c.artifact_type == "contexts" for c in accepted)
+        has_skills = any(c.artifact_type == "skills" for c in accepted)
+
+        if has_contexts:
+            from beacon.domains.setup.wiring import (
+                wire_contexts_claudecode,
+                wire_contexts_opencode,
+            )
+
+            wire_contexts_opencode(project_root, artifacts_path)
+            wire_contexts_claudecode(project_root, artifacts_path)
+
+        if has_skills:
+            from beacon.domains.artifact.skill import wire_skills_post_sync
+
+            wire_skills_post_sync(project_root, artifacts_path)
+
+    post_sync_wiring_fn = _post_sync_wiring_fn or _default_post_sync_wiring
 
     def _rollback() -> None:
         """Restore the three tracked files to their pre-commit state."""
@@ -203,7 +229,10 @@ def commit_pending_session(
         # 2. Sync symlinks per accepted entry (one call per entry for testability)
         for path in accepted_paths:
             candidate = candidate_map.get(path)
-            if candidate is None or candidate.artifact_type not in _BEACON_ARTIFACT_TYPES:
+            if (
+                candidate is None
+                or candidate.artifact_type not in _BEACON_ARTIFACT_TYPES
+            ):
                 continue
             try:
                 sync_fn(
@@ -216,6 +245,9 @@ def commit_pending_session(
                     f"Symlink sync failed for '{path}': {exc}",
                     failed_entry=path,
                 ) from exc
+
+        if beacon_accepts:
+            post_sync_wiring_fn(beacon_accepts)
 
         # 3. Write new pending.yaml (removes accepted + rejected; keeps deferred)
         new_manifest = PendingManifest(pending=new_pending_entries)

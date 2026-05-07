@@ -1,14 +1,13 @@
 """Unit tests for beacon.domains.adoption.last_adopt."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-
 from beacon.core.exceptions import ValidationError
 from beacon.domains.adoption.last_adopt import read_last_adopt, write_last_adopt
 
-_UTC = timezone.utc
+_UTC = UTC
 
 
 # ---------------------------------------------------------------------------

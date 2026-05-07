@@ -1,14 +1,13 @@
 """Unit tests for beacon.domains.adoption.pending_alert (and cli re-export)."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-
 from beacon.cli.pending_alert import maybe_emit_pending_alert
 from beacon.core.manifest.pending import PendingEntry, PendingManifest
 
-_UTC = timezone.utc
+_UTC = UTC
 
 
 def _make_project(tmp_path: Path) -> Path:
@@ -41,7 +40,9 @@ def _sample_entry(n: int = 1) -> PendingEntry:
 # ---------------------------------------------------------------------------
 
 
-def test_alert_fires_with_one_entry(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+def test_alert_fires_with_one_entry(
+    tmp_path: Path, capsys: pytest.CaptureFixture
+) -> None:
     project = _make_project(tmp_path)
     _write_pending(project, [_sample_entry(1)])
 
@@ -154,8 +155,6 @@ def test_alert_does_not_raise_on_permission_error(
 ) -> None:
     project = _make_project(tmp_path)
     _write_pending(project, [_sample_entry(1)])
-
-    original_from_yaml = PendingManifest.from_yaml
 
     def _boom(path: Path) -> PendingManifest:
         raise PermissionError("no access")

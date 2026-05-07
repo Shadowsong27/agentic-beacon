@@ -12,21 +12,14 @@ from beacon.core.manifest.workspace import WorkspaceConfig
 from beacon.domains.adoption.apply import (
     apply_adoption,
     cleanup_unadopted_artifacts,
-    warehouse_uncommitted_paths,
+    commit_pending_session,
 )
-from beacon.domains.adoption.discovery import discover_adoptable
-from beacon.domains.adoption.models import AdoptCandidate
+from beacon.domains.adoption.discovery import discover_candidates
 from beacon.domains.adoption.tui import AdoptApp
 from beacon.domains.artifact.agent import (
     detect_agents_global,
     install_agent_global,
     read_agent_definition,
-)
-from beacon.domains.artifact.skill import wire_skills_post_sync
-from beacon.domains.distribution.sync_engine import SyncEngine
-from beacon.domains.setup.wiring import (
-    wire_contexts_claudecode,
-    wire_contexts_opencode,
 )
 from beacon.utils.display import is_interactive
 from beacon.utils.git import find_project_root
@@ -72,7 +65,7 @@ def adopt(*, dry_run: bool) -> None:
 
     beacon_settings = BeaconManifest.from_yaml(beacon_yaml)
 
-    candidates, _ = discover_adoptable(warehouse_path, beacon_settings)
+    candidates = discover_candidates(project_root, warehouse_path)
 
     if not candidates:
         console.print("[green]✓[/green] No unadopted warehouse artifacts found.")
@@ -132,42 +125,64 @@ def adopt(*, dry_run: bool) -> None:
     )
     result = app.run()
 
-    if not result.to_adopt and not result.to_unadopt:
+    if (
+        not result.to_adopt
+        and not result.to_unadopt
+        and not result.to_reject
+        and not result.to_defer
+    ):
         console.print("[dim]No changes made.[/dim]")
         return
 
-    path_to_candidate: dict[str, AdoptCandidate] = {c.path: c for c in candidates}
     agent_adoptions = [p for p in result.to_adopt if p.startswith("agents/")]
-    non_agent_selections = [
-        path_to_candidate[p]
-        for p in result.to_adopt
-        if p in path_to_candidate and not p.startswith("agents/")
-    ]
     agent_unadoptions = [p for p in result.to_unadopt if p.startswith("agents/")]
     non_agent_unadoptions = [
         p for p in result.to_unadopt if not p.startswith("agents/")
     ]
+
+    session_state = {
+        **dict.fromkeys(result.to_adopt, "accept"),
+        **dict.fromkeys(result.to_reject, "reject"),
+        **dict.fromkeys(result.to_defer, "defer"),
+    }
+
+    if session_state:
+        commit_pending_session(
+            session_state,
+            candidates,
+            project_root,
+            warehouse_path,
+            artifacts_dir,
+            beacon_yaml,
+        )
+
+        accepted_non_agents = [
+            p for p in result.to_adopt if not p.startswith("agents/")
+        ]
+        if accepted_non_agents:
+            console.print(
+                f"[green]✓[/green] Accepted {len(accepted_non_agents)} artifact(s)"
+            )
+        if result.to_reject:
+            console.print(
+                f"[yellow]−[/yellow] Rejected {len(result.to_reject)} pending artifact(s)"
+            )
+        if result.to_defer:
+            console.print(f"[dim]Deferred {len(result.to_defer)} artifact(s).[/dim]")
 
     # All selections (agents + non-agents) are recorded in beacon.yaml via
     # apply_adoption. Agents additionally get a global symlink install below.
     # Per Decision 7, removing an agent from beacon.yaml does NOT uninstall the
     # global symlink — global install state is managed independently of project
     # declaration so an agent can serve multiple projects on the same machine.
-    agent_selections = [
-        path_to_candidate[p] for p in agent_adoptions if p in path_to_candidate
-    ]
-    all_selections = non_agent_selections + agent_selections
     all_unadoptions = non_agent_unadoptions + agent_unadoptions
 
-    apply_adoption(beacon_yaml, all_selections, unadoptions=all_unadoptions)
-    if non_agent_selections:
-        console.print(
-            f"[green]✓[/green] Added {len(non_agent_selections)} artifact(s) to beacon.yaml"
-        )
-    if non_agent_unadoptions:
-        console.print(
-            f"[yellow]−[/yellow] Removed {len(non_agent_unadoptions)} artifact(s) from beacon.yaml"
-        )
+    if all_unadoptions:
+        apply_adoption(beacon_yaml, [], unadoptions=all_unadoptions)
+        if non_agent_unadoptions:
+            console.print(
+                f"[yellow]−[/yellow] Removed {len(non_agent_unadoptions)} artifact(s) from beacon.yaml"
+            )
 
     if agent_adoptions:
         tools = detect_agents_global()
@@ -197,61 +212,6 @@ def adopt(*, dry_run: bool) -> None:
             f"[yellow]−[/yellow] Removed {len(agent_unadoptions)} agent(s) from beacon.yaml "
             f"[dim](global install retained per Decision 7)[/dim]"
         )
-
-    if non_agent_selections:
-        try:
-            sync_engine = SyncEngine(
-                warehouse_path=warehouse_path,
-                artifacts_path=artifacts_dir,
-            )
-
-            new_artifact_paths: list[str] = []
-            for c in non_agent_selections:
-                if c.artifact_type == "skills":
-                    new_artifact_paths.append(c.path.rstrip("/") + "/")
-                else:
-                    new_artifact_paths.append(c.path)
-
-            expanded: list[str] = []
-            for path in new_artifact_paths:
-                if path.endswith("/"):
-                    matches = sync_engine.expand_glob(f"{path.rstrip('/')}/**/*")
-                    expanded.extend(matches)
-                else:
-                    expanded.append(path)
-
-            if expanded:
-                sync_engine.sync_all(
-                    artifact_paths=expanded,
-                    dry_run=False,
-                )
-                dirty = warehouse_uncommitted_paths(warehouse_path)
-                for c in non_agent_selections:
-                    rel = c.path.rstrip("/")
-                    note = (
-                        " [yellow](has local edits in warehouse)[/yellow]"
-                        if rel in dirty
-                        else ""
-                    )
-                    console.print(f"[green]✓[/green] Symlink created: {c.path}{note}")
-
-                for c in non_agent_selections:
-                    if c.artifact_type == "contexts":
-                        wire_contexts_opencode(project_root, artifacts_dir)
-                        wire_contexts_claudecode(project_root, artifacts_dir)
-                        break
-
-                has_skills = any(
-                    c.artifact_type == "skills" for c in non_agent_selections
-                )
-                if has_skills:
-                    wire_skills_post_sync(project_root, artifacts_dir)
-
-        except Exception as e:
-            console.print(
-                f"[yellow]⚠[/yellow] Post-adoption sync failed: {e}\n"
-                "  Run [bold]abc sync[/bold] to sync and wire adopted artifacts."
-            )
 
     if non_agent_unadoptions:
         cleanup_unadopted_artifacts(

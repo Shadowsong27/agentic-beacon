@@ -5,12 +5,13 @@ gitignored file that buffers artifacts authored in the warehouse but not yet
 wired into beacon.yaml via `abc adopt`.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, Field, ValidationError as PydanticValidationError
+from pydantic import BaseModel, Field
+from pydantic import ValidationError as PydanticValidationError
 
 from beacon.core.exceptions import ValidationError, YAMLParseError
 
@@ -87,7 +88,7 @@ class PendingManifest(BaseModel):
         for entry in self.pending:
             dt = entry.created_at
             if dt.tzinfo is not None:
-                dt = dt.astimezone(timezone.utc)
+                dt = dt.astimezone(UTC)
             created_at_str = dt.strftime("%Y-%m-%dT%H:%M:%SZ")
             serialized_entries.append(
                 {
@@ -102,7 +103,9 @@ class PendingManifest(BaseModel):
         data = {"pending": serialized_entries}
 
         with open(path, "w", encoding="utf-8") as f:
-            yaml.dump(data, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
+            yaml.dump(
+                data, f, default_flow_style=False, sort_keys=False, allow_unicode=True
+            )
 
     def append(self, entry: PendingEntry) -> None:
         """Append entry to the in-memory list. Persist via to_yaml."""

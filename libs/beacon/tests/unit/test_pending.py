@@ -1,15 +1,14 @@
 """Unit tests for beacon.core.manifest.pending."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 import yaml
-
 from beacon.core.exceptions import ValidationError
 from beacon.core.manifest.pending import PendingEntry, PendingManifest
 
-_UTC = timezone.utc
+_UTC = UTC
 
 _SAMPLE_ENTRY = PendingEntry(
     path="knowledge/lessons/foo.md",
@@ -260,4 +259,10 @@ def test_append_then_dump_preserves_order(tmp_path: Path) -> None:
 
     raw = yaml.safe_load(p.read_text(encoding="utf-8"))
     for raw_entry in raw["pending"]:
-        assert list(raw_entry.keys()) == ["path", "type", "action", "source", "created_at"]
+        assert list(raw_entry.keys()) == [
+            "path",
+            "type",
+            "action",
+            "source",
+            "created_at",
+        ]

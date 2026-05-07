@@ -12,7 +12,7 @@ Usage:
 
 import argparse
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from beacon.core.manifest.pending import PendingEntry, PendingManifest
@@ -51,7 +51,7 @@ def append_pending_entry(
         type=type_,
         action=action,
         source=source,
-        created_at=datetime.now(timezone.utc),
+        created_at=datetime.now(UTC),
     )
     manifest.append(entry)
     manifest.to_yaml(pending_path)

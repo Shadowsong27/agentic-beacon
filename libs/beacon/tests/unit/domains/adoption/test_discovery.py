@@ -13,15 +13,12 @@ Covers tasks 4.1–4.4:
 from __future__ import annotations
 
 import subprocess
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-
-import pytest
 
 from beacon.core.manifest.pending import PendingEntry, PendingManifest
 from beacon.domains.adoption.discovery import discover_candidates
 from beacon.domains.adoption.last_adopt import write_last_adopt
-
 
 # ─────────────────────────────────────────────────────────────
 # Helpers
@@ -32,11 +29,15 @@ def _git_init(path: Path) -> None:
     subprocess.run(["git", "init"], cwd=path, check=True, capture_output=True)
     subprocess.run(
         ["git", "config", "user.email", "test@test.com"],
-        cwd=path, check=True, capture_output=True,
+        cwd=path,
+        check=True,
+        capture_output=True,
     )
     subprocess.run(
         ["git", "config", "user.name", "Test User"],
-        cwd=path, check=True, capture_output=True,
+        cwd=path,
+        check=True,
+        capture_output=True,
     )
 
 
@@ -44,7 +45,9 @@ def _git_commit(warehouse: Path, message: str = "add files") -> None:
     subprocess.run(["git", "add", "-A"], cwd=warehouse, check=True, capture_output=True)
     subprocess.run(
         ["git", "commit", "-m", message],
-        cwd=warehouse, check=True, capture_output=True,
+        cwd=warehouse,
+        check=True,
+        capture_output=True,
     )
 
 
@@ -80,7 +83,7 @@ def _pending_entry(
         type=entry_type,  # type: ignore[arg-type]
         action=action,  # type: ignore[arg-type]
         source=source,
-        created_at=datetime(2026, 5, 6, 12, 0, 0, tzinfo=timezone.utc),
+        created_at=datetime(2026, 5, 6, 12, 0, 0, tzinfo=UTC),
     )
 
 
@@ -100,7 +103,7 @@ def test_tc1_pending_only_no_warehouse_changes(tmp_path):
     project = _make_project(tmp_path)
 
     # Set .last-adopt to AFTER the last warehouse commit (no new changes)
-    write_last_adopt(project, datetime.now(tz=timezone.utc))
+    write_last_adopt(project, datetime.now(tz=UTC))
 
     entries = [
         _pending_entry("knowledge/lessons/foo.md"),
@@ -122,7 +125,7 @@ def test_tc2_warehouse_only_no_pending(tmp_path):
     project = _make_project(tmp_path)
 
     # Set .last-adopt BEFORE adding the new file
-    write_last_adopt(project, datetime(2020, 1, 1, tzinfo=timezone.utc))
+    write_last_adopt(project, datetime(2020, 1, 1, tzinfo=UTC))
 
     # Add a file to warehouse AFTER .last-adopt
     ctx_file = wh / "contexts" / "python-standards.md"
@@ -142,7 +145,7 @@ def test_tc3_both_empty(tmp_path):
     project = _make_project(tmp_path)
 
     # Set .last-adopt to now (no new warehouse changes expected)
-    write_last_adopt(project, datetime.now(tz=timezone.utc))
+    write_last_adopt(project, datetime.now(tz=UTC))
     _write_pending(project, [])
 
     candidates = discover_candidates(project, wh)
@@ -195,16 +198,19 @@ def test_dedup_same_path_pending_metadata_wins(tmp_path):
     project = _make_project(tmp_path)
 
     # .last-adopt BEFORE commit so warehouse diff also picks up the file
-    write_last_adopt(project, datetime(2020, 1, 1, tzinfo=timezone.utc))
+    write_last_adopt(project, datetime(2020, 1, 1, tzinfo=UTC))
 
     # Commit the file to warehouse
     (wh / "knowledge" / "foo.md").write_text("# Foo\n")
     _git_commit(wh, "add foo.md")
 
     # Pending.yaml also has this path with a distinct source
-    _write_pending(project, [
-        _pending_entry("knowledge/foo.md", source="record-knowledge"),
-    ])
+    _write_pending(
+        project,
+        [
+            _pending_entry("knowledge/foo.md", source="record-knowledge"),
+        ],
+    )
 
     candidates = discover_candidates(project, wh)
 
@@ -218,14 +224,17 @@ def test_dedup_pending_action_wins(tmp_path):
     wh = _make_warehouse(tmp_path)
     project = _make_project(tmp_path)
 
-    write_last_adopt(project, datetime(2020, 1, 1, tzinfo=timezone.utc))
+    write_last_adopt(project, datetime(2020, 1, 1, tzinfo=UTC))
 
     (wh / "contexts" / "existing.md").write_text("# Existing\n")
     _git_commit(wh, "add existing.md")
 
-    _write_pending(project, [
-        _pending_entry("contexts/existing.md", action="modified", source="my-tool"),
-    ])
+    _write_pending(
+        project,
+        [
+            _pending_entry("contexts/existing.md", action="modified", source="my-tool"),
+        ],
+    )
 
     candidates = discover_candidates(project, wh)
 
@@ -240,14 +249,17 @@ def test_no_dedup_different_paths(tmp_path):
     wh = _make_warehouse(tmp_path)
     project = _make_project(tmp_path)
 
-    write_last_adopt(project, datetime(2020, 1, 1, tzinfo=timezone.utc))
+    write_last_adopt(project, datetime(2020, 1, 1, tzinfo=UTC))
 
     (wh / "contexts" / "new-context.md").write_text("# New Context\n")
     _git_commit(wh, "add context")
 
-    _write_pending(project, [
-        _pending_entry("knowledge/lesson.md"),
-    ])
+    _write_pending(
+        project,
+        [
+            _pending_entry("knowledge/lesson.md"),
+        ],
+    )
 
     candidates = discover_candidates(project, wh)
 
@@ -261,12 +273,15 @@ def test_duplicate_pending_entries_last_write_wins(tmp_path):
     """TC4 for 4.2: Two pending entries with same path → last-write-wins."""
     wh = _make_warehouse(tmp_path)
     project = _make_project(tmp_path)
-    write_last_adopt(project, datetime.now(tz=timezone.utc))
+    write_last_adopt(project, datetime.now(tz=UTC))
 
-    _write_pending(project, [
-        _pending_entry("knowledge/foo.md", source="first-tool"),
-        _pending_entry("knowledge/foo.md", source="second-tool"),
-    ])
+    _write_pending(
+        project,
+        [
+            _pending_entry("knowledge/foo.md", source="first-tool"),
+            _pending_entry("knowledge/foo.md", source="second-tool"),
+        ],
+    )
 
     candidates = discover_candidates(project, wh)
 
@@ -286,7 +301,7 @@ def test_warehouse_only_source_annotation(tmp_path):
     wh = _make_warehouse(tmp_path)
     project = _make_project(tmp_path)
 
-    write_last_adopt(project, datetime(2020, 1, 1, tzinfo=timezone.utc))
+    write_last_adopt(project, datetime(2020, 1, 1, tzinfo=UTC))
 
     (wh / "contexts" / "cicd.md").write_text("# CICD\n")
     _git_commit(wh, "add cicd.md")
@@ -303,7 +318,7 @@ def test_pending_yaml_not_written_during_discover(tmp_path):
     wh = _make_warehouse(tmp_path)
     project = _make_project(tmp_path)
 
-    write_last_adopt(project, datetime(2020, 1, 1, tzinfo=timezone.utc))
+    write_last_adopt(project, datetime(2020, 1, 1, tzinfo=UTC))
     (wh / "contexts" / "foo.md").write_text("# Foo\n")
     _git_commit(wh, "add foo.md")
 
@@ -321,15 +336,18 @@ def test_mixed_sources_only_warehouse_only_annotated(tmp_path):
     wh = _make_warehouse(tmp_path)
     project = _make_project(tmp_path)
 
-    write_last_adopt(project, datetime(2020, 1, 1, tzinfo=timezone.utc))
+    write_last_adopt(project, datetime(2020, 1, 1, tzinfo=UTC))
 
     (wh / "contexts" / "cicd.md").write_text("# CICD\n")
     _git_commit(wh, "add cicd.md")
 
     # pending.yaml entry for a DIFFERENT path
-    _write_pending(project, [
-        _pending_entry("knowledge/lesson.md", source="record-knowledge"),
-    ])
+    _write_pending(
+        project,
+        [
+            _pending_entry("knowledge/lesson.md", source="record-knowledge"),
+        ],
+    )
 
     candidates = discover_candidates(project, wh)
 

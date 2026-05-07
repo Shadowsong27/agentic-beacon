@@ -16,7 +16,7 @@ from __future__ import annotations
 import fnmatch
 import re
 import subprocess
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -432,7 +432,7 @@ def _get_warehouse_modified_paths(
     if since is None:
         since_str = "1970-01-01T00:00:00+00:00"
     else:
-        since_dt = since.astimezone(timezone.utc)
+        since_dt = since.astimezone(UTC)
         since_str = since_dt.strftime("%Y-%m-%dT%H:%M:%S+00:00")
 
     cmd = [
@@ -451,7 +451,34 @@ def _get_warehouse_modified_paths(
         return []
     if result.returncode != 0:
         return []
-    return [p.strip() for p in result.stdout.splitlines() if p.strip()]
+    paths = [p.strip() for p in result.stdout.splitlines() if p.strip()]
+    return paths + _get_warehouse_working_tree_paths(warehouse_path)
+
+
+def _get_warehouse_working_tree_paths(warehouse_path: Path) -> list[str]:
+    """Return paths with uncommitted working-tree changes in the warehouse."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(warehouse_path), "status", "--porcelain", "-uall"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return []
+    if result.returncode != 0:
+        return []
+
+    paths: list[str] = []
+    for line in result.stdout.splitlines():
+        if len(line) < 4:
+            continue
+        path = line[3:].strip()
+        if " -> " in path:
+            path = path.rsplit(" -> ", 1)[1]
+        if path:
+            paths.append(path)
+    return paths
 
 
 def discover_candidates(
@@ -492,6 +519,8 @@ def discover_candidates(
 
     seen_skill_dirs: set[str] = set()
     for path in modified_paths:
+        if Path(path).name.startswith("."):
+            continue
         atype = _classify_warehouse_path_extended(path)
         if atype is None:
             continue

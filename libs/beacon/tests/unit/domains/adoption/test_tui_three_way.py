@@ -8,18 +8,12 @@ Covers tasks 5.1–5.4:
 
 from __future__ import annotations
 
-import filecmp
-import shutil
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import UTC, datetime
 
 import pytest
-
-from beacon.core.manifest.pending import PendingEntry, PendingManifest
 from beacon.domains.adoption.last_adopt import write_last_adopt
 from beacon.domains.adoption.models import AdoptCandidate
 from beacon.domains.adoption.tui import AdoptInnerApp
-
 
 # ─────────────────────────────────────────────────────────────
 # Helpers
@@ -116,8 +110,6 @@ async def test_tc4_toggle_accept_reject_defer_same_row(tmp_path):
         await pilot.pause()
 
         node0 = _find_node(app, "contexts/item-0.md")
-        node1 = _find_node(app, "contexts/item-1.md")
-
         app._mark_action(node0, "accept")
         await pilot.pause()
         assert _get_session_action(app, "contexts/item-0.md") == "accept"
@@ -187,7 +179,7 @@ async def test_tc1_mark_then_cancel_files_unchanged(tmp_path):
     pending_yaml = ab / "pending.yaml"
     pending_yaml.write_text("pending: []\n")
     last_adopt = ab / ".last-adopt"
-    write_last_adopt(project, datetime(2026, 5, 1, tzinfo=timezone.utc))
+    write_last_adopt(project, datetime(2026, 5, 1, tzinfo=UTC))
 
     # Snapshot pre-session
     def snapshot() -> tuple[bytes, bytes, bytes]:
@@ -226,7 +218,7 @@ async def test_tc2_mark_all_accept_cancel_files_unchanged(tmp_path):
     beacon_yaml.write_text("artifacts:\n  contexts: []\n  skills: []\n")
     pending_yaml = ab / "pending.yaml"
     pending_yaml.write_text("pending: []\n")
-    write_last_adopt(project, datetime(2026, 5, 1, tzinfo=timezone.utc))
+    write_last_adopt(project, datetime(2026, 5, 1, tzinfo=UTC))
     last_adopt = ab / ".last-adopt"
 
     pre = (beacon_yaml.read_bytes(), pending_yaml.read_bytes(), last_adopt.read_bytes())
@@ -241,7 +233,11 @@ async def test_tc2_mark_all_accept_cancel_files_unchanged(tmp_path):
         await pilot.pause()
         app.action_cancel()
 
-    post = (beacon_yaml.read_bytes(), pending_yaml.read_bytes(), last_adopt.read_bytes())
+    post = (
+        beacon_yaml.read_bytes(),
+        pending_yaml.read_bytes(),
+        last_adopt.read_bytes(),
+    )
     assert pre == post
 
 
@@ -257,7 +253,7 @@ async def test_tc3_no_marks_cancel_files_unchanged(tmp_path):
     beacon_yaml.write_text("artifacts:\n  contexts: []\n  skills: []\n")
     pending_yaml = ab / "pending.yaml"
     pending_yaml.write_text("pending: []\n")
-    write_last_adopt(project, datetime(2026, 5, 1, tzinfo=timezone.utc))
+    write_last_adopt(project, datetime(2026, 5, 1, tzinfo=UTC))
     last_adopt = ab / ".last-adopt"
 
     pre = (beacon_yaml.read_bytes(), pending_yaml.read_bytes(), last_adopt.read_bytes())
@@ -268,7 +264,11 @@ async def test_tc3_no_marks_cancel_files_unchanged(tmp_path):
         await pilot.pause()
         app.action_cancel()
 
-    post = (beacon_yaml.read_bytes(), pending_yaml.read_bytes(), last_adopt.read_bytes())
+    post = (
+        beacon_yaml.read_bytes(),
+        pending_yaml.read_bytes(),
+        last_adopt.read_bytes(),
+    )
     assert pre == post
 
 
@@ -287,8 +287,6 @@ async def test_confirm_collects_three_way_choices(tmp_path):
 
         node0 = _find_node(app, "contexts/item-0.md")
         node1 = _find_node(app, "contexts/item-1.md")
-        node2 = _find_node(app, "contexts/item-2.md")
-
         app._mark_action(node0, "accept")
         app._mark_action(node1, "reject")
         # item-2 stays defer (default)
@@ -356,7 +354,7 @@ async def test_cancel_from_confirm_screen_files_unchanged(tmp_path):
     beacon_yaml.write_text("artifacts:\n  contexts: []\n  skills: []\n")
     pending_yaml = ab / "pending.yaml"
     pending_yaml.write_text("pending: []\n")
-    write_last_adopt(project, datetime(2026, 5, 1, tzinfo=timezone.utc))
+    write_last_adopt(project, datetime(2026, 5, 1, tzinfo=UTC))
     last_adopt = ab / ".last-adopt"
 
     pre = (beacon_yaml.read_bytes(), pending_yaml.read_bytes(), last_adopt.read_bytes())
@@ -382,5 +380,9 @@ async def test_cancel_from_confirm_screen_files_unchanged(tmp_path):
         app.action_cancel()
         await pilot.pause()
 
-    post = (beacon_yaml.read_bytes(), pending_yaml.read_bytes(), last_adopt.read_bytes())
+    post = (
+        beacon_yaml.read_bytes(),
+        pending_yaml.read_bytes(),
+        last_adopt.read_bytes(),
+    )
     assert pre == post

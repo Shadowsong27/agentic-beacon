@@ -8,17 +8,15 @@ Covers tasks 6.5 and 6.6:
 from __future__ import annotations
 
 import subprocess
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 import yaml
-
 from beacon.core.manifest.pending import PendingEntry, PendingManifest
 from beacon.domains.adoption.apply import CommitError, commit_pending_session
 from beacon.domains.adoption.last_adopt import read_last_adopt, write_last_adopt
 from beacon.domains.adoption.models import AdoptCandidate
-
 
 # ─────────────────────────────────────────────────────────────
 # Fixtures / helpers
@@ -29,11 +27,15 @@ def _git_init(path: Path) -> None:
     subprocess.run(["git", "init"], cwd=path, check=True, capture_output=True)
     subprocess.run(
         ["git", "config", "user.email", "test@test.com"],
-        cwd=path, check=True, capture_output=True,
+        cwd=path,
+        check=True,
+        capture_output=True,
     )
     subprocess.run(
         ["git", "config", "user.name", "Test"],
-        cwd=path, check=True, capture_output=True,
+        cwd=path,
+        check=True,
+        capture_output=True,
     )
 
 
@@ -41,7 +43,9 @@ def _git_commit(path: Path, msg: str = "add files") -> None:
     subprocess.run(["git", "add", "-A"], cwd=path, check=True, capture_output=True)
     subprocess.run(
         ["git", "commit", "-m", msg],
-        cwd=path, check=True, capture_output=True,
+        cwd=path,
+        check=True,
+        capture_output=True,
     )
 
 
@@ -73,7 +77,7 @@ def project(tmp_path: Path, warehouse: Path) -> dict:
     beacon_yaml = ab / "beacon.yaml"
     beacon_yaml.write_text("artifacts:\n  contexts: []\n  skills: []\n  agents: []\n")
 
-    write_last_adopt(p, datetime(2026, 5, 1, tzinfo=timezone.utc))
+    write_last_adopt(p, datetime(2026, 5, 1, tzinfo=UTC))
 
     # Pending with 4 entries
     entries = [
@@ -82,28 +86,28 @@ def project(tmp_path: Path, warehouse: Path) -> dict:
             type="context",
             action="created",
             source="record-knowledge",
-            created_at=datetime(2026, 5, 6, 12, 0, 0, tzinfo=timezone.utc),
+            created_at=datetime(2026, 5, 6, 12, 0, 0, tzinfo=UTC),
         ),
         PendingEntry(
             path="contexts/ctx-b.md",
             type="context",
             action="created",
             source="record-knowledge",
-            created_at=datetime(2026, 5, 6, 12, 0, 0, tzinfo=timezone.utc),
+            created_at=datetime(2026, 5, 6, 12, 0, 0, tzinfo=UTC),
         ),
         PendingEntry(
             path="knowledge/k.md",
             type="knowledge",
             action="created",
             source="record-knowledge",
-            created_at=datetime(2026, 5, 6, 12, 0, 0, tzinfo=timezone.utc),
+            created_at=datetime(2026, 5, 6, 12, 0, 0, tzinfo=UTC),
         ),
         PendingEntry(
             path="contexts/ctx-c.md",
             type="context",
             action="created",
             source="record-knowledge",
-            created_at=datetime(2026, 5, 6, 12, 0, 0, tzinfo=timezone.utc),
+            created_at=datetime(2026, 5, 6, 12, 0, 0, tzinfo=UTC),
         ),
     ]
     m = PendingManifest(pending=entries)
@@ -135,10 +139,24 @@ def _snapshot(paths: dict) -> tuple[bytes, bytes, bytes]:
 def test_happy_path(project: dict, warehouse: Path):
     """6.5: 2 accept / 1 reject / 1 defer → all 4 invariants hold simultaneously."""
     candidates = [
-        AdoptCandidate(artifact_type="contexts", path="contexts/ctx-a.md", source="record-knowledge"),
-        AdoptCandidate(artifact_type="contexts", path="contexts/ctx-b.md", source="record-knowledge"),
-        AdoptCandidate(artifact_type="knowledge", path="knowledge/k.md", source="record-knowledge"),
-        AdoptCandidate(artifact_type="contexts", path="contexts/ctx-c.md", source="record-knowledge"),
+        AdoptCandidate(
+            artifact_type="contexts",
+            path="contexts/ctx-a.md",
+            source="record-knowledge",
+        ),
+        AdoptCandidate(
+            artifact_type="contexts",
+            path="contexts/ctx-b.md",
+            source="record-knowledge",
+        ),
+        AdoptCandidate(
+            artifact_type="knowledge", path="knowledge/k.md", source="record-knowledge"
+        ),
+        AdoptCandidate(
+            artifact_type="contexts",
+            path="contexts/ctx-c.md",
+            source="record-knowledge",
+        ),
     ]
     session_state = {
         "contexts/ctx-a.md": "accept",
@@ -146,7 +164,7 @@ def test_happy_path(project: dict, warehouse: Path):
         "knowledge/k.md": "reject",
         "contexts/ctx-c.md": "defer",
     }
-    commit_time = datetime(2026, 5, 7, 15, 0, 0, tzinfo=timezone.utc)
+    commit_time = datetime(2026, 5, 7, 15, 0, 0, tzinfo=UTC)
 
     commit_pending_session(
         session_state,

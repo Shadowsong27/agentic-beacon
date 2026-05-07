@@ -15,18 +15,16 @@ import os
 import re
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 import yaml
-
 from beacon.core.manifest.pending import PendingEntry, PendingManifest
 from beacon.domains.adoption.apply import commit_pending_session
 from beacon.domains.adoption.discovery import discover_candidates
 from beacon.domains.adoption.last_adopt import read_last_adopt, write_last_adopt
-from beacon.domains.adoption.models import AdoptCandidate
-
+from beacon.domains.adoption.models import AdoptCandidate, AdoptResult
 
 # ─────────────────────────────────────────────────────────────
 # Shared helpers
@@ -79,9 +77,7 @@ def _make_project(
     artifacts = ab / "artifacts"
     artifacts.mkdir(exist_ok=True)
 
-    (ab / "config.toml").write_text(
-        f'[warehouse]\nlocal_path = "{warehouse}"\n'
-    )
+    (ab / "config.toml").write_text(f'[warehouse]\nlocal_path = "{warehouse}"\n')
 
     beacon_yaml = ab / "beacon.yaml"
     if beacon_content is None:
@@ -114,19 +110,19 @@ def test_knowledge_no_pointer(tmp_path: Path) -> None:
 
     proj = tmp_path / "proj"
     proj.mkdir()
-    p = _make_project(proj, wh, last_adopt_dt=datetime(2026, 5, 1, tzinfo=timezone.utc))
+    p = _make_project(proj, wh, last_adopt_dt=datetime(2026, 5, 1, tzinfo=UTC))
 
     entry = PendingEntry(
         path="knowledge/lesson.md",
         type="knowledge",
         action="created",
         source="record-knowledge",
-        created_at=datetime(2026, 5, 6, 12, 0, tzinfo=timezone.utc),
+        created_at=datetime(2026, 5, 6, 12, 0, tzinfo=UTC),
     )
     PendingManifest(pending=[entry]).to_yaml(p["pending_yaml"])
     pre_beacon = p["beacon_yaml"].read_bytes()
 
-    commit_time = datetime(2026, 5, 7, 12, 0, tzinfo=timezone.utc)
+    commit_time = datetime(2026, 5, 7, 12, 0, tzinfo=UTC)
     commit_pending_session(
         {"knowledge/lesson.md": "accept"},
         [AdoptCandidate(artifact_type="knowledge", path="knowledge/lesson.md")],
@@ -164,7 +160,7 @@ def test_knowledge_with_pointer(tmp_path: Path) -> None:
 
     proj = tmp_path / "proj"
     proj.mkdir()
-    p = _make_project(proj, wh, last_adopt_dt=datetime(2026, 5, 1, tzinfo=timezone.utc))
+    p = _make_project(proj, wh, last_adopt_dt=datetime(2026, 5, 1, tzinfo=UTC))
 
     entries = [
         PendingEntry(
@@ -172,14 +168,14 @@ def test_knowledge_with_pointer(tmp_path: Path) -> None:
             type="knowledge",
             action="created",
             source="record-knowledge",
-            created_at=datetime(2026, 5, 6, 12, 0, tzinfo=timezone.utc),
+            created_at=datetime(2026, 5, 6, 12, 0, tzinfo=UTC),
         ),
         PendingEntry(
             path="contexts/guide.md",
             type="context",
             action="modified",
             source="record-knowledge",
-            created_at=datetime(2026, 5, 6, 12, 0, tzinfo=timezone.utc),
+            created_at=datetime(2026, 5, 6, 12, 0, tzinfo=UTC),
         ),
     ]
     PendingManifest(pending=entries).to_yaml(p["pending_yaml"])
@@ -194,7 +190,7 @@ def test_knowledge_with_pointer(tmp_path: Path) -> None:
         wh,
         p["artifacts"],
         p["beacon_yaml"],
-        commit_time=datetime(2026, 5, 7, 12, 0, tzinfo=timezone.utc),
+        commit_time=datetime(2026, 5, 7, 12, 0, tzinfo=UTC),
     )
 
     # Context symlink exists and reads through to the warehouse file
@@ -236,14 +232,14 @@ def test_skill_create(tmp_path: Path) -> None:
 
     proj = tmp_path / "proj"
     proj.mkdir()
-    p = _make_project(proj, wh, last_adopt_dt=datetime(2026, 5, 1, tzinfo=timezone.utc))
+    p = _make_project(proj, wh, last_adopt_dt=datetime(2026, 5, 1, tzinfo=UTC))
 
     entry = PendingEntry(
         path="skills/new-skill/",
         type="skill",
         action="created",
         source="record-skill",
-        created_at=datetime(2026, 5, 6, 12, 0, tzinfo=timezone.utc),
+        created_at=datetime(2026, 5, 6, 12, 0, tzinfo=UTC),
     )
     PendingManifest(pending=[entry]).to_yaml(p["pending_yaml"])
 
@@ -254,7 +250,7 @@ def test_skill_create(tmp_path: Path) -> None:
         wh,
         p["artifacts"],
         p["beacon_yaml"],
-        commit_time=datetime(2026, 5, 7, 12, 0, tzinfo=timezone.utc),
+        commit_time=datetime(2026, 5, 7, 12, 0, tzinfo=UTC),
     )
 
     # beacon.yaml has the skill entry
@@ -289,7 +285,7 @@ def test_warehouse_modified_via_last_adopt(tmp_path: Path) -> None:
     proj = tmp_path / "proj"
     proj.mkdir()
     # .last-adopt set between initial commit and modification
-    last_adopt_dt = datetime(2026, 1, 15, tzinfo=timezone.utc)
+    last_adopt_dt = datetime(2026, 1, 15, tzinfo=UTC)
     p = _make_project(proj, wh, last_adopt_dt=last_adopt_dt)
     # No pending.yaml entries — only warehouse diff path matters
 
@@ -307,10 +303,16 @@ def test_warehouse_modified_via_last_adopt(tmp_path: Path) -> None:
     assert guide.source == "warehouse-modified"
 
     # Accept the entry via commit_pending_session
-    commit_time = datetime(2026, 3, 1, tzinfo=timezone.utc)
+    commit_time = datetime(2026, 3, 1, tzinfo=UTC)
     commit_pending_session(
         {"contexts/guide.md": "accept"},
-        [AdoptCandidate(artifact_type="contexts", path="contexts/guide.md", source="warehouse-modified")],
+        [
+            AdoptCandidate(
+                artifact_type="contexts",
+                path="contexts/guide.md",
+                source="warehouse-modified",
+            )
+        ],
         proj,
         wh,
         p["artifacts"],
@@ -329,6 +331,97 @@ def test_warehouse_modified_via_last_adopt(tmp_path: Path) -> None:
     )
 
 
+def test_uncommitted_warehouse_edit_surfaces_via_discovery(tmp_path: Path) -> None:
+    """Uncommitted warehouse working-tree edits are discoverable by abc adopt."""
+    wh = tmp_path / "wh"
+    _init_warehouse(wh)
+    (wh / "contexts" / "draft.md").write_text("# Original\n")
+    _commit_all(wh, "add draft", date="2026-01-01T00:00:00+00:00")
+
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    _make_project(proj, wh, last_adopt_dt=datetime(2026, 2, 1, tzinfo=UTC))
+
+    (wh / "contexts" / "draft.md").write_text("# Uncommitted edit\n")
+
+    candidates = discover_candidates(proj, wh)
+
+    draft = [c for c in candidates if c.path == "contexts/draft.md"]
+    assert draft, f"contexts/draft.md not in candidates: {[c.path for c in candidates]}"
+    assert draft[0].source == "warehouse-modified"
+
+
+def test_cli_adopt_commits_pending_three_way_actions(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """abc adopt uses the pending-aware commit path, including reject/defer choices."""
+    import beacon.cli.adoption as adoption_cli
+    from beacon.cli.main import main
+    from click.testing import CliRunner
+
+    wh = tmp_path / "wh"
+    _init_warehouse(wh)
+    (wh / "contexts" / "accept.md").write_text("# Accept\n")
+    (wh / "contexts" / "reject.md").write_text("# Reject\n")
+    (wh / "contexts" / "defer.md").write_text("# Defer\n")
+    _commit_all(wh, "add pending candidates")
+
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    p = _make_project(proj, wh, last_adopt_dt=datetime(2026, 5, 1, tzinfo=UTC))
+    PendingManifest(
+        pending=[
+            PendingEntry(
+                path="contexts/accept.md",
+                type="context",
+                action="created",
+                source="test",
+                created_at=datetime(2026, 5, 6, 12, 0, tzinfo=UTC),
+            ),
+            PendingEntry(
+                path="contexts/reject.md",
+                type="context",
+                action="created",
+                source="test",
+                created_at=datetime(2026, 5, 6, 12, 0, tzinfo=UTC),
+            ),
+            PendingEntry(
+                path="contexts/defer.md",
+                type="context",
+                action="created",
+                source="test",
+                created_at=datetime(2026, 5, 6, 12, 0, tzinfo=UTC),
+            ),
+        ]
+    ).to_yaml(p["pending_yaml"])
+
+    class FakeAdoptApp:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        def run(self) -> AdoptResult:
+            return AdoptResult(
+                to_adopt=["contexts/accept.md"],
+                to_reject=["contexts/reject.md"],
+                to_defer=["contexts/defer.md"],
+            )
+
+    monkeypatch.setattr(adoption_cli, "AdoptApp", FakeAdoptApp)
+    monkeypatch.setattr(adoption_cli, "is_interactive", lambda: True)
+    monkeypatch.chdir(proj)
+
+    result = CliRunner().invoke(main, ["adopt"])
+
+    assert result.exit_code == 0, result.output
+    data = yaml.safe_load(p["beacon_yaml"].read_text())
+    assert "contexts/accept.md" in data["artifacts"]["contexts"]
+
+    remaining = PendingManifest.from_yaml(p["pending_yaml"]).pending
+    assert [e.path for e in remaining] == ["contexts/defer.md"]
+    assert read_last_adopt(proj) is not None
+
+
 # ─────────────────────────────────────────────────────────────
 # 9.5 — Alert visibility: pending alert precedes warehouse status
 # ─────────────────────────────────────────────────────────────
@@ -336,9 +429,8 @@ def test_warehouse_modified_via_last_adopt(tmp_path: Path) -> None:
 
 def test_alert_visibility(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """9.5: non-empty pending.yaml → alert on stderr, then warehouse status runs normally."""
-    from click.testing import CliRunner
-
     from beacon.cli.main import main
+    from click.testing import CliRunner
 
     wh = tmp_path / "wh"
     _init_warehouse(wh)
@@ -354,7 +446,7 @@ def test_alert_visibility(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> No
             type="context",
             action="created",
             source="test",
-            created_at=datetime(2026, 5, 6, 12, 0, tzinfo=timezone.utc),
+            created_at=datetime(2026, 5, 6, 12, 0, tzinfo=UTC),
         )
         for i in range(3)
     ]

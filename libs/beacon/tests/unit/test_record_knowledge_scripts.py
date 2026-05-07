@@ -8,17 +8,13 @@ Tests match the TDD criteria in tasks.md sections 7.1, 7.2, 8.1, 8.2.
 """
 
 import importlib.util
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 
 _SKILLS_DIR = (
-    Path(__file__).resolve().parent.parent.parent
-    / "src"
-    / "beacon"
-    / "data"
-    / "skills"
+    Path(__file__).resolve().parent.parent.parent / "src" / "beacon" / "data" / "skills"
 )
 
 
@@ -247,7 +243,7 @@ class TestAppendPendingEntry:
     def test_created_at_is_utc_aware(self, append_mod, tmp_path):
         """TC7: created_at field is timezone-aware UTC, not naive."""
         project_root = self._make_project(tmp_path)
-        before = datetime.now(timezone.utc)
+        before = datetime.now(UTC)
         append_mod.append_pending_entry(
             project_root,
             path="knowledge/facts/x.md",
@@ -255,7 +251,7 @@ class TestAppendPendingEntry:
             action="created",
             source="test",
         )
-        after = datetime.now(timezone.utc)
+        after = datetime.now(UTC)
         from beacon.core.manifest.pending import PendingManifest
 
         manifest = PendingManifest.from_yaml(

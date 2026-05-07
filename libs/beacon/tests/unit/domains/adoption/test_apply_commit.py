@@ -6,17 +6,15 @@ Covers task 6.2 (commit) and 6.3 (rollback) TDD test cases.
 from __future__ import annotations
 
 import subprocess
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 import yaml
-
 from beacon.core.manifest.pending import PendingEntry, PendingManifest
 from beacon.domains.adoption.apply import CommitError, commit_pending_session
 from beacon.domains.adoption.last_adopt import read_last_adopt, write_last_adopt
 from beacon.domains.adoption.models import AdoptCandidate
-
 
 # ─────────────────────────────────────────────────────────────
 # Helpers
@@ -27,11 +25,15 @@ def _git_init(path: Path) -> None:
     subprocess.run(["git", "init"], cwd=path, check=True, capture_output=True)
     subprocess.run(
         ["git", "config", "user.email", "test@test.com"],
-        cwd=path, check=True, capture_output=True,
+        cwd=path,
+        check=True,
+        capture_output=True,
     )
     subprocess.run(
         ["git", "config", "user.name", "Test User"],
-        cwd=path, check=True, capture_output=True,
+        cwd=path,
+        check=True,
+        capture_output=True,
     )
 
 
@@ -39,7 +41,9 @@ def _git_commit(path: Path, msg: str = "add files") -> None:
     subprocess.run(["git", "add", "-A"], cwd=path, check=True, capture_output=True)
     subprocess.run(
         ["git", "commit", "-m", msg],
-        cwd=path, check=True, capture_output=True,
+        cwd=path,
+        check=True,
+        capture_output=True,
     )
 
 
@@ -72,7 +76,7 @@ def _make_project(tmp_path: Path, wh: Path) -> tuple[Path, Path, Path, Path]:
     pending_yaml = ab / "pending.yaml"
     pending_yaml.write_text("pending: []\n")
 
-    write_last_adopt(project, datetime(2026, 5, 1, tzinfo=timezone.utc))
+    write_last_adopt(project, datetime(2026, 5, 1, tzinfo=UTC))
 
     return project, beacon_yaml, artifacts, ab
 
@@ -88,7 +92,7 @@ def _pending_entry(
         type=entry_type,  # type: ignore[arg-type]
         action=action,  # type: ignore[arg-type]
         source=source,
-        created_at=datetime(2026, 5, 6, 12, 0, 0, tzinfo=timezone.utc),
+        created_at=datetime(2026, 5, 6, 12, 0, 0, tzinfo=UTC),
     )
 
 
@@ -98,7 +102,9 @@ def _write_pending(project: Path, entries: list[PendingEntry]) -> None:
 
 
 def _candidate(path: str, artifact_type: str = "contexts") -> AdoptCandidate:
-    return AdoptCandidate(artifact_type=artifact_type, path=path, source="record-knowledge")
+    return AdoptCandidate(
+        artifact_type=artifact_type, path=path, source="record-knowledge"
+    )
 
 
 # ─────────────────────────────────────────────────────────────
@@ -130,7 +136,9 @@ def test_tc1_accept_only_updates_beacon_and_pending(tmp_path):
     ]
     session_state = {"contexts/foo.md": "accept", "contexts/bar.md": "accept"}
 
-    commit_pending_session(session_state, candidates, project, wh, artifacts, beacon_yaml)
+    commit_pending_session(
+        session_state, candidates, project, wh, artifacts, beacon_yaml
+    )
 
     # beacon.yaml should have 2 new entries
     with open(beacon_yaml) as f:
@@ -174,7 +182,9 @@ def test_tc2_reject_only_clears_pending_warehouse_unchanged(tmp_path):
     ]
     session_state = {"knowledge/lesson.md": "reject", "contexts/foo.md": "reject"}
 
-    commit_pending_session(session_state, candidates, project, wh, artifacts, beacon_yaml)
+    commit_pending_session(
+        session_state, candidates, project, wh, artifacts, beacon_yaml
+    )
 
     # pending.yaml should be empty
     manifest = PendingManifest.from_yaml(ab / "pending.yaml")
@@ -192,8 +202,6 @@ def test_tc3_defer_only_keeps_pending_advances_last_adopt(tmp_path):
     wh = _make_warehouse(tmp_path)
     project, beacon_yaml, artifacts, ab = _make_project(tmp_path, wh)
 
-    pre_last_adopt = read_last_adopt(project)
-
     entries = [
         _pending_entry("knowledge/foo.md", entry_type="knowledge"),
         _pending_entry("contexts/bar.md"),
@@ -208,9 +216,14 @@ def test_tc3_defer_only_keeps_pending_advances_last_adopt(tmp_path):
     ]
     session_state = {"knowledge/foo.md": "defer", "contexts/bar.md": "defer"}
 
-    commit_time = datetime(2026, 5, 7, 10, 0, 0, tzinfo=timezone.utc)
+    commit_time = datetime(2026, 5, 7, 10, 0, 0, tzinfo=UTC)
     commit_pending_session(
-        session_state, candidates, project, wh, artifacts, beacon_yaml,
+        session_state,
+        candidates,
+        project,
+        wh,
+        artifacts,
+        beacon_yaml,
         commit_time=commit_time,
     )
 
@@ -261,9 +274,14 @@ def test_tc4_mixed_2_1_1_all_invariants(tmp_path):
         "contexts/ctx-c.md": "defer",
     }
 
-    commit_time = datetime(2026, 5, 7, 12, 0, 0, tzinfo=timezone.utc)
+    commit_time = datetime(2026, 5, 7, 12, 0, 0, tzinfo=UTC)
     commit_pending_session(
-        session_state, candidates, project, wh, artifacts, beacon_yaml,
+        session_state,
+        candidates,
+        project,
+        wh,
+        artifacts,
+        beacon_yaml,
         commit_time=commit_time,
     )
 
@@ -289,6 +307,43 @@ def test_tc4_mixed_2_1_1_all_invariants(tmp_path):
     assert warehouse_knowledge.read_bytes() == original_knowledge
 
 
+def test_accepted_contexts_and_skills_trigger_post_sync_wiring(tmp_path):
+    """Accepted beacon artifacts run the post-sync wiring hook before commit completes."""
+    wh = _make_warehouse(tmp_path)
+    (wh / "contexts" / "ctx.md").write_text("# Context\n")
+    skill_dir = wh / "skills" / "helper"
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text("---\ndescription: Helper\n---\n")
+    _git_commit(wh, "add context and skill")
+
+    project, beacon_yaml, artifacts, ab = _make_project(tmp_path, wh)
+    entries = [
+        _pending_entry("contexts/ctx.md"),
+        _pending_entry("skills/helper/", entry_type="skill"),
+    ]
+    _write_pending(project, entries)
+
+    wired_paths: list[str] = []
+
+    def _record_wiring(accepted: list[AdoptCandidate]) -> None:
+        wired_paths.extend(c.path for c in accepted)
+
+    commit_pending_session(
+        {"contexts/ctx.md": "accept", "skills/helper/": "accept"},
+        [
+            _candidate("contexts/ctx.md"),
+            _candidate("skills/helper/", artifact_type="skills"),
+        ],
+        project,
+        wh,
+        artifacts,
+        beacon_yaml,
+        _post_sync_wiring_fn=_record_wiring,
+    )
+
+    assert wired_paths == ["contexts/ctx.md", "skills/helper/"]
+
+
 def test_tc6_last_adopt_advances_only_on_success(tmp_path):
     """TC6: .last-adopt advances ONLY on successful commit, never on partial state."""
     wh = _make_warehouse(tmp_path)
@@ -306,7 +361,12 @@ def test_tc6_last_adopt_advances_only_on_success(tmp_path):
 
     with pytest.raises(CommitError):
         commit_pending_session(
-            session_state, candidates, project, wh, artifacts, beacon_yaml,
+            session_state,
+            candidates,
+            project,
+            wh,
+            artifacts,
+            beacon_yaml,
             _symlink_sync_fn=_failing_sync,
         )
 
@@ -365,9 +425,14 @@ def test_tc1_symlink_failure_on_second_entry_rolls_back(tmp_path):
         if call_count[0] == 2:
             raise RuntimeError("injected sync failure on b.md")
 
-    with pytest.raises(CommitError) as exc_info:
+    with pytest.raises(CommitError):
         commit_pending_session(
-            session_state, candidates, project, wh, artifacts, beacon_yaml,
+            session_state,
+            candidates,
+            project,
+            wh,
+            artifacts,
+            beacon_yaml,
             _symlink_sync_fn=_failing_on_second,
         )
 
@@ -392,7 +457,12 @@ def test_tc4_error_message_includes_failing_entry_path(tmp_path):
 
     with pytest.raises(CommitError) as exc_info:
         commit_pending_session(
-            session_state, candidates, project, wh, artifacts, beacon_yaml,
+            session_state,
+            candidates,
+            project,
+            wh,
+            artifacts,
+            beacon_yaml,
             _symlink_sync_fn=_fail,
         )
 

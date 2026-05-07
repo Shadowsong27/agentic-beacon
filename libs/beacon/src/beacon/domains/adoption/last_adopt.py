@@ -4,7 +4,7 @@ The marker lives at .agentic-beacon/.last-adopt and records the UTC timestamp
 of the most recent successful `abc adopt` session commit. It is gitignored.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from beacon.core.exceptions import ValidationError
@@ -37,7 +37,7 @@ def read_last_adopt(project_root: Path) -> datetime | None:
             f".last-adopt contains an unrecognisable timestamp: {raw!r}"
         ) from e
 
-    return dt.astimezone(timezone.utc)
+    return dt.astimezone(UTC)
 
 
 def write_last_adopt(project_root: Path, when: datetime) -> None:
@@ -45,7 +45,7 @@ def write_last_adopt(project_root: Path, when: datetime) -> None:
     path = _marker_path(project_root)
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    dt = when if when.tzinfo is None else when.astimezone(timezone.utc)
+    dt = when if when.tzinfo is None else when.astimezone(UTC)
     timestamp_str = dt.strftime("%Y-%m-%dT%H:%M:%SZ")
 
     path.write_text(timestamp_str + "\n", encoding="utf-8")
