@@ -40,8 +40,10 @@ from beacon.domains.artifact.skill import (
     wire_bundled_skills_per_project,
     wire_skills_post_sync,
 )
+from beacon.domains.distribution.legacy_cleanup import (
+    cleanup_legacy_global_agent_symlinks,
+)
 from beacon.domains.distribution.migration import migrate_entries
-from beacon.domains.distribution.migrations import cleanup_legacy_global_agent_symlinks
 from beacon.domains.distribution.sync_engine import (
     DestinationOutsideArtifactsError,
     OutOfWarehouseError,

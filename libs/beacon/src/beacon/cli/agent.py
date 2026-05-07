@@ -4,6 +4,8 @@ import sys
 from pathlib import Path
 
 import click
+from loguru import logger
+from pydantic import ValidationError
 from rich.console import Console
 from rich.table import Table
 
@@ -42,12 +44,14 @@ def list_cmd(*, artifact_type: str | None) -> None:
 
     # SyncEngine.list_artifacts() only reads artifacts_path, but the engine's
     # __post_init__ resolves warehouse_path. Read the connected warehouse from
-    # WorkspaceConfig when available; if the project isn't connected (or the
-    # config is unreadable), fall back to beacon_dir so the engine doesn't end
-    # up with a semantically-wrong Path.cwd().
+    # WorkspaceConfig when available; if the project isn't connected (no
+    # config.toml, missing required `warehouse.local_path`) or the file is
+    # unreadable, fall back to beacon_dir so the engine doesn't end up with a
+    # semantically-wrong Path.cwd().
     try:
         warehouse_path = Path(WorkspaceConfig().warehouse.local_path)
-    except Exception:
+    except (ValidationError, OSError) as exc:
+        logger.debug("Falling back to beacon_dir as warehouse_path: {}", exc)
         warehouse_path = beacon_dir
 
     if artifact_type == "agents":

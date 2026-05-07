@@ -435,7 +435,6 @@ def test_warehouse_cli_handlers_have_one_domain_call():
 _TC10_WAIVERS: dict[str, set[str]] = {
     # TODO: extract interactive UX to CLI layer
     "domains/adoption/apply.py": {"click", "rich"},
-    "domains/artifact/agent.py": {"click", "rich", "sys.exit"},
     "domains/artifact/skill.py": {"rich", "sys.exit"},
     "domains/distribution/upgrader.py": {"click"},
     "domains/setup/wiring.py": {"click", "rich"},

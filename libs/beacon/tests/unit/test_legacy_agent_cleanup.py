@@ -7,7 +7,9 @@ All tests use tmp_path fixtures to simulate home dirs without touching real ~/.c
 from pathlib import Path
 from unittest.mock import patch
 
-from beacon.domains.distribution.migrations import cleanup_legacy_global_agent_symlinks
+from beacon.domains.distribution.legacy_cleanup import (
+    cleanup_legacy_global_agent_symlinks,
+)
 
 
 def _make_warehouse(tmp_path: Path) -> Path:

@@ -401,6 +401,8 @@ def cleanup_unadopted_artifacts(
     import click
     from rich.console import Console
 
+    from beacon.domains.setup.wiring import unwire_agent
+
     console = Console()
 
     to_remove: list[tuple[str, Path]] = []
@@ -411,8 +413,6 @@ def cleanup_unadopted_artifacts(
         if entry_clean.startswith("agents/"):
             # PER-113: unwire project-local agent symlinks on unadopt
             if project_root is not None:
-                from beacon.domains.setup.wiring import unwire_agent
-
                 agent_name = Path(entry_clean).stem
                 unwire_agent(project_root, agent_name)
             # Also fall through to remove the artifact symlink
