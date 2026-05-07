@@ -4,8 +4,6 @@ import sys
 from pathlib import Path
 
 import click
-from loguru import logger
-from pydantic import ValidationError
 from rich.console import Console
 from rich.table import Table
 
@@ -42,27 +40,30 @@ def list_cmd(*, artifact_type: str | None) -> None:
     beacon_dir = Path.cwd() / ".agentic-beacon"
     artifacts_dir = beacon_dir / "artifacts"
 
-    # SyncEngine.list_artifacts() only reads artifacts_path, but the engine's
-    # __post_init__ resolves warehouse_path. Read the connected warehouse from
-    # WorkspaceConfig when available; if the project isn't connected (no
-    # config.toml, missing required `warehouse.local_path`) or the file is
-    # unreadable, fall back to beacon_dir so the engine doesn't end up with a
-    # semantically-wrong Path.cwd().
-    try:
+    # Resolve the connected warehouse path from WorkspaceConfig only when a
+    # config.toml is present. SyncEngine.list_artifacts() only reads
+    # artifacts_path today, but the engine's __post_init__ resolves
+    # warehouse_path; fall back to beacon_dir on unconnected projects so the
+    # engine doesn't end up with a semantically-wrong Path.cwd(). A malformed
+    # but present config.toml is allowed to propagate (the user should fix
+    # their config rather than have abc list silently degrade).
+    if (beacon_dir / "config.toml").is_file():
         warehouse_path = Path(WorkspaceConfig().warehouse.local_path)
-    except (ValidationError, OSError) as exc:
-        logger.debug("Falling back to beacon_dir as warehouse_path: {}", exc)
+    else:
         warehouse_path = beacon_dir
 
+    engine = SyncEngine(warehouse_path=warehouse_path, artifacts_path=artifacts_dir)
+
     if artifact_type == "agents":
-        engine = SyncEngine(warehouse_path=warehouse_path, artifacts_path=artifacts_dir)
         artifacts = engine.list_artifacts("agents")
         agent_files = artifacts.get("agents", [])
         if not agent_files:
             console.print(
                 "[yellow]No agents found in .agentic-beacon/artifacts/agents/.[/yellow]"
             )
-            console.print("Run 'abc adopt' to wire agents from the warehouse.")
+            console.print(
+                "Run 'abc adopt' or declare agents in beacon.yaml then 'abc sync'."
+            )
             return
 
         table = Table(title="Synced Agents")
@@ -82,7 +83,6 @@ def list_cmd(*, artifact_type: str | None) -> None:
         "skills": ("Synced Skills", "yellow", "Skill"),
     }
 
-    engine = SyncEngine(warehouse_path=warehouse_path, artifacts_path=artifacts_dir)
     artifacts = engine.list_artifacts(artifact_type)
 
     for section, files in artifacts.items():

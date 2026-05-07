@@ -57,5 +57,6 @@ def setup() -> None:
         "  • [cyan]knowledge[/cyan], [cyan]contexts[/cyan], [cyan]skills[/cyan] — project-scoped, tracked in beacon.yaml"
     )
     console.print(
-        "  • [magenta]agents[/magenta] — project-scoped, declared in beacon.yaml; run 'abc adopt' to wire agents"
+        "  • [magenta]agents[/magenta] — project-scoped, declared in beacon.yaml; "
+        "run 'abc adopt' or 'abc sync' to wire agents"
     )

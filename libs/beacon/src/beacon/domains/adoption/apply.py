@@ -227,10 +227,13 @@ def commit_session(
             return ("regular_file", None)
         return ("missing", None)
 
-    def _default_post_sync_wiring(accepted: list[AdoptCandidate]) -> None:
-        has_contexts = any(c.artifact_type == "contexts" for c in accepted)
-        has_skills = any(c.artifact_type == "skills" for c in accepted)
-        agent_candidates = [c for c in accepted if c.artifact_type == "agents"]
+    def _default_post_sync_wiring(beacon_adds: list[AdoptCandidate]) -> None:
+        # `beacon_adds` is the union of candidates being added to beacon.yaml:
+        # both the to_adopt set and the pending-accept set (filtered to beacon
+        # artifact types). Not the full session result.
+        has_contexts = any(c.artifact_type == "contexts" for c in beacon_adds)
+        has_skills = any(c.artifact_type == "skills" for c in beacon_adds)
+        agent_candidates = [c for c in beacon_adds if c.artifact_type == "agents"]
 
         if has_contexts:
             from beacon.domains.setup.wiring import (
