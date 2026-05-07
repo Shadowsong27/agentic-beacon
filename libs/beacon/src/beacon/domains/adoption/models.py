@@ -16,7 +16,7 @@ AdoptAction = Literal["accept", "reject", "defer"]
 class AdoptCandidate:
     """A warehouse artifact that can be adopted into beacon.yaml."""
 
-    artifact_type: str  # "contexts" | "skills" | "knowledge" | "agents"
+    artifact_type: str  # "contexts" | "skills" | "agents"
     path: str  # warehouse-relative path (e.g. "contexts/foo.md", "skills/bar/")
     description: str = ""
     is_new: bool = True  # kept for backward compat; prefer commits_ago is not None

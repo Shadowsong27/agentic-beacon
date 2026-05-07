@@ -20,7 +20,7 @@ class PendingEntry(BaseModel):
     """A single pending artifact entry."""
 
     path: str
-    type: Literal["knowledge", "skill", "context", "agent"]
+    type: Literal["skill", "context", "agent"]
     action: Literal["created", "modified"]
     source: str
     created_at: datetime

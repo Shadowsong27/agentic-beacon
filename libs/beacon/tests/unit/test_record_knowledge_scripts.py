@@ -184,9 +184,9 @@ class TestAppendPendingEntry:
         project_root = self._make_project(tmp_path)
         append_mod.append_pending_entry(
             project_root,
-            path="knowledge/lessons/x.md",
-            type_="knowledge",
-            action="created",
+            path="contexts/x.md",
+            type_="context",
+            action="modified",
             source="record-knowledge",
         )
         pending_path = project_root / ".agentic-beacon" / "pending.yaml"
@@ -195,22 +195,22 @@ class TestAppendPendingEntry:
 
         manifest = PendingManifest.from_yaml(pending_path)
         assert len(manifest.pending) == 1
-        assert manifest.pending[0].path == "knowledge/lessons/x.md"
+        assert manifest.pending[0].path == "contexts/x.md"
 
     def test_appends_on_second_call_preserving_order(self, append_mod, tmp_path):
         """TC2: second call → length 2, insertion order preserved."""
         project_root = self._make_project(tmp_path)
         append_mod.append_pending_entry(
             project_root,
-            path="knowledge/lessons/first.md",
-            type_="knowledge",
-            action="created",
+            path="contexts/first.md",
+            type_="context",
+            action="modified",
             source="s",
         )
         append_mod.append_pending_entry(
             project_root,
-            path="knowledge/lessons/second.md",
-            type_="knowledge",
+            path="contexts/second.md",
+            type_="context",
             action="modified",
             source="s",
         )
@@ -220,8 +220,8 @@ class TestAppendPendingEntry:
             project_root / ".agentic-beacon" / "pending.yaml"
         )
         assert len(manifest.pending) == 2
-        assert manifest.pending[0].path == "knowledge/lessons/first.md"
-        assert manifest.pending[1].path == "knowledge/lessons/second.md"
+        assert manifest.pending[0].path == "contexts/first.md"
+        assert manifest.pending[1].path == "contexts/second.md"
 
     def test_source_accepts_free_form_string(self, append_mod, tmp_path):
         """TC6: source accepts any free-form string, no enum check."""
@@ -246,9 +246,9 @@ class TestAppendPendingEntry:
         before = datetime.now(UTC)
         append_mod.append_pending_entry(
             project_root,
-            path="knowledge/facts/x.md",
-            type_="knowledge",
-            action="created",
+            path="contexts/x.md",
+            type_="context",
+            action="modified",
             source="test",
         )
         after = datetime.now(UTC)
@@ -282,7 +282,7 @@ class TestAppendMainArgValidation:
             [
                 "append_pending.py",
                 "--type",
-                "knowledge",
+                "context",
                 "--action",
                 "created",
                 "--source",
@@ -313,6 +313,26 @@ class TestAppendMainArgValidation:
             append_mod.main()
         assert exc.value.code != 0
 
+    def test_knowledge_type_exits_nonzero(self, append_mod, monkeypatch, capsys):
+        """Knowledge files are auto-derived and are not valid pending entries."""
+        monkeypatch.setattr(
+            "sys.argv",
+            [
+                "append_pending.py",
+                "--path",
+                "knowledge/lessons/x.md",
+                "--type",
+                "knowledge",
+                "--action",
+                "created",
+                "--source",
+                "record-knowledge",
+            ],
+        )
+        with pytest.raises(SystemExit) as exc:
+            append_mod.main()
+        assert exc.value.code != 0
+
     def test_no_config_in_cwd_exits_nonzero(
         self, append_mod, monkeypatch, capsys, tmp_path
     ):
@@ -324,7 +344,7 @@ class TestAppendMainArgValidation:
                 "--path",
                 "x.md",
                 "--type",
-                "knowledge",
+                "context",
                 "--action",
                 "created",
                 "--source",

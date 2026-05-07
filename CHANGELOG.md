@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **`pending.yaml` tracks warehouse artifacts authored in the current project but not yet wired into `beacon.yaml`.** Every successful `record-knowledge` or `record-skill` invocation appends an entry to `.agentic-beacon/pending.yaml`. The file is gitignored automatically.
+- **`pending.yaml` tracks project-wired warehouse artifacts authored in the current project but not yet wired into `beacon.yaml`.** Contexts, skills, and agents can be queued for `abc adopt`; knowledge files are auto-derived during sync/adopt and are not tracked in `pending.yaml`. The file is gitignored automatically.
 - **`.last-adopt` records the timestamp of the most recent `abc adopt` session.** Written to `.agentic-beacon/.last-adopt` in ISO-8601 UTC format. Also gitignored automatically.
 - **Three-way `abc adopt` flow (accept / reject / defer).** Each pending entry can be individually accepted (wired into `beacon.yaml` + symlinked), rejected (removed from pending only), or deferred (kept in pending for a later session). A confirmation screen shows projected mutations before any filesystem writes.
 - **Atomic rollback on `abc adopt` commit failure.** If any write fails mid-commit, `beacon.yaml`, `pending.yaml`, and `.last-adopt` are restored to their pre-adopt state automatically.

@@ -11,9 +11,9 @@ from beacon.core.manifest.pending import PendingEntry, PendingManifest
 _UTC = UTC
 
 _SAMPLE_ENTRY = PendingEntry(
-    path="knowledge/lessons/foo.md",
-    type="knowledge",
-    action="created",
+    path="contexts/foo.md",
+    type="context",
+    action="modified",
     source="record-knowledge",
     created_at=datetime(2026, 5, 6, 14, 22, 0, tzinfo=_UTC),
 )
@@ -59,9 +59,9 @@ def test_from_yaml_parses_valid_entry(tmp_path: Path) -> None:
     p = tmp_path / "pending.yaml"
     p.write_text(
         "pending:\n"
-        "- path: knowledge/lessons/x.md\n"
-        "  type: knowledge\n"
-        "  action: created\n"
+        "- path: contexts/x.md\n"
+        "  type: context\n"
+        "  action: modified\n"
         "  source: record-knowledge\n"
         "  created_at: '2026-05-06T14:22:00Z'\n",
         encoding="utf-8",
@@ -69,9 +69,9 @@ def test_from_yaml_parses_valid_entry(tmp_path: Path) -> None:
     result = PendingManifest.from_yaml(p)
     assert len(result.pending) == 1
     entry = result.pending[0]
-    assert entry.path == "knowledge/lessons/x.md"
-    assert entry.type == "knowledge"
-    assert entry.action == "created"
+    assert entry.path == "contexts/x.md"
+    assert entry.type == "context"
+    assert entry.action == "modified"
     assert entry.source == "record-knowledge"
     assert entry.created_at == datetime(2026, 5, 6, 14, 22, 0, tzinfo=_UTC)
 
@@ -100,7 +100,7 @@ def test_from_yaml_missing_field_raises(tmp_path: Path) -> None:
     p = tmp_path / "pending.yaml"
     p.write_text(
         "pending:\n"
-        "- path: knowledge/lessons/x.md\n"
+        "- path: contexts/x.md\n"
         "  action: created\n"
         "  source: record-knowledge\n"
         "  created_at: '2026-05-06T14:22:00Z'\n",
@@ -128,12 +128,29 @@ def test_from_yaml_invalid_type_enum_raises(tmp_path: Path) -> None:
     assert "index 0" in str(exc_info.value)
 
 
-def test_from_yaml_invalid_action_enum_raises(tmp_path: Path) -> None:
+def test_from_yaml_knowledge_type_rejected(tmp_path: Path) -> None:
     p = tmp_path / "pending.yaml"
     p.write_text(
         "pending:\n"
         "- path: knowledge/lessons/x.md\n"
         "  type: knowledge\n"
+        "  action: created\n"
+        "  source: record-knowledge\n"
+        "  created_at: '2026-05-06T14:22:00Z'\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValidationError) as exc_info:
+        PendingManifest.from_yaml(p)
+    assert "index 0" in str(exc_info.value)
+    assert "type" in str(exc_info.value)
+
+
+def test_from_yaml_invalid_action_enum_raises(tmp_path: Path) -> None:
+    p = tmp_path / "pending.yaml"
+    p.write_text(
+        "pending:\n"
+        "- path: contexts/x.md\n"
+        "  type: context\n"
         "  action: deleted\n"
         "  source: record-knowledge\n"
         "  created_at: '2026-05-06T14:22:00Z'\n",
@@ -149,8 +166,8 @@ def test_from_yaml_error_identifies_index(tmp_path: Path) -> None:
     # Second entry is bad
     p.write_text(
         "pending:\n"
-        "- path: knowledge/lessons/x.md\n"
-        "  type: knowledge\n"
+        "- path: contexts/x.md\n"
+        "  type: context\n"
         "  action: created\n"
         "  source: record-knowledge\n"
         "  created_at: '2026-05-06T14:22:00Z'\n"
@@ -232,9 +249,9 @@ def test_append_in_memory(tmp_path: Path) -> None:
 
 def test_append_then_dump_preserves_order(tmp_path: Path) -> None:
     entry1 = PendingEntry(
-        path="knowledge/a.md",
-        type="knowledge",
-        action="created",
+        path="contexts/a.md",
+        type="context",
+        action="modified",
         source="record-knowledge",
         created_at=datetime(2026, 5, 6, 10, 0, 0, tzinfo=_UTC),
     )
@@ -254,7 +271,7 @@ def test_append_then_dump_preserves_order(tmp_path: Path) -> None:
 
     loaded = PendingManifest.from_yaml(p)
     assert len(loaded.pending) == 2
-    assert loaded.pending[0].path == "knowledge/a.md"
+    assert loaded.pending[0].path == "contexts/a.md"
     assert loaded.pending[1].path == "skills/b/"
 
     raw = yaml.safe_load(p.read_text(encoding="utf-8"))

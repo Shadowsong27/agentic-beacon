@@ -86,7 +86,7 @@ The locally-cloned warehouse is the **single write entrypoint** for every harnes
 
 - `abc sync` creates symlinks, not copies. One logical artifact = one physical file per machine.
 - `abc warehouse contribute` is the primary way to push warehouse working-tree changes back upstream.
-- Authoring skills (`record-knowledge`, `record-skill`) also write directly to the warehouse and append entries to `.agentic-beacon/pending.yaml`; wiring into `beacon.yaml` happens later via `abc adopt`.
+- Authoring skills (`record-knowledge`, `record-skill`) write directly to the warehouse. Project-wired artifacts (contexts, skills, agents) are appended to `.agentic-beacon/pending.yaml`; wiring into `beacon.yaml` happens later via `abc adopt`. Knowledge files are auto-derived during sync/adopt and are not tracked in `pending.yaml`.
 - Cross-project visibility of harness edits on a single machine is **intended**: editing a skill through Project A's symlink edits the warehouse working tree; Project B sees the change immediately.
 - Platform: macOS / Linux only. Windows is rejected.
 - Agents are declared per-project in `beacon.yaml.artifacts.agents` **AND** installed globally via symlinks into `~/.config/opencode/agents/` and `~/.claude/agents/`.

@@ -17,7 +17,7 @@ from pathlib import Path
 
 from beacon.core.manifest.pending import PendingEntry, PendingManifest
 
-VALID_TYPES = ("knowledge", "skill", "context", "agent")
+VALID_TYPES = ("skill", "context", "agent")
 VALID_ACTIONS = ("created", "modified")
 ERROR_NO_WAREHOUSE = (
     "Error: no warehouse connected. Run 'abc warehouse connect <path>' first."

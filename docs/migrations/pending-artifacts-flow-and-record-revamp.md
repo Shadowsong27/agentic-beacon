@@ -21,8 +21,9 @@ This release establishes a **warehouse-write model**:
 
 1. Authoring skills (`record-knowledge`, `record-skill`) write to the warehouse
    working tree, not the project.
-2. A new file — `.agentic-beacon/pending.yaml` — tracks authored artifacts
-   waiting to be wired into the project.
+2. A new file — `.agentic-beacon/pending.yaml` — tracks authored contexts,
+   skills, and agents waiting to be wired into the project. Knowledge files are
+   auto-derived during sync/adopt and are not tracked in pending.yaml.
 3. `abc adopt` gained a **three-way action model** (accept / reject / defer)
    and a confirm screen before any filesystem mutation.
 4. A `.last-adopt` marker enables `abc adopt` to detect hand-edited warehouse
@@ -33,17 +34,11 @@ This release establishes a **warehouse-write model**:
 ## `pending.yaml` — What It Is
 
 `.agentic-beacon/pending.yaml` is a project-local, gitignored file that
-records artifacts authored in the warehouse from within this project but not
-yet wired into `beacon.yaml`:
+records project-wired artifacts authored in the warehouse from within this
+project but not yet wired into `beacon.yaml`:
 
 ```yaml
 pending:
-  - path: knowledge/lessons/debugging-pydantic.md
-    type: knowledge
-    action: created
-    source: record-knowledge
-    created_at: 2026-05-06T14:22:00+00:00
-
   - path: contexts/python-standards.md
     type: context
     action: modified
@@ -56,7 +51,7 @@ pending:
 | Field | Description |
 |---|---|
 | `path` | Warehouse-relative path to the artifact |
-| `type` | One of `knowledge`, `skill`, `context`, `agent` |
+| `type` | One of `skill`, `context`, `agent` |
 | `action` | `created` (new artifact) or `modified` (existing file edited) |
 | `source` | Authoring skill that produced the entry (free-form string) |
 | `created_at` | ISO-8601 UTC timestamp when the entry was appended |
@@ -78,13 +73,15 @@ working state, not shared project config. Do not commit it.
 |---|---|
 | Wrote knowledge file to `.agentic-beacon/artifacts/knowledge/` | Writes knowledge file to `<warehouse>/knowledge/<type>/<name>.md` |
 | Updated `AGENTS.md` with pointer | Offers to insert pointer into a warehouse context file only (not `AGENTS.md`) |
-| No pending.yaml interaction | Appends entries to `.agentic-beacon/pending.yaml` |
+| No pending.yaml interaction | Appends a pending entry only when a warehouse context pointer is modified |
 | No warehouse required | Hard-errors if no warehouse is connected |
 
 **Context pointer behaviour:** When offering a pointer target, only files
 under `<warehouse>/contexts/*.md` are listed. `AGENTS.md` is never a target.
 The proposed diff is shown before writing; declining leaves the context file
-untouched (only the knowledge entry is appended to `pending.yaml`).
+untouched. The created knowledge file is **not** appended to `pending.yaml`;
+knowledge is auto-derived by sync/adopt. If the context pointer is accepted,
+only the modified context entry is appended to `pending.yaml`.
 
 ### `record-skill`
 

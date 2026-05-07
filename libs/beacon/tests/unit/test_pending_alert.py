@@ -27,9 +27,9 @@ def _write_pending(project: Path, entries: list[PendingEntry]) -> None:
 
 def _sample_entry(n: int = 1) -> PendingEntry:
     return PendingEntry(
-        path=f"knowledge/lessons/entry{n}.md",
-        type="knowledge",
-        action="created",
+        path=f"contexts/entry{n}.md",
+        type="context",
+        action="modified",
         source="record-knowledge",
         created_at=datetime(2026, 5, 6, 14, 22, n, tzinfo=_UTC),
     )

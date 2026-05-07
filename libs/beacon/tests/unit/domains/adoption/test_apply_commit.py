@@ -165,7 +165,7 @@ def test_tc2_reject_only_clears_pending_warehouse_unchanged(tmp_path):
     project, beacon_yaml, artifacts, ab = _make_project(tmp_path, wh)
 
     entries = [
-        _pending_entry("knowledge/lesson.md", entry_type="knowledge"),
+        _pending_entry("contexts/rejected.md"),
         _pending_entry("contexts/foo.md"),
     ]
     _write_pending(project, entries)
@@ -177,10 +177,10 @@ def test_tc2_reject_only_clears_pending_warehouse_unchanged(tmp_path):
     original_beacon = beacon_yaml.read_bytes()
 
     candidates = [
-        _candidate("knowledge/lesson.md", artifact_type="knowledge"),
+        _candidate("contexts/rejected.md"),
         _candidate("contexts/foo.md"),
     ]
-    session_state = {"knowledge/lesson.md": "reject", "contexts/foo.md": "reject"}
+    session_state = {"contexts/rejected.md": "reject", "contexts/foo.md": "reject"}
 
     commit_pending_session(
         session_state, candidates, project, wh, artifacts, beacon_yaml
@@ -203,7 +203,7 @@ def test_tc3_defer_only_keeps_pending_advances_last_adopt(tmp_path):
     project, beacon_yaml, artifacts, ab = _make_project(tmp_path, wh)
 
     entries = [
-        _pending_entry("knowledge/foo.md", entry_type="knowledge"),
+        _pending_entry("contexts/foo.md"),
         _pending_entry("contexts/bar.md"),
     ]
     _write_pending(project, entries)
@@ -211,10 +211,10 @@ def test_tc3_defer_only_keeps_pending_advances_last_adopt(tmp_path):
     original_beacon = beacon_yaml.read_bytes()
 
     candidates = [
-        _candidate("knowledge/foo.md", artifact_type="knowledge"),
+        _candidate("contexts/foo.md"),
         _candidate("contexts/bar.md"),
     ]
-    session_state = {"knowledge/foo.md": "defer", "contexts/bar.md": "defer"}
+    session_state = {"contexts/foo.md": "defer", "contexts/bar.md": "defer"}
 
     commit_time = datetime(2026, 5, 7, 10, 0, 0, tzinfo=UTC)
     commit_pending_session(
@@ -256,7 +256,7 @@ def test_tc4_mixed_2_1_1_all_invariants(tmp_path):
     entries = [
         _pending_entry("contexts/ctx-a.md"),
         _pending_entry("contexts/ctx-b.md"),
-        _pending_entry("knowledge/k.md", entry_type="knowledge"),
+        _pending_entry("contexts/rejected.md"),
         _pending_entry("contexts/ctx-c.md"),
     ]
     _write_pending(project, entries)
@@ -264,13 +264,13 @@ def test_tc4_mixed_2_1_1_all_invariants(tmp_path):
     candidates = [
         _candidate("contexts/ctx-a.md"),
         _candidate("contexts/ctx-b.md"),
-        _candidate("knowledge/k.md", artifact_type="knowledge"),
+        _candidate("contexts/rejected.md"),
         _candidate("contexts/ctx-c.md"),
     ]
     session_state = {
         "contexts/ctx-a.md": "accept",
         "contexts/ctx-b.md": "accept",
-        "knowledge/k.md": "reject",
+        "contexts/rejected.md": "reject",
         "contexts/ctx-c.md": "defer",
     }
 

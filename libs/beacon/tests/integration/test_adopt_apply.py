@@ -96,8 +96,8 @@ def project(tmp_path: Path, warehouse: Path) -> dict:
             created_at=datetime(2026, 5, 6, 12, 0, 0, tzinfo=UTC),
         ),
         PendingEntry(
-            path="knowledge/k.md",
-            type="knowledge",
+            path="contexts/ctx-reject.md",
+            type="context",
             action="created",
             source="record-knowledge",
             created_at=datetime(2026, 5, 6, 12, 0, 0, tzinfo=UTC),
@@ -150,7 +150,9 @@ def test_happy_path(project: dict, warehouse: Path):
             source="record-knowledge",
         ),
         AdoptCandidate(
-            artifact_type="knowledge", path="knowledge/k.md", source="record-knowledge"
+            artifact_type="contexts",
+            path="contexts/ctx-reject.md",
+            source="record-knowledge",
         ),
         AdoptCandidate(
             artifact_type="contexts",
@@ -161,7 +163,7 @@ def test_happy_path(project: dict, warehouse: Path):
     session_state = {
         "contexts/ctx-a.md": "accept",
         "contexts/ctx-b.md": "accept",
-        "knowledge/k.md": "reject",
+        "contexts/ctx-reject.md": "reject",
         "contexts/ctx-c.md": "defer",
     }
     commit_time = datetime(2026, 5, 7, 15, 0, 0, tzinfo=UTC)
@@ -196,8 +198,7 @@ def test_happy_path(project: dict, warehouse: Path):
     # Invariant 4: .last-adopt set to commit timestamp
     assert read_last_adopt(project["root"]) == commit_time
 
-    # Bonus: rejected warehouse file unchanged
-    assert (warehouse / "knowledge" / "k.md").read_text() == "# Knowledge\n"
+    assert "contexts/ctx-reject.md" not in data["artifacts"]["contexts"]
 
 
 # ─────────────────────────────────────────────────────────────

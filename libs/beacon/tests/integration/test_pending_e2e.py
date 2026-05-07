@@ -1,8 +1,8 @@
 """Integration tests for the full pending → adopt → wired pipeline.
 
 Covers tasks 9.1–9.6:
-- test_knowledge_no_pointer: knowledge entry accepted → beacon.yaml unchanged
-- test_knowledge_with_pointer: knowledge + context entries → context symlink created
+    - test_knowledge_no_pointer: knowledge-only warehouse file is auto-managed
+    - test_knowledge_with_pointer: context pointer entry → context symlink created
 - test_skill_create: skill pending entry → beacon.yaml entry + symlink
 - test_warehouse_modified_via_last_adopt: hand-edited file surfaces via .last-adopt diff
 - test_alert_visibility: pending.yaml non-empty → alert on stderr before status output
@@ -102,7 +102,7 @@ def _make_project(
 
 
 def test_knowledge_no_pointer(tmp_path: Path) -> None:
-    """9.1: knowledge entry accepted → beacon.yaml unchanged, pending.yaml empty, .last-adopt advanced."""
+    """9.1: knowledge-only files are auto-managed and do not enter pending/adopt."""
     wh = tmp_path / "wh"
     _init_warehouse(wh)
     (wh / "knowledge" / "lesson.md").write_text("# Lesson\n")
@@ -112,37 +112,10 @@ def test_knowledge_no_pointer(tmp_path: Path) -> None:
     proj.mkdir()
     p = _make_project(proj, wh, last_adopt_dt=datetime(2026, 5, 1, tzinfo=UTC))
 
-    entry = PendingEntry(
-        path="knowledge/lesson.md",
-        type="knowledge",
-        action="created",
-        source="record-knowledge",
-        created_at=datetime(2026, 5, 6, 12, 0, tzinfo=UTC),
-    )
-    PendingManifest(pending=[entry]).to_yaml(p["pending_yaml"])
-    pre_beacon = p["beacon_yaml"].read_bytes()
+    candidates = discover_candidates(proj, wh)
 
-    commit_time = datetime(2026, 5, 7, 12, 0, tzinfo=UTC)
-    commit_pending_session(
-        {"knowledge/lesson.md": "accept"},
-        [AdoptCandidate(artifact_type="knowledge", path="knowledge/lesson.md")],
-        proj,
-        wh,
-        p["artifacts"],
-        p["beacon_yaml"],
-        commit_time=commit_time,
-    )
-
-    # beacon.yaml must be byte-identical — knowledge is not a beacon.yaml artifact
-    assert p["beacon_yaml"].read_bytes() == pre_beacon, (
-        "beacon.yaml must not change when accepting a knowledge entry"
-    )
-
-    # pending.yaml is now empty
-    assert PendingManifest.from_yaml(p["pending_yaml"]).pending == []
-
-    # .last-adopt advanced to commit_time
-    assert read_last_adopt(proj) == commit_time
+    assert "knowledge/lesson.md" not in {c.path for c in candidates}
+    assert not p["pending_yaml"].exists()
 
 
 # ─────────────────────────────────────────────────────────────
@@ -151,7 +124,7 @@ def test_knowledge_no_pointer(tmp_path: Path) -> None:
 
 
 def test_knowledge_with_pointer(tmp_path: Path) -> None:
-    """9.2: knowledge + context pending entries accepted → context symlink resolves in project."""
+    """9.2: context pointer pending entry accepted → context symlink resolves in project."""
     wh = tmp_path / "wh"
     _init_warehouse(wh)
     (wh / "knowledge" / "lesson.md").write_text("# Lesson\n")
@@ -164,13 +137,6 @@ def test_knowledge_with_pointer(tmp_path: Path) -> None:
 
     entries = [
         PendingEntry(
-            path="knowledge/lesson.md",
-            type="knowledge",
-            action="created",
-            source="record-knowledge",
-            created_at=datetime(2026, 5, 6, 12, 0, tzinfo=UTC),
-        ),
-        PendingEntry(
             path="contexts/guide.md",
             type="context",
             action="modified",
@@ -181,9 +147,8 @@ def test_knowledge_with_pointer(tmp_path: Path) -> None:
     PendingManifest(pending=entries).to_yaml(p["pending_yaml"])
 
     commit_pending_session(
-        {"knowledge/lesson.md": "accept", "contexts/guide.md": "accept"},
+        {"contexts/guide.md": "accept"},
         [
-            AdoptCandidate(artifact_type="knowledge", path="knowledge/lesson.md"),
             AdoptCandidate(artifact_type="contexts", path="contexts/guide.md"),
         ],
         proj,
@@ -202,7 +167,7 @@ def test_knowledge_with_pointer(tmp_path: Path) -> None:
     data = yaml.safe_load(p["beacon_yaml"].read_text())
     assert "contexts/guide.md" in data["artifacts"]["contexts"]
 
-    # knowledge NOT in any beacon.yaml artifact list
+    # knowledge NOT in any beacon.yaml artifact list; it is auto-derived from pointers
     all_beacon_paths = (
         data["artifacts"].get("contexts", [])
         + data["artifacts"].get("skills", [])

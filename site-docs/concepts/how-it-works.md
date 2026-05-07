@@ -66,7 +66,7 @@ artifacts:
 
 `config.toml` stores the local path to the warehouse (e.g. `~/my-org-warehouse`). It is gitignored because warehouse paths vary per machine.
 
-`pending.yaml` records artifacts written to the warehouse by authoring skills (`record-knowledge`, `record-skill`) that have not yet been wired into `beacon.yaml`. It is absent or `pending: []` when nothing is pending. Use `abc adopt` to accept, reject, or defer each entry. The file is gitignored — it represents per-developer working state.
+`pending.yaml` records project-wired artifacts (contexts, skills, agents) written to the warehouse by authoring skills that have not yet been wired into `beacon.yaml`. Knowledge files are auto-derived during sync/adopt and are not tracked here. It is absent or `pending: []` when nothing is pending. Use `abc adopt` to accept, reject, or defer each entry. The file is gitignored — it represents per-developer working state.
 
 `.last-adopt` is a single-line ISO-8601 UTC timestamp recording when `abc adopt` last committed successfully. It enables `abc adopt` to detect hand-edited warehouse files (files modified after `.last-adopt` but not tracked in `pending.yaml`). The file is gitignored.
 

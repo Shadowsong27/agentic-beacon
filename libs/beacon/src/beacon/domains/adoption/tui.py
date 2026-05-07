@@ -149,7 +149,6 @@ _ARTIFACT_ICONS: dict[str, str] = {
     "contexts": "📄",
     "skills": "🔧",
     "agents": "🤖",
-    "knowledge": "📚",
 }
 
 # Three-way action visual marks
@@ -373,7 +372,7 @@ class AdoptInnerApp(App[AdoptResult]):
                     atype = path.split("/")[0] if "/" in path else "contexts"
                 by_type.setdefault(atype, []).append((path, "", True, None, True, None))
 
-        for atype in ["contexts", "skills", "agents", "knowledge"]:
+        for atype in ["contexts", "skills", "agents"]:
             type_items = by_type.get(atype, [])
             if not type_items:
                 continue

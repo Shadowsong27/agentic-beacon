@@ -74,7 +74,7 @@ def _make_project(tmp_path: Path) -> Path:
 
 def _pending_entry(
     path: str,
-    entry_type: str = "knowledge",
+    entry_type: str = "context",
     action: str = "created",
     source: str = "record-knowledge",
 ) -> PendingEntry:
@@ -106,7 +106,7 @@ def test_tc1_pending_only_no_warehouse_changes(tmp_path):
     write_last_adopt(project, datetime.now(tz=UTC))
 
     entries = [
-        _pending_entry("knowledge/lessons/foo.md"),
+        _pending_entry("contexts/foo.md"),
         _pending_entry("skills/bar/", entry_type="skill"),
     ]
     _write_pending(project, entries)
@@ -115,7 +115,7 @@ def test_tc1_pending_only_no_warehouse_changes(tmp_path):
 
     assert len(candidates) == 2
     paths = {c.path for c in candidates}
-    assert "knowledge/lessons/foo.md" in paths
+    assert "contexts/foo.md" in paths
     assert "skills/bar/" in paths
 
 
@@ -158,7 +158,8 @@ def test_tc4_last_adopt_absent_returns_all_warehouse_files(tmp_path):
     wh = _make_warehouse(tmp_path)
     project = _make_project(tmp_path)
 
-    # Add a context and a knowledge file
+    # Add a context and a knowledge file. Knowledge is auto-derived and should
+    # not become an adopt candidate.
     (wh / "contexts" / "agent-practices.md").write_text("# Agent Practices\n")
     (wh / "knowledge" / "lesson.md").write_text("# Lesson\n")
     _git_commit(wh, "add files")
@@ -168,7 +169,21 @@ def test_tc4_last_adopt_absent_returns_all_warehouse_files(tmp_path):
 
     paths = {c.path for c in candidates}
     assert "contexts/agent-practices.md" in paths
-    assert "knowledge/lesson.md" in paths
+    assert "knowledge/lesson.md" not in paths
+
+
+def test_warehouse_knowledge_changes_are_not_adopt_candidates(tmp_path):
+    """Knowledge files are auto-derived and must not appear in the adopt TUI."""
+    wh = _make_warehouse(tmp_path)
+    project = _make_project(tmp_path)
+
+    write_last_adopt(project, datetime(2020, 1, 1, tzinfo=UTC))
+    (wh / "knowledge" / "auto-managed.md").write_text("# Auto Managed\n")
+    _git_commit(wh, "add knowledge")
+
+    candidates = discover_candidates(project, wh)
+
+    assert "knowledge/auto-managed.md" not in {c.path for c in candidates}
 
 
 def test_tc5_existing_discover_adoptable_regression(tmp_path):
@@ -201,20 +216,20 @@ def test_dedup_same_path_pending_metadata_wins(tmp_path):
     write_last_adopt(project, datetime(2020, 1, 1, tzinfo=UTC))
 
     # Commit the file to warehouse
-    (wh / "knowledge" / "foo.md").write_text("# Foo\n")
+    (wh / "contexts" / "foo.md").write_text("# Foo\n")
     _git_commit(wh, "add foo.md")
 
     # Pending.yaml also has this path with a distinct source
     _write_pending(
         project,
         [
-            _pending_entry("knowledge/foo.md", source="record-knowledge"),
+            _pending_entry("contexts/foo.md", source="record-knowledge"),
         ],
     )
 
     candidates = discover_candidates(project, wh)
 
-    foo_candidates = [c for c in candidates if c.path == "knowledge/foo.md"]
+    foo_candidates = [c for c in candidates if c.path == "contexts/foo.md"]
     assert len(foo_candidates) == 1
     assert foo_candidates[0].source == "record-knowledge"
 
@@ -257,7 +272,7 @@ def test_no_dedup_different_paths(tmp_path):
     _write_pending(
         project,
         [
-            _pending_entry("knowledge/lesson.md"),
+            _pending_entry("contexts/lesson.md"),
         ],
     )
 
@@ -265,7 +280,7 @@ def test_no_dedup_different_paths(tmp_path):
 
     assert len(candidates) == 2
     paths = {c.path for c in candidates}
-    assert "knowledge/lesson.md" in paths
+    assert "contexts/lesson.md" in paths
     assert "contexts/new-context.md" in paths
 
 
@@ -278,14 +293,14 @@ def test_duplicate_pending_entries_last_write_wins(tmp_path):
     _write_pending(
         project,
         [
-            _pending_entry("knowledge/foo.md", source="first-tool"),
-            _pending_entry("knowledge/foo.md", source="second-tool"),
+            _pending_entry("contexts/foo.md", source="first-tool"),
+            _pending_entry("contexts/foo.md", source="second-tool"),
         ],
     )
 
     candidates = discover_candidates(project, wh)
 
-    foo_candidates = [c for c in candidates if c.path == "knowledge/foo.md"]
+    foo_candidates = [c for c in candidates if c.path == "contexts/foo.md"]
     assert len(foo_candidates) == 1
     # last entry wins
     assert foo_candidates[0].source == "second-tool"
@@ -323,7 +338,7 @@ def test_pending_yaml_not_written_during_discover(tmp_path):
     _git_commit(wh, "add foo.md")
 
     pending_path = project / ".agentic-beacon" / "pending.yaml"
-    _write_pending(project, [_pending_entry("knowledge/lesson.md")])
+    _write_pending(project, [_pending_entry("contexts/lesson.md")])
     original_content = pending_path.read_bytes()
 
     discover_candidates(project, wh)
@@ -345,13 +360,13 @@ def test_mixed_sources_only_warehouse_only_annotated(tmp_path):
     _write_pending(
         project,
         [
-            _pending_entry("knowledge/lesson.md", source="record-knowledge"),
+            _pending_entry("contexts/lesson.md", source="record-knowledge"),
         ],
     )
 
     candidates = discover_candidates(project, wh)
 
-    pending_entry = next(c for c in candidates if c.path == "knowledge/lesson.md")
+    pending_entry = next(c for c in candidates if c.path == "contexts/lesson.md")
     warehouse_entry = next(c for c in candidates if c.path == "contexts/cicd.md")
 
     assert pending_entry.source == "record-knowledge"  # NOT warehouse-modified

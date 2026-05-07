@@ -1,6 +1,6 @@
 ---
 name: record-knowledge
-description: Systematically capture decisions, lessons, and facts into the warehouse knowledge base with pending-based wiring
+description: Systematically capture decisions, lessons, and facts into the warehouse knowledge base with optional context wiring
 license: MIT
 compatibility: opencode
 requires:
@@ -14,8 +14,9 @@ requires:
 ## Purpose
 
 Capture decisions, lessons, and facts into the connected warehouse knowledge base.
-Writes knowledge files directly to the warehouse working tree and queues them in
-`.agentic-beacon/pending.yaml` for adoption via `abc adopt`.
+Writes knowledge files directly to the warehouse working tree. Knowledge files are
+auto-derived during `abc sync` / `abc adopt`; only optional context pointer edits
+are queued in `.agentic-beacon/pending.yaml` for project wiring.
 
 ---
 
@@ -248,19 +249,14 @@ Apply this change? [y/N]:
 
 Write to `$WAREHOUSE_ROOT/contexts/<file>.md` only after the user confirms.
 
-### Step 6: Append to pending.yaml
+### Step 6: Append context pointer to pending.yaml
 
-Always append the knowledge file entry:
+Do **not** append the created `knowledge/<type>/<name>.md` file to
+`pending.yaml`. Knowledge is auto-derived from context and skill references during
+`abc sync` / `abc adopt` and does not require beacon.yaml or symlink adoption.
 
-```bash
-uv run ${SKILL_DIR}/scripts/append_pending.py \
-  --path knowledge/<type>/<name>.md \
-  --type knowledge \
-  --action created \
-  --source record-knowledge
-```
-
-If the user confirmed a context pointer write in Step 5, also append:
+If the user confirmed a context pointer write in Step 5, append only that context
+entry:
 
 ```bash
 uv run ${SKILL_DIR}/scripts/append_pending.py \
@@ -278,9 +274,9 @@ uv run ${SKILL_DIR}/scripts/append_pending.py \
 Type:            [Decision|Lesson|Fact]
 Warehouse file:  $WAREHOUSE_ROOT/knowledge/<type>/<name>.md
 Context pointer: [contexts/<file>.md | Skipped]
-Pending entries: [1 or 2] added to .agentic-beacon/pending.yaml
+Pending entries: [1 if context pointer written, otherwise 0]
 
-Run 'abc adopt' to wire this knowledge into your project.
+Run 'abc adopt' to wire the context pointer if one was queued.
 ```
 
 ---
@@ -301,8 +297,8 @@ Run 'abc adopt' to wire this knowledge into your project.
 4. Lists warehouse contexts → user picks `contexts/development-guidelines.md`
 5. Shows diff → user confirms
 6. Writes pointer under appropriate section
-7. Runs `append_pending.py` twice (knowledge + context)
-8. Reports with `abc adopt` reminder
+7. Runs `append_pending.py` once for the modified context
+8. Reports with `abc adopt` reminder for the context pointer
 
 ### Example 2: Recording a Lesson (skip pointer)
 
@@ -316,8 +312,8 @@ Run 'abc adopt' to wire this knowledge into your project.
 2. Resolves warehouse path
 3. Creates: `$WAREHOUSE_ROOT/knowledge/lessons/updating-warehouse-structure.md`
 4. User chooses: "Skip"
-5. Runs `append_pending.py` once (knowledge only)
-6. Reports with `abc adopt` reminder
+5. Does not write pending.yaml (knowledge is auto-derived)
+6. Reports completion with no `abc adopt` reminder
 
 ---
 
@@ -330,9 +326,9 @@ Run 'abc adopt' to wire this knowledge into your project.
 - [ ] Write file to `$WAREHOUSE_ROOT/knowledge/<type>/` (warehouse, not the project)
 - [ ] Ask user which warehouse `contexts/` file for the pointer — or skip
 - [ ] Show diff before writing pointer; wait for explicit confirmation
-- [ ] Run `append_pending.py` for the knowledge file
+- [ ] Do NOT run `append_pending.py` for the knowledge file
 - [ ] Run `append_pending.py` for the context file if pointer was written
-- [ ] Confirm completion and remind user to run `abc adopt`
+- [ ] Confirm completion; remind user to run `abc adopt` only if a context pointer was queued
 
 ---
 

@@ -401,20 +401,21 @@ def discover_adoptable(
 # Pending-workflow discovery: pending.yaml + warehouse-diff merge
 # ─────────────────────────────────────────────────────────────
 
-# Maps PendingEntry.type (singular) → AdoptCandidate.artifact_type (plural)
+# Maps PendingEntry.type (singular) → AdoptCandidate.artifact_type (plural).
+# Knowledge is intentionally absent: knowledge files are auto-derived during
+# sync/adopt and are not pending-wired through beacon.yaml.
 _PENDING_TYPE_TO_ARTIFACT_TYPE: dict[str, str] = {
-    "knowledge": "knowledge",
     "skill": "skills",
     "context": "contexts",
     "agent": "agents",
 }
 
-# Extended set of known warehouse top-level dirs (includes knowledge)
-_WAREHOUSE_ARTIFACT_DIRS = ("contexts", "skills", "agents", "knowledge")
+# Warehouse top-level dirs that require project-level adoption.
+_WAREHOUSE_ARTIFACT_DIRS = ("contexts", "skills", "agents")
 
 
 def _classify_warehouse_path_extended(path: str) -> str | None:
-    """Classify a warehouse-relative path into an artifact type including knowledge."""
+    """Classify a warehouse-relative path into an adoptable artifact type."""
     for atype in _WAREHOUSE_ARTIFACT_DIRS:
         if path.startswith(atype + "/"):
             return atype
