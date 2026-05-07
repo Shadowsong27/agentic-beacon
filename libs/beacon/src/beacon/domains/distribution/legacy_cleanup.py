@@ -1,6 +1,10 @@
-"""One-time and ongoing migration utilities for the distribution domain.
+"""Legacy global-agent symlink cleanup for the distribution domain.
 
-PER-113: legacy global agent symlink cleanup.
+PER-113 migration: scans `~/.claude/agents/` and `~/.config/opencode/agents/`
+on every `abc sync` invocation and removes symlinks pointing into the
+connected warehouse's `agents/` directory. Idempotent — subsequent runs find
+nothing and return 0. A run-once marker (so the cleanup only fires the first
+time after upgrade) is tracked separately in PER-133.
 """
 
 from pathlib import Path
