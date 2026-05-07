@@ -38,9 +38,9 @@ def detect_agent_targets(project_root: Path) -> list[str]:
     NOT on tool config files (which is what detect_agents() checks).
     """
     targets = []
-    if (project_root / ".claude").exists():
+    if (project_root / ".claude").is_dir():
         targets.append("claudecode")
-    if (project_root / ".opencode").exists():
+    if (project_root / ".opencode").is_dir():
         targets.append("opencode")
     return targets
 
