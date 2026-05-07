@@ -40,11 +40,35 @@ jobs:
         run: |
           set -o pipefail
           opencode run \
+            --format json \
             --model "$OPENCODE_REVIEW_MODEL" \
             --title "PR review #${{ github.event.pull_request.number }}" \
             "$(cat .github/opencode-pr-review-prompt.md)" \
             --file opencode-pr.diff \
-            | tee /tmp/opencode-review.md
+            | tee /tmp/opencode-events.ndjson
+
+          jq -r 'select(.type == "text") | .part.text' /tmp/opencode-events.ndjson > /tmp/opencode-review.md
+          jq -rs '
+            [.[] | select(.type == "step_finish") | .part.tokens] as $tokens |
+            {
+              input: ($tokens | map(.input // 0) | add // 0),
+              output: ($tokens | map(.output // 0) | add // 0),
+              reasoning: ($tokens | map(.reasoning // 0) | add // 0),
+              cache_read: ($tokens | map(.cache.read // 0) | add // 0),
+              cache_write: ($tokens | map(.cache.write // 0) | add // 0),
+              total: ($tokens | map(.total // 0) | add // 0)
+            } |
+            [
+              "### Token Usage",
+              "",
+              "Input tokens: `\(.input)`",
+              "Output tokens: `\(.output)`",
+              "Reasoning tokens: `\(.reasoning)`",
+              "Cache read tokens: `\(.cache_read)`",
+              "Cache write tokens: `\(.cache_write)`",
+              "Total tokens: `\(.total)`"
+            ] | join("\n")
+          ' /tmp/opencode-events.ndjson > /tmp/opencode-usage.md
 
       - name: Publish step summary
         run: |
@@ -58,6 +82,7 @@ jobs:
             const fs = require("fs")
             const marker = "<!-- opencode-pr-review -->"
             const review = fs.readFileSync("/tmp/opencode-review.md", "utf8").trim()
+            const usage = fs.readFileSync("/tmp/opencode-usage.md", "utf8").trim()
             const body = [
               marker,
               "",
@@ -68,6 +93,8 @@ jobs:
               `Workflow run: ${process.env.GITHUB_SERVER_URL}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
               "",
               review || "OpenCode produced no review output.",
+              "",
+              usage,
             ].join("\n")
 
             const { owner, repo } = context.repo
