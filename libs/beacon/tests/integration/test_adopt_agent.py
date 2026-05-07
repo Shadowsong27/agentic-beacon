@@ -452,3 +452,125 @@ def test_reject_agent_artifact_symlink_restored_on_failure(
         "TODO: patching Path.unlink to force a failure mid-reject is too brittle "
         "without a dedicated injectable hook in the reject path; skipping per spec allowance."
     )
+
+
+# ---------------------------------------------------------------------------
+# TC8: rollback preserves pre-existing identical tool symlink
+# ---------------------------------------------------------------------------
+
+
+def test_accept_rollback_preserves_pre_existing_identical_tool_symlink(
+    project: tuple, warehouse: Path, monkeypatch
+):
+    """Rollback must NOT unlink a tool symlink that already pointed at the correct target.
+
+    Set up: .claude/agents/spec-planner.md already points at the artifact file (idempotent
+    wire would no-op). Force wire_agent_opencode to raise. After rollback, the
+    pre-existing .claude symlink must still exist, pointing at the same target.
+    """
+    project_root, artifacts_path, beacon_yaml = project
+    (project_root / ".opencode").mkdir()
+
+    artifact_path = artifacts_path / "agents" / "spec-planner.md"
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    warehouse_agent = warehouse / "agents" / "spec-planner.md"
+    artifact_path.symlink_to(warehouse_agent)
+
+    claude_dest = project_root / ".claude" / "agents" / "spec-planner.md"
+    claude_dest.parent.mkdir(parents=True, exist_ok=True)
+    claude_dest.symlink_to(artifact_path)
+
+    pre_target = claude_dest.readlink()
+
+    import beacon.domains.setup.wiring as wiring_mod
+
+    def _failing_wire_opencode(p, a):
+        raise OSError("forced wire failure")
+
+    monkeypatch.setattr(wiring_mod, "wire_agent_opencode", _failing_wire_opencode)
+
+    candidate = AdoptCandidate(
+        artifact_type="agents", path="agents/spec-planner.md", description="x"
+    )
+    from beacon.domains.adoption.apply import CommitError
+
+    with pytest.raises(CommitError):
+        commit_session(
+            to_adopt=["agents/spec-planner.md"],
+            to_unadopt=[],
+            pending_accept=[],
+            pending_reject=[],
+            candidates=[candidate],
+            pending_entries=[],
+            project_root=project_root,
+            warehouse_path=warehouse,
+            artifacts_path=artifacts_path,
+            beacon_yaml_path=beacon_yaml,
+        )
+
+    assert claude_dest.is_symlink(), (
+        "Pre-existing .claude symlink was destroyed by rollback"
+    )
+    assert claude_dest.readlink() == pre_target, (
+        "Pre-existing .claude symlink target changed"
+    )
+
+
+# ---------------------------------------------------------------------------
+# TC9: rollback restores stale tool symlink to prior target
+# ---------------------------------------------------------------------------
+
+
+def test_accept_rollback_restores_stale_tool_symlink_target(
+    project: tuple, warehouse: Path, monkeypatch
+):
+    """Rollback must restore a stale tool symlink to its prior (different) target.
+
+    Set up: .claude/agents/spec-planner.md points at OLD_TARGET (some unrelated path).
+    Wire would replace it with artifact_file. Force wire_agent_opencode to raise.
+    After rollback, .claude symlink must point at OLD_TARGET again.
+    """
+    project_root, artifacts_path, beacon_yaml = project
+    (project_root / ".opencode").mkdir()
+
+    artifact_path = artifacts_path / "agents" / "spec-planner.md"
+    artifact_path.parent.mkdir(parents=True, exist_ok=True)
+    warehouse_agent = warehouse / "agents" / "spec-planner.md"
+    artifact_path.symlink_to(warehouse_agent)
+
+    stale_target = project_root / "some-old-agent.md"
+    stale_target.touch()
+    claude_dest = project_root / ".claude" / "agents" / "spec-planner.md"
+    claude_dest.parent.mkdir(parents=True, exist_ok=True)
+    claude_dest.symlink_to(stale_target)
+
+    import beacon.domains.setup.wiring as wiring_mod
+
+    def _failing_wire_opencode(p, a):
+        raise OSError("forced wire failure")
+
+    monkeypatch.setattr(wiring_mod, "wire_agent_opencode", _failing_wire_opencode)
+
+    candidate = AdoptCandidate(
+        artifact_type="agents", path="agents/spec-planner.md", description="x"
+    )
+    from beacon.domains.adoption.apply import CommitError
+
+    with pytest.raises(CommitError):
+        commit_session(
+            to_adopt=["agents/spec-planner.md"],
+            to_unadopt=[],
+            pending_accept=[],
+            pending_reject=[],
+            candidates=[candidate],
+            pending_entries=[],
+            project_root=project_root,
+            warehouse_path=warehouse,
+            artifacts_path=artifacts_path,
+            beacon_yaml_path=beacon_yaml,
+        )
+
+    assert claude_dest.is_symlink()
+    assert claude_dest.readlink() == stale_target, (
+        f"Stale .claude symlink target was not restored on rollback: got {claude_dest.readlink()}"
+    )
