@@ -209,24 +209,7 @@ abc sync [OPTIONS]
 | Knowledge | Create symlinks in `.agentic-beacon/artifacts/knowledge/` |
 | Contexts | Create symlinks + wire into `CLAUDE.md` or `opencode.json` |
 | Skills | Create symlinks + install into tool-specific directories |
-| Agents | Install into global tool directories |
-
----
-
-### `abc agents sync`
-
-Sync agent definitions from the warehouse into global tool directories.
-
-```bash
-abc agents sync [OPTIONS]
-```
-
-| Option | Description |
-|--------|-------------|
-| `--force` | Overwrite conflicting files without prompting |
-| `--skip-git-check` | Skip warehouse git state validation |
-
-Does not require `beacon.yaml` — works in any project connected to a warehouse.
+| Agents | Create artifact symlinks + wire into project-local `.claude/agents/` and `.opencode/agents/` |
 
 ---
 
@@ -264,7 +247,7 @@ abc doctor [OPTIONS]
 
 ### `abc list`
 
-List synced artifacts or globally installed agents.
+List declared and synced project artifacts.
 
 ```bash
 abc list [ARTIFACT_TYPE]
@@ -273,7 +256,7 @@ abc list [ARTIFACT_TYPE]
 | Argument | Description |
 |----------|-------------|
 | (none) | List all synced artifacts |
-| `agents` | List globally installed agents |
+| `agents` | List declared agents (read from `.agentic-beacon/artifacts/agents/`) |
 | `knowledge` | List synced knowledge files |
 | `skills` | List synced skills |
 | `contexts` | List synced contexts |
@@ -350,8 +333,7 @@ Available on all commands:
 | `abc warehouse template-upgrade` | Upgrade warehouse template docs |
 | `abc setup` | Create `beacon.yaml` configuration |
 | `abc adopt` | Browse + select artifacts via TUI |
-| `abc sync` | Sync all declared artifacts |
-| `abc agents sync` | Sync global agent definitions |
+| `abc sync` | Sync all declared artifacts (contexts, skills, agents) |
 | `abc status` | Show connection and sync status |
 | `abc doctor` | Validate project health |
 | `abc list` | List synced artifacts |

@@ -42,6 +42,10 @@ def setup() -> None:
             sys.exit(0)
 
     create_beacon_template(beacon_yaml)
+    # Note: .gitignore entries for .claude/agents/ and .opencode/agents/ are
+    # added later by `abc sync` or `abc adopt` accept when agents are first
+    # declared. Doing it here unconditionally would dirty the .gitignore on
+    # projects that never declare agents.
     console.print("\n[bold green]✓ Created beacon.yaml template[/bold green]")
     console.print(f"  [blue]Location:[/blue] {beacon_yaml}")
     console.print("\n[bold]Next Steps:[/bold]")
@@ -53,5 +57,6 @@ def setup() -> None:
         "  • [cyan]knowledge[/cyan], [cyan]contexts[/cyan], [cyan]skills[/cyan] — project-scoped, tracked in beacon.yaml"
     )
     console.print(
-        "  • [magenta]agents[/magenta] — declared per-project in beacon.yaml & globally linked with 'abc agents sync'"
+        "  • [magenta]agents[/magenta] — project-scoped, declared in beacon.yaml; "
+        "run 'abc adopt' or 'abc sync' to wire agents"
     )

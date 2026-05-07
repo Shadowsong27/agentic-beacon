@@ -21,11 +21,8 @@ abc warehouse connect --path ~/path/to/this-warehouse
 
 # 4. Create your artifact config and sync
 abc setup             # creates .agentic-beacon/beacon.yaml
-abc adopt             # select relevant warehouse artifacts
+abc adopt             # select relevant warehouse artifacts (including agents)
 abc sync              # creates symlinks into the warehouse clone
-
-# 5. (Optional) Install agents globally from this warehouse
-abc agents sync
 ```
 
 ### For Contributors
@@ -59,7 +56,7 @@ uv tool install agentic-beacon --no-index --find-links ./abc-bundle/
 - **`contexts/`** — Boot instructions loaded by agents at session start
 - **`knowledge/`** — Atomic decisions, lessons, and facts organized by scope
 - **`skills/`** — Reusable workflows and procedures (agent slash commands)
-- **`agents/`** — Global sub-agent profiles installed per-machine
+- **`agents/`** — Project-scoped sub-agent profiles wired via `abc adopt` / `abc sync`
 - **`docs/`** — Warehouse documentation and contribution guides
 
 ## CLI Reference
@@ -70,7 +67,7 @@ uv tool install agentic-beacon --no-index --find-links ./abc-bundle/
 | `abc setup` | Create `beacon.yaml` for a project |
 | `abc sync` | Create symlinks into the warehouse clone for every declared artifact |
 | `abc sync --dry-run` | Preview the sync operations without touching the filesystem |
-| `abc agents sync` | Link every agent definition from the warehouse into global tool directories |
+| `abc adopt` | Interactively select warehouse artifacts (including agents) to wire |
 | `abc warehouse status` | Show uncommitted warehouse edits (scoped by `beacon.yaml`) |
 | `abc warehouse contribute -m "…" [--push]` | Commit warehouse edits and optionally push |
 

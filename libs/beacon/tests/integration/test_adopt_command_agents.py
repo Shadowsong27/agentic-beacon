@@ -101,16 +101,19 @@ def _stub_adopt_app(monkeypatch, *, to_adopt=None, to_unadopt=None):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def test_adopt_records_agent_in_beacon_yaml_and_installs_globally(
+def test_adopt_records_agent_in_beacon_yaml_and_wires_project_local(
     valid_warehouse, temp_dir, monkeypatch, isolated_home
 ):
-    """Adopting an agent updates beacon.yaml AND creates the global symlink."""
+    """PER-113: adopting an agent updates beacon.yaml AND wires a project-local symlink.
+
+    Agents are now project-scoped. adopt wires into .claude/agents/ (and/or
+    .opencode/agents/) inside the project root — not into global tool dirs.
+    """
     wh = _agent_warehouse(valid_warehouse)
     project_dir, runner = _connected_project(wh, temp_dir, monkeypatch)
 
-    # Pre-create global agent dirs so detect_agents_global picks both up
-    (isolated_home / ".config" / "opencode").mkdir(parents=True, exist_ok=True)
-    (isolated_home / ".claude").mkdir(parents=True, exist_ok=True)
+    # Create .claude/ so detect_agents() returns 'claudecode'
+    (project_dir / ".claude").mkdir(exist_ok=True)
 
     _force_interactive(monkeypatch)
     _stub_adopt_app(monkeypatch, to_adopt=["agents/code-reviewer.md"])
@@ -124,54 +127,71 @@ def test_adopt_records_agent_in_beacon_yaml_and_installs_globally(
     )
     assert beacon["artifacts"]["agents"] == ["agents/code-reviewer.md"]
 
-    # Global symlink installed for both detected tools
-    assert (
-        isolated_home / ".config" / "opencode" / "agents" / "code-reviewer.md"
-    ).exists()
-    assert (isolated_home / ".claude" / "agents" / "code-reviewer.md").exists()
+    # Project-local .claude/agents/ symlink wired
+    claude_link = project_dir / ".claude" / "agents" / "code-reviewer.md"
+    assert claude_link.is_symlink(), (
+        f"Expected project-local .claude/agents/code-reviewer.md symlink, got nothing. "
+        f"adopt output: {r.output}"
+    )
+
+    # Global dirs must NOT receive new symlinks
+    for d in [
+        isolated_home / ".config" / "opencode" / "agents",
+        isolated_home / ".claude" / "agents",
+    ]:
+        if d.exists():
+            assert not any(f.suffix == ".md" for f in d.rglob("*")), (
+                f"Unexpected agent files in global dir {d}"
+            )
 
 
-def test_unadopt_agent_removes_from_beacon_yaml_but_keeps_global_symlink(
+def test_unadopt_agent_removes_from_beacon_yaml_and_unwires_project_local(
     valid_warehouse, temp_dir, monkeypatch, isolated_home
 ):
-    """Decision 7: unadopting only touches beacon.yaml; global symlink stays.
+    """PER-113: unadopting removes from beacon.yaml AND removes project-local symlinks.
 
-    Other projects on the same machine may still depend on the global install.
+    Agents are now project-scoped. Unadopt removes the project-local .claude/agents/
+    and .opencode/agents/ symlinks (no longer Decision 7 — global keep is abolished).
     """
     wh = _agent_warehouse(valid_warehouse)
     project_dir, runner = _connected_project(wh, temp_dir, monkeypatch)
 
-    (isolated_home / ".config" / "opencode").mkdir(parents=True, exist_ok=True)
-    (isolated_home / ".claude").mkdir(parents=True, exist_ok=True)
+    # Create .claude/ so detect_agents() returns 'claudecode'
+    (project_dir / ".claude").mkdir(exist_ok=True)
 
-    # Seed: agent already declared and globally installed
+    # Seed: agent already declared in beacon.yaml
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
     beacon_yaml.write_text(
         "artifacts:\n  contexts: []\n  skills: []\n"
         "  agents:\n    - agents/code-reviewer.md\n"
     )
-    opencode_link = (
-        isolated_home / ".config" / "opencode" / "agents" / "code-reviewer.md"
+
+    # Plant project-local symlinks that adopt previously created
+    claude_agents_dir = project_dir / ".claude" / "agents"
+    claude_agents_dir.mkdir(parents=True, exist_ok=True)
+    artifact_target = (
+        project_dir / ".agentic-beacon" / "artifacts" / "agents" / "code-reviewer.md"
     )
-    opencode_link.parent.mkdir(parents=True, exist_ok=True)
-    opencode_link.symlink_to(wh / "agents" / "code-reviewer.md")
-    claudecode_link = isolated_home / ".claude" / "agents" / "code-reviewer.md"
-    claudecode_link.parent.mkdir(parents=True, exist_ok=True)
-    claudecode_link.symlink_to(wh / "agents" / "code-reviewer.md")
+    artifact_target.parent.mkdir(parents=True, exist_ok=True)
+    artifact_target.symlink_to(wh / "agents" / "code-reviewer.md")
+    claudecode_link = claude_agents_dir / "code-reviewer.md"
+    claudecode_link.symlink_to(artifact_target)
 
     _force_interactive(monkeypatch)
     _stub_adopt_app(monkeypatch, to_unadopt=["agents/code-reviewer.md"])
 
-    r = runner.invoke(main, ["adopt"])
+    # Pass "y\n" to confirm the artifact symlink removal prompt
+    r = runner.invoke(main, ["adopt"], input="y\n")
     assert r.exit_code == 0, r.output
 
     # beacon.yaml: agent removed
     beacon = yaml.safe_load(beacon_yaml.read_text())
     assert beacon["artifacts"]["agents"] == []
 
-    # Global symlinks: still present (Decision 7)
-    assert opencode_link.exists()
-    assert claudecode_link.exists()
+    # Project-local symlink must be removed
+    assert not claudecode_link.exists(), (
+        "Expected .claude/agents/code-reviewer.md to be removed after unadopt"
+    )
 
 
 def test_pre_tick_state_reflects_beacon_yaml_not_global_install(

@@ -28,7 +28,7 @@ Reads `.agentic-beacon/beacon.yaml` and performs the full sync. Output example:
 2. **Resolve dependencies** — reads `requires:` frontmatter from each skill's `SKILL.md` and agent dependencies from `agents/agents.yaml` to compute transitive dependencies
 3. **Auto-derive knowledge** — scans all adopted contexts and skills for markdown links to `knowledge/` paths
 4. **Create symlinks** — creates per-file symlinks under `.agentic-beacon/artifacts/` pointing into the warehouse
-5. **Wire artifacts** — adds context references to `CLAUDE.md`/`opencode.json`, installs skills into tool directories, installs agents globally
+5. **Wire artifacts** — adds context references to `CLAUDE.md`/`opencode.json`, installs skills into tool directories, wires agents into project-local `.claude/agents/` and `.opencode/agents/`
 6. **Prune orphans** — removes symlinks for artifacts no longer referenced
 
 | Artifact | Destination | Wiring |
@@ -36,7 +36,7 @@ Reads `.agentic-beacon/beacon.yaml` and performs the full sync. Output example:
 | **Contexts** | `.agentic-beacon/artifacts/contexts/` (symlinks) | Added to `CLAUDE.md` or `opencode.json` |
 | **Skills** | `.agentic-beacon/artifacts/skills/` (symlinks) + tool dirs | Installed as slash commands |
 | **Knowledge** | `.agentic-beacon/artifacts/knowledge/` (symlinks) | Auto-derived from markdown links; no wiring needed |
-| **Agents** | `.agentic-beacon/artifacts/agents/` (symlinks) + `~/.claude/agents/` + `~/.config/opencode/agents/` | Ready in all projects |
+| **Agents** | `.agentic-beacon/artifacts/agents/` (symlinks) + `.claude/agents/` + `.opencode/agents/` | Wired per-project; declared in `beacon.yaml` |
 
 ---
 
@@ -106,15 +106,20 @@ abc sync --force --dry-run
 
 ---
 
-## Syncing Agents Only
+## Syncing Agents
+
+Agents declared in `beacon.yaml` are wired into project-local tool directories during `abc sync`:
 
 ```bash
-abc agents sync
+abc sync
 ```
 
-Syncs agent definitions from the warehouse into global tool directories. Agents declared in `beacon.yaml` are also installed during a full `abc sync`.
+`abc sync` creates:
+- `.agentic-beacon/artifacts/agents/<name>.md` — artifact symlink into the warehouse
+- `.claude/agents/<name>.md` — project-local symlink (when `.claude/` exists)
+- `.opencode/agents/<name>.md` — project-local symlink (when `.opencode/` exists)
 
-Supports `--force` and `--skip-git-check` flags.
+Agents are project-scoped. Use `abc adopt` to select which agents to declare in `beacon.yaml`.
 
 ---
 

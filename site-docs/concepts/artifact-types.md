@@ -102,12 +102,14 @@ Agent definitions are sub-agent profiles — specialized agents that can be invo
 
 **Project-scoped** because agents are declared per-project in `beacon.yaml.artifacts.agents`.
 
-**Tool-specific** because each tool has its own global agent directory. Declared agents are symlinked into both:
+**Tool-specific** because each tool has its own project-local agent directory. Declared agents are symlinked into:
 
-| Tool | Global agent directory |
-|------|----------------------|
-| Claude Code | `~/.claude/agents/` |
-| OpenCode | `~/.config/opencode/agents/` |
+| Tool | Project-local agent directory |
+|------|------------------------------|
+| Claude Code | `.claude/agents/` (inside the project root) |
+| OpenCode | `.opencode/agents/` (inside the project root) |
+
+Agent symlinks are project-scoped, so each project controls which agents are available without sharing state across projects on the same machine.
 
 **Declared in `beacon.yaml`:**
 ```yaml
@@ -116,7 +118,7 @@ agents:
   - agents/spec-planner.md
 ```
 
-`abc agents sync` installs agent definitions from the warehouse into both tool directories. Agents can also be adopted interactively via `abc adopt`, which records the selection in `beacon.yaml`.
+`abc sync` wires declared agents into the project-local tool directories. Use `abc adopt` to browse and select agents interactively.
 
 ---
 
@@ -131,7 +133,7 @@ Applies different logic per type:
 | Contexts | Symlink to `.agentic-beacon/artifacts/contexts/`; wire into agent config |
 | Skills | Symlink to artifacts; install into each detected tool's live directories |
 | Knowledge | Auto-derived from markdown links; symlink to `.agentic-beacon/artifacts/knowledge/` |
-| Agents | Symlink to `.agentic-beacon/artifacts/agents/` and install into global tool directories |
+| Agents | Symlink to `.agentic-beacon/artifacts/agents/`; wire into project-local `.claude/agents/` and `.opencode/agents/` |
 
 ### `abc warehouse status`
 

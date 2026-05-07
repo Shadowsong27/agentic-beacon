@@ -6,8 +6,8 @@ Reusable coding agent definitions for distribution to team members.
 
 Agent definition files are markdown files with YAML frontmatter that configure
 AI coding assistants (OpenCode, Claude Code) with specialized instructions and
-roles. Agents are declared per-project in `beacon.yaml.artifacts.agents` AND **globally
-installed** — available everywhere on the developer's machine.
+roles. Agents are declared per-project in `beacon.yaml.artifacts.agents` and
+wired into project-local tool directories by `abc sync` or `abc adopt`.
 
 ## Frontmatter Format
 
@@ -60,22 +60,26 @@ agents/
 └── agent-name.md        # Agent definition with frontmatter
 ```
 
-## Installing Agents
+## Wiring Agents
 
-Team members install agents from the warehouse to their machine:
+Agents are project-scoped and wired via `abc adopt` or `abc sync`:
 
 ```bash
-# Sync every agent definition from the warehouse into global tool directories
-abc agents sync
+# Interactively select agents to wire into this project
+abc adopt
+
+# Or, after adding agents to beacon.yaml directly, sync to wire them
+abc sync
 ```
 
-This links agents to the globally detected tool directories:
-- OpenCode: `~/.config/opencode/agents/<name>.md`
-- Claude Code: `~/.claude/agents/<name>.md`
+After wiring, agents are available in:
+- Claude Code: `.claude/agents/<name>.md` (project-local)
+- OpenCode: `.opencode/agents/<name>.md` (project-local)
 
 ## Notes
 
-- Agents are declared per-project in `beacon.yaml.artifacts.agents` AND globally installed via symlinks
-- Global agent files are per-file symlinks to this warehouse, so edits land in the warehouse working tree
-- View installed agents: `abc list agents`
+- Agents are declared per-project in `beacon.yaml.artifacts.agents`
+- Project-local agent symlinks are gitignored (per-machine state)
+- The team-shared SSOT is `beacon.yaml.artifacts.agents` — `abc sync` recreates symlinks anywhere
+- View wired agents: `abc list agents`
 - View available warehouse agents: `abc warehouse list agents`

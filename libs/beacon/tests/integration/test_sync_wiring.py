@@ -313,46 +313,42 @@ def test_wire_skills_post_sync_reinstalls_when_content_changes(project_with_skil
 
 
 def test_update_agent_gitignores_creates_claude_gitignore(tmp_path):
-    (tmp_path / ".claude").mkdir()
+    """PER-113: update_agent_gitignores now writes to project root .gitignore."""
     update_agent_gitignores(tmp_path)
-    content = (tmp_path / ".claude" / ".gitignore").read_text()
-    assert "skills/" in content
+    content = (tmp_path / ".gitignore").read_text()
+    assert ".claude/agents/" in content
 
 
 def test_update_agent_gitignores_creates_opencode_gitignore(tmp_path):
-    (tmp_path / ".opencode").mkdir()
+    """PER-113: project .gitignore gets .opencode/agents/ entry."""
     update_agent_gitignores(tmp_path)
-    content = (tmp_path / ".opencode" / ".gitignore").read_text()
-    assert "skills/" in content
-    assert "command/" in content
+    content = (tmp_path / ".gitignore").read_text()
+    assert ".opencode/agents/" in content
 
 
 def test_update_agent_gitignores_skips_when_no_agent_dirs(tmp_path):
+    """update_agent_gitignores always writes to project root .gitignore."""
     update_agent_gitignores(tmp_path)
-    assert not (tmp_path / ".claude" / ".gitignore").exists()
-    assert not (tmp_path / ".opencode" / ".gitignore").exists()
+    # Now writes to root .gitignore regardless of whether .claude/ / .opencode/ exist
+    assert (tmp_path / ".gitignore").exists()
 
 
 def test_update_agent_gitignores_idempotent(tmp_path):
-    (tmp_path / ".claude").mkdir()
-    (tmp_path / ".opencode").mkdir()
+    """update_agent_gitignores is idempotent on repeated calls."""
     update_agent_gitignores(tmp_path)
     update_agent_gitignores(tmp_path)
-    claude_content = (tmp_path / ".claude" / ".gitignore").read_text()
-    opencode_content = (tmp_path / ".opencode" / ".gitignore").read_text()
-    assert claude_content.count("skills/") == 1
-    assert opencode_content.count("skills/") == 1
-    assert opencode_content.count("command/") == 1
+    content = (tmp_path / ".gitignore").read_text()
+    assert content.count(".claude/agents/") == 1
+    assert content.count(".opencode/agents/") == 1
 
 
 def test_update_agent_gitignores_appends_to_existing_gitignore(tmp_path):
-    claude_dir = tmp_path / ".claude"
-    claude_dir.mkdir()
-    (claude_dir / ".gitignore").write_text("settings.local.json\n")
+    """update_agent_gitignores appends to an existing project .gitignore."""
+    (tmp_path / ".gitignore").write_text("settings.local.json\n")
     update_agent_gitignores(tmp_path)
-    content = (claude_dir / ".gitignore").read_text()
+    content = (tmp_path / ".gitignore").read_text()
     assert "settings.local.json" in content
-    assert "skills/" in content
+    assert ".claude/agents/" in content
 
 
 # ---------------------------------------------------------------------------

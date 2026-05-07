@@ -295,24 +295,46 @@ def test_e2e_legacy_beacon_yaml_migration(
 
 
 # ---------------------------------------------------------------------------
-# 10.4: E2E — sync does not install agents globally (PER-109 deferred)
+# 10.4: E2E — sync wires declared agents into project-local dirs (PER-113)
 # ---------------------------------------------------------------------------
 
 
-def test_e2e_sync_does_not_install_agents(project_dir, monkeypatch, isolated_home):
-    """Sync must not call sync_agents_from_warehouse or install agents globally."""
+def test_e2e_sync_wires_declared_agents(project_dir, monkeypatch, isolated_home):
+    """Sync wires declared agents into .claude/agents/ and .opencode/agents/.
+
+    PER-113: agents are now project-scoped. sync_agents_from_warehouse is
+    deleted. abc sync must wire declared agents into project-local tool dirs.
+    """
     runner = CliRunner()
     monkeypatch.chdir(project_dir)
 
+    # Declare the reviewer agent (warehouse fixture creates reviewer.md)
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
     beacon_yaml.write_text(
-        "artifacts:\n  contexts:\n    - contexts/team.md\n  skills: []\n"
+        "artifacts:\n"
+        "  contexts: []\n"
+        "  skills: []\n"
+        "  agents:\n"
+        "    - agents/reviewer.md\n"
     )
+
+    # Set up .claude/ so detect_agents() returns 'claudecode'
+    (project_dir / ".claude").mkdir(exist_ok=True)
 
     result = runner.invoke(main, ["sync", "--skip-git-check"])
     assert result.exit_code == 0, f"sync failed: {result.output}"
 
-    # No agent should appear in global dirs
+    # Artifact symlink must exist
+    artifact_link = (
+        project_dir / ".agentic-beacon" / "artifacts" / "agents" / "reviewer.md"
+    )
+    assert artifact_link.is_symlink(), f"artifact symlink missing: {artifact_link}"
+
+    # Project-local .claude/agents/ symlink must exist
+    claude_link = project_dir / ".claude" / "agents" / "reviewer.md"
+    assert claude_link.is_symlink(), f".claude/agents symlink missing: {claude_link}"
+
+    # Global dirs must NOT receive any new symlinks from sync
     for d in [
         isolated_home / ".config" / "opencode" / "agents",
         isolated_home / ".claude" / "agents",
@@ -320,7 +342,7 @@ def test_e2e_sync_does_not_install_agents(project_dir, monkeypatch, isolated_hom
         if d.exists():
             assert not any(
                 f.suffix == ".md" and f.name != "README.md" for f in d.rglob("*")
-            ), f"Unexpected agent files in {d}"
+            ), f"Unexpected agent files in global dir {d}"
 
 
 # ---------------------------------------------------------------------------

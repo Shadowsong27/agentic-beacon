@@ -29,6 +29,7 @@ from beacon.core.gitignore import GitignoreManager
 from beacon.core.manifest.beacon import BeaconManifest
 from beacon.domains.adoption.discovery import count_unadopted_since
 from beacon.domains.artifact.agent import (
+    detect_agent_targets,
     update_agent_gitignores,
 )
 from beacon.domains.artifact.skill import (
@@ -38,6 +39,9 @@ from beacon.domains.artifact.skill import (
     validate_skill_entries,
     wire_bundled_skills_per_project,
     wire_skills_post_sync,
+)
+from beacon.domains.distribution.legacy_cleanup import (
+    cleanup_legacy_global_agent_symlinks,
 )
 from beacon.domains.distribution.migration import migrate_entries
 from beacon.domains.distribution.sync_engine import (
@@ -50,6 +54,8 @@ from beacon.domains.setup.wiring import (
     confirm_prune,
     has_synced_contexts,
     unwire_pruned_artifacts,
+    wire_agent_claudecode,
+    wire_agent_opencode,
     wire_contexts_claudecode,
     wire_contexts_opencode,
 )
@@ -96,6 +102,7 @@ class SyncOrchestrationResult:
     wiring_notes: list[str] = field(default_factory=list)
     migration_resolved: dict[str, str] = field(default_factory=dict)
     unresolved_files: list[str] = field(default_factory=list)
+    legacy_agents_cleaned: int = 0
 
 
 def _normalize_beacon_for_resolver(
@@ -326,8 +333,15 @@ def run_sync(
         effective_set, sync_engine, warehouse_path, verbose
     )
 
-    total_explicit = len(beacon_settings.artifacts.skills) + len(
-        beacon_settings.artifacts.contexts
+    # Add declared agent paths to artifact_paths so the sync engine creates
+    # the .agentic-beacon/artifacts/agents/<name>.md symlinks
+    for agent_entry in beacon_settings.artifacts.agents:
+        artifact_paths.append(agent_entry)
+
+    total_explicit = (
+        len(beacon_settings.artifacts.skills)
+        + len(beacon_settings.artifacts.contexts)
+        + len(beacon_settings.artifacts.agents)
     )
     no_artifacts = total_explicit == 0
 
@@ -430,6 +444,17 @@ def run_sync(
     if summary.pruned_paths and not dry_run:
         unwire_pruned_artifacts(project_root, summary.pruned_paths, artifacts_dir)
 
+    # Wire declared agents into project-local tool directories
+    if not dry_run:
+        detected_tools = detect_agent_targets(project_root)
+        for agent_entry in beacon_settings.artifacts.agents:
+            # agent_entry is like "agents/spec-planner.md"
+            artifact_file = artifacts_dir / agent_entry
+            if "claudecode" in detected_tools:
+                wire_agent_claudecode(project_root, artifact_file)
+            if "opencode" in detected_tools:
+                wire_agent_opencode(project_root, artifact_file)
+
     # Use effective set for wiring decisions
     has_contexts = bool(effective_set.contexts) and not dry_run
     has_skills = bool(effective_set.skills) and not dry_run
@@ -474,6 +499,17 @@ def run_sync(
             force=force,
             skill_conflict_callback=skill_conflict_callback,
         )
+        # Write per-tool gitignore entries for skill directories
+        claude_dir = project_root / ".claude"
+        if claude_dir.is_dir():
+            GitignoreManager(claude_dir).ensure_entries(["skills/"])
+        opencode_dir = project_root / ".opencode"
+        if opencode_dir.is_dir():
+            GitignoreManager(opencode_dir).ensure_entries(["skills/", "command/"])
+
+    # PER-113: gate on declared agents so contexts-only or skills-only projects
+    # don't dirty their .gitignore with unused agent dir entries.
+    if not dry_run and beacon_settings.artifacts.agents:
         update_agent_gitignores(project_root)
 
     if not dry_run:
@@ -486,6 +522,11 @@ def run_sync(
     else:
         bundled_installed, bundled_skipped = [], []
         bundled_wired, bundled_wire_errors = [], []
+
+    # Legacy global agent symlink cleanup (PER-113 migration)
+    legacy_agents_cleaned = 0
+    if not dry_run:
+        legacy_agents_cleaned = cleanup_legacy_global_agent_symlinks(warehouse_path)
 
     adoption_notification = None
     if not dry_run:
@@ -523,4 +564,5 @@ def run_sync(
         wiring_notes=wiring_notes,
         migration_resolved=migration_resolved,
         unresolved_files=unresolved_files,
+        legacy_agents_cleaned=legacy_agents_cleaned,
     )

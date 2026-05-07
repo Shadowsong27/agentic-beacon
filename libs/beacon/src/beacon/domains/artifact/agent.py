@@ -2,39 +2,7 @@
 
 from pathlib import Path
 
-import click
-from rich.console import Console
-from rich.table import Table
-
-from beacon.utils.display import is_interactive
-
-console = Console()
-
 _ALL_KNOWN_AGENTS = ["opencode", "claudecode"]
-
-
-def global_agent_dirs() -> dict[str, Path]:
-    """Return global agent definition directories per tool."""
-    return {
-        "opencode": Path.home() / ".config" / "opencode" / "agents",
-        "claudecode": Path.home() / ".claude" / "agents",
-    }
-
-
-def detect_agents_global() -> list[str]:
-    """Detect which agent tools are available on this machine via home-dir paths.
-
-    Checks only home-directory paths (not project-relative paths).
-    Returns list of tool names: 'opencode' and/or 'claudecode'.
-    """
-    tools = []
-    opencode_dir = Path.home() / ".config" / "opencode"
-    if opencode_dir.is_dir():
-        tools.append("opencode")
-    claudecode_dir = Path.home() / ".claude"
-    if claudecode_dir.is_dir():
-        tools.append("claudecode")
-    return tools
 
 
 def read_agent_definition(agent_file: Path) -> str | None:
@@ -63,222 +31,53 @@ def detect_agents(project_root: Path, *, fallback_to_all: bool = False) -> list[
     return agents
 
 
-def _agent_link_conflicts(dest: Path, source_file: Path) -> bool:
-    """Return whether replacing dest with a warehouse symlink needs confirmation."""
-    if not dest.exists() and not dest.is_symlink():
-        return False
+def detect_agent_targets(project_root: Path) -> list[str]:
+    """Return tool keys whose project-local agent directories exist.
 
-    if dest.is_symlink():
-        try:
-            if dest.resolve(strict=True) == source_file.resolve(strict=True):
-                return False
-        except FileNotFoundError:
-            return False
-
-    if dest.is_dir():
-        return True
-
-    try:
-        return dest.read_text(encoding="utf-8") != source_file.read_text(
-            encoding="utf-8"
-        )
-    except OSError:
-        return True
-
-
-def install_agent_global(agent: str, agent_name: str, source_file: Path) -> bool:
-    """Link an agent definition file into the global agent directory for a tool.
-
-    Creates parent dirs if needed.
-    Returns True if the symlink was created or repaired, False if already correct.
-    Conflict handling is the caller's responsibility (soft block pre-check).
-
-    Args:
-        agent: Tool name — "opencode" or "claudecode".
-        agent_name: Filename (e.g. "code-reviewer.md").
-        source_file: Warehouse-side agent file to link to.
+    For agent wiring per project-agent-wiring spec: gate on directory existence,
+    NOT on tool config files (which is what detect_agents() checks).
     """
-    agent_dirs = global_agent_dirs()
-    source = source_file.resolve(strict=True)
-    dest = agent_dirs[agent] / agent_name
-
-    if dest.is_symlink():
-        try:
-            if dest.resolve(strict=True) == source:
-                return False
-        except FileNotFoundError:
-            pass
-
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    if dest.is_symlink() or dest.exists():
-        if dest.is_dir() and not dest.is_symlink():
-            raise IsADirectoryError(f"Expected agent file, found directory: {dest}")
-        dest.unlink()
-    dest.symlink_to(source)
-    return True
-
-
-def uninstall_agent_global(agent_name: str) -> int:
-    """Remove an agent definition file from all global agent directories.
-
-    Returns the number of directories from which the agent was removed.
-    """
-    removed_count = 0
-    for agent_dir in global_agent_dirs().values():
-        target = agent_dir / agent_name
-        if target.exists() or target.is_symlink():
-            target.unlink()
-            removed_count += 1
-    return removed_count
-
-
-def list_global_agents() -> None:
-    """Display globally installed agent files from all detected tool directories."""
-    agent_dirs = global_agent_dirs()
-
-    # Union of all agent filenames across detected tools, deduplicated
-    seen: dict[str, list[str]] = {}  # filename -> list of tools that have it
-    for tool, agent_dir in agent_dirs.items():
-        if not agent_dir.exists():
-            continue
-        for f in sorted(agent_dir.rglob("*.md")):
-            if f.is_file() and not f.name.startswith("."):
-                name = f.name
-                seen.setdefault(name, []).append(tool)
-
-    if not seen:
-        console.print("[yellow]No agents found.[/yellow]")
-        console.print("Install agents with: abc agents sync")
-        return
-
-    table = Table(title="Installed Agents (Global)")
-    table.add_column("Agent", style="magenta")
-    table.add_column("Tools", style="dim")
-    for name in sorted(seen):
-        table.add_row(name, ", ".join(seen[name]))
-    console.print(table)
+    targets = []
+    if (project_root / ".claude").is_dir():
+        targets.append("claudecode")
+    if (project_root / ".opencode").is_dir():
+        targets.append("opencode")
+    return targets
 
 
 def update_agent_gitignores(project_root: Path) -> None:
-    """Add gitignore entries to agent subdirectory .gitignore files.
+    """Append .claude/agents/ and .opencode/agents/ entries to the project .gitignore.
 
-    Updates .claude/.gitignore and .opencode/.gitignore if those directories
-    exist, creating the gitignore files if needed.
-    """
-    from beacon.core.gitignore import GitignoreManager
-
-    claude_dir = project_root / ".claude"
-    if claude_dir.is_dir():
-        GitignoreManager(claude_dir).ensure_entries(["skills/"])
-
-    opencode_dir = project_root / ".opencode"
-    if opencode_dir.is_dir():
-        GitignoreManager(opencode_dir).ensure_entries(["skills/", "command/"])
-
-
-def sync_agents_from_warehouse(
-    warehouse_path: Path,
-    *,
-    force: bool = False,
-    preserve: bool = False,
-) -> None:
-    """Sync all agent definition files from the warehouse into global tool directories.
-
-    Called as part of `abc sync`. Finds every *.md under warehouse/agents/,
-    compares each against the global agent dirs for detected tools, and links any
-    that are out-of-date.  A single Y/N prompt is shown when conflicts exist
-    (unless --force or --preserve are supplied).
+    Idempotent: if the entries are already present they are not added again.
+    Creates the .gitignore file if it does not exist.
 
     Args:
-        warehouse_path: Absolute path to the connected warehouse root.
-        force: Overwrite conflicting files without prompting.
-        preserve: Skip conflicting files without prompting.
+        project_root: Project root directory (must be a directory).
+
+    Raises:
+        FileNotFoundError: If project_root is not a directory.
     """
-    agents_dir = warehouse_path / "agents"
-    if not agents_dir.is_dir():
+    if not project_root.is_dir():
+        raise FileNotFoundError(f"project_root is not a directory: {project_root}")
+
+    gitignore_path = project_root / ".gitignore"
+    entries_to_add = [".claude/agents/", ".opencode/agents/"]
+
+    if gitignore_path.exists():
+        existing_content = gitignore_path.read_text(encoding="utf-8")
+        existing_lines = set(existing_content.splitlines())
+    else:
+        existing_content = ""
+        existing_lines = set()
+
+    missing = [e for e in entries_to_add if e not in existing_lines]
+    if not missing:
         return
 
-    agent_files = sorted(
-        af for af in agents_dir.rglob("*.md") if af.name != "README.md"
-    )
-    if not agent_files:
-        return
+    if existing_content and not existing_content.endswith("\n"):
+        prefix = "\n"
+    else:
+        prefix = ""
 
-    tools = detect_agents_global()
-    if not tools:
-        # Fresh machine: neither ~/.config/opencode/ nor ~/.claude/ exists yet.
-        # The user explicitly invoked agent sync, so install to canonical paths
-        # for every known tool — install_agent_global creates parent dirs.
-        tools = list(_ALL_KNOWN_AGENTS)
-        console.print(
-            "[yellow]No agent tools detected[/yellow] "
-            "(neither ~/.config/opencode/ nor ~/.claude/ exists).\n"
-            "Installing to canonical paths so agents are ready when you "
-            "set up Claude Code or OpenCode."
-        )
-
-    agent_dirs = global_agent_dirs()
-
-    # Build list of (relative_path, source_file, agent_name) tuples
-    entries: list[tuple[str, Path, str]] = []
-    for af in agent_files:
-        rel = str(af.relative_to(warehouse_path))  # e.g. "agents/code-reviewer.md"
-        agent_name = af.name
-        entries.append((rel, af, agent_name))
-
-    # Detect conflicts: files that exist in global dirs but differ from warehouse
-    conflicts: list[str] = []
-    for _rel, source_file, agent_name in entries:
-        for tool in tools:
-            dest = agent_dirs[tool] / agent_name
-            if _agent_link_conflicts(dest, source_file):
-                conflicts.append(str(dest))
-
-    # Single Y/N prompt for all conflicts together
-    effective_preserve = preserve
-    if conflicts and not force and not preserve:
-        conflict_list = "\n".join(f"  • {p}" for p in conflicts)
-        console.print(
-            f"\n[yellow]Warning:[/yellow] {len(conflicts)} global agent file(s) "
-            f"differ from the warehouse and will be overwritten:\n{conflict_list}\n"
-        )
-        if is_interactive():
-            if not click.confirm(
-                "Overwrite local agent files with warehouse versions?", default=False
-            ):
-                effective_preserve = True
-        else:
-            console.print(
-                "[dim]Non-interactive mode — skipping agent overwrite. "
-                "Use --force to overwrite or --preserve to suppress this warning.[/dim]"
-            )
-            effective_preserve = True
-
-    # Link
-    installed: list[str] = []
-    skipped: list[str] = []
-    for _rel, source_file, agent_name in entries:
-        for tool in tools:
-            dest = agent_dirs[tool] / agent_name
-            is_conflict = str(dest) in conflicts
-
-            if effective_preserve and is_conflict:
-                skipped.append(agent_name)
-                continue
-
-            linked = install_agent_global(tool, agent_name, source_file)
-            if linked:
-                installed.append(agent_name)
-
-    if installed:
-        unique = sorted(set(installed))
-        console.print(
-            f"\n[green]✓[/green] Synced {len(unique)} global agent(s) from warehouse "
-            f"({', '.join(unique)})"
-        )
-    if skipped:
-        unique_skipped = sorted(set(skipped))
-        console.print(
-            f"  [yellow]Skipped {len(unique_skipped)} agent(s) with local changes "
-            f"(use --force to overwrite): {', '.join(unique_skipped)}[/yellow]"
-        )
+    new_content = existing_content + prefix + "\n".join(missing) + "\n"
+    gitignore_path.write_text(new_content, encoding="utf-8")

@@ -32,7 +32,7 @@ Three artifact types are declared in `beacon.yaml`:
 
 - **Skills** — declared at directory level (trailing `/`), must have `requires: { contexts: [...] }` frontmatter in their `SKILL.md`
 - **Contexts** — file or glob patterns, wired into agent config on sync
-- **Agents** — declared per-project AND installed globally via symlinks into `~/.claude/agents/` and `~/.config/opencode/agents/`
+- **Agents** — declared per-project; `abc sync` wires them into project-local `.claude/agents/` and `.opencode/agents/`
 
 **Knowledge files are NOT declared in beacon.yaml.** They are auto-derived from markdown links (`[text](knowledge/...)`) found in adopted contexts and skills. The dependency resolver scans all adopted artifacts and syncs every referenced knowledge file automatically.
 
@@ -40,7 +40,7 @@ Three artifact types are declared in `beacon.yaml`:
 
 ## `artifacts.agents`
 
-Agents are declared per-project in `beacon.yaml` and also installed globally.
+Agents are declared per-project in `beacon.yaml`. `abc sync` wires them into project-local tool directories.
 
 ```yaml
 artifacts:
