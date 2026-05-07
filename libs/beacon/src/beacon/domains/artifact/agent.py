@@ -1,6 +1,5 @@
 """Agent operations for the artifact domain."""
 
-import sys
 from pathlib import Path
 
 import click
@@ -8,7 +7,6 @@ from rich.console import Console
 from rich.table import Table
 
 from beacon.utils.display import is_interactive
-from beacon.utils.interaction import OverwriteDecision, resolve_conflict
 
 console = Console()
 
@@ -63,22 +61,6 @@ def detect_agents(project_root: Path, *, fallback_to_all: bool = False) -> list[
     if not agents and fallback_to_all:
         return list(_ALL_KNOWN_AGENTS)
     return agents
-
-
-def build_agents_paths() -> dict[str, Path]:
-    """Return a mapping of tool name → global agents directory for detected tools.
-
-    Shared detection logic used by `abc install` (and historically by
-    per-project agent-drift tooling) so writes/reads hit the same global
-    agent locations.
-    """
-    agents_paths: dict[str, Path] = {}
-    for tool in detect_agents_global():
-        if tool == "opencode":
-            agents_paths["opencode"] = Path.home() / ".config" / "opencode" / "agents"
-        elif tool == "claudecode":
-            agents_paths["claudecode"] = Path.home() / ".claude" / "agents"
-    return agents_paths
 
 
 def _agent_link_conflicts(dest: Path, source_file: Path) -> bool:
@@ -166,7 +148,7 @@ def list_global_agents() -> None:
 
     if not seen:
         console.print("[yellow]No agents found.[/yellow]")
-        console.print("Install agents with: abc install agents/<name>.md")
+        console.print("Install agents with: abc agents sync")
         return
 
     table = Table(title="Installed Agents (Global)")
@@ -175,30 +157,6 @@ def list_global_agents() -> None:
     for name in sorted(seen):
         table.add_row(name, ", ".join(seen[name]))
     console.print(table)
-
-
-def find_project_level_agents(project_root: Path) -> dict[str, list[str]]:
-    """Return project-scoped agent files per tool that live outside the global dirs.
-
-    Checks .claude/agents/ (Claude Code) and .opencode/agents/ (OpenCode) under
-    the given project root.  Returns a mapping of tool name → sorted list of
-    agent file names (README.md excluded).
-    """
-    project_agent_dirs: dict[str, Path] = {
-        "claudecode": project_root / ".claude" / "agents",
-        "opencode": project_root / ".opencode" / "agents",
-    }
-    result: dict[str, list[str]] = {}
-    for tool, agents_dir in project_agent_dirs.items():
-        if agents_dir.is_dir():
-            files = sorted(
-                f.name
-                for f in agents_dir.iterdir()
-                if f.is_file() and f.name != "README.md"
-            )
-            if files:
-                result[tool] = files
-    return result
 
 
 def update_agent_gitignores(project_root: Path) -> None:
@@ -323,93 +281,4 @@ def sync_agents_from_warehouse(
         console.print(
             f"  [yellow]Skipped {len(unique_skipped)} agent(s) with local changes "
             f"(use --force to overwrite): {', '.join(unique_skipped)}[/yellow]"
-        )
-
-
-def handle_install_agent(
-    artifact: str, *, force: bool = False, preserve: bool = False
-) -> None:
-    """Handle 'abc install agents/<name>.md' — global install for all detected tools.
-
-    Loads warehouse settings, performs soft-block conflict detection against global
-    agent dirs, and creates warehouse symlinks in each detected tool dir. Does NOT
-    update beacon.yaml.
-    """
-    from beacon.core.manifest.workspace import WorkspaceConfig
-
-    beacon_dir = Path.cwd() / ".agentic-beacon"
-    if not beacon_dir.exists():
-        console.print("[red]Error:[/red] No .agentic-beacon directory found.")
-        console.print("Run 'abc warehouse connect' to connect to a warehouse first.")
-        sys.exit(1)
-
-    try:
-        warehouse_settings = WorkspaceConfig()
-        warehouse_path = Path(warehouse_settings.warehouse.local_path)
-    except Exception as e:
-        console.print(f"[red]Error:[/red] Could not load warehouse settings: {e}")
-        sys.exit(1)
-
-    agent_file = warehouse_path / artifact
-    if not agent_file.exists():
-        console.print(f"[red]Error:[/red] Agent not found in warehouse: {artifact}")
-        sys.exit(1)
-
-    agent_name = Path(artifact).name
-
-    # Detect tools
-    tools = detect_agents_global()
-    if not tools:
-        console.print(
-            "[yellow]Warning:[/yellow] No agent tools detected "
-            "(neither ~/.config/opencode/ nor ~/.claude/ found)."
-        )
-        console.print("Install OpenCode or Claude Code and re-run to install agent.")
-        return
-
-    # Soft-block pre-check: check for conflicting global agent files
-    agent_dirs = global_agent_dirs()
-    conflicts: list[str] = []
-    for tool in tools:
-        dest = agent_dirs[tool] / agent_name
-        if _agent_link_conflicts(dest, agent_file):
-            conflicts.append(str(dest))
-
-    resolution = resolve_conflict(
-        force=force, preserve=preserve, has_conflicts=bool(conflicts)
-    )
-    if resolution == OverwriteDecision.SKIP:
-        preserve = True  # skip conflicting files
-    elif resolution == OverwriteDecision.NEEDS_CONFIRMATION:
-        # Non-interactive mode with conflicts — cannot prompt; refuse to proceed.
-        conflict_list = "\n".join(f"  • {p}" for p in conflicts)
-        console.print(
-            f"\n[yellow]Warning:[/yellow] {len(conflicts)} global agent file(s) "
-            f"differ from the warehouse:\n{conflict_list}\n"
-        )
-        console.print(
-            "[red]Error:[/red] Non-interactive mode — cannot prompt for overwrite.\n"
-            "Use --force to overwrite or --preserve to skip conflicting files."
-        )
-        sys.exit(1)
-
-    written_any = False
-    for tool in tools:
-        dest = agent_dirs[tool] / agent_name
-        is_conflict = str(dest) in conflicts
-
-        if preserve and is_conflict:
-            console.print(f"[yellow]Skipped[/yellow] {dest} (preserved local version)")
-            continue
-
-        linked = install_agent_global(tool, agent_name, agent_file)
-        if linked:
-            console.print(f"[green]Linked[/green] {artifact} → {dest}")
-            written_any = True
-        else:
-            console.print(f"[dim]Up to date[/dim] {dest}")
-
-    if not written_any and not conflicts:
-        console.print(
-            f"[dim]{artifact} is already up to date in all tool directories.[/dim]"
         )

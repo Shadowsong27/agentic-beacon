@@ -17,8 +17,6 @@ import pytest
 from beacon.cli.main import main
 from beacon.domains.artifact.agent import update_agent_gitignores
 from beacon.domains.artifact.skill import (
-    _install_skill_claudecode,
-    _install_skill_opencode,
     normalize_skill_entry,
     skill_name_from_entry,
     wire_single_skill,
@@ -355,80 +353,6 @@ def test_update_agent_gitignores_appends_to_existing_gitignore(tmp_path):
     content = (claude_dir / ".gitignore").read_text()
     assert "settings.local.json" in content
     assert "skills/" in content
-
-
-# ---------------------------------------------------------------------------
-# Unit tests: _install_skill_opencode / _install_skill_claudecode
-# ---------------------------------------------------------------------------
-
-
-def test_install_skill_opencode_returns_true_on_first_install(tmp_path):
-    changed = _install_skill_opencode(
-        tmp_path, "my-skill", SAMPLE_SKILL_MD, "A test skill"
-    )
-
-    assert changed is True
-    assert (tmp_path / ".opencode" / "skills" / "my-skill" / "SKILL.md").exists()
-    assert (tmp_path / ".opencode" / "command" / "my-skill.md").exists()
-
-
-def test_install_skill_opencode_returns_false_when_unchanged(tmp_path):
-    _install_skill_opencode(tmp_path, "my-skill", SAMPLE_SKILL_MD, "A test skill")
-    changed = _install_skill_opencode(
-        tmp_path, "my-skill", SAMPLE_SKILL_MD, "A test skill"
-    )
-
-    assert changed is False
-
-
-def test_install_skill_opencode_returns_true_when_content_changes(tmp_path):
-    _install_skill_opencode(tmp_path, "my-skill", SAMPLE_SKILL_MD, "A test skill")
-    changed = _install_skill_opencode(
-        tmp_path, "my-skill", SAMPLE_SKILL_MD + "\n## Extra\n", "A test skill"
-    )
-
-    assert changed is True
-
-
-def test_install_skill_opencode_updates_file_content_when_changed(tmp_path):
-    _install_skill_opencode(tmp_path, "my-skill", SAMPLE_SKILL_MD, "A test skill")
-    new_content = SAMPLE_SKILL_MD + "\n## Extra\n"
-    _install_skill_opencode(tmp_path, "my-skill", new_content, "A test skill")
-
-    skill_file = tmp_path / ".opencode" / "skills" / "my-skill" / "SKILL.md"
-    assert skill_file.read_text() == new_content
-
-
-def test_install_skill_claudecode_returns_true_on_first_install(tmp_path):
-    changed = _install_skill_claudecode(tmp_path, "my-skill", SAMPLE_SKILL_MD)
-
-    assert changed is True
-    assert (tmp_path / ".claude" / "skills" / "my-skill" / "SKILL.md").exists()
-
-
-def test_install_skill_claudecode_returns_false_when_unchanged(tmp_path):
-    _install_skill_claudecode(tmp_path, "my-skill", SAMPLE_SKILL_MD)
-    changed = _install_skill_claudecode(tmp_path, "my-skill", SAMPLE_SKILL_MD)
-
-    assert changed is False
-
-
-def test_install_skill_claudecode_returns_true_when_content_changes(tmp_path):
-    _install_skill_claudecode(tmp_path, "my-skill", SAMPLE_SKILL_MD)
-    changed = _install_skill_claudecode(
-        tmp_path, "my-skill", SAMPLE_SKILL_MD + "\n## Extra\n"
-    )
-
-    assert changed is True
-
-
-def test_install_skill_claudecode_updates_file_content_when_changed(tmp_path):
-    _install_skill_claudecode(tmp_path, "my-skill", SAMPLE_SKILL_MD)
-    new_content = SAMPLE_SKILL_MD + "\n## Extra\n"
-    _install_skill_claudecode(tmp_path, "my-skill", new_content)
-
-    skill_file = tmp_path / ".claude" / "skills" / "my-skill" / "SKILL.md"
-    assert skill_file.read_text() == new_content
 
 
 # ---------------------------------------------------------------------------

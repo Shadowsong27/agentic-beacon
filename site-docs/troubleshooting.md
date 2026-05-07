@@ -34,6 +34,7 @@ Removed commands and their replacements:
 | `abc delta` | `abc warehouse status` |
 | `abc contribute` | `abc warehouse contribute -m "message"` |
 | `abc install <artifact>` | Edit `beacon.yaml`, then `abc sync` |
+| `abc update` | `abc sync` (or `abc reset` to force-overwrite) |
 | `abc sync --preserve` | `abc sync --contribute-local` or `--discard-local` |
 | `abc setup --manual` | `abc setup` (no flags needed) |
 | `abc setup --agent-assisted` | `abc setup` (no flags needed) |
