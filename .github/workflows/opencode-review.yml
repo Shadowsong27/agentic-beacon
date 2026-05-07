@@ -18,7 +18,7 @@ jobs:
     permissions:
       contents: read
       issues: write
-      pull-requests: read
+      pull-requests: write
 
     env:
       OPENCODE_REVIEW_MODEL: ${{ vars.OPENCODE_REVIEW_MODEL || 'openai/gpt-5.5' }}
@@ -38,12 +38,12 @@ jobs:
         env:
           PATH: /home/runner/.opencode/bin:/home/runner/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
         run: |
-          opencode run --model "$OPENCODE_REVIEW_MODEL" --title "PR review #${{ github.event.pull_request.number }}" "$(cat <<'EOF'
+          opencode run --model "$OPENCODE_REVIEW_MODEL" --title "PR review #${{ github.event.pull_request.number }}" --file /tmp/opencode-pr.diff "$(cat <<'EOF'
           Review this pull request for the agentic-beacon repository.
 
           Follow AGENTS.md and the project architecture rules.
 
-          Review only the diff below. Prioritize:
+          Review only the attached diff. Prioritize:
           - correctness bugs
           - behavioral regressions
           - architecture violations
@@ -56,10 +56,7 @@ jobs:
           Include file and line references when possible.
           If there are no findings, say so explicitly.
           Keep the review concise and actionable.
-
-          Diff:
           EOF
-          cat /tmp/opencode-pr.diff
           )" | tee /tmp/opencode-review.md
 
       - name: Publish step summary
