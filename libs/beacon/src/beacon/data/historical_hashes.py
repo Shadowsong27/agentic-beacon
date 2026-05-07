@@ -18,6 +18,8 @@ KNOWN_TEMPLATE_HASHES: dict[str, list[str]] = {
         "2a2ea65bc817582bf992ebc0ffe919774635173f138ab35dc6c68f237ec2c15e",
         # v2.2+ (agent skill dirs added)
         "84eeaf600db2a2b5aaa963c05e4ea13af92dc973a6b63740554212fec1701cb7",
+        # v3.x — pending.yaml added to gitignore
+        "8feef5396350636e6d01b504c84ad4295d9f2bf300a1b4893850e72694b86b0a",
     ],
     "agents/README.md": [
         # v2.3+ (agents artifact type introduced)

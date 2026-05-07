@@ -24,7 +24,7 @@ from pathlib import Path
 # Keys are relative paths matching the template directory structure.
 # Update this dict whenever the starter warehouse is re-generated.
 STARTER_WAREHOUSE_PINNED_TEMPLATE_HASHES: dict[str, str] = {
-    ".gitignore": "84eeaf600db2a2b5aaa963c05e4ea13af92dc973a6b63740554212fec1701cb7",
+    ".gitignore": "8feef5396350636e6d01b504c84ad4295d9f2bf300a1b4893850e72694b86b0a",
     "agents/README.md": "6f05be87226b2892c20d1a75bee24b682590506ee22dbdc2c911f959ff625590",
     "agents/agents.yaml": "9f03ec77cf08ad3296d640d70a65038e0cdf46a3335e887f6ee130ce314077e2",
     "README.md": "052846a397d19d160ab86287a7bc211e92c4943bcea72ca34909155aa78ebf1a",

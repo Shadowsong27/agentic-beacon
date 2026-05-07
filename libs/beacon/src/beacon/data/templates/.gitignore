@@ -29,3 +29,6 @@ logs/
 .claude/skills/
 .opencode/skills/
 .opencode/command/
+
+# Agentic Beacon (local only — not committed)
+.agentic-beacon/pending.yaml
