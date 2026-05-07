@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 from beacon.domains.setup.wiring import (
     unwire_agent,
+    unwire_agent_with_undo,
     unwire_pruned_artifacts,
     wire_agent_claudecode,
     wire_agent_opencode,
@@ -294,3 +295,73 @@ class TestUnwirePrunedArtifactsAgents:
         )
 
         assert not agent_dest.exists() and not agent_dest.is_symlink()
+
+
+# ---------------------------------------------------------------------------
+# Finding 1: unwire_agent / unwire_agent_with_undo preserve regular files
+# ---------------------------------------------------------------------------
+
+
+def test_unwire_agent_preserves_regular_file(tmp_path):
+    """Regular file at .claude/agents/<name>.md must NOT be deleted by unwire_agent."""
+    target = tmp_path / ".claude" / "agents" / "spec-planner.md"
+    target.parent.mkdir(parents=True)
+    target.write_text("user-authored content")
+
+    unwire_agent(tmp_path, "spec-planner")
+
+    assert target.exists() and not target.is_symlink()
+    assert target.read_text() == "user-authored content"
+
+
+def test_unwire_agent_with_undo_preserves_regular_file(tmp_path):
+    """Regular file at the agent path must NOT be deleted by unwire_agent_with_undo."""
+    target = tmp_path / ".opencode" / "agents" / "spec-planner.md"
+    target.parent.mkdir(parents=True)
+    target.write_text("user-authored content")
+
+    removed = unwire_agent_with_undo(tmp_path, "spec-planner")
+
+    assert target.exists() and target.read_text() == "user-authored content"
+    assert removed == []  # nothing removed → nothing to roll back
+
+
+# ---------------------------------------------------------------------------
+# Finding 3: wire_agent_* refuse to overwrite regular files
+# ---------------------------------------------------------------------------
+
+
+def test_wire_agent_claudecode_refuses_to_overwrite_regular_file(tmp_path):
+    """Regular file at dest must cause BeaconSyncError, not FileExistsError or silent overwrite."""
+    from beacon.core.exceptions import BeaconSyncError
+
+    target = tmp_path / ".claude" / "agents" / "spec-planner.md"
+    target.parent.mkdir(parents=True)
+    target.write_text("user-authored content")
+
+    artifact_file = tmp_path / "warehouse" / "agents" / "spec-planner.md"
+    artifact_file.parent.mkdir(parents=True)
+    artifact_file.write_text("warehouse content")
+
+    with pytest.raises(BeaconSyncError) as exc:
+        wire_agent_claudecode(tmp_path, artifact_file)
+    assert "regular file" in str(exc.value)
+    assert target.read_text() == "user-authored content"  # not overwritten
+
+
+def test_wire_agent_opencode_refuses_to_overwrite_regular_file(tmp_path):
+    """Same as above but for opencode side."""
+    from beacon.core.exceptions import BeaconSyncError
+
+    target = tmp_path / ".opencode" / "agents" / "spec-planner.md"
+    target.parent.mkdir(parents=True)
+    target.write_text("user-authored content")
+
+    artifact_file = tmp_path / "warehouse" / "agents" / "spec-planner.md"
+    artifact_file.parent.mkdir(parents=True)
+    artifact_file.write_text("warehouse content")
+
+    with pytest.raises(BeaconSyncError) as exc:
+        wire_agent_opencode(tmp_path, artifact_file)
+    assert "regular file" in str(exc.value)
+    assert target.read_text() == "user-authored content"

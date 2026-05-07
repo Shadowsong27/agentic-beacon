@@ -8,6 +8,8 @@ import click
 from loguru import logger
 from rich.console import Console
 
+from beacon.core.exceptions import BeaconSyncError
+
 console = Console()
 
 
@@ -331,6 +333,9 @@ def wire_agent_claudecode(project_root: Path, artifact_file: Path) -> Path:
     unchanged. A stale symlink pointing at a different target is replaced.
     The parent directory is created if it does not exist.
 
+    A regular file at the destination is user-owned content. Beacon will not
+    overwrite it; a BeaconSyncError is raised with an actionable hint instead.
+
     Args:
         project_root: Project root directory.
         artifact_file: Path to the artifact file (the symlink target).
@@ -339,6 +344,7 @@ def wire_agent_claudecode(project_root: Path, artifact_file: Path) -> Path:
         Path to the created (or existing) symlink.
 
     Raises:
+        BeaconSyncError: If a regular file already exists at the destination.
         OSError: If the parent directory cannot be created or the symlink
             cannot be written.
     """
@@ -352,6 +358,15 @@ def wire_agent_claudecode(project_root: Path, artifact_file: Path) -> Path:
         except OSError:
             pass
         dest.unlink()
+    elif dest.exists():
+        raise BeaconSyncError(
+            f"Cannot wire agent: {dest} exists as a regular file (not a Beacon symlink).",
+            hint=(
+                f"Beacon will not overwrite user-authored content. "
+                f"Either remove or rename {dest}, or remove "
+                f"'agents/{artifact_file.stem}' from beacon.yaml.artifacts.agents."
+            ),
+        )
 
     dest.symlink_to(artifact_file)
     logger.debug("Wired agent to .claude/agents/: {}", dest.name)
@@ -365,6 +380,9 @@ def wire_agent_opencode(project_root: Path, artifact_file: Path) -> Path:
     unchanged. A stale symlink pointing at a different target is replaced.
     The parent directory is created if it does not exist.
 
+    A regular file at the destination is user-owned content. Beacon will not
+    overwrite it; a BeaconSyncError is raised with an actionable hint instead.
+
     Args:
         project_root: Project root directory.
         artifact_file: Path to the artifact file (the symlink target).
@@ -373,6 +391,7 @@ def wire_agent_opencode(project_root: Path, artifact_file: Path) -> Path:
         Path to the created (or existing) symlink.
 
     Raises:
+        BeaconSyncError: If a regular file already exists at the destination.
         OSError: If the parent directory cannot be created or the symlink
             cannot be written.
     """
@@ -386,6 +405,15 @@ def wire_agent_opencode(project_root: Path, artifact_file: Path) -> Path:
         except OSError:
             pass
         dest.unlink()
+    elif dest.exists():
+        raise BeaconSyncError(
+            f"Cannot wire agent: {dest} exists as a regular file (not a Beacon symlink).",
+            hint=(
+                f"Beacon will not overwrite user-authored content. "
+                f"Either remove or rename {dest}, or remove "
+                f"'agents/{artifact_file.stem}' from beacon.yaml.artifacts.agents."
+            ),
+        )
 
     dest.symlink_to(artifact_file)
     logger.debug("Wired agent to .opencode/agents/: {}", dest.name)
@@ -395,9 +423,12 @@ def wire_agent_opencode(project_root: Path, artifact_file: Path) -> Path:
 def unwire_agent(project_root: Path, agent_name: str) -> None:
     """Remove project-local agent symlinks for the given agent.
 
+    Only Beacon-created symlinks are removed. A regular file at the agent path
+    is user-owned content and is left untouched with a warning logged.
+
     Removes both .claude/agents/<agent_name>.md and
-    .opencode/agents/<agent_name>.md if they exist. Missing files are silently
-    skipped. Does not traverse subdirectories.
+    .opencode/agents/<agent_name>.md if they are Beacon symlinks. Missing files
+    are silently skipped. Does not traverse subdirectories.
 
     Args:
         project_root: Project root directory.
@@ -413,15 +444,24 @@ def unwire_agent(project_root: Path, agent_name: str) -> None:
         project_root / ".claude" / "agents" / leaf,
         project_root / ".opencode" / "agents" / leaf,
     ):
-        if dest.exists() or dest.is_symlink():
-            dest.unlink(missing_ok=True)
+        if dest.is_symlink():
+            dest.unlink()
             logger.debug("Unwired agent: {}", dest)
+        elif dest.exists():
+            logger.warning(
+                "Skipping unwire of {}: regular file (not a Beacon symlink); "
+                "left untouched. Remove manually if intended.",
+                dest,
+            )
 
 
 def unwire_agent_with_undo(
     project_root: Path, agent_name: str
 ) -> list[tuple[Path, Path]]:
     """Remove project-local agent symlinks, returning (path, target) pairs for rollback.
+
+    Only Beacon-created symlinks are removed and recorded. A regular file at the
+    agent path is user-owned content and is left untouched with a warning logged.
 
     Like unwire_agent but returns a list of (removed_path, original_target) tuples
     for each symlink removed, enabling callers to reconstruct them on rollback.
@@ -432,6 +472,7 @@ def unwire_agent_with_undo(
 
     Returns:
         List of (path, target) pairs for each symlink successfully removed.
+        Regular files at the agent paths are not included (they are not removed).
     """
     leaf = Path(agent_name).name
     if not leaf.endswith(".md"):
@@ -448,8 +489,11 @@ def unwire_agent_with_undo(
             removed.append((dest, target))
             logger.debug("Unwired agent: {}", dest)
         elif dest.exists():
-            dest.unlink()
-            logger.debug("Unwired agent (non-symlink): {}", dest)
+            logger.warning(
+                "Skipping unwire of {}: regular file (not a Beacon symlink); "
+                "left untouched. Remove manually if intended.",
+                dest,
+            )
     return removed
 
 
