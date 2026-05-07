@@ -53,3 +53,5 @@ uv.lock
 
 # Local sample-warehouse checkout (developer convenience; never a submodule)
 sample-warehouse/
+.claude/agents/
+.opencode/agents/
