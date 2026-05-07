@@ -32,13 +32,14 @@ Two moving parts:
 **Beacon** — a per-project connector. Running `abc warehouse connect` creates `.agentic-beacon/` in your project with a `beacon.yaml` that declares which contexts, skills, and agents this project needs. Knowledge files are auto-derived from markdown links in contexts and skills.
 
 ```
-Warehouse (shared git repo)                 Your project / global
+Warehouse (shared git repo)                 Your project
 ────────────────────────────                ────────────────────────────────
 contexts/     ── abc sync ──►  .agentic-beacon/artifacts/contexts/
                                  opencode.json / CLAUDE.md (wired)
 knowledge/    ── auto-derive ─► .agentic-beacon/artifacts/knowledge/
 skills/       ── abc sync ──►  .opencode/skills/<name>/
-agents/       ── abc sync ──►  ~/.claude/agents/<name>.md
+agents/       ── abc sync ──►  .claude/agents/<name>.md
+                                 .opencode/agents/<name>.md
 ```
 
 `abc sync` reads `beacon.yaml`, resolves skill→context dependencies via frontmatter, auto-derives knowledge from markdown links, and creates symlinks into the warehouse for all resolved artifacts.

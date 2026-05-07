@@ -247,7 +247,7 @@ abc doctor [OPTIONS]
 
 ### `abc list`
 
-List synced artifacts or globally installed agents.
+List declared and synced project artifacts.
 
 ```bash
 abc list [ARTIFACT_TYPE]
@@ -256,7 +256,7 @@ abc list [ARTIFACT_TYPE]
 | Argument | Description |
 |----------|-------------|
 | (none) | List all synced artifacts |
-| `agents` | List globally installed agents |
+| `agents` | List declared agents (read from `.agentic-beacon/artifacts/agents/`) |
 | `knowledge` | List synced knowledge files |
 | `skills` | List synced skills |
 | `contexts` | List synced contexts |
