@@ -314,13 +314,15 @@ Overwrites all symlinks from the warehouse, discarding any local modifications.
 
 ## Removed Commands
 
-The following commands have been removed in v3. Their stubs remain with migration guidance:
+The following commands have been removed. If you are upgrading from a pre-v3
+release, replace any scripted invocations with the modern equivalents below:
 
 | Removed | Replacement |
 |---------|-------------|
 | `abc delta` | `abc warehouse status` |
 | `abc contribute` | `abc warehouse contribute -m "message"` |
-| `abc install <artifact>` | Edit `beacon.yaml` manually, then `abc sync` |
+| `abc install <artifact>` | Edit `beacon.yaml`, then `abc sync` |
+| `abc update` | `abc sync` (or `abc reset` to force-overwrite) |
 
 ---
 

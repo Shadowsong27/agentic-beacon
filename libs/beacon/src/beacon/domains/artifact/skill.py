@@ -1,6 +1,5 @@
 """Skill operations for the artifact domain."""
 
-import fnmatch
 import os
 import shutil
 import sys
@@ -11,7 +10,7 @@ from rich.console import Console
 from rich.table import Table
 
 from beacon.core.file_filter import ARTIFACT_IGNORE_PATTERNS, is_artifact_file
-from beacon.core.manifest.beacon import ArtifactsConfig, BeaconManifest
+from beacon.core.manifest.beacon import BeaconManifest
 from beacon.domains.artifact.agent import detect_agents
 from beacon.utils.interaction import OverwriteDecision, resolve_conflict
 
@@ -46,12 +45,7 @@ def bundled_skill_names() -> set[str]:
 
 
 def build_skills_paths(project_root: Path) -> dict[str, Path]:
-    """Return a mapping of agent name → live skills directory for detected agents.
-
-    Shared detection logic used by `abc install` (and historically by
-    per-project skill-drift tooling) so writes/reads hit the same live agent
-    locations.
-    """
+    """Return a mapping of agent name → live skills directory for detected agents."""
     skills_paths: dict[str, Path] = {}
     for agent in detect_agents(project_root):
         if agent == "opencode":
@@ -59,34 +53,6 @@ def build_skills_paths(project_root: Path) -> dict[str, Path]:
         elif agent == "claudecode":
             skills_paths["claudecode"] = project_root / ".claude" / "skills"
     return skills_paths
-
-
-def find_global_untracked_skills(
-    ignore_patterns: list[str] | None = None,
-) -> dict[str, list[str]]:
-    """Return non-bundled skill directories found in the global skill dirs.
-
-    Scans ~/.claude/skills/ (Claude Code) and ~/.config/opencode/skills/ (OpenCode).
-    Excludes abc-bundled skills and any skill names matching ignore_patterns (fnmatch).
-    Returns a mapping of tool name → sorted list of skill names.
-    """
-    global_skill_dirs = bundled_global_skill_dirs()
-    bundled = bundled_skill_names()
-    patterns = ignore_patterns or []
-    result: dict[str, list[str]] = {}
-    for tool, skills_dir in global_skill_dirs.items():
-        if skills_dir.is_dir():
-            names = sorted(
-                d.name
-                for d in skills_dir.iterdir()
-                if d.is_dir()
-                and (d / "SKILL.md").exists()
-                and d.name not in bundled
-                and not any(fnmatch.fnmatch(d.name, p) for p in patterns)
-            )
-            if names:
-                result[tool] = names
-    return result
 
 
 def install_bundled_skills_globally() -> tuple[list[str], list[str]]:
@@ -247,30 +213,6 @@ def validate_skill_entries(beacon_settings: BeaconManifest) -> None:
         "Update beacon.yaml and re-run 'abc sync'."
     )
     sys.exit(1)
-
-
-def _migrate_beacon_yaml_skill_entries(
-    beacon_yaml: Path, legacy_entries: list[str]
-) -> None:
-    """Rewrite beacon.yaml replacing file-level skill entries with directory form."""
-    from beacon.core.manifest.beacon import BeaconManifest
-
-    settings = BeaconManifest.from_yaml(beacon_yaml)
-    migrated = []
-    for entry in settings.artifacts.skills:
-        if entry in legacy_entries:
-            migrated.append(normalize_skill_entry(entry))
-        else:
-            migrated.append(entry)
-    # Deduplicate while preserving order
-    seen: set[str] = set()
-    deduped = []
-    for e in migrated:
-        if e not in seen:
-            seen.add(e)
-            deduped.append(e)
-    settings.artifacts.skills = deduped
-    settings.to_yaml(beacon_yaml)
 
 
 def normalize_skill_entry(entry: str) -> str:
@@ -565,103 +507,3 @@ def wire_skills_post_sync(
                 errors.append(f"{name} ({agent}): {e}")
 
     return installed, errors
-
-
-def update_beacon_yaml(beacon_dir: Path, files: list[str]) -> None:
-    """Add installed file paths to beacon.yaml, creating it if absent."""
-    beacon_yaml = beacon_dir / "beacon.yaml"
-
-    if beacon_yaml.exists():
-        try:
-            settings = BeaconManifest.from_yaml(beacon_yaml)
-        except Exception:
-            return  # Don't corrupt a file we can't parse
-    else:
-        settings = BeaconManifest(artifacts=ArtifactsConfig())
-
-    for path in files:
-        parts = Path(path).parts
-        artifact_type = parts[0] if parts else ""
-        if artifact_type == "skills":
-            # Normalize to directory form and deduplicate across old/new formats
-            dir_entry = normalize_skill_entry(path)
-            already_tracked = any(
-                normalize_skill_entry(e) == dir_entry for e in settings.artifacts.skills
-            )
-            if not already_tracked:
-                settings.artifacts.skills.append(dir_entry)
-        elif artifact_type == "contexts":
-            if path not in settings.artifacts.contexts:
-                settings.artifacts.contexts.append(path)
-
-    settings.to_yaml(beacon_yaml)
-
-
-def _install_skill_opencode(
-    project_root: Path, skill_name: str, content: str, description: str
-) -> bool:
-    """Install a skill for OpenCode: skill file + thin command stub.
-
-    Returns True if files were written, False if already up-to-date.
-    """
-    skill_dest = project_root / ".opencode" / "skills" / skill_name
-    skill_dest.mkdir(parents=True, exist_ok=True)
-    skill_file = skill_dest / "SKILL.md"
-
-    stub = (
-        f"---\ndescription: {description}\n---\n\n"
-        f"Use the **skill** tool to load and execute the `{skill_name}` skill "
-        f"with any provided arguments.\n"
-    )
-    command_dir = project_root / ".opencode" / "command"
-    command_dir.mkdir(parents=True, exist_ok=True)
-    stub_file = command_dir / f"{skill_name}.md"
-
-    skill_unchanged = (
-        skill_file.exists() and skill_file.read_text(encoding="utf-8") == content
-    )
-    stub_unchanged = (
-        stub_file.exists() and stub_file.read_text(encoding="utf-8") == stub
-    )
-
-    if skill_unchanged and stub_unchanged:
-        return False
-
-    if not skill_unchanged:
-        skill_file.write_text(content)
-    if not stub_unchanged:
-        stub_file.write_text(stub)
-
-    # Return True only if SKILL.md was written (command stub updates are transparent)
-    return not skill_unchanged
-
-
-def _install_skill_claudecode(
-    project_root: Path, skill_name: str, content: str
-) -> bool:
-    """Install a skill for Claude Code: copy SKILL.md to .claude/skills/<name>/.
-
-    Returns True if the file was written, False if already up-to-date.
-    """
-    dest = project_root / ".claude" / "skills" / skill_name
-    dest.mkdir(parents=True, exist_ok=True)
-    dest_file = dest / "SKILL.md"
-
-    if dest_file.exists() and dest_file.read_text(encoding="utf-8") == content:
-        return False
-
-    dest_file.write_text(content)
-    return True
-
-
-def print_skill_next_steps(agents: list[str]) -> None:
-    """Print agent-specific guidance after install."""
-    console.print("\n[bold]Next Steps:[/bold]")
-    if "opencode" in agents:
-        console.print(
-            "  [bold]OpenCode[/bold] — restart your session to pick up new commands"
-        )
-    if "claudecode" in agents:
-        console.print(
-            "  [bold]Claude Code[/bold] — skills are available as /skill-name in new sessions"
-        )
