@@ -80,7 +80,7 @@ artifacts:
 2. **Resolve dependencies** — reads `requires:` frontmatter from each skill's `SKILL.md` and agent dependencies from `agents/agents.yaml` to compute the full set of required artifacts
 3. **Auto-derive knowledge** — scans every adopted context and skill for markdown links to `knowledge/` paths and adds them to the sync set
 4. **Create symlinks** — creates per-file symlinks under `.agentic-beacon/artifacts/` pointing into the warehouse clone
-5. **Wire artifacts** — adds context references to `CLAUDE.md` or `opencode.json`, installs skills into tool directories, installs agents globally
+5. **Wire artifacts** — adds context references to `CLAUDE.md` or `opencode.json`, installs skills into tool directories, wires agents into project-local `.claude/agents/` and `.opencode/agents/`
 6. **Prune orphans** — removes symlinks for artifacts no longer referenced
 
 | Artifact type | How it's configured | What sync does |
@@ -88,7 +88,7 @@ artifacts:
 | **Contexts** | Declared in `beacon.yaml` | Symlinks + wiring into agent config |
 | **Skills** | Declared in `beacon.yaml` | Symlinks + install into tool directories |
 | **Knowledge** | Auto-derived from markdown links in contexts/skills | Symlinks only (referenced from contexts) |
-| **Agents** | Declared in `beacon.yaml` | Symlinks + install into global tool directories |
+| **Agents** | Declared in `beacon.yaml` | Symlinks + wire into project-local tool directories |
 
 ---
 

@@ -215,6 +215,7 @@ def commit_session(
     def _default_post_sync_wiring(accepted: list[AdoptCandidate]) -> None:
         has_contexts = any(c.artifact_type == "contexts" for c in accepted)
         has_skills = any(c.artifact_type == "skills" for c in accepted)
+        agent_candidates = [c for c in accepted if c.artifact_type == "agents"]
 
         if has_contexts:
             from beacon.domains.setup.wiring import (
@@ -229,6 +230,21 @@ def commit_session(
             from beacon.domains.artifact.skill import wire_skills_post_sync
 
             wire_skills_post_sync(project_root, artifacts_path)
+
+        if agent_candidates:
+            from beacon.domains.artifact.agent import detect_agents
+            from beacon.domains.setup.wiring import (
+                wire_agent_claudecode,
+                wire_agent_opencode,
+            )
+
+            detected_tools = detect_agents(project_root)
+            for candidate in agent_candidates:
+                artifact_file = artifacts_path / candidate.path
+                if "claudecode" in detected_tools:
+                    wire_agent_claudecode(project_root, artifact_file)
+                if "opencode" in detected_tools:
+                    wire_agent_opencode(project_root, artifact_file)
 
     post_sync_wiring_fn = _post_sync_wiring_fn or _default_post_sync_wiring
 
@@ -266,6 +282,15 @@ def commit_session(
 
         if beacon_adds:
             post_sync_wiring_fn(beacon_adds)
+
+        # 2b. Unwire project-local tool symlinks for unadopted agents.
+        agent_unadoptions = [p for p in to_unadopt if p.startswith("agents/")]
+        if agent_unadoptions:
+            from beacon.domains.setup.wiring import unwire_agent
+
+            for agent_path in agent_unadoptions:
+                agent_name = Path(agent_path).stem
+                unwire_agent(project_root, agent_name)
 
         # 3. Rewrite pending.yaml (drop accepted + rejected; keep deferred).
         if pending_resolved or pre_pending:
@@ -319,10 +344,18 @@ def cleanup_unadopted_artifacts(
     for entry in unadoptions:
         entry_clean = entry.rstrip("/")
 
-        # Decision 7: removing an agent from beacon.yaml does NOT uninstall the
-        # global symlink (~/.config/opencode/agents/, ~/.claude/agents/).
-        # Global install state is managed separately from project declaration.
         if entry_clean.startswith("agents/"):
+            # PER-113: unwire project-local agent symlinks on unadopt
+            if project_root is not None:
+                from beacon.domains.setup.wiring import unwire_agent
+
+                agent_name = Path(entry_clean).stem
+                unwire_agent(project_root, agent_name)
+            # Also fall through to remove the artifact symlink
+            local_entry = artifacts_dir / entry_clean
+            if local_entry.is_file() or local_entry.is_symlink():
+                rel = str(local_entry.relative_to(artifacts_dir))
+                to_remove.append((rel, local_entry))
             continue
 
         local_entry = artifacts_dir / entry_clean

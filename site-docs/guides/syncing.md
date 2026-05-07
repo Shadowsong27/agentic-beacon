@@ -106,15 +106,20 @@ abc sync --force --dry-run
 
 ---
 
-## Syncing Agents Only
+## Syncing Agents
+
+Agents declared in `beacon.yaml` are wired into project-local tool directories during `abc sync`:
 
 ```bash
-abc agents sync
+abc sync
 ```
 
-Syncs agent definitions from the warehouse into global tool directories. Agents declared in `beacon.yaml` are also installed during a full `abc sync`.
+`abc sync` creates:
+- `.agentic-beacon/artifacts/agents/<name>.md` — artifact symlink into the warehouse
+- `.claude/agents/<name>.md` — project-local symlink (when `.claude/` exists)
+- `.opencode/agents/<name>.md` — project-local symlink (when `.opencode/` exists)
 
-Supports `--force` and `--skip-git-check` flags.
+Agents are project-scoped. Use `abc adopt` to select which agents to declare in `beacon.yaml`.
 
 ---
 

@@ -32,6 +32,8 @@ KNOWN_TEMPLATE_HASHES: dict[str, list[str]] = {
         "5ee9768984c954f7ef8a3157018f283828f3ac10ea45b3b3a56053e13c7d4b42",
         # project-scoped-agents — dual agent semantics
         "6f05be87226b2892c20d1a75bee24b682590506ee22dbdc2c911f959ff625590",
+        # PER-113 — unify-agent-distribution: agents are now fully project-scoped
+        "2f942a6895e0c2fb8b867eac90e8f788dba4427efcbcb855e8b96db656f2983e",
     ],
     "agents/agents.yaml": [
         # v3.x — move-agent-requires-to-warehouse-manifest
@@ -48,6 +50,8 @@ KNOWN_TEMPLATE_HASHES: dict[str, list[str]] = {
         "e7d52b2e8fc6725079fc11afd3a7ee9435229d399eeb71b0bf9ebf74e1284aaa",
         # project-scoped-agents — dual agent semantics
         "052846a397d19d160ab86287a7bc211e92c4943bcea72ca34909155aa78ebf1a",
+        # PER-113 — unify-agent-distribution: drop abc agents sync reference
+        "4614df66a7b6d3ef486a661f055e4073ca8c50258bd85e6e9b23e8e9513b956b",
     ],
     "contexts/README.md": [
         # v2.2+ (current)

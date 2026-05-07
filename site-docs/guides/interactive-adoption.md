@@ -44,7 +44,7 @@ When you press `Enter`:
 2. `abc sync` runs automatically for the newly selected artifacts
 3. Contexts are wired into your agent config
 4. Skills are installed into each detected tool's directories
-5. Agents are installed globally into `~/.claude/agents/` and `~/.config/opencode/agents/`
+5. Agents are wired into project-local `.claude/agents/` and `.opencode/agents/` directories
 
 The entire workflow — select → write config → sync — happens in one step.
 

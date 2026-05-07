@@ -15,11 +15,6 @@ from beacon.domains.adoption.apply import (
 )
 from beacon.domains.adoption.discovery import discover_adoptable, discover_pending
 from beacon.domains.adoption.tui import AdoptApp
-from beacon.domains.artifact.agent import (
-    detect_agents_global,
-    install_agent_global,
-    read_agent_definition,
-)
 from beacon.utils.display import is_interactive
 from beacon.utils.git import find_project_root
 
@@ -186,35 +181,19 @@ def adopt(*, dry_run: bool) -> None:
                 f"[yellow]−[/yellow] Removed {len(non_agent_unadoptions)} artifact(s) from beacon.yaml"
             )
         if agent_unadoptions:
-            # Decision 7: do NOT uninstall global symlinks here.
             console.print(
-                f"[yellow]−[/yellow] Removed {len(agent_unadoptions)} agent(s) from beacon.yaml "
-                "[dim](global install retained per Decision 7)[/dim]"
+                f"[yellow]−[/yellow] Removed {len(agent_unadoptions)} agent(s) from beacon.yaml"
             )
 
     if accepted_agents:
-        tools = detect_agents_global()
-        installed_count = 0
-        for agent_path in accepted_agents:
-            agent_file = warehouse_path / agent_path
-            if read_agent_definition(agent_file) is None:
-                continue
-            agent_name = agent_file.name
-            for tool in tools:
-                install_agent_global(tool, agent_name, agent_file)
-            installed_count += 1
-        if installed_count:
-            console.print(
-                f"[green]✓[/green] Installed {installed_count} agent(s) globally"
-                + (f" for: {', '.join(tools)}" if tools else "")
-            )
+        console.print(
+            f"[green]✓[/green] Adopted {len(accepted_agents)} agent(s) "
+            "(wired via abc sync or adopt)"
+        )
 
-    non_agent_unadoptions = [
-        p for p in result.to_unadopt if not p.startswith("agents/")
-    ]
-    if non_agent_unadoptions:
+    if result.to_unadopt:
         cleanup_unadopted_artifacts(
-            non_agent_unadoptions,
+            result.to_unadopt,
             artifacts_dir,
             warehouse_path,
             project_root=project_root,

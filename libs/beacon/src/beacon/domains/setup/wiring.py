@@ -18,8 +18,8 @@ def create_beacon_template(path: Path) -> None:
 # Run 'abc sync' after editing to download artifacts.
 #
 # Skills are tracked at the directory level: skills/code-review/
-# Agents are declared per-project in beacon.yaml.artifacts.agents AND installed globally.
-# Use 'abc adopt' to select agents and record them in beacon.yaml.
+# Agents are declared per-project in beacon.yaml.artifacts.agents.
+# Use 'abc adopt' to wire agents into .claude/agents/ and .opencode/agents/.
 
 artifacts:
   skills: []
@@ -251,6 +251,11 @@ def unwire_pruned_artifacts(
             unwire_context_opencode(project_root, rel_to_project)
             unwire_context_claudecode(project_root, rel_to_project)
 
+        elif artifact_type == "agents" and len(parts) >= 2:
+            agent_filename = parts[1]  # e.g. "spec-planner.md"
+            agent_name = Path(agent_filename).stem  # e.g. "spec-planner"
+            unwire_agent(project_root, agent_name)
+
         elif artifact_type == "skills" and len(parts) >= 2:
             skill_name = parts[1]
             unwire_skill(project_root, skill_name)
@@ -317,6 +322,100 @@ def unwire_skill(project_root: Path, skill_name: str) -> None:
     if claude_skill.exists():
         shutil.rmtree(claude_skill, ignore_errors=True)
         logger.debug("Removed Claude skill dir: {}", claude_skill)
+
+
+def wire_agent_claudecode(project_root: Path, artifact_file: Path) -> Path:
+    """Create a symlink at .claude/agents/<name>.md pointing at artifact_file.
+
+    Idempotent: if the symlink already points at the same target, it is left
+    unchanged. A stale symlink pointing at a different target is replaced.
+    The parent directory is created if it does not exist.
+
+    Args:
+        project_root: Project root directory.
+        artifact_file: Path to the artifact file (the symlink target).
+
+    Returns:
+        Path to the created (or existing) symlink.
+
+    Raises:
+        OSError: If the parent directory cannot be created or the symlink
+            cannot be written.
+    """
+    dest = project_root / ".claude" / "agents" / artifact_file.name
+    dest.parent.mkdir(parents=True, exist_ok=True)
+
+    if dest.is_symlink():
+        try:
+            if dest.readlink() == artifact_file:
+                return dest
+        except OSError:
+            pass
+        dest.unlink()
+
+    dest.symlink_to(artifact_file)
+    logger.debug("Wired agent to .claude/agents/: {}", dest.name)
+    return dest
+
+
+def wire_agent_opencode(project_root: Path, artifact_file: Path) -> Path:
+    """Create a symlink at .opencode/agents/<name>.md pointing at artifact_file.
+
+    Idempotent: if the symlink already points at the same target, it is left
+    unchanged. A stale symlink pointing at a different target is replaced.
+    The parent directory is created if it does not exist.
+
+    Args:
+        project_root: Project root directory.
+        artifact_file: Path to the artifact file (the symlink target).
+
+    Returns:
+        Path to the created (or existing) symlink.
+
+    Raises:
+        OSError: If the parent directory cannot be created or the symlink
+            cannot be written.
+    """
+    dest = project_root / ".opencode" / "agents" / artifact_file.name
+    dest.parent.mkdir(parents=True, exist_ok=True)
+
+    if dest.is_symlink():
+        try:
+            if dest.readlink() == artifact_file:
+                return dest
+        except OSError:
+            pass
+        dest.unlink()
+
+    dest.symlink_to(artifact_file)
+    logger.debug("Wired agent to .opencode/agents/: {}", dest.name)
+    return dest
+
+
+def unwire_agent(project_root: Path, agent_name: str) -> None:
+    """Remove project-local agent symlinks for the given agent.
+
+    Removes both .claude/agents/<agent_name>.md and
+    .opencode/agents/<agent_name>.md if they exist. Missing files are silently
+    skipped. Does not traverse subdirectories.
+
+    Args:
+        project_root: Project root directory.
+        agent_name: Stem name of the agent (without .md extension), or full
+            filename. Only the leaf name is used to avoid path traversal.
+    """
+    # Normalise to leaf filename (prevent any subdirectory traversal)
+    leaf = Path(agent_name).name
+    if not leaf.endswith(".md"):
+        leaf = leaf + ".md"
+
+    for dest in (
+        project_root / ".claude" / "agents" / leaf,
+        project_root / ".opencode" / "agents" / leaf,
+    ):
+        if dest.exists() or dest.is_symlink():
+            dest.unlink(missing_ok=True)
+            logger.debug("Unwired agent: {}", dest)
 
 
 def has_synced_contexts(artifacts_dir: Path) -> bool:

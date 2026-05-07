@@ -275,6 +275,12 @@ def sync(
 
     print_bundled_install_result(result.bundled_installed, result.bundled_skipped)
 
+    if result.legacy_agents_cleaned > 0:
+        console.print(
+            f"Cleaned up {result.legacy_agents_cleaned} legacy global agent "
+            f"symlinks (PER-113 migration)."
+        )
+
     if result.adoption_notification:
         console.print(f"\n[cyan]{result.adoption_notification}[/cyan]")
 

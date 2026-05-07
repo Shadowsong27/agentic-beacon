@@ -6,6 +6,7 @@ from pathlib import Path
 import click
 from rich.console import Console
 
+from beacon.domains.artifact.agent import update_agent_gitignores
 from beacon.domains.setup.wiring import create_beacon_template
 
 console = Console()
@@ -42,6 +43,7 @@ def setup() -> None:
             sys.exit(0)
 
     create_beacon_template(beacon_yaml)
+    update_agent_gitignores(Path.cwd())
     console.print("\n[bold green]✓ Created beacon.yaml template[/bold green]")
     console.print(f"  [blue]Location:[/blue] {beacon_yaml}")
     console.print("\n[bold]Next Steps:[/bold]")
@@ -53,5 +55,5 @@ def setup() -> None:
         "  • [cyan]knowledge[/cyan], [cyan]contexts[/cyan], [cyan]skills[/cyan] — project-scoped, tracked in beacon.yaml"
     )
     console.print(
-        "  • [magenta]agents[/magenta] — declared per-project in beacon.yaml & globally linked with 'abc agents sync'"
+        "  • [magenta]agents[/magenta] — project-scoped, declared in beacon.yaml; run 'abc adopt' to wire agents"
     )

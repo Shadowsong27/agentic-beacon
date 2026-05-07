@@ -153,19 +153,21 @@ abc sync
 
 ---
 
-## Syncing Only Agents
+## Syncing Agents
+
+Agents are wired into project-local tool directories as part of `abc sync`:
 
 ```bash
-abc agents sync
+abc sync
 ```
 
-Installs agent definitions from the warehouse into global tool directories without touching project artifacts. No `beacon.yaml` required.
+Declare agents in `beacon.yaml` first (via `abc adopt` or manually), then `abc sync` wires them into `.claude/agents/` and `.opencode/agents/` inside the project root.
 
 ### Listing installed artifacts
 
 ```bash
-abc list                # all synced artifacts
-abc list agents         # globally installed agents
+abc list                # all synced artifacts (contexts, skills)
+abc list agents         # project-scoped agents from .agentic-beacon/artifacts/agents/
 abc list skills         # synced skills
 abc list contexts       # synced contexts
 ```

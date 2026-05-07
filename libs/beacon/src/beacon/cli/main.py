@@ -7,7 +7,7 @@ import click
 from loguru import logger
 
 from beacon.cli.adoption import adopt
-from beacon.cli.agent import agents, list_cmd
+from beacon.cli.agent import list_cmd
 from beacon.cli.diagnostics import doctor
 from beacon.cli.pending_alert import maybe_emit_pending_alert
 from beacon.cli.setup import setup
@@ -33,7 +33,6 @@ def main(*, verbose: bool) -> None:
 main.add_command(warehouse)
 main.add_command(setup)
 main.add_command(sync)
-main.add_command(agents)
 main.add_command(reset_cmd, name="reset")
 main.add_command(list_cmd, name="list")
 main.add_command(clean)

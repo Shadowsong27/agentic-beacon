@@ -32,3 +32,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Migration
 
 - See [Migration Guide: Artifact Dependencies via Frontmatter](./docs/migrations/artifact-dependencies-frontmatter.md) for step-by-step instructions on adding `requires:` frontmatter to existing warehouses.
+
+### Breaking Changes (PER-113 — unify-agent-distribution)
+
+- **`abc agents sync` command removed.** Agents are now wired into project-local `.claude/agents/` and `.opencode/agents/` directories by `abc sync`, not into global `~/.claude/agents/` or `~/.config/opencode/agents/`. Remove any references to `abc agents sync` from scripts or documentation.
+- **Agent symlinks are project-scoped.** Each project independently declares agents in `beacon.yaml` and `abc sync` creates project-local symlinks. Global agent symlinks from previous versions are cleaned up automatically on the first `abc sync` run (a one-time migration notice is printed).
+
+### Migration (PER-113)
+
+- Run `abc sync` once in each project to migrate: legacy global agent symlinks pointing into the warehouse will be removed and project-local symlinks will be created for declared agents.
+- If you previously relied on globally-installed agents visible across all projects, declare each agent explicitly in the relevant project's `beacon.yaml`.

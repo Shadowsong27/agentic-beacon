@@ -415,8 +415,12 @@ def test_warehouse_list_agents_empty(tmp_path, monkeypatch):
     assert "No agents found" in result.output
 
 
-def test_list_agents_shows_global_installs(tmp_path, monkeypatch):
-    """TC1: abc list agents → shows globally installed agent files from both tool dirs."""
+def test_list_agents_shows_project_artifacts(tmp_path, monkeypatch):
+    """TC1: abc list agents → shows agent files from .agentic-beacon/artifacts/agents/.
+
+    PER-113: agents are project-scoped. abc list agents reads from the project
+    artifacts dir, not from global ~/.config/opencode/agents/ or ~/.claude/agents/.
+    """
     from click.testing import CliRunner
 
     runner = CliRunner()
@@ -424,16 +428,15 @@ def test_list_agents_shows_global_installs(tmp_path, monkeypatch):
     project.mkdir()
     monkeypatch.chdir(project)
 
-    # Fake global agent dirs
-    fake_home = tmp_path / "home"
-    opencode_agents = fake_home / ".config" / "opencode" / "agents"
-    claude_agents = fake_home / ".claude" / "agents"
-    opencode_agents.mkdir(parents=True)
-    claude_agents.mkdir(parents=True)
-    (opencode_agents / "code-reviewer.md").write_text("# Agent")
-    (claude_agents / "code-reviewer.md").write_text("# Agent")
+    # Create a fake warehouse agent file to use as the symlink target
+    wh_agent = tmp_path / "warehouse" / "agents" / "code-reviewer.md"
+    wh_agent.parent.mkdir(parents=True)
+    wh_agent.write_text("---\nname: code-reviewer\n---\n# Code Reviewer\n")
 
-    monkeypatch.setattr("pathlib.Path.home", lambda: fake_home)
+    # Plant an agent artifact symlink (normally created by abc sync)
+    agents_artifacts = project / ".agentic-beacon" / "artifacts" / "agents"
+    agents_artifacts.mkdir(parents=True)
+    (agents_artifacts / "code-reviewer.md").symlink_to(wh_agent)
 
     result = runner.invoke(main, ["list", "agents"])
     assert result.exit_code == 0
@@ -441,7 +444,11 @@ def test_list_agents_shows_global_installs(tmp_path, monkeypatch):
 
 
 def test_list_agents_no_artifacts_dir_needed(tmp_path, monkeypatch):
-    """TC2: abc list agents doesn't require .agentic-beacon/artifacts/ to exist."""
+    """TC2: abc list agents exits 0 with 'No agents found' when no artifacts dir exists.
+
+    PER-113: agents are project-scoped. abc list agents reads from
+    .agentic-beacon/artifacts/agents/ which may not exist yet (before abc sync).
+    """
     from click.testing import CliRunner
 
     runner = CliRunner()
@@ -449,27 +456,26 @@ def test_list_agents_no_artifacts_dir_needed(tmp_path, monkeypatch):
     project.mkdir()
     monkeypatch.chdir(project)
 
-    fake_home = tmp_path / "home"
-    (fake_home / ".config" / "opencode" / "agents").mkdir(parents=True)
-    (fake_home / ".claude" / "agents").mkdir(parents=True)
-    monkeypatch.setattr("pathlib.Path.home", lambda: fake_home)
-
     result = runner.invoke(main, ["list", "agents"])
     assert result.exit_code == 0
     assert "No agents found" in result.output
 
 
-def test_list_agents_not_shown_in_default_list(synced_project, monkeypatch):
-    """TC2: abc list (no filter) → agents section not shown (backward compatible)."""
+def test_list_agents_not_shown_in_default_list(synced_project):
+    """TC2: abc list (no filter) → agents section not shown (backward compatible).
+
+    PER-113: even with agent artifacts in .agentic-beacon/artifacts/agents/,
+    the default abc list (no type arg) only shows contexts and skills.
+    """
     project, warehouse, runner = synced_project
 
-    fake_home = project.parent / "home"
-    (fake_home / ".config" / "opencode" / "agents").mkdir(parents=True)
-    (fake_home / ".config" / "opencode" / "agents" / "test-agent.md").write_text(
-        "# Agent"
-    )
-    (fake_home / ".claude" / "agents").mkdir(parents=True)
-    monkeypatch.setattr("pathlib.Path.home", lambda: fake_home)
+    # Plant an agent artifact symlink to verify it does NOT show in the default list.
+    # Create a real target file so the symlink is valid (list_artifacts checks is_symlink).
+    wh_agent = warehouse / "agents" / "test-agent.md"
+    wh_agent.write_text("---\nname: test-agent\n---\n")
+    agents_artifacts = project / ".agentic-beacon" / "artifacts" / "agents"
+    agents_artifacts.mkdir(parents=True, exist_ok=True)
+    (agents_artifacts / "test-agent.md").symlink_to(wh_agent)
 
     result = runner.invoke(main, ["list"])
     assert result.exit_code == 0

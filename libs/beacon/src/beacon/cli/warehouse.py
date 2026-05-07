@@ -176,6 +176,7 @@ def init(
         console.print(f"  {step}. Customize contexts, skills, and agents")
         console.print(f"  {step + 1}. git remote add origin <your-repo-url>")
         console.print(f"  {step + 2}. git push -u origin main")
+        console.print(f"  {step + 3}. Run 'abc adopt' to wire agents.")
 
     except ValueError as e:
         console.print(f"[red]Error:[/red] {e}")

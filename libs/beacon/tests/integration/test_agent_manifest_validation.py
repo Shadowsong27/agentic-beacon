@@ -253,24 +253,8 @@ class TestSyncAgentManifestValidation:
 
 
 # ---------------------------------------------------------------------------
-# 2.4: abc install agents/<name>.md and sync_agents_from_warehouse unchanged
+# 2.4: abc agents sync removed (PER-113 — unify-agent-distribution)
 # ---------------------------------------------------------------------------
-
-
-class TestAgentsSyncUnchanged:
-    def test_agents_sync_still_works(self, tmp_path, monkeypatch):
-        """abc agents sync should still work and not be affected by manifest validation."""
-        runner = CliRunner()
-
-        wh = _make_warehouse_with_agents(tmp_path)
-
-        project_dir = tmp_path / "project"
-        project_dir.mkdir()
-        monkeypatch.chdir(project_dir)
-        _connect_project(project_dir, wh)
-
-        result = runner.invoke(main, ["agents", "sync", "--skip-git-check"])
-
-        # agents sync should succeed regardless of manifest state
-        # (it doesn't validate the manifest)
-        assert result.exit_code == 0
+# The TestAgentsSyncUnchanged class previously tested `abc agents sync`.
+# That command was deleted in PER-113. Agents are now project-scoped and
+# wired via `abc sync` + `abc adopt`. No replacement test needed here.
