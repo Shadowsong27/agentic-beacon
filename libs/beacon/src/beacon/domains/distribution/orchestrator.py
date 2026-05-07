@@ -502,7 +502,10 @@ def run_sync(
         opencode_dir = project_root / ".opencode"
         if opencode_dir.is_dir():
             GitignoreManager(opencode_dir).ensure_entries(["skills/", "command/"])
-        # PER-113: also ensure project-root .gitignore has agent dir entries
+
+    # PER-113 (Finding 2): run unconditionally during real syncs so agents-only
+    # projects also get the project-root .gitignore protections.
+    if not dry_run:
         update_agent_gitignores(project_root)
 
     if not dry_run:

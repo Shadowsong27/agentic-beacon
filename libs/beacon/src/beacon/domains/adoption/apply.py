@@ -247,7 +247,10 @@ def commit_session(
             wire_skills_post_sync(project_root, artifacts_path)
 
         if agent_candidates:
-            from beacon.domains.artifact.agent import detect_agent_targets
+            from beacon.domains.artifact.agent import (
+                detect_agent_targets,
+                update_agent_gitignores,
+            )
             from beacon.domains.setup.wiring import (
                 wire_agent_claudecode,
                 wire_agent_opencode,
@@ -267,6 +270,9 @@ def commit_session(
                     kind, prior = _snapshot_path(oc_dest)
                     tool_snapshots.append((oc_dest, kind, prior))
                     wire_agent_opencode(project_root, artifact_file)
+
+            # PER-113 (Finding 2): ensure root .gitignore has agent dir entries
+            update_agent_gitignores(project_root)
 
     post_sync_wiring_fn = _post_sync_wiring_fn or _default_post_sync_wiring
 

@@ -261,6 +261,42 @@ def test_sync_with_empty_agents_list_succeeds(
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Finding 2: agents-only sync still updates project-root .gitignore
+# ---------------------------------------------------------------------------
+
+
+def test_sync_with_only_agents_updates_gitignore(
+    project_dir: Path, warehouse: Path, monkeypatch
+):
+    """A project with agents but no skills must still get .claude/agents/ + .opencode/agents/ in .gitignore."""
+    runner = CliRunner()
+    monkeypatch.chdir(project_dir)
+
+    # Ensure both tool dirs exist so detect_agent_targets returns both
+    (project_dir / ".opencode").mkdir(exist_ok=True)
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n"
+        "  contexts: []\n"
+        "  skills: []\n"
+        "  agents:\n"
+        "    - agents/spec-planner.md\n"
+    )
+
+    r = runner.invoke(main, ["sync", "--skip-git-check"])
+    assert r.exit_code == 0, f"sync failed: {r.output}"
+
+    gitignore = (project_dir / ".gitignore").read_text()
+    assert ".claude/agents/" in gitignore, (
+        f".gitignore missing .claude/agents/ entry: {gitignore!r}"
+    )
+    assert ".opencode/agents/" in gitignore, (
+        f".gitignore missing .opencode/agents/ entry: {gitignore!r}"
+    )
+
+
 def test_sync_unwires_removed_agent(project_dir: Path, warehouse: Path, monkeypatch):
     """Removing an agent from beacon.yaml and re-syncing removes all three paths.
 

@@ -574,3 +574,43 @@ def test_accept_rollback_restores_stale_tool_symlink_target(
     assert claude_dest.readlink() == stale_target, (
         f"Stale .claude symlink target was not restored on rollback: got {claude_dest.readlink()}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Finding 2: adopt accept of an agent-only session updates project .gitignore
+# ---------------------------------------------------------------------------
+
+
+def test_adopt_accept_only_agent_updates_gitignore(project: tuple, warehouse: Path):
+    """abc adopt accepting an agent must add .gitignore entries even if no skills are involved."""
+    project_root, artifacts_path, beacon_yaml = project
+
+    # Both tool dirs present so detect_agent_targets returns both
+    (project_root / ".opencode").mkdir(exist_ok=True)
+
+    candidate = AdoptCandidate(
+        artifact_type="agents",
+        path="agents/spec-planner.md",
+        description="Plans specs",
+    )
+
+    commit_session(
+        to_adopt=["agents/spec-planner.md"],
+        to_unadopt=[],
+        pending_accept=[],
+        pending_reject=[],
+        candidates=[candidate],
+        pending_entries=[],
+        project_root=project_root,
+        warehouse_path=warehouse,
+        artifacts_path=artifacts_path,
+        beacon_yaml_path=beacon_yaml,
+    )
+
+    gitignore = (project_root / ".gitignore").read_text()
+    assert ".claude/agents/" in gitignore, (
+        f".gitignore missing .claude/agents/ entry: {gitignore!r}"
+    )
+    assert ".opencode/agents/" in gitignore, (
+        f".gitignore missing .opencode/agents/ entry: {gitignore!r}"
+    )
