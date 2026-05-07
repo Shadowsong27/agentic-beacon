@@ -43,13 +43,15 @@ def test_fresh_machine_creates_both_global_dirs(
     claude_dest = fake_home / ".claude" / "agents" / "code-reviewer.md"
     opencode_dest = fake_home / ".config" / "opencode" / "agents" / "code-reviewer.md"
     assert claude_dest.is_symlink()
-    assert claude_dest.resolve() == (
-        warehouse_with_agent / "agents" / "code-reviewer.md"
-    ).resolve()
+    assert (
+        claude_dest.resolve()
+        == (warehouse_with_agent / "agents" / "code-reviewer.md").resolve()
+    )
     assert opencode_dest.is_symlink()
-    assert opencode_dest.resolve() == (
-        warehouse_with_agent / "agents" / "code-reviewer.md"
-    ).resolve()
+    assert (
+        opencode_dest.resolve()
+        == (warehouse_with_agent / "agents" / "code-reviewer.md").resolve()
+    )
 
 
 def test_fresh_machine_prints_warning(fake_home, warehouse_with_agent, capsys):
@@ -99,9 +101,7 @@ def test_warehouse_without_agents_dir_returns_silently(fake_home, tmp_path, caps
     assert "No agent tools detected" not in out
 
 
-def test_warehouse_with_empty_agents_dir_returns_silently(
-    fake_home, tmp_path, capsys
-):
+def test_warehouse_with_empty_agents_dir_returns_silently(fake_home, tmp_path, capsys):
     """agents/ dir present but no *.md files → no-op, no fallback warning."""
     wh = tmp_path / "warehouse"
     (wh / "agents").mkdir(parents=True)
