@@ -215,6 +215,17 @@ def commit_session(
     # Accumulators for filesystem rollback (Bug 2 fix)
     created_paths: list[Path] = []
     removed_paths_with_target: list[tuple[Path, Path]] = []
+    # Per-path pre-state snapshot for tool symlinks; reconciled on rollback.
+    # Each entry: (path, kind, prior_target) where kind is "missing"/"symlink"/"regular_file".
+    tool_snapshots: list[tuple[Path, str, Path | None]] = []
+
+    def _snapshot_path(p: Path) -> tuple[str, Path | None]:
+        """Capture pre-state of a path for rollback restoration."""
+        if p.is_symlink():
+            return ("symlink", p.readlink())
+        if p.exists():
+            return ("regular_file", None)
+        return ("missing", None)
 
     def _default_post_sync_wiring(accepted: list[AdoptCandidate]) -> None:
         has_contexts = any(c.artifact_type == "contexts" for c in accepted)
@@ -245,12 +256,17 @@ def commit_session(
             detected_tools = detect_agent_targets(project_root)
             for candidate in agent_candidates:
                 artifact_file = artifacts_path / candidate.path
+                leaf = artifact_file.name
                 if "claudecode" in detected_tools:
-                    dest = wire_agent_claudecode(project_root, artifact_file)
-                    created_paths.append(dest)
+                    cc_dest = project_root / ".claude" / "agents" / leaf
+                    kind, prior = _snapshot_path(cc_dest)
+                    tool_snapshots.append((cc_dest, kind, prior))
+                    wire_agent_claudecode(project_root, artifact_file)
                 if "opencode" in detected_tools:
-                    dest = wire_agent_opencode(project_root, artifact_file)
-                    created_paths.append(dest)
+                    oc_dest = project_root / ".opencode" / "agents" / leaf
+                    kind, prior = _snapshot_path(oc_dest)
+                    tool_snapshots.append((oc_dest, kind, prior))
+                    wire_agent_opencode(project_root, artifact_file)
 
     post_sync_wiring_fn = _post_sync_wiring_fn or _default_post_sync_wiring
 
@@ -270,6 +286,20 @@ def commit_session(
         for path, target in removed_paths_with_target:
             path.parent.mkdir(parents=True, exist_ok=True)
             path.symlink_to(target)
+        for path, kind, prior_target in tool_snapshots:
+            if kind == "missing":
+                if path.is_symlink() or path.exists():
+                    path.unlink()
+            elif kind == "symlink":
+                if path.is_symlink():
+                    if path.readlink() != prior_target:
+                        path.unlink()
+                        path.symlink_to(prior_target)
+                else:
+                    if path.exists():
+                        path.unlink()
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.symlink_to(prior_target)
 
     try:
         # 1. Update beacon.yaml — add adopts + pending accepts, remove unadopts.

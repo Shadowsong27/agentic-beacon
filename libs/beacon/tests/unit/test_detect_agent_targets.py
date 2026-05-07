@@ -40,3 +40,19 @@ def test_detect_agent_targets_only_opencode_json_does_not_count(tmp_path: Path) 
     # opencode.json alone (no .opencode/ dir) does NOT enable opencode for agent wiring
     (tmp_path / "opencode.json").write_text("{}")
     assert detect_agent_targets(tmp_path) == []
+
+
+def test_detect_agent_targets_claude_as_regular_file_does_not_count(
+    tmp_path: Path,
+) -> None:
+    """A `.claude` regular file (not a directory) must NOT enable claudecode."""
+    (tmp_path / ".claude").touch()
+    assert detect_agent_targets(tmp_path) == []
+
+
+def test_detect_agent_targets_opencode_as_regular_file_does_not_count(
+    tmp_path: Path,
+) -> None:
+    """An `.opencode` regular file (not a directory) must NOT enable opencode."""
+    (tmp_path / ".opencode").touch()
+    assert detect_agent_targets(tmp_path) == []
