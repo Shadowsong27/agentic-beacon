@@ -1,27 +1,30 @@
-"""Textual TUI for interactive artifact selection and unadoption.
+"""Textual TUI for interactive artifact adoption.
 
-Provides:
-- AdoptApp: textual TUI for interactive selection and unadoption
-- make_cb_id: generate valid Textual widget IDs from warehouse paths
+Two independent flows in one TUI:
+
+1. Pending TODO (top section, only shown when pending.yaml has entries) —
+   per-entry yes/no resolution. ``y`` = accept (adopt + remove from pending),
+   ``n`` = reject (remove from pending). Unmarked entries stay in pending.yaml.
+
+2. Warehouse browser (contexts/skills/agents sections) — diff between
+   warehouse and beacon.yaml. ``space`` toggles a checkbox; ``t`` flips
+   between unadopted-only and show-all (so adopted items can be unchecked
+   to unadopt them). ``A`` = select all, ``N`` = select none.
 """
 
 from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import TYPE_CHECKING
 
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.screen import ModalScreen
 from textual.widgets import Footer, Header, Static, Tree
 
+from beacon.core.manifest.pending import PendingEntry
 from beacon.domains.adoption.discovery import classify_artifact_type
 from beacon.domains.adoption.models import AdoptCandidate, AdoptResult
-
-if TYPE_CHECKING:
-    pass
-
 
 # ─────────────────────────────────────────────────────────────
 # Tree helpers
@@ -29,7 +32,7 @@ if TYPE_CHECKING:
 
 
 def iter_selectable_leaves(node):
-    """Yield tree nodes that have a 'selected' key in their data, recursively."""
+    """Yield warehouse-browser leaves (have a 'selected' key)."""
     if node.data is not None and "selected" in node.data:
         yield node
     else:
@@ -37,13 +40,17 @@ def iter_selectable_leaves(node):
             yield from iter_selectable_leaves(child)
 
 
-def _folder_label(name: str, all_selected: bool, any_selected: bool) -> str:
-    """Render a grouping folder label with a checkbox reflecting child selection state.
+def iter_pending_leaves(node):
+    """Yield pending-TODO leaves (have a 'pending' key)."""
+    if node.data is not None and node.data.get("pending"):
+        yield node
+    else:
+        for child in node.children:
+            yield from iter_pending_leaves(child)
 
-    - all selected  → [x] name/
-    - some selected → [-] name/
-    - none selected → [ ] name/
-    """
+
+def _folder_label(name: str, all_selected: bool, any_selected: bool) -> str:
+    """Render a grouping folder label with a checkbox reflecting child selection state."""
     if all_selected:
         checkbox = "[bold cyan]\\[x][/bold cyan]"
     elif any_selected:
@@ -54,11 +61,7 @@ def _folder_label(name: str, all_selected: bool, any_selected: bool) -> str:
 
 
 def _refresh_ancestor_folders(node) -> None:
-    """Walk up the tree from node, refreshing every pure grouping-folder ancestor.
-
-    A pure grouping folder has ``data={"folder": name}`` (no ``"selected"`` key).
-    Its label is recomputed from the selection state of all its selectable descendants.
-    """
+    """Walk up the tree from node, refreshing every grouping-folder ancestor."""
     parent = node.parent
     while parent is not None:
         data = parent.data
@@ -72,11 +75,7 @@ def _refresh_ancestor_folders(node) -> None:
 
 
 def _refresh_all_folders(node) -> None:
-    """Recursively refresh every grouping-folder label in a subtree (bottom-up).
-
-    Used after bulk select-all / select-none operations where every folder
-    needs to be updated at once.
-    """
+    """Recursively refresh every grouping-folder label in a subtree."""
     for child in node.children:
         _refresh_all_folders(child)
     data = node.data
@@ -130,7 +129,6 @@ Screen {
 _DOCS_BASE = "https://github.com/Shadowsong27/agentic-beacon/blob/main/docs"
 
 _SECTION_META: dict[str, tuple[str, str]] = {
-    # type → (one-line description, docs path relative to _DOCS_BASE)
     "contexts": (
         "Project-scoped AI context files injected into every agent session",
         "artifact-type-matrix.md",
@@ -151,29 +149,34 @@ _ARTIFACT_ICONS: dict[str, str] = {
     "agents": "🤖",
 }
 
-# Three-way action visual marks
-_ACTION_MARKS: dict[str, str] = {
-    "accept": "[bold green]\\[A][/bold green]",
-    "reject": "[bold red]\\[R][/bold red]",
-    "defer": "[dim]\\[D][/dim]",
+_PENDING_TYPE_TO_ARTIFACT_TYPE: dict[str, str] = {
+    "skill": "skills",
+    "context": "contexts",
+    "agent": "agents",
+}
+
+# Pending action visual marks
+_PENDING_MARKS: dict[str | None, str] = {
+    "accept": "[bold green]\\[Y][/bold green]",
+    "reject": "[bold red]\\[N][/bold red]",
+    None: "[dim]\\[ ][/dim]",
 }
 
 
-class _ConfirmScreen(ModalScreen):
-    """Modal confirm screen showing N accepted / N rejected / N deferred."""
+# ─────────────────────────────────────────────────────────────
+# Confirm modal
+# ─────────────────────────────────────────────────────────────
 
-    BINDINGS = [
-        Binding("enter", "confirm", "Proceed", priority=True),
-        Binding("escape", "cancel", "Cancel", priority=True),
-        Binding("q", "cancel", "Cancel"),
-    ]
+
+class _ConfirmScreen(ModalScreen):
+    """Modal confirm screen showing the impact summary before commit."""
 
     CSS = """
     _ConfirmScreen {
         align: center middle;
     }
     #confirm-panel {
-        width: 60;
+        width: 70;
         height: auto;
         padding: 2 4;
         background: $surface;
@@ -181,27 +184,50 @@ class _ConfirmScreen(ModalScreen):
     }
     """
 
-    def __init__(self, n_accept: int, n_reject: int, n_defer: int) -> None:
+    def __init__(
+        self,
+        *,
+        n_adopt: int,
+        n_unadopt: int,
+        n_pending_accept: int,
+        n_pending_reject: int,
+        n_pending_defer: int,
+    ) -> None:
         super().__init__()
-        self._n_accept = n_accept
-        self._n_reject = n_reject
-        self._n_defer = n_defer
+        self._n_adopt = n_adopt
+        self._n_unadopt = n_unadopt
+        self._n_pending_accept = n_pending_accept
+        self._n_pending_reject = n_pending_reject
+        self._n_pending_defer = n_pending_defer
 
     def compose(self) -> ComposeResult:
-        yield Static(
-            f"[bold]Apply pending session?[/bold]\n\n"
-            f"  [bold green]{self._n_accept}[/bold green] accept  "
-            f"[bold red]{self._n_reject}[/bold red] reject  "
-            f"[dim]{self._n_defer}[/dim] defer\n\n"
-            f"[dim]Enter[/dim] to proceed  [dim]Escape[/dim] to cancel",
-            id="confirm-panel",
-        )
+        lines = ["[bold]Apply changes?[/bold]", ""]
+        if self._n_adopt or self._n_unadopt:
+            lines.append(
+                f"  Warehouse: [bold green]{self._n_adopt}[/bold green] adopt  "
+                f"[bold yellow]{self._n_unadopt}[/bold yellow] unadopt"
+            )
+        if self._n_pending_accept or self._n_pending_reject or self._n_pending_defer:
+            lines.append(
+                f"  Pending:   [bold green]{self._n_pending_accept}[/bold green] accept  "
+                f"[bold red]{self._n_pending_reject}[/bold red] reject  "
+                f"[dim]{self._n_pending_defer}[/dim] defer"
+            )
+        lines.extend(["", "[dim]Enter[/dim] to proceed  [dim]Escape[/dim] to cancel"])
+        yield Static("\n".join(lines), id="confirm-panel")
 
-    def action_confirm(self) -> None:
-        self.dismiss(True)
+    def on_key(self, event) -> None:
+        if event.key == "enter":
+            event.stop()
+            self.dismiss(True)
+        elif event.key in ("escape", "q"):
+            event.stop()
+            self.dismiss(False)
 
-    def action_cancel(self) -> None:
-        self.dismiss(False)
+
+# ─────────────────────────────────────────────────────────────
+# Helpers
+# ─────────────────────────────────────────────────────────────
 
 
 def make_cb_id(path: str) -> str:
@@ -235,31 +261,39 @@ def _leaf_label(
     commits_ago: int | None = None,
     adopted_tag: bool = False,
     provenance: str = "",
-    action: str | None = None,
-    source: str | None = None,
 ) -> str:
-    if action is not None:
-        mark = _ACTION_MARKS.get(action, "[dim]\\[ ][/dim]")
-    elif selected:
-        mark = "[bold cyan]\\[x][/bold cyan]"
-    else:
-        mark = "[dim]\\[ ][/dim]"
+    """Render a warehouse-browser leaf label."""
+    mark = "[bold cyan]\\[x][/bold cyan]" if selected else "[dim]\\[ ][/dim]"
     label = f"{mark} [cyan]{path}[/cyan]"
-    if source:
-        label += f" [dim](via {source})[/dim]"
     if provenance:
         label += f" [dim yellow]{provenance}[/dim yellow]"
+    if adopted_tag:
+        label += " [dim](adopted)[/dim]"
     if commits_ago is not None:
         plural = "s" if commits_ago != 1 else ""
         label += f" [dim yellow]\\[added {commits_ago} commit{plural} ago][/dim yellow]"
     return label
 
 
-class AdoptInnerApp(App[AdoptResult]):
-    """Inner Textual App for the adoption TUI.
+def _pending_leaf_label(
+    path: str,
+    action: str | None,
+    entry: PendingEntry,
+) -> str:
+    """Render a pending-TODO leaf label with action mark and source annotation."""
+    mark = _PENDING_MARKS.get(action, _PENDING_MARKS[None])
+    label = f"{mark} [cyan]{path}[/cyan]"
+    label += f" [dim]({entry.type} via {entry.source})[/dim]"
+    return label
 
-    Extracted from AdoptApp for testability.
-    """
+
+# ─────────────────────────────────────────────────────────────
+# Inner app
+# ─────────────────────────────────────────────────────────────
+
+
+class AdoptInnerApp(App[AdoptResult]):
+    """Inner Textual App for the adoption TUI."""
 
     CSS = _ADOPT_CSS
     TITLE = "Agentic Beacon"
@@ -269,13 +303,10 @@ class AdoptInnerApp(App[AdoptResult]):
         Binding("escape", "cancel", "Cancel", priority=True),
         Binding("q", "cancel", "Quit"),
         Binding("space", "toggle_selection", "Toggle", priority=True),
-        # Three-way mark bindings
-        Binding("a", "mark_accept", "Accept"),
-        Binding("r", "mark_reject", "Reject"),
-        Binding("d", "mark_defer", "Defer"),
-        # Bulk selection (shifted)
+        Binding("y", "pending_accept", "Yes"),
+        Binding("n", "pending_reject", "No"),
         Binding("A", "select_all", "All"),
-        Binding("n", "select_none", "None"),
+        Binding("N", "select_none", "None"),
         Binding("t", "toggle_view", "Show All"),
         Binding("o", "open_docs", "Open Docs"),
     ]
@@ -283,6 +314,7 @@ class AdoptInnerApp(App[AdoptResult]):
     def __init__(
         self,
         candidates: list[AdoptCandidate],
+        pending_entries: list[PendingEntry],
         adopted_paths: list[str],
         project_name: str = "",
         warehouse_name: str = "",
@@ -291,18 +323,20 @@ class AdoptInnerApp(App[AdoptResult]):
     ) -> None:
         super().__init__()
         self._candidates = candidates
+        self._pending_entries = pending_entries
+        self._pending_map = {e.path: e for e in pending_entries}
         self._adopted_paths = adopted_paths
         self._project_name = project_name
         self._warehouse_name = warehouse_name
         self._warehouse_path = warehouse_path
         self._show_all = show_all_default
         self._current_docs_url: str = ""
-        # Project-scoped-agents state
+        # Project-scoped-agents propagation state
         self._required_by: dict[str, list[str]] = {}
         self._user_explicit: dict[str, bool] = {}
         self._status_message: str = ""
-        # Three-way pending-workflow session state (path → "accept"|"reject"|"defer")
-        self._session_actions: dict[str, str] = {}
+        # Pending TODO action map: path → "accept" | "reject"
+        self._pending_actions: dict[str, str] = {}
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
@@ -320,8 +354,10 @@ class AdoptInnerApp(App[AdoptResult]):
             parts.append(f"[dim]warehouse:[/dim] [bold]{self._warehouse_name}[/bold]")
         unadopted_n = len(self._candidates)
         adopted_n = len(self._adopted_paths)
+        pending_n = len(self._pending_entries)
         parts.append(
             f"[dim]{unadopted_n} unadopted[/dim]  [dim]{adopted_n} adopted[/dim]"
+            + (f"  [dim]{pending_n} pending[/dim]" if pending_n else "")
         )
         self.query_one("#meta-panel", Static).update("  " + "   │   ".join(parts))
         self._rebuild_tree()
@@ -350,19 +386,42 @@ class AdoptInnerApp(App[AdoptResult]):
         tree.show_root = False
         tree.root.expand()
 
-        # Tuples: (path, desc, selected, commits_ago, orig_adopted, source)
-        by_type: dict[str, list[tuple]] = {}
+        # ── Pending TODO list (flat at top, only if non-empty) ──
+        # Rendered as a flat list of selectable items at root level — no parent
+        # folder — so it reads as an inbox, not a tree branch.
+        if self._pending_entries:
+            tree.root.add_leaf(
+                "[bold white]📥 PENDING TODO[/bold white]"
+                "  [dim](y=yes  n=no  default=defer)[/dim]",
+                data={"header": True},
+            )
+            for entry in self._pending_entries:
+                action = self._pending_actions.get(entry.path)
+                tree.root.add_leaf(
+                    _pending_leaf_label(entry.path, action, entry),
+                    data={
+                        "pending": True,
+                        "path": entry.path,
+                        "pending_type": entry.type,
+                        "pending_action": action,
+                        "desc": "",
+                    },
+                )
+            # Visual separator between pending list and warehouse tree.
+            tree.root.add_leaf(
+                "[dim]─────────────────────────────[/dim]",
+                data={"header": True},
+            )
 
-        if not self._show_all:
-            for c in self._candidates:
-                by_type.setdefault(c.artifact_type, []).append(
-                    (c.path, c.description, False, c.commits_ago, False, c.source)
-                )
-        else:
-            for c in self._candidates:
-                by_type.setdefault(c.artifact_type, []).append(
-                    (c.path, c.description, False, c.commits_ago, False, c.source)
-                )
+        # ── Warehouse browser sections ──
+        # by_type tuples: (path, desc, selected, commits_ago, orig_adopted)
+        by_type: dict[str, list[tuple]] = {}
+        for c in self._candidates:
+            by_type.setdefault(c.artifact_type, []).append(
+                (c.path, c.description, False, c.commits_ago, False)
+            )
+
+        if self._show_all:
             unadopted_paths = {c.path for c in self._candidates}
             for path in self._adopted_paths:
                 if path in unadopted_paths:
@@ -370,7 +429,7 @@ class AdoptInnerApp(App[AdoptResult]):
                 atype = classify_artifact_type(path)
                 if atype is None:
                     atype = path.split("/")[0] if "/" in path else "contexts"
-                by_type.setdefault(atype, []).append((path, "", True, None, True, None))
+                by_type.setdefault(atype, []).append((path, "", True, None, True))
 
         for atype in ["contexts", "skills", "agents"]:
             type_items = by_type.get(atype, [])
@@ -392,19 +451,11 @@ class AdoptInnerApp(App[AdoptResult]):
                 expand=True,
                 data={"docs_url": docs_url, "section": atype},
             )
-            for (
-                path,
-                desc,
-                selected,
-                commits_ago_val,
-                orig_adopted,
-                source,
-            ) in type_items:
+            for path, desc, selected, commits_ago_val, orig_adopted in type_items:
                 prov = ""
                 if atype == "skills":
                     req_list = self._required_by.get(path, [])
                     prov = _format_provenance(req_list)
-                action = self._session_actions.get(path) if not orig_adopted else None
                 folder.add_leaf(
                     _leaf_label(
                         path,
@@ -412,8 +463,6 @@ class AdoptInnerApp(App[AdoptResult]):
                         commits_ago_val,
                         orig_adopted and self._show_all,
                         provenance=prov,
-                        action=action,
-                        source=source,
                     ),
                     data={
                         "path": path,
@@ -422,10 +471,10 @@ class AdoptInnerApp(App[AdoptResult]):
                         "originally_adopted": orig_adopted,
                         "commits_ago": commits_ago_val,
                         "artifact_type": atype,
-                        "source": source,
                     },
                 )
 
+    # ── Description panel ──
     def on_tree_node_highlighted(self, event) -> None:
         data = event.node.data
         panel = self.query_one("#desc-panel", Static)
@@ -435,6 +484,15 @@ class AdoptInnerApp(App[AdoptResult]):
                 f"[dim]docs:[/dim]  {data['docs_url']}  "
                 "[dim]([bold]o[/bold] to open in browser)[/dim]"
             )
+        elif data and data.get("pending"):
+            self._current_docs_url = ""
+            entry = self._pending_map.get(data["path"])
+            if entry is not None:
+                panel.update(
+                    f"[dim]pending:[/dim]  {entry.path}  "
+                    f"[dim]({entry.type} via {entry.source})[/dim]   "
+                    "[dim][bold]y[/bold] yes  [bold]n[/bold] no[/dim]"
+                )
         elif data and data.get("desc"):
             self._current_docs_url = ""
             panel.update(f"[dim]desc:[/dim]  {data['desc']}")
@@ -446,13 +504,16 @@ class AdoptInnerApp(App[AdoptResult]):
             else:
                 mode = "all" if self._show_all else "unadopted"
                 panel.update(
-                    f"[dim]showing {mode} — "
-                    "[dim]space[/dim] toggle  [dim]enter[/dim] confirm  "
-                    "[dim]a[/dim] all  [dim]n[/dim] none  [dim]t[/dim] toggle view"
+                    f"[dim]warehouse: showing {mode} — "
+                    "[bold]space[/bold] toggle  "
+                    "[bold]A[/bold] all  [bold]N[/bold] none  "
+                    "[bold]t[/bold] view[/dim]   "
+                    "[dim]pending: [bold]y[/bold] yes  [bold]n[/bold] no[/dim]"
                 )
 
+    # ── Warehouse browser interactions ──
     def _set_skill_selected(self, skill_path: str, selected: bool) -> None:
-        """Update a skill leaf's selected state by path."""
+        """Update a warehouse skill leaf's selected state by path."""
         tree = self.query_one("#tree", Tree)
         for section_node in tree.root.children:
             for leaf in iter_selectable_leaves(section_node):
@@ -473,11 +534,14 @@ class AdoptInnerApp(App[AdoptResult]):
                     _refresh_ancestor_folders(leaf)
                     break
 
-    def _toggle_node_selection(self, node) -> None:
-        if node is None:
-            return
+    def _toggle_warehouse_node(self, node) -> None:
+        """Toggle the warehouse-browser leaf at *node* (or its folder)."""
         data = node.data
-        if data is not None and "selected" in data:
+        if data is None:
+            node.toggle()
+            return
+
+        if "selected" in data:
             atype = data.get("artifact_type", "")
             path = data["path"]
 
@@ -496,12 +560,9 @@ class AdoptInnerApp(App[AdoptResult]):
             new_state = not data["selected"]
             data["selected"] = new_state
 
-            # Track user_explicit for skills
-            if atype == "skills":
-                if new_state:
-                    self._user_explicit[path] = True
+            if atype == "skills" and new_state:
+                self._user_explicit[path] = True
 
-            # Agent tick propagation
             if atype == "agents" and new_state:
                 skills = self._load_agent_skills(path)
                 for skill_name in skills:
@@ -511,7 +572,6 @@ class AdoptInnerApp(App[AdoptResult]):
                         self._required_by[skill_path].append(path)
                     self._set_skill_selected(skill_path, True)
             elif atype == "agents" and not new_state:
-                # Agent untick: remove from required_by
                 skills = self._load_agent_skills(path)
                 for skill_name in skills:
                     skill_path = f"skills/{skill_name}/"
@@ -526,8 +586,8 @@ class AdoptInnerApp(App[AdoptResult]):
 
             node.set_label(
                 _leaf_label(
-                    data.get("display_name") or data["path"],
-                    data["selected"],
+                    data["path"],
+                    new_state,
                     data.get("commits_ago"),
                     data.get("originally_adopted", False) and self._show_all,
                     provenance=_format_provenance(self._required_by.get(path, []))
@@ -536,120 +596,169 @@ class AdoptInnerApp(App[AdoptResult]):
                 )
             )
             _refresh_ancestor_folders(node)
-        elif data is not None and "folder" in data:
+        elif "folder" in data:
             leaves = list(iter_selectable_leaves(node))
             new_state = not all(lf.data.get("selected", False) for lf in leaves)
             for lf in leaves:
                 lf.data["selected"] = new_state
                 lf.set_label(
                     _leaf_label(
-                        lf.data.get("display_name") or lf.data["path"],
+                        lf.data["path"],
                         new_state,
                         lf.data.get("commits_ago"),
                         lf.data.get("originally_adopted", False) and self._show_all,
                     )
                 )
-            any_sel = new_state
-            all_sel = new_state
-            node.set_label(_folder_label(data["folder"], all_sel, any_sel))
+            node.set_label(_folder_label(data["folder"], new_state, new_state))
             _refresh_ancestor_folders(node)
         else:
             node.toggle()
 
+    # ── Pending TODO interactions ──
+    def _set_pending_action(self, node, action: str | None) -> None:
+        """Mark a pending-TODO leaf with action 'accept', 'reject', or None (defer)."""
+        if node is None or node.data is None or not node.data.get("pending"):
+            return
+        path = node.data["path"]
+        if action is None:
+            self._pending_actions.pop(path, None)
+        else:
+            self._pending_actions[path] = action
+        node.data["pending_action"] = action
+        entry = self._pending_map[path]
+        node.set_label(_pending_leaf_label(path, action, entry))
+
+    def action_pending_accept(self) -> None:
+        tree = self.query_one("#tree", Tree)
+        node = tree.cursor_node
+        if node is None or node.data is None or not node.data.get("pending"):
+            return
+        # Toggle: pressing y on an already-accepted entry clears it (defers).
+        current = self._pending_actions.get(node.data["path"])
+        self._set_pending_action(node, None if current == "accept" else "accept")
+
+    def action_pending_reject(self) -> None:
+        tree = self.query_one("#tree", Tree)
+        node = tree.cursor_node
+        if node is None or node.data is None or not node.data.get("pending"):
+            return
+        current = self._pending_actions.get(node.data["path"])
+        self._set_pending_action(node, None if current == "reject" else "reject")
+
     def action_toggle_selection(self) -> None:
         tree = self.query_one("#tree", Tree)
-        self._toggle_node_selection(tree.cursor_node)
+        node = tree.cursor_node
+        if node is None:
+            return
+        # On a pending leaf, space cycles accept ↔ defer (mirrors warehouse UX).
+        if node.data is not None and node.data.get("pending"):
+            current = self._pending_actions.get(node.data["path"])
+            self._set_pending_action(node, None if current == "accept" else "accept")
+            return
+        self._toggle_warehouse_node(node)
 
-    def action_mark_accept(self) -> None:
-        tree = self.query_one("#tree", Tree)
-        self._mark_action(tree.cursor_node, "accept")
+    def on_tree_node_selected(self, event) -> None:
+        node = event.node
+        if node.data is not None and node.data.get("pending"):
+            current = self._pending_actions.get(node.data["path"])
+            self._set_pending_action(node, None if current == "accept" else "accept")
+            return
+        self._toggle_warehouse_node(node)
 
-    def action_mark_reject(self) -> None:
-        tree = self.query_one("#tree", Tree)
-        self._mark_action(tree.cursor_node, "reject")
-
-    def action_mark_defer(self) -> None:
-        tree = self.query_one("#tree", Tree)
-        self._mark_action(tree.cursor_node, "defer")
-
+    # ── Apply / cancel ──
     def action_apply(self) -> None:
-        """Show confirm screen summarising N accepted / N rejected / N deferred."""
-        n_accept = sum(1 for a in self._session_actions.values() if a == "accept")
-        n_reject = sum(1 for a in self._session_actions.values() if a == "reject")
-        n_defer = len(self._candidates) - n_accept - n_reject
+        if len(self.screen_stack) > 1:
+            # Confirm modal already open — Enter dismisses it.
+            self.screen.dismiss(True)
+            return
+
+        tree = self.query_one("#tree", Tree)
+
+        n_adopt = 0
+        n_unadopt = 0
+        for section_node in tree.root.children:
+            for leaf in iter_selectable_leaves(section_node):
+                selected = leaf.data.get("selected", False)
+                orig_adopted = leaf.data.get("originally_adopted", False)
+                if not orig_adopted and selected:
+                    n_adopt += 1
+                elif orig_adopted and not selected:
+                    n_unadopt += 1
+
+        n_pending_accept = sum(
+            1 for a in self._pending_actions.values() if a == "accept"
+        )
+        n_pending_reject = sum(
+            1 for a in self._pending_actions.values() if a == "reject"
+        )
+        n_pending_defer = (
+            len(self._pending_entries) - n_pending_accept - n_pending_reject
+        )
+
+        if (
+            n_adopt == 0
+            and n_unadopt == 0
+            and n_pending_accept == 0
+            and n_pending_reject == 0
+        ):
+            # Nothing to apply — exit with empty result.
+            self.exit(AdoptResult())
+            return
 
         def _on_confirm(proceed: bool | None) -> None:
             if proceed:
-                self.action_confirm()
+                self._finalize()
 
-        self.push_screen(_ConfirmScreen(n_accept, n_reject, n_defer), _on_confirm)
-
-    def on_tree_node_selected(self, event) -> None:
-        self._toggle_node_selection(event.node)
-
-    def _mark_action(self, node, action: str) -> None:
-        """Set the three-way action for a leaf node and update its visual mark."""
-        if node is None or node.data is None or "path" not in node.data:
-            return
-        path = node.data["path"]
-        self._session_actions[path] = action
-        node.data["selected"] = action == "accept"
-        source = node.data.get("source")
-        atype = node.data.get("artifact_type", "")
-        node.set_label(
-            _leaf_label(
-                node.data.get("display_name") or path,
-                node.data["selected"],
-                node.data.get("commits_ago"),
-                node.data.get("originally_adopted", False) and self._show_all,
-                provenance=_format_provenance(self._required_by.get(path, []))
-                if atype == "skills"
-                else "",
-                action=action,
-                source=source,
-            )
+        self.push_screen(
+            _ConfirmScreen(
+                n_adopt=n_adopt,
+                n_unadopt=n_unadopt,
+                n_pending_accept=n_pending_accept,
+                n_pending_reject=n_pending_reject,
+                n_pending_defer=n_pending_defer,
+            ),
+            _on_confirm,
         )
-        _refresh_ancestor_folders(node)
 
-    def action_confirm(self) -> None:
+    def _finalize(self) -> None:
+        """Build the AdoptResult and exit."""
         tree = self.query_one("#tree", Tree)
         to_adopt: list[str] = []
         to_unadopt: list[str] = []
-        to_reject: list[str] = []
-        to_defer: list[str] = []
         for section_node in tree.root.children:
             for leaf in iter_selectable_leaves(section_node):
                 path = leaf.data["path"]
                 selected = leaf.data.get("selected", False)
                 orig_adopted = leaf.data.get("originally_adopted", False)
-                if orig_adopted and not selected:
+                if not orig_adopted and selected:
+                    to_adopt.append(path)
+                elif orig_adopted and not selected:
                     to_unadopt.append(path)
-                elif not orig_adopted:
-                    session_action = self._session_actions.get(path, "defer")
-                    if session_action == "accept":
-                        to_adopt.append(path)
-                    elif session_action == "reject":
-                        to_reject.append(path)
-                    else:
-                        to_defer.append(path)
+
+        pending_accept = [p for p, a in self._pending_actions.items() if a == "accept"]
+        pending_reject = [p for p, a in self._pending_actions.items() if a == "reject"]
+
         self.exit(
             AdoptResult(
                 to_adopt=to_adopt,
                 to_unadopt=to_unadopt,
-                to_reject=to_reject,
-                to_defer=to_defer,
+                pending_accept=pending_accept,
+                pending_reject=pending_reject,
             )
         )
 
     def action_cancel(self) -> None:
         self.exit(AdoptResult())
 
+    # ── Bulk / view actions ──
     def action_toggle_view(self) -> None:
         self._show_all = not self._show_all
         self._rebuild_tree()
         panel = self.query_one("#desc-panel", Static)
         mode = "all artifacts" if self._show_all else "unadopted artifacts"
-        panel.update(f"[dim]showing {mode} — press [bold]t[/bold] to toggle view[/dim]")
+        panel.update(
+            f"[dim]warehouse: showing {mode} — press [bold]t[/bold] to toggle[/dim]"
+        )
 
     def action_open_docs(self) -> None:
         if self._current_docs_url:
@@ -666,7 +775,7 @@ class AdoptInnerApp(App[AdoptResult]):
                     self._user_explicit[path] = True
                 leaf.set_label(
                     _leaf_label(
-                        leaf.data.get("display_name") or leaf.data["path"],
+                        leaf.data["path"],
                         True,
                         leaf.data.get("commits_ago"),
                         leaf.data.get("originally_adopted", False) and self._show_all,
@@ -681,7 +790,7 @@ class AdoptInnerApp(App[AdoptResult]):
                 leaf.data["selected"] = False
                 leaf.set_label(
                     _leaf_label(
-                        leaf.data.get("display_name") or leaf.data["path"],
+                        leaf.data["path"],
                         False,
                         leaf.data.get("commits_ago"),
                         leaf.data.get("originally_adopted", False) and self._show_all,
@@ -692,28 +801,31 @@ class AdoptInnerApp(App[AdoptResult]):
         self._user_explicit.clear()
 
 
-class AdoptApp:
-    """Textual TUI for interactive artifact selection and unadoption.
+# ─────────────────────────────────────────────────────────────
+# Public wrapper
+# ─────────────────────────────────────────────────────────────
 
-    Default view shows all unadopted artifacts. Press ``t`` to toggle to
-    "show all" mode where adopted artifacts are pre-checked and can be
-    unchecked to unadopt them.
+
+class AdoptApp:
+    """Textual TUI for interactive artifact adoption (warehouse browser + pending TODO).
 
     Usage::
 
-        app = AdoptApp(candidates, adopted_paths, project_name="my-project", warehouse_name="my-warehouse")
+        app = AdoptApp(candidates, pending_entries, adopted_paths, ...)
         result = app.run()  # blocks; returns AdoptResult
     """
 
     def __init__(
         self,
         candidates: list[AdoptCandidate],
+        pending_entries: list[PendingEntry],
         adopted_paths: list[str],
         project_name: str = "",
         warehouse_name: str = "",
         warehouse_path: Path | None = None,
     ) -> None:
         self.candidates = candidates
+        self.pending_entries = pending_entries
         self.adopted_paths = adopted_paths
         self.project_name = project_name
         self.warehouse_name = warehouse_name
@@ -723,6 +835,7 @@ class AdoptApp:
         """Launch TUI and return AdoptResult (empty lists on cancel)."""
         inner = AdoptInnerApp(
             self.candidates,
+            self.pending_entries,
             self.adopted_paths,
             self.project_name,
             self.warehouse_name,

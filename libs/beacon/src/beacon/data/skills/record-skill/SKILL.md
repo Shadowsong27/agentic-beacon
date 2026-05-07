@@ -11,9 +11,15 @@ requires:
 
 ## Purpose
 
-Create properly structured Beacon skills in the connected warehouse. Generates a skill
-directory at `<warehouse>/skills/<name>/` with `SKILL.md` and an optional PEP 723
-script, then queues it in `.agentic-beacon/pending.yaml` for adoption via `abc adopt`.
+Create properly structured Beacon skills in the connected warehouse. The bundled
+`write_skill.py` script generates a skill directory at
+`<warehouse>/skills/<name>/` with `SKILL.md` and an optional PEP 723 script,
+then `append_pending.py` queues it for adoption via `abc adopt`.
+
+> **Important:** Do NOT write the skill files using your editor tools directly.
+> Always go through `write_skill.py`. The script enforces that the directory
+> lands inside the warehouse and refuses to write into the project's symlink
+> mirror at `.agentic-beacon/artifacts/skills/`.
 
 ## When to Use
 
@@ -70,8 +76,9 @@ If the command exits non-zero, surface the stderr output to the user and stop.
 
 ### Step 3: Suggest `requires.contexts` from Warehouse Scan
 
-Read all context files under `$WAREHOUSE_ROOT/contexts/*.md` (if any exist). Based on
-the skill's name and description, identify which context files are relevant.
+Read all context files under `$WAREHOUSE_ROOT/contexts/*.md` (if any exist).
+Based on the skill's name and description, identify which context files are
+relevant.
 
 Present the suggestion to the user:
 
@@ -90,79 +97,51 @@ Options:
   3. Skip (use empty list)
 ```
 
-If no warehouse contexts exist or none are relevant, inform the user and use an empty
-list without prompting further.
+If no warehouse contexts exist or none are relevant, inform the user and use an
+empty list without prompting further.
 
-### Step 4: Write Skill to Warehouse
+### Step 4: Scaffold the Skill via `write_skill.py`
 
-Create the skill directory and files at `$WAREHOUSE_ROOT/skills/<name>/`.
+Invoke the writer to generate the skill directory in the warehouse. **This is
+the only way the SKILL.md and (optional) script are created.** Do not use your
+editor's write tool.
 
-**`$WAREHOUSE_ROOT/skills/<name>/SKILL.md`:**
-
-```
----
-name: <name>
-description: <description>
-license: MIT
-compatibility: opencode
-requires:
-  contexts: [<accepted-list-or-empty>]
----
-
-# SKILL: <Title>
-
-## Purpose
-
-<description>
-
-## When to Use
-
-<!-- Describe the specific situations where this skill applies -->
-
-## Invocation
-
-/<name>
-
-## Process
-
-<!-- Step-by-step workflow -->
-
-## Examples
-
-<!-- Concrete usage examples -->
-
-## Checklist
-
-- [ ] Skill files are complete and tested
-- [ ] Documentation is accurate and up-to-date
-- [ ] Skill has been validated in a real project
+```bash
+WRITTEN_DIR=$(uv run ${SKILL_DIR}/scripts/write_skill.py \
+  --name <kebab-name> \
+  --description "<one-line description>" \
+  [--invocation "/<name>"] \
+  [--include-script] \
+  [--requires-context contexts/<file>.md ...] \
+)
 ```
 
-If the user requested a Python script, also create:
+The script:
+- Resolves the warehouse from `.agentic-beacon/config.toml`.
+- Refuses to write outside `<warehouse>/skills/`.
+- Refuses to overwrite an existing skill directory unless `--overwrite` is passed.
+- Creates `SKILL.md` (with `## Purpose`, `## When to Use`, `## Invocation`,
+  `## Process`, `## Examples`, `## Checklist` placeholders) using the requested
+  frontmatter.
+- If `--include-script` is set, also creates `scripts/<name>.py` as a PEP 723
+  scaffold.
+- Prints the warehouse-relative skill directory on stdout (e.g.
+  `skills/deploy-check/`).
 
-**`$WAREHOUSE_ROOT/skills/<name>/scripts/<name>.py`:**
+If the script exits non-zero, surface the stderr to the user and stop.
 
-```python
-# /// script
-# requires-python = ">=3.11"
-# dependencies = []
-# ///
-"""<description>"""
+### Step 5: Optionally Fill in Body Sections
 
-import sys
+The scaffolded `SKILL.md` has `<!-- ... -->` placeholders for the
+`When to Use`, `Process`, and `Examples` sections. If the user gave you enough
+context to draft these, edit `$WAREHOUSE_ROOT/skills/<name>/SKILL.md` directly
+to replace the placeholders. This is a normal in-place edit on a fully-qualified
+warehouse path; your editor's edit tool is fine here.
 
+If the user prefers to fill the body themselves, leave the placeholders as-is
+and surface that in the completion message.
 
-def main() -> None:
-    """Main entry point for <name>."""
-    print(f"Running <name>...")
-    # TODO: Implement your skill logic here
-
-
-if __name__ == "__main__":
-    main()
-```
-
-### Step 5: Append to pending.yaml
+### Step 6: Append to pending.yaml
 
 ```bash
 uv run ${SKILL_DIR}/scripts/append_pending.py \
@@ -172,19 +151,20 @@ uv run ${SKILL_DIR}/scripts/append_pending.py \
   --source record-skill
 ```
 
-### Step 6: Confirm Completion
+### Step 7: Confirm Completion
 
 ```
 ✅ Skill scaffolded successfully!
 
-Name:             <name>
-Warehouse path:   $WAREHOUSE_ROOT/skills/<name>/
-Script:           [created | not included]
+Name:              <name>
+Warehouse path:    $WAREHOUSE_ROOT/<written-dir>
+Script:            [created | not included]
 requires.contexts: [list or empty]
-Pending entry:    added to .agentic-beacon/pending.yaml
+Pending entry:     added to .agentic-beacon/pending.yaml
 
 Next steps:
   1. Edit $WAREHOUSE_ROOT/skills/<name>/SKILL.md to fill in Process and Examples
+     (if you didn't draft them in Step 5)
   2. Run 'abc adopt' to wire this skill into your project
 ```
 
@@ -200,12 +180,13 @@ Next steps:
 ```
 
 **Agent:**
-1. Asks: name=`deploy-check`, description="Validate deployment readiness", invocation=`/deploy-check`, no script
-2. Resolves warehouse path via `resolve_warehouse.py`
-3. Scans contexts — no relevant matches → user skips
-4. Writes `$WAREHOUSE_ROOT/skills/deploy-check/SKILL.md`
-5. Runs `append_pending.py` with `type: skill action: created source: record-skill`
-6. Reports: "✅ Skill scaffolded! Run `abc adopt` to wire it."
+1. Asks: name=`deploy-check`, description="Validate deployment readiness", invocation=`/deploy-check`, no script.
+2. Runs `resolve_warehouse.py`.
+3. Scans contexts — no relevant matches → user skips.
+4. Calls `write_skill.py --name deploy-check --description "Validate deployment readiness"` → script writes `skills/deploy-check/SKILL.md` to the warehouse.
+5. User chose to fill the body themselves → leave placeholders.
+6. Runs `append_pending.py --path skills/deploy-check/ --type skill --action created --source record-skill`.
+7. Reports: "✅ Skill scaffolded! Run `abc adopt` to wire it."
 
 ### Example 2: Skill with Script and Context Suggestion
 
@@ -215,12 +196,12 @@ Next steps:
 ```
 
 **Agent:**
-1. Infers: name=`validate-types`, description="Validate Python type annotations", invocation=`/validate-types`, yes script
-2. Resolves warehouse path
-3. Scans contexts → suggests `contexts/python-standards.md` → user accepts
-4. Writes `$WAREHOUSE_ROOT/skills/validate-types/SKILL.md` with `requires.contexts: [contexts/python-standards.md]`
-5. Writes `$WAREHOUSE_ROOT/skills/validate-types/scripts/validate-types.py` (PEP 723 scaffold)
-6. Runs `append_pending.py`
+1. Infers: name=`validate-types`, description="Validate Python type annotations", invocation=`/validate-types`, yes script.
+2. Runs `resolve_warehouse.py`.
+3. Scans contexts → suggests `contexts/python-standards.md` → user accepts.
+4. Calls `write_skill.py --name validate-types --description "Validate Python type annotations" --include-script --requires-context contexts/python-standards.md` → script writes `skills/validate-types/SKILL.md` and `skills/validate-types/scripts/validate-types.py`.
+5. Drafts a brief Process section based on the user's description and edits `SKILL.md` directly in the warehouse.
+6. Runs `append_pending.py`.
 7. Reports: "✅ Skill scaffolded! Run `abc adopt` to wire it."
 
 ---
@@ -230,8 +211,8 @@ Next steps:
 - [ ] Gather skill name, description, invocation, include-script preference
 - [ ] Run `resolve_warehouse.py` — STOP if it exits non-zero
 - [ ] Scan warehouse contexts and propose `requires.contexts` (accept / edit / skip)
-- [ ] Write `SKILL.md` to `$WAREHOUSE_ROOT/skills/<name>/` (warehouse, not the project)
-- [ ] Write PEP 723 script scaffold if requested
+- [ ] Call `write_skill.py` with the appropriate flags — do NOT write `SKILL.md` or the script with your editor's write tool
+- [ ] Optionally fill `When to Use`, `Process`, `Examples` placeholders by editing the warehouse `SKILL.md` in place
 - [ ] Run `append_pending.py` with `type: skill action: created source: record-skill`
 - [ ] Confirm completion and remind user to run `abc adopt`
 
@@ -266,5 +247,5 @@ PEP 723 lets Python scripts declare their own dependencies without a `pyproject.
 
 ---
 
-**Skill Version:** 2.0.0
-**Last Updated:** 2026-05-06
+**Skill Version:** 2.1.0
+**Last Updated:** 2026-05-07

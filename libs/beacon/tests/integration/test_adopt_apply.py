@@ -1,9 +1,4 @@
-"""Integration tests for commit_pending_session + rollback.
-
-Covers tasks 6.5 and 6.6:
-- test_happy_path: 2 accept / 1 reject / 1 defer → all 4 invariants hold
-- test_rollback_on_symlink_failure: injected failure → files restored
-"""
+"""Integration tests for commit_session() — happy path + rollback."""
 
 from __future__ import annotations
 
@@ -14,8 +9,7 @@ from pathlib import Path
 import pytest
 import yaml
 from beacon.core.manifest.pending import PendingEntry, PendingManifest
-from beacon.domains.adoption.apply import CommitError, commit_pending_session
-from beacon.domains.adoption.last_adopt import read_last_adopt, write_last_adopt
+from beacon.domains.adoption.apply import CommitError, commit_session
 from beacon.domains.adoption.models import AdoptCandidate
 
 # ─────────────────────────────────────────────────────────────
@@ -66,7 +60,7 @@ def warehouse(tmp_path: Path) -> Path:
 
 @pytest.fixture()
 def project(tmp_path: Path, warehouse: Path) -> dict:
-    """Create a fixture project. Returns a dict of important paths."""
+    """Project with 4 pending entries: ctx-a, ctx-b, ctx-reject, ctx-c."""
     p = tmp_path / "project"
     p.mkdir()
     ab = p / ".agentic-beacon"
@@ -77,9 +71,6 @@ def project(tmp_path: Path, warehouse: Path) -> dict:
     beacon_yaml = ab / "beacon.yaml"
     beacon_yaml.write_text("artifacts:\n  contexts: []\n  skills: []\n  agents: []\n")
 
-    write_last_adopt(p, datetime(2026, 5, 1, tzinfo=UTC))
-
-    # Pending with 4 entries
     entries = [
         PendingEntry(
             path="contexts/ctx-a.md",
@@ -110,8 +101,7 @@ def project(tmp_path: Path, warehouse: Path) -> dict:
             created_at=datetime(2026, 5, 6, 12, 0, 0, tzinfo=UTC),
         ),
     ]
-    m = PendingManifest(pending=entries)
-    m.to_yaml(ab / "pending.yaml")
+    PendingManifest(pending=entries).to_yaml(ab / "pending.yaml")
 
     return {
         "root": p,
@@ -119,63 +109,35 @@ def project(tmp_path: Path, warehouse: Path) -> dict:
         "beacon_yaml": beacon_yaml,
         "artifacts": artifacts,
         "pending_yaml": ab / "pending.yaml",
-        "last_adopt": ab / ".last-adopt",
+        "pending_entries": entries,
     }
 
 
-def _snapshot(paths: dict) -> tuple[bytes, bytes, bytes]:
+def _snapshot(paths: dict) -> tuple[bytes, bytes]:
     return (
         paths["beacon_yaml"].read_bytes(),
         paths["pending_yaml"].read_bytes(),
-        paths["last_adopt"].read_bytes(),
     )
 
 
 # ─────────────────────────────────────────────────────────────
-# Task 6.5: Happy path integration test
+# Happy path: pending accept + reject + defer in one commit
 # ─────────────────────────────────────────────────────────────
 
 
 def test_happy_path(project: dict, warehouse: Path):
-    """6.5: 2 accept / 1 reject / 1 defer → all 4 invariants hold simultaneously."""
-    candidates = [
-        AdoptCandidate(
-            artifact_type="contexts",
-            path="contexts/ctx-a.md",
-            source="record-knowledge",
-        ),
-        AdoptCandidate(
-            artifact_type="contexts",
-            path="contexts/ctx-b.md",
-            source="record-knowledge",
-        ),
-        AdoptCandidate(
-            artifact_type="contexts",
-            path="contexts/ctx-reject.md",
-            source="record-knowledge",
-        ),
-        AdoptCandidate(
-            artifact_type="contexts",
-            path="contexts/ctx-c.md",
-            source="record-knowledge",
-        ),
-    ]
-    session_state = {
-        "contexts/ctx-a.md": "accept",
-        "contexts/ctx-b.md": "accept",
-        "contexts/ctx-reject.md": "reject",
-        "contexts/ctx-c.md": "defer",
-    }
-    commit_time = datetime(2026, 5, 7, 15, 0, 0, tzinfo=UTC)
-
-    commit_pending_session(
-        session_state,
-        candidates,
-        project["root"],
-        warehouse,
-        project["artifacts"],
-        project["beacon_yaml"],
-        commit_time=commit_time,
+    """2 pending accept + 1 pending reject + 1 defer → all invariants hold."""
+    commit_session(
+        to_adopt=[],
+        to_unadopt=[],
+        pending_accept=["contexts/ctx-a.md", "contexts/ctx-b.md"],
+        pending_reject=["contexts/ctx-reject.md"],
+        candidates=[],
+        pending_entries=project["pending_entries"],
+        project_root=project["root"],
+        warehouse_path=warehouse,
+        artifacts_path=project["artifacts"],
+        beacon_yaml_path=project["beacon_yaml"],
     )
 
     # Invariant 1: beacon.yaml has 2 accepted contexts
@@ -183,6 +145,7 @@ def test_happy_path(project: dict, warehouse: Path):
         data = yaml.safe_load(f)
     assert "contexts/ctx-a.md" in data["artifacts"]["contexts"]
     assert "contexts/ctx-b.md" in data["artifacts"]["contexts"]
+    assert "contexts/ctx-reject.md" not in data["artifacts"]["contexts"]
     assert "contexts/ctx-c.md" not in data["artifacts"]["contexts"]
 
     # Invariant 2: Symlinks for accepted entries
@@ -195,31 +158,15 @@ def test_happy_path(project: dict, warehouse: Path):
     remaining = [e.path for e in manifest.pending]
     assert remaining == ["contexts/ctx-c.md"]
 
-    # Invariant 4: .last-adopt set to commit timestamp
-    assert read_last_adopt(project["root"]) == commit_time
-
-    assert "contexts/ctx-reject.md" not in data["artifacts"]["contexts"]
-
 
 # ─────────────────────────────────────────────────────────────
-# Task 6.6: Rollback on symlink failure
+# Rollback on symlink failure
 # ─────────────────────────────────────────────────────────────
 
 
 def test_rollback_on_symlink_failure(project: dict, warehouse: Path):
-    """6.6: Injected symlink failure mid-commit → all 3 files restored, error identifies entry."""
+    """Injected symlink failure mid-commit → both files restored, error identifies entry."""
     pre = _snapshot(project)
-
-    candidates = [
-        AdoptCandidate(artifact_type="contexts", path="contexts/ctx-a.md"),
-        AdoptCandidate(artifact_type="contexts", path="contexts/ctx-b.md"),
-        AdoptCandidate(artifact_type="contexts", path="contexts/ctx-c.md"),
-    ]
-    session_state = {
-        "contexts/ctx-a.md": "accept",
-        "contexts/ctx-b.md": "accept",
-        "contexts/ctx-c.md": "accept",
-    }
 
     call_count = [0]
 
@@ -229,19 +176,76 @@ def test_rollback_on_symlink_failure(project: dict, warehouse: Path):
             raise RuntimeError("injected failure on ctx-b.md")
 
     with pytest.raises(CommitError) as exc_info:
-        commit_pending_session(
-            session_state,
-            candidates,
-            project["root"],
-            warehouse,
-            project["artifacts"],
-            project["beacon_yaml"],
+        commit_session(
+            to_adopt=[],
+            to_unadopt=[],
+            pending_accept=[
+                "contexts/ctx-a.md",
+                "contexts/ctx-b.md",
+                "contexts/ctx-c.md",
+            ],
+            pending_reject=[],
+            candidates=[],
+            pending_entries=project["pending_entries"],
+            project_root=project["root"],
+            warehouse_path=warehouse,
+            artifacts_path=project["artifacts"],
+            beacon_yaml_path=project["beacon_yaml"],
             _symlink_sync_fn=_failing_on_second,
         )
 
-    # All 3 files restored
+    # Both files restored byte-for-byte
     post = _snapshot(project)
-    assert pre == post, "All three files must be byte-identical after rollback"
+    assert pre == post, "Both files must be byte-identical after rollback"
 
     # Error message identifies the failing entry
     assert "ctx-b.md" in str(exc_info.value)
+
+
+# ─────────────────────────────────────────────────────────────
+# Mixed warehouse + pending in one commit
+# ─────────────────────────────────────────────────────────────
+
+
+def test_mixed_warehouse_and_pending(tmp_path: Path, warehouse: Path):
+    """Warehouse adopt + pending accept land atomically in beacon.yaml."""
+    p = tmp_path / "mixed-project"
+    p.mkdir()
+    ab = p / ".agentic-beacon"
+    ab.mkdir()
+    artifacts = ab / "artifacts"
+    artifacts.mkdir()
+    beacon_yaml = ab / "beacon.yaml"
+    beacon_yaml.write_text("artifacts:\n  contexts: []\n  skills: []\n  agents: []\n")
+
+    # Only ctx-b is pending; ctx-a is a warehouse-only pick.
+    pending_entries = [
+        PendingEntry(
+            path="contexts/ctx-b.md",
+            type="context",
+            action="created",
+            source="record-knowledge",
+            created_at=datetime(2026, 5, 6, 12, 0, tzinfo=UTC),
+        ),
+    ]
+    PendingManifest(pending=pending_entries).to_yaml(ab / "pending.yaml")
+
+    commit_session(
+        to_adopt=["contexts/ctx-a.md"],  # warehouse browser pick
+        to_unadopt=[],
+        pending_accept=["contexts/ctx-b.md"],  # pending TODO accept
+        pending_reject=[],
+        candidates=[AdoptCandidate(artifact_type="contexts", path="contexts/ctx-a.md")],
+        pending_entries=pending_entries,
+        project_root=p,
+        warehouse_path=warehouse,
+        artifacts_path=artifacts,
+        beacon_yaml_path=beacon_yaml,
+    )
+
+    data = yaml.safe_load(beacon_yaml.read_text())
+    assert "contexts/ctx-a.md" in data["artifacts"]["contexts"]
+    assert "contexts/ctx-b.md" in data["artifacts"]["contexts"]
+
+    manifest = PendingManifest.from_yaml(ab / "pending.yaml")
+    assert manifest.pending == []  # ctx-b accepted = removed

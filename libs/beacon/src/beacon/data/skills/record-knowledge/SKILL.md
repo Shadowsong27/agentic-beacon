@@ -14,9 +14,15 @@ requires:
 ## Purpose
 
 Capture decisions, lessons, and facts into the connected warehouse knowledge base.
-Writes knowledge files directly to the warehouse working tree. Knowledge files are
+Knowledge files are written **directly to the warehouse** by the bundled
+`write_knowledge.py` script — never to the project. Knowledge files are
 auto-derived during `abc sync` / `abc adopt`; only optional context pointer edits
 are queued in `.agentic-beacon/pending.yaml` for project wiring.
+
+> **Important:** Do NOT write knowledge files using your editor tools directly.
+> Always go through `write_knowledge.py`. The script enforces that the file
+> lands inside the warehouse and refuses to write into the project's symlink
+> mirror at `.agentic-beacon/artifacts/knowledge/`.
 
 ---
 
@@ -61,45 +67,35 @@ If this command fails with `Error: no warehouse connected. Run 'abc warehouse co
 
 Examine the user's description and determine:
 
-**Decision indicators:**
-- "decided to", "chose", "selected"
-- Comparison of alternatives
-- Rationale for choice
-- Trade-offs mentioned
+**Decision indicators:** "decided to", "chose", "selected"; comparison of alternatives; rationale for choice; trade-offs mentioned.
 
-**Lesson indicators:**
-- "learned", "discovered", "found out"
-- Common mistakes or patterns
-- Best practices or anti-patterns
-- Gotchas or pitfalls
+**Lesson indicators:** "learned", "discovered", "found out"; common mistakes or patterns; best practices or anti-patterns; gotchas or pitfalls.
 
-**Fact indicators:**
-- "is", "uses", "requires"
-- Configuration information
-- Technical specifications
-- Process descriptions
+**Fact indicators:** "is", "uses", "requires"; configuration information; technical specifications; process descriptions.
 
-### Step 2: Resolve Warehouse
+### Step 2: Decide Topic and Filename
 
-Run the warehouse resolver and capture the path:
+**Filename** (`--name`): kebab-case, descriptive but concise.
+Example: `use-pydantic-for-data-carriers`.
+
+**Topic** (`--topic`, optional): kebab-case category. Inspect the existing
+warehouse layout to follow the established convention:
 
 ```bash
 WAREHOUSE_ROOT=$(uv run ${SKILL_DIR}/scripts/resolve_warehouse.py)
+ls "$WAREHOUSE_ROOT/knowledge/"
 ```
 
-If the command exits non-zero, surface the stderr output to the user and stop.
+If the warehouse already groups knowledge by topic (e.g.
+`knowledge/python-standards/`, `knowledge/infrastructure/`), pick the matching
+topic. Otherwise omit `--topic` for a flat layout
+(`knowledge/<type>s/<name>.md`).
 
-### Step 3: Create Knowledge File in Warehouse
+### Step 3: Generate the Markdown Body
 
-**File naming:** kebab-case, descriptive but concise.
-Example: `use-pydantic-for-data-carriers.md`
+Produce the knowledge file content using the template that matches the type.
 
-**Write to (warehouse-relative paths):**
-- Decisions: `$WAREHOUSE_ROOT/knowledge/decisions/<name>.md`
-- Lessons: `$WAREHOUSE_ROOT/knowledge/lessons/<name>.md`
-- Facts: `$WAREHOUSE_ROOT/knowledge/facts/<name>.md`
-
-**File format — Decisions:**
+**Decisions:**
 
 ```markdown
 # Decision: [Title]
@@ -140,7 +136,7 @@ Example: `use-pydantic-for-data-carriers.md`
 2. [Alternative 2] - [Why not chosen]
 ```
 
-**File format — Lessons:**
+**Lessons:**
 
 ```markdown
 # Lesson: [Title]
@@ -176,7 +172,7 @@ Example: `use-pydantic-for-data-carriers.md`
 [Impact of following/not following this lesson]
 ```
 
-**File format — Facts:**
+**Facts:**
 
 ```markdown
 # Fact: [Title]
@@ -203,12 +199,35 @@ Example: `use-pydantic-for-data-carriers.md`
 [Critical information]
 ```
 
-### Step 4: Ask User for Context Pointer Target
+### Step 4: Write the File via `write_knowledge.py`
+
+Invoke the writer with the rendered body via stdin. **This is the only way
+the knowledge file is created.** Do not use your editor's write tool.
+
+```bash
+WRITTEN_PATH=$(uv run ${SKILL_DIR}/scripts/write_knowledge.py \
+  --type {decision|lesson|fact} \
+  --name <kebab-name> \
+  [--topic <topic>] <<'KNOWLEDGE_EOF'
+<rendered markdown body from Step 3>
+KNOWLEDGE_EOF
+)
+```
+
+The script:
+- Resolves the warehouse from `.agentic-beacon/config.toml`.
+- Refuses to write outside `<warehouse>/knowledge/`.
+- Refuses to overwrite an existing file unless `--overwrite` is passed.
+- Prints the warehouse-relative path on stdout (e.g. `knowledge/infrastructure/lessons/foo.md`).
+
+If the script exits non-zero, surface the stderr to the user and stop.
+
+### Step 5: Ask User for Context Pointer Target
 
 List the available warehouse context files:
 
 ```bash
-ls $WAREHOUSE_ROOT/contexts/*.md 2>/dev/null
+ls "$WAREHOUSE_ROOT/contexts/"*.md 2>/dev/null
 ```
 
 Present options to the user — **only warehouse context files plus "skip"**:
@@ -225,16 +244,17 @@ N. Skip — don't add a pointer yet
 Default: Skip
 ```
 
-**Important constraints:**
-- Only offer files found under `$WAREHOUSE_ROOT/contexts/`
-- Do NOT offer any project-local files as pointer targets
-- If no context files exist in the warehouse, skip this step automatically
+**Constraints:**
+- Only offer files found under `$WAREHOUSE_ROOT/contexts/`.
+- Do NOT offer any project-local files as pointer targets.
+- If no context files exist in the warehouse, skip this step automatically.
 
-### Step 5: Diff-Confirm Before Writing Pointer
+### Step 6: Diff-Confirm Before Writing Pointer
 
-If the user chose a context file, identify the existing section in that file where
-the pointer fits best (based on topic relevance). If no section fits, ask the user
-to skip or pick a section manually — never auto-create new section headings.
+If the user chose a context file, identify the existing section in that file
+where the pointer fits best (based on topic relevance). If no section fits,
+ask the user to skip or pick a section manually — never auto-create new
+section headings.
 
 Show the proposed change before writing:
 
@@ -248,15 +268,18 @@ Apply this change? [y/N]:
 ```
 
 Write to `$WAREHOUSE_ROOT/contexts/<file>.md` only after the user confirms.
+This edit is a normal in-place modification of an existing warehouse context;
+your editor's edit tool is fine here because the path is fully qualified to
+`$WAREHOUSE_ROOT`.
 
-### Step 6: Append context pointer to pending.yaml
+### Step 7: Append context pointer to pending.yaml
 
-Do **not** append the created `knowledge/<type>/<name>.md` file to
-`pending.yaml`. Knowledge is auto-derived from context and skill references during
-`abc sync` / `abc adopt` and does not require beacon.yaml or symlink adoption.
+Do **not** append the created knowledge file to `pending.yaml`. Knowledge is
+auto-derived from context and skill references during `abc sync` / `abc adopt`
+and does not require beacon.yaml or symlink adoption.
 
-If the user confirmed a context pointer write in Step 5, append only that context
-entry:
+If the user confirmed a context pointer write in Step 6, append only that
+context entry:
 
 ```bash
 uv run ${SKILL_DIR}/scripts/append_pending.py \
@@ -266,13 +289,13 @@ uv run ${SKILL_DIR}/scripts/append_pending.py \
   --source record-knowledge
 ```
 
-### Step 7: Confirm Completion
+### Step 8: Confirm Completion
 
 ```
 ✅ Knowledge recorded successfully!
 
 Type:            [Decision|Lesson|Fact]
-Warehouse file:  $WAREHOUSE_ROOT/knowledge/<type>/<name>.md
+Warehouse file:  $WAREHOUSE_ROOT/<written-path>
 Context pointer: [contexts/<file>.md | Skipped]
 Pending entries: [1 if context pointer written, otherwise 0]
 
@@ -291,16 +314,17 @@ Run 'abc adopt' to wire the context pointer if one was queued.
 ```
 
 **Agent:**
-1. Analyzes: this is a **decision**
-2. Resolves warehouse path via `resolve_warehouse.py`
-3. Creates: `$WAREHOUSE_ROOT/knowledge/decisions/no-temporary-docs.md`
-4. Lists warehouse contexts → user picks `contexts/development-guidelines.md`
-5. Shows diff → user confirms
-6. Writes pointer under appropriate section
-7. Runs `append_pending.py` once for the modified context
-8. Reports with `abc adopt` reminder for the context pointer
+1. Analyzes: this is a **decision**.
+2. Resolves warehouse path; sees existing `knowledge/agent-practices/` group.
+3. Renders the decision markdown body.
+4. Calls `write_knowledge.py --type decision --topic agent-practices --name no-temporary-docs` with the body via stdin → script writes `knowledge/agent-practices/decisions/no-temporary-docs.md` in the warehouse.
+5. Lists warehouse contexts → user picks `contexts/development-guidelines.md`.
+6. Shows diff → user confirms.
+7. Edits the warehouse context file under the appropriate section.
+8. Runs `append_pending.py` once for the modified context.
+9. Reports with `abc adopt` reminder for the context pointer.
 
-### Example 2: Recording a Lesson (skip pointer)
+### Example 2: Recording a Lesson (skip pointer, flat layout)
 
 **User:**
 ```
@@ -308,29 +332,31 @@ Run 'abc adopt' to wire the context pointer if one was queued.
 ```
 
 **Agent:**
-1. Analyzes: this is a **lesson**
-2. Resolves warehouse path
-3. Creates: `$WAREHOUSE_ROOT/knowledge/lessons/updating-warehouse-structure.md`
-4. User chooses: "Skip"
-5. Does not write pending.yaml (knowledge is auto-derived)
-6. Reports completion with no `abc adopt` reminder
+1. Analyzes: this is a **lesson**.
+2. Resolves warehouse; sees no obvious topic match → omit `--topic`.
+3. Renders the lesson body.
+4. Calls `write_knowledge.py --type lesson --name updating-warehouse-structure` with the body via stdin → script writes `knowledge/lessons/updating-warehouse-structure.md`.
+5. User chooses: "Skip".
+6. Does not call `append_pending.py` (knowledge is auto-derived).
+7. Reports completion with no `abc adopt` reminder.
 
 ---
 
 ## Checklist for Agent
 
 - [ ] Read user's knowledge description carefully
-- [ ] Analyze and determine type (decision/lesson/fact)
+- [ ] Analyze and determine type (decision / lesson / fact)
 - [ ] Run `resolve_warehouse.py` — STOP if it exits non-zero
-- [ ] Choose appropriate filename (kebab-case)
-- [ ] Write file to `$WAREHOUSE_ROOT/knowledge/<type>/` (warehouse, not the project)
+- [ ] Inspect `$WAREHOUSE_ROOT/knowledge/` to pick a topic that matches existing convention (or omit for flat layout)
+- [ ] Render the markdown body using the type-specific template
+- [ ] Write the file by piping the body into `write_knowledge.py` — do NOT write the file with your editor's write tool
 - [ ] Ask user which warehouse `contexts/` file for the pointer — or skip
-- [ ] Show diff before writing pointer; wait for explicit confirmation
+- [ ] Show diff before writing the pointer; wait for explicit confirmation
 - [ ] Do NOT run `append_pending.py` for the knowledge file
-- [ ] Run `append_pending.py` for the context file if pointer was written
+- [ ] Run `append_pending.py` for the context file if a pointer was written
 - [ ] Confirm completion; remind user to run `abc adopt` only if a context pointer was queued
 
 ---
 
-**Skill Version:** 2.0.0
-**Last Updated:** 2026-05-06
+**Skill Version:** 2.1.0
+**Last Updated:** 2026-05-07

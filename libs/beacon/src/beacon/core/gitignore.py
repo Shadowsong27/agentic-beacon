@@ -15,7 +15,6 @@ GITIGNORE_ENTRIES = [
     ".agentic-beacon/config.toml",
     ".agentic-beacon/artifacts/",
     ".agentic-beacon/pending.yaml",
-    ".agentic-beacon/.last-adopt",
 ]
 
 # Section header for our entries

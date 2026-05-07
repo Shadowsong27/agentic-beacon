@@ -1,14 +1,17 @@
 """Artifact discovery and classification for the abc adopt command.
 
-Provides:
+Two independent flows feed the adopt TUI:
+
+1. Warehouse browser — `discover_adoptable()` returns the diff between the
+   warehouse and `beacon.yaml`. Items in `pending.yaml` are excluded so they
+   don't double-show in both sections.
+2. Pending TODO — `discover_pending()` returns the entries currently in
+   `pending.yaml` for resolution.
+
+Other helpers:
 - classify_artifact_type(): map warehouse-relative paths to artifact types
-- find_knowledge_node_for_file(): locate knowledge nodes from file paths
-- list_knowledge_nodes(): scan warehouse for all knowledge nodes
-- discover_adoptable(): full-scan discovery with recent-commit annotation
-- discover_candidates(): pending.yaml + warehouse-diff merge (pending workflow)
 - count_unadopted_since(): lightweight count for sync notification
 - is_adopted(): check whether a path is already declared in beacon.yaml
-- build_candidates(): construct AdoptCandidate lists from file paths
 """
 
 from __future__ import annotations
@@ -16,19 +19,15 @@ from __future__ import annotations
 import fnmatch
 import re
 import subprocess
-from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
 
+from beacon.core.manifest.beacon import BeaconManifest
+from beacon.core.manifest.pending import PendingEntry, PendingManifest
 from beacon.domains.adoption.models import (
     ADOPTABLE_TYPES,
     NEW_TAG_MAX_COMMITS,
     AdoptCandidate,
 )
-
-if TYPE_CHECKING:
-    from beacon.core.manifest.beacon import BeaconManifest
-
 
 # ─────────────────────────────────────────────────────────────
 # Classification helpers
@@ -232,75 +231,25 @@ def annotate_with_commits_ago(
 
 
 # ─────────────────────────────────────────────────────────────
-# Candidate building
+# Warehouse-vs-beacon.yaml diff (browser flow)
 # ─────────────────────────────────────────────────────────────
-
-
-def build_candidates(
-    warehouse_path: Path,
-    paths: list[str],
-    beacon_settings: BeaconManifest,
-    *,
-    is_new: bool,
-) -> list[AdoptCandidate]:
-    """Build AdoptCandidate list from a list of warehouse-relative file paths.
-
-    Skills are grouped by directory.
-    """
-    seen_skill_dirs: set[str] = set()
-    candidates: list[AdoptCandidate] = []
-
-    for path in paths:
-        artifact_type = classify_artifact_type(path)
-        if artifact_type is None:
-            continue
-
-        if artifact_type == "skills":
-            skill_dir = skill_dir_from_path(path)
-            skill_key = skill_dir.rstrip("/")
-            if skill_key in seen_skill_dirs:
-                continue
-            if is_adopted(skill_dir, beacon_settings):
-                continue
-            seen_skill_dirs.add(skill_key)
-            skill_md = (
-                warehouse_path / "skills" / skill_key.split("/", 1)[-1] / "SKILL.md"
-            )
-            desc = (
-                extract_skill_description(skill_md.read_text(encoding="utf-8"))
-                if skill_md.exists()
-                else ""
-            )
-            candidates.append(
-                AdoptCandidate(
-                    artifact_type="skills",
-                    path=skill_dir,
-                    description=desc,
-                    is_new=is_new,
-                )
-            )
-        else:
-            if is_adopted(path, beacon_settings):
-                continue
-            desc = extract_description(warehouse_path, path)
-            candidates.append(
-                AdoptCandidate(
-                    artifact_type=artifact_type,
-                    path=path,
-                    description=desc,
-                    is_new=is_new,
-                )
-            )
-
-    return candidates
 
 
 def discover_all(
     warehouse_path: Path,
     beacon_settings: BeaconManifest,
+    *,
+    excluded_paths: set[str] | None = None,
 ) -> list[AdoptCandidate]:
-    """Full-scan mode: return every warehouse artifact not in beacon.yaml."""
+    """Full-scan: every warehouse artifact not in beacon.yaml and not excluded.
+
+    *excluded_paths* (optional) — warehouse-relative paths to skip. Used by the
+    CLI to hide entries that are also in pending.yaml so they show up only in
+    the pending section of the TUI.
+    """
     from beacon.domains.distribution.distributor import WarehouseDistributor
+
+    excluded = excluded_paths or set()
 
     distributor = WarehouseDistributor(
         warehouse_root=warehouse_path,
@@ -310,8 +259,9 @@ def discover_all(
 
     candidates: list[AdoptCandidate] = []
 
-    # Contexts — list_available returns paths like "contexts/foo.md"
     for ctx_path in available.get("contexts", []):
+        if ctx_path in excluded:
+            continue
         if not is_adopted(ctx_path, beacon_settings):
             desc = extract_description(warehouse_path, ctx_path)
             candidates.append(
@@ -319,13 +269,13 @@ def discover_all(
                     artifact_type="contexts",
                     path=ctx_path,
                     description=desc,
-                    is_new=False,
                 )
             )
 
-    # Skills — list_available returns skill names like "example-skill"
     for skill_name in available.get("skills", []):
         skill_path = f"skills/{skill_name}/"
+        if skill_path in excluded:
+            continue
         if not is_adopted(skill_path, beacon_settings):
             skill_md = warehouse_path / "skills" / skill_name / "SKILL.md"
             desc = (
@@ -338,18 +288,15 @@ def discover_all(
                     artifact_type="skills",
                     path=skill_path,
                     description=desc,
-                    is_new=False,
                 )
             )
 
-    # Agents — list_available returns paths like "agents/code-reviewer.md".
-    # Per Decision 1, "adopted" for the adopt TUI means "declared in
+    # Agents — Per Decision 1, "adopted" for the adopt TUI means "declared in
     # beacon.yaml.artifacts.agents". Global install state is a side effect of
-    # ticking — not the source of truth for project membership. Filtering on
-    # global state would hide globally-installed agents from existing users
-    # running `abc adopt` post-upgrade to opt into per-project tracking (the
-    # migration path documented in design.md Decision 4).
+    # ticking, not the source of truth for project membership.
     for agent_path in available.get("agents", []):
+        if agent_path in excluded:
+            continue
         if not is_adopted(agent_path, beacon_settings):
             desc = extract_description(warehouse_path, agent_path)
             candidates.append(
@@ -357,16 +304,10 @@ def discover_all(
                     artifact_type="agents",
                     path=agent_path,
                     description=desc,
-                    is_new=False,
                 )
             )
 
     return candidates
-
-
-# ─────────────────────────────────────────────────────────────
-# Public API: discovery
-# ─────────────────────────────────────────────────────────────
 
 
 def discover_adoptable(
@@ -375,6 +316,7 @@ def discover_adoptable(
     sync_sha: str | None = None,
     *,
     show_all: bool = False,
+    excluded_paths: set[str] | None = None,
 ) -> tuple[list[AdoptCandidate], list[str]]:
     """Discover warehouse artifacts available to adopt.
 
@@ -386,173 +328,40 @@ def discover_adoptable(
         beacon_settings: Parsed beacon.yaml settings.
         sync_sha: Kept for backward compatibility; no longer used for discovery.
         show_all: Kept for backward compatibility; full scan is always used.
+        excluded_paths: Warehouse-relative paths to skip (e.g. items in pending.yaml).
 
     Returns:
         (candidates, updated_adopted_paths) where:
         - candidates: unadopted AdoptCandidates with commits_ago annotated
         - updated_adopted_paths: always empty (retained for API compatibility)
     """
-    candidates = discover_all(warehouse_path, beacon_settings)
+    candidates = discover_all(
+        warehouse_path, beacon_settings, excluded_paths=excluded_paths
+    )
     annotate_with_commits_ago(candidates, warehouse_path)
     return candidates, []
 
 
 # ─────────────────────────────────────────────────────────────
-# Pending-workflow discovery: pending.yaml + warehouse-diff merge
+# Pending TODO discovery
 # ─────────────────────────────────────────────────────────────
 
-# Maps PendingEntry.type (singular) → AdoptCandidate.artifact_type (plural).
-# Knowledge is intentionally absent: knowledge files are auto-derived during
-# sync/adopt and are not pending-wired through beacon.yaml.
-_PENDING_TYPE_TO_ARTIFACT_TYPE: dict[str, str] = {
-    "skill": "skills",
-    "context": "contexts",
-    "agent": "agents",
-}
 
-# Warehouse top-level dirs that require project-level adoption.
-_WAREHOUSE_ARTIFACT_DIRS = ("contexts", "skills", "agents")
+def discover_pending(project_root: Path) -> list[PendingEntry]:
+    """Return the pending.yaml entries for resolution in the adopt TUI.
 
-
-def _classify_warehouse_path_extended(path: str) -> str | None:
-    """Classify a warehouse-relative path into an adoptable artifact type."""
-    for atype in _WAREHOUSE_ARTIFACT_DIRS:
-        if path.startswith(atype + "/"):
-            return atype
-    return None
-
-
-def _get_warehouse_modified_paths(
-    warehouse_path: Path,
-    since: datetime | None,
-) -> list[str]:
-    """Return warehouse-relative paths of files added/modified since *since*.
-
-    When *since* is None, uses epoch (1970-01-01) to return all git-tracked files.
+    The pending TODO is a flat list — each entry came from a specific authoring
+    source (record-knowledge, record-skill, manual edit) and is resolved
+    independently as accept (adopt + remove) or reject (remove only).
     """
-    if since is None:
-        since_str = "1970-01-01T00:00:00+00:00"
-    else:
-        since_dt = since.astimezone(UTC)
-        since_str = since_dt.strftime("%Y-%m-%dT%H:%M:%S+00:00")
-
-    cmd = [
-        "git",
-        "-C",
-        str(warehouse_path),
-        "log",
-        f"--since={since_str}",
-        "--diff-filter=AM",
-        "--name-only",
-        "--pretty=format:",
-    ]
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return []
-    if result.returncode != 0:
-        return []
-    paths = [p.strip() for p in result.stdout.splitlines() if p.strip()]
-    return paths + _get_warehouse_working_tree_paths(warehouse_path)
-
-
-def _get_warehouse_working_tree_paths(warehouse_path: Path) -> list[str]:
-    """Return paths with uncommitted working-tree changes in the warehouse."""
-    try:
-        result = subprocess.run(
-            ["git", "-C", str(warehouse_path), "status", "--porcelain", "-uall"],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        return []
-    if result.returncode != 0:
-        return []
-
-    paths: list[str] = []
-    for line in result.stdout.splitlines():
-        if len(line) < 4:
-            continue
-        path = line[3:].strip()
-        if " -> " in path:
-            path = path.rsplit(" -> ", 1)[1]
-        if path:
-            paths.append(path)
-    return paths
-
-
-def discover_candidates(
-    project_root: Path,
-    warehouse_path: Path,
-) -> list[AdoptCandidate]:
-    """Discover adopt candidates by merging pending.yaml with warehouse-modified-since-.last-adopt.
-
-    Rules:
-    - pending.yaml entries are always included.
-    - Warehouse files modified since .last-adopt (or all if absent) are included.
-    - Dedup by path: when both sources have the same path, pending.yaml metadata wins.
-    - Warehouse-only entries are annotated with source='warehouse-modified'.
-    - pending.yaml is never mutated by this function.
-    """
-    from beacon.core.manifest.pending import PendingManifest
-    from beacon.domains.adoption.last_adopt import read_last_adopt
-
     pending_path = project_root / ".agentic-beacon" / "pending.yaml"
     manifest = PendingManifest.from_yaml(pending_path)
+    return list(manifest.pending)
 
-    # Build candidate dict from pending entries (path → AdoptCandidate).
-    # Later entries with the same path overwrite earlier ones (last-write-wins).
-    candidates: dict[str, AdoptCandidate] = {}
-    for entry in manifest.pending:
-        atype = _PENDING_TYPE_TO_ARTIFACT_TYPE.get(entry.type, entry.type)
-        candidates[entry.path] = AdoptCandidate(
-            artifact_type=atype,
-            path=entry.path,
-            description="",
-            source=entry.source,
-            action=entry.action,
-            created_at=entry.created_at,
-        )
 
-    since = read_last_adopt(project_root)
-    modified_paths = _get_warehouse_modified_paths(warehouse_path, since)
-
-    seen_skill_dirs: set[str] = set()
-    for path in modified_paths:
-        if Path(path).name.startswith("."):
-            continue
-        atype = _classify_warehouse_path_extended(path)
-        if atype is None:
-            continue
-
-        if atype == "skills":
-            skill_path = skill_dir_from_path(path)
-            skill_key = skill_path.rstrip("/")
-            if skill_key in seen_skill_dirs:
-                continue
-            seen_skill_dirs.add(skill_key)
-            if skill_path in candidates:
-                continue  # pending.yaml entry takes precedence
-            candidates[skill_path] = AdoptCandidate(
-                artifact_type=atype,
-                path=skill_path,
-                description="",
-                source="warehouse-modified",
-                action="modified",
-            )
-        else:
-            if path in candidates:
-                continue  # pending.yaml entry takes precedence
-            candidates[path] = AdoptCandidate(
-                artifact_type=atype,
-                path=path,
-                description="",
-                source="warehouse-modified",
-                action="modified",
-            )
-
-    return list(candidates.values())
+# ─────────────────────────────────────────────────────────────
+# Sync notification count
+# ─────────────────────────────────────────────────────────────
 
 
 def count_unadopted_since(
