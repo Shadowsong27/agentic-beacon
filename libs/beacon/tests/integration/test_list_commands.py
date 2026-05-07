@@ -458,7 +458,9 @@ def test_list_agents_no_artifacts_dir_needed(tmp_path, monkeypatch):
 
     result = runner.invoke(main, ["list", "agents"])
     assert result.exit_code == 0
-    assert "No agents found" in result.output
+    # No beacon.yaml at all → "No agents declared" branch
+    assert "No agents declared" in result.output
+    assert "abc adopt" in result.output
 
 
 def test_list_agents_not_shown_in_default_list(synced_project):

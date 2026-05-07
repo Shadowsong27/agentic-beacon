@@ -7,6 +7,7 @@ import click
 from rich.console import Console
 from rich.table import Table
 
+from beacon.core.manifest.beacon import BeaconManifest
 from beacon.core.manifest.workspace import WorkspaceConfig
 from beacon.domains.distribution.sync_engine import SyncEngine
 
@@ -58,12 +59,26 @@ def list_cmd(*, artifact_type: str | None) -> None:
         artifacts = engine.list_artifacts("agents")
         agent_files = artifacts.get("agents", [])
         if not agent_files:
-            console.print(
-                "[yellow]No agents found in .agentic-beacon/artifacts/agents/.[/yellow]"
-            )
-            console.print(
-                "Run 'abc adopt' or declare agents in beacon.yaml then 'abc sync'."
-            )
+            # Distinguish "declared but not synced" from "none declared at all"
+            # so the user gets an actionable next step.
+            beacon_yaml = beacon_dir / "beacon.yaml"
+            declared_agents: list[str] = []
+            if beacon_yaml.is_file():
+                try:
+                    declared_agents = BeaconManifest.from_yaml(
+                        beacon_yaml
+                    ).artifacts.agents
+                except (OSError, ValueError):
+                    pass
+            if declared_agents:
+                console.print(
+                    f"[yellow]{len(declared_agents)} agent(s) declared in "
+                    "beacon.yaml but not synced.[/yellow]"
+                )
+                console.print("Run 'abc sync' to wire them.")
+            else:
+                console.print("[yellow]No agents declared in beacon.yaml.[/yellow]")
+                console.print("Run 'abc adopt' to wire agents from the warehouse.")
             return
 
         table = Table(title="Synced Agents")
