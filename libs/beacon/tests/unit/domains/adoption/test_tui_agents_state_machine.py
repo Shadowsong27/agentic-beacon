@@ -58,11 +58,11 @@ async def test_tc1_tick_agent_auto_ticks_skills_with_provenance(tmp_path):
         tmp_path, {"planner": {"skills": ["alpha", "beta"]}}, ["alpha", "beta"]
     )
     cands = _candidates_for(["planner"], ["alpha", "beta"])
-    app = AdoptInnerApp(cands, [], warehouse_path=wh, show_all_default=False)
+    app = AdoptInnerApp(cands, [], [], warehouse_path=wh, show_all_default=False)
     async with app.run_test() as pilot:
         await pilot.pause()
         node = _node_for_path(app, "agents/planner.md")
-        app._toggle_node_selection(node)
+        app._toggle_warehouse_node(node)
         await pilot.pause()
         assert app._required_by.get("skills/alpha/") == ["agents/planner.md"]
         assert app._required_by.get("skills/beta/") == ["agents/planner.md"]
@@ -75,12 +75,12 @@ async def test_tc1_tick_agent_auto_ticks_skills_with_provenance(tmp_path):
 async def test_tc2_hard_lock_untick_skill_blocked(tmp_path):
     wh = _make_warehouse(tmp_path, {"planner": {"skills": ["alpha"]}}, ["alpha"])
     cands = _candidates_for(["planner"], ["alpha"])
-    app = AdoptInnerApp(cands, [], warehouse_path=wh, show_all_default=False)
+    app = AdoptInnerApp(cands, [], [], warehouse_path=wh, show_all_default=False)
     async with app.run_test() as pilot:
         await pilot.pause()
         # Tick agent
         agent_node = _node_for_path(app, "agents/planner.md")
-        app._toggle_node_selection(agent_node)
+        app._toggle_warehouse_node(agent_node)
         await pilot.pause()
 
         # Skill should be ticked
@@ -88,7 +88,7 @@ async def test_tc2_hard_lock_untick_skill_blocked(tmp_path):
         assert skill_node.data["selected"] is True
 
         # Try to untick skill
-        app._toggle_node_selection(skill_node)
+        app._toggle_warehouse_node(skill_node)
         await pilot.pause()
 
         # Skill should still be ticked
@@ -102,12 +102,12 @@ async def test_tc2_hard_lock_untick_skill_blocked(tmp_path):
 async def test_tc3a_auto_untick_when_not_explicit(tmp_path):
     wh = _make_warehouse(tmp_path, {"planner": {"skills": ["alpha"]}}, ["alpha"])
     cands = _candidates_for(["planner"], ["alpha"])
-    app = AdoptInnerApp(cands, [], warehouse_path=wh, show_all_default=False)
+    app = AdoptInnerApp(cands, [], [], warehouse_path=wh, show_all_default=False)
     async with app.run_test() as pilot:
         await pilot.pause()
         # Tick agent
         agent_node = _node_for_path(app, "agents/planner.md")
-        app._toggle_node_selection(agent_node)
+        app._toggle_warehouse_node(agent_node)
         await pilot.pause()
 
         # Skill auto-ticked
@@ -116,7 +116,7 @@ async def test_tc3a_auto_untick_when_not_explicit(tmp_path):
         assert app._user_explicit.get("skills/alpha/") is not True
 
         # Untick agent
-        app._toggle_node_selection(agent_node)
+        app._toggle_warehouse_node(agent_node)
         await pilot.pause()
 
         # Skill should auto-untick
@@ -128,18 +128,18 @@ async def test_tc3a_auto_untick_when_not_explicit(tmp_path):
 async def test_tc3b_user_explicit_survives_agent_untick(tmp_path):
     wh = _make_warehouse(tmp_path, {"planner": {"skills": ["alpha"]}}, ["alpha"])
     cands = _candidates_for(["planner"], ["alpha"])
-    app = AdoptInnerApp(cands, [], warehouse_path=wh, show_all_default=False)
+    app = AdoptInnerApp(cands, [], [], warehouse_path=wh, show_all_default=False)
     async with app.run_test() as pilot:
         await pilot.pause()
         # User explicitly ticks skill first
         skill_node = _node_for_path(app, "skills/alpha/")
-        app._toggle_node_selection(skill_node)
+        app._toggle_warehouse_node(skill_node)
         await pilot.pause()
         assert app._user_explicit.get("skills/alpha/") is True
 
         # Tick agent
         agent_node = _node_for_path(app, "agents/planner.md")
-        app._toggle_node_selection(agent_node)
+        app._toggle_warehouse_node(agent_node)
         await pilot.pause()
 
         # Skill stays ticked, gains provenance
@@ -147,7 +147,7 @@ async def test_tc3b_user_explicit_survives_agent_untick(tmp_path):
         assert app._required_by.get("skills/alpha/") == ["agents/planner.md"]
 
         # Untick agent
-        app._toggle_node_selection(agent_node)
+        app._toggle_warehouse_node(agent_node)
         await pilot.pause()
 
         # Skill should remain ticked because user_explicit is True
@@ -163,7 +163,7 @@ async def test_tc4_multi_agent_shared_skill_provenance(tmp_path):
         ["shared"],
     )
     cands = _candidates_for(["planner", "reviewer"], ["shared"])
-    app = AdoptInnerApp(cands, [], warehouse_path=wh, show_all_default=False)
+    app = AdoptInnerApp(cands, [], [], warehouse_path=wh, show_all_default=False)
     async with app.run_test() as pilot:
         await pilot.pause()
         planner_node = _node_for_path(app, "agents/planner.md")
@@ -171,13 +171,13 @@ async def test_tc4_multi_agent_shared_skill_provenance(tmp_path):
         skill_node = _node_for_path(app, "skills/shared/")
 
         # Tick planner
-        app._toggle_node_selection(planner_node)
+        app._toggle_warehouse_node(planner_node)
         await pilot.pause()
         assert skill_node.data["selected"] is True
         assert app._required_by.get("skills/shared/") == ["agents/planner.md"]
 
         # Tick reviewer
-        app._toggle_node_selection(reviewer_node)
+        app._toggle_warehouse_node(reviewer_node)
         await pilot.pause()
         assert skill_node.data["selected"] is True
         assert app._required_by.get("skills/shared/") == [
@@ -186,13 +186,13 @@ async def test_tc4_multi_agent_shared_skill_provenance(tmp_path):
         ]
 
         # Untick planner
-        app._toggle_node_selection(planner_node)
+        app._toggle_warehouse_node(planner_node)
         await pilot.pause()
         assert skill_node.data["selected"] is True
         assert app._required_by.get("skills/shared/") == ["agents/reviewer.md"]
 
         # Untick reviewer
-        app._toggle_node_selection(reviewer_node)
+        app._toggle_warehouse_node(reviewer_node)
         await pilot.pause()
         assert app._required_by.get("skills/shared/", []) == []
         assert skill_node.data["selected"] is False

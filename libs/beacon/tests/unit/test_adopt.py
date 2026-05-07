@@ -546,7 +546,7 @@ class TestAdoptTUI:
             AdoptCandidate("contexts", "contexts/b.md", "Beta"),
             AdoptCandidate("skills", "skills/tool/", "Tool"),
         ]
-        AdoptApp(candidates, [])
+        AdoptApp(candidates, [], [])
 
         # Import the inner class by running through compose
         # We need to test the inner _InnerApp — replicate the logic

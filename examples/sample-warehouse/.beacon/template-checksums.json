@@ -1,12 +1,15 @@
 {
-  "beacon_version": "2.0.2",
+  "beacon_version": "2.7.1",
   "files": {
-    ".gitignore": "2a2ea65bc817582bf992ebc0ffe919774635173f138ab35dc6c68f237ec2c15e",
-    "README.md": "8640d224a2daa4a943405852aa7bc600aa6cb1fb8093c7bb8e5b7eb4cebf4a6c",
+    ".gitignore": "84eeaf600db2a2b5aaa963c05e4ea13af92dc973a6b63740554212fec1701cb7",
+    "README.md": "7c7c5c4ef5d9ee0cf98c6016b8416f9a8e39e90b669dd1902afaad1fede4d173",
+    "agents/README.md": "6f05be87226b2892c20d1a75bee24b682590506ee22dbdc2c911f959ff625590",
+    "agents/agents.yaml": "9f03ec77cf08ad3296d640d70a65038e0cdf46a3335e887f6ee130ce314077e2",
     "contexts/README.md": "90dfeb30f5844e16596302291d9f9770e2f714a35733d525ab7fe913be49912b",
-    "docs/architecture.md": "b8432ac465d92f0d4be8ae7692e8ca63cd3d947f274b257bb5435d62dea6fbdb",
-    "docs/contribution-guide.md": "b6c1ee2e50f12fdabe45054005b79c0d79978051bc96dba846f05642cf103061",
-    "knowledge/README.md": "fb2fa6a609bc234b37f87268c2322b66b529aabd5cdf41b5ccd88dab5ed026fc",
-    "skills/README.md": "abbf8a13d85ec87c77cc164673ab7924de6b44ead33482bedcf9765c88837179"
+    "docs/architecture.md": "9cc10b8aff32012c7d3db6f7d6f10fb2a2412fb67ad63d17525996febe6e49a2",
+    "docs/contribution-guide.md": "201a351019780deffc8b3e4a7df2f1198ff07c8f6de6299d03a8a82cc57f5cfd",
+    "skills/README.md": "91759e4e3657b1aaa570b0d2bcb09c2a12b46f34f19147ca2b288e9cfd4ed39f",
+    "skills/record-knowledge/SKILL.md": "0a26861dec7fdaec46625b234ce4ad6e6ecc44aeb42eb7a3abe0fd8aed5b2580",
+    "skills/record-skill/SKILL.md": "a9e888440a644f4727268a858c23f6e41092c5931549e97ed540a44092943380"
   }
 }

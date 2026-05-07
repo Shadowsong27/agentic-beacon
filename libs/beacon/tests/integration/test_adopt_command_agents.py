@@ -81,11 +81,12 @@ def _stub_adopt_app(monkeypatch, *, to_adopt=None, to_unadopt=None):
 
     real_init = AdoptApp.__init__
 
-    def fake_init(self, candidates, adopted_paths, **kwargs):
+    def fake_init(self, candidates, pending_entries, adopted_paths, **kwargs):
         captured["candidates"] = list(candidates)
+        captured["pending_entries"] = list(pending_entries)
         captured["adopted_paths"] = list(adopted_paths)
         captured["kwargs"] = dict(kwargs)
-        real_init(self, candidates, adopted_paths, **kwargs)
+        real_init(self, candidates, pending_entries, adopted_paths, **kwargs)
 
     def fake_run(self):
         return AdoptResult(to_adopt=to_adopt or [], to_unadopt=to_unadopt or [])

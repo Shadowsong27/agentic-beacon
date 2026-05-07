@@ -1,6 +1,6 @@
 ---
 name: record-knowledge
-description: Systematically capture decisions, lessons, and facts into the project knowledge base with automatic categorization and context updates
+description: Systematically capture decisions, lessons, and facts into the warehouse knowledge base with optional context wiring
 license: MIT
 compatibility: opencode
 requires:
@@ -13,10 +13,10 @@ requires:
 
 ## Purpose
 
-Streamline the process of recording knowledge by:
-1. Analyzing context to determine knowledge type (decision/lesson/fact)
-2. Creating properly formatted atomic knowledge files
-3. Updating context files with pointers to new knowledge
+Capture decisions, lessons, and facts into the connected warehouse knowledge base.
+Writes knowledge files directly to the warehouse working tree. Knowledge files are
+auto-derived during `abc sync` / `abc adopt`; only optional context pointer edits
+are queued in `.agentic-beacon/pending.yaml` for project wiring.
 
 ---
 
@@ -40,6 +40,18 @@ Streamline the process of recording knowledge by:
 ```
 /record-knowledge We decided to use Pydantic instead of dataclasses for all data carriers because it provides automatic validation and serialization
 ```
+
+---
+
+## Prerequisites
+
+This skill requires a connected warehouse. Verify at the start:
+
+```bash
+uv run ${SKILL_DIR}/scripts/resolve_warehouse.py
+```
+
+If this command fails with `Error: no warehouse connected. Run 'abc warehouse connect <path>' first.`, stop immediately and surface the error to the user. Do not continue.
 
 ---
 
@@ -67,26 +79,28 @@ Examine the user's description and determine:
 - Technical specifications
 - Process descriptions
 
-### Step 2: Create Knowledge File
+### Step 2: Resolve Warehouse
 
-**File naming:**
-- Use kebab-case
-- Be descriptive but concise
-- Example: `use-pydantic-for-data-carriers.md`
+Run the warehouse resolver and capture the path:
 
-**File location (on disk in an Agentic Beacon project):**
-- Decisions: `.agentic-beacon/artifacts/knowledge/decisions/<name>.md`
-- Lessons: `.agentic-beacon/artifacts/knowledge/lessons/<name>.md`
-- Facts: `.agentic-beacon/artifacts/knowledge/facts/<name>.md`
+```bash
+WAREHOUSE_ROOT=$(uv run ${SKILL_DIR}/scripts/resolve_warehouse.py)
+```
 
-**Warehouse-relative reference (for context pointers):**
-- `knowledge/decisions/<name>.md`
-- `knowledge/lessons/<name>.md`
-- `knowledge/facts/<name>.md`
+If the command exits non-zero, surface the stderr output to the user and stop.
 
-**File format:**
+### Step 3: Create Knowledge File in Warehouse
 
-**For Decisions:**
+**File naming:** kebab-case, descriptive but concise.
+Example: `use-pydantic-for-data-carriers.md`
+
+**Write to (warehouse-relative paths):**
+- Decisions: `$WAREHOUSE_ROOT/knowledge/decisions/<name>.md`
+- Lessons: `$WAREHOUSE_ROOT/knowledge/lessons/<name>.md`
+- Facts: `$WAREHOUSE_ROOT/knowledge/facts/<name>.md`
+
+**File format — Decisions:**
+
 ```markdown
 # Decision: [Title]
 
@@ -126,7 +140,8 @@ Examine the user's description and determine:
 2. [Alternative 2] - [Why not chosen]
 ```
 
-**For Lessons:**
+**File format — Lessons:**
+
 ```markdown
 # Lesson: [Title]
 
@@ -161,7 +176,8 @@ Examine the user's description and determine:
 [Impact of following/not following this lesson]
 ```
 
-**For Facts:**
+**File format — Facts:**
+
 ```markdown
 # Fact: [Title]
 
@@ -187,133 +203,134 @@ Examine the user's description and determine:
 [Critical information]
 ```
 
-### Step 3: Ask User for Context File
+### Step 4: Ask User for Context Pointer Target
 
-First, infer the most likely context file from the current session:
-- If an `AGENTS.md` (or similar context file) is already loaded in the session, default to that file
-- If multiple context files are loaded, prefer the most specific one (project-level over global)
-- If none can be inferred, fall back to `AGENTS.md`
+List the available warehouse context files:
 
-**Question to user:**
+```bash
+ls $WAREHOUSE_ROOT/contexts/*.md 2>/dev/null
+```
+
+Present options to the user — **only warehouse context files plus "skip"**:
+
 ```
 Where should I add a pointer to this knowledge?
 
 Options:
-1. [Inferred file from current context] (default)
-2. Skip - don't add to any context file yet
-3. Custom path - specify another file
+1. contexts/development-guidelines.md
+2. contexts/architecture.md
+...
+N. Skip — don't add a pointer yet
 
-Default: [inferred file, or AGENTS.md if none detected]
+Default: Skip
 ```
 
-### Step 4: Update Context File
+**Important constraints:**
+- Only offer files found under `$WAREHOUSE_ROOT/contexts/`
+- Do NOT offer any project-local files as pointer targets
+- If no context files exist in the warehouse, skip this step automatically
 
-If user chooses a context file, add a pointer in the appropriate section:
+### Step 5: Diff-Confirm Before Writing Pointer
 
-**Format:**
-```markdown
-**Brief:** [One-sentence summary]
+If the user chose a context file, identify the existing section in that file where
+the pointer fits best (based on topic relevance). If no section fits, ask the user
+to skip or pick a section manually — never auto-create new section headings.
 
-**Read:** [Relative path to knowledge file]
+Show the proposed change before writing:
+
+```
+Proposed addition to contexts/<file>.md under section "## <Section>":
+
++ **Brief:** [One-sentence summary]
++ **Read:** [knowledge/<type>/<name>.md]
+
+Apply this change? [y/N]:
 ```
 
-**Example in AGENTS.md:**
-```markdown
-### Data Modeling
+Write to `$WAREHOUSE_ROOT/contexts/<file>.md` only after the user confirms.
 
-**Brief:** Use Pydantic BaseModel for all data carriers to get automatic validation.
+### Step 6: Append context pointer to pending.yaml
 
-**Read:** [Decision: Use Pydantic for Data Carriers](knowledge/decisions/use-pydantic-for-data-carriers.md)
+Do **not** append the created `knowledge/<type>/<name>.md` file to
+`pending.yaml`. Knowledge is auto-derived from context and skill references during
+`abc sync` / `abc adopt` and does not require beacon.yaml or symlink adoption.
+
+If the user confirmed a context pointer write in Step 5, append only that context
+entry:
+
+```bash
+uv run ${SKILL_DIR}/scripts/append_pending.py \
+  --path contexts/<file>.md \
+  --type context \
+  --action modified \
+  --source record-knowledge
 ```
 
-### Step 5: Confirm Completion
+### Step 7: Confirm Completion
 
-Report to user:
 ```
 ✅ Knowledge recorded successfully!
 
-Type: [Decision|Lesson|Fact]
-File: .agentic-beacon/artifacts/knowledge/[type]/[filename].md
-Context updated: [Yes - AGENTS.md | No | Custom file]
+Type:            [Decision|Lesson|Fact]
+Warehouse file:  $WAREHOUSE_ROOT/knowledge/<type>/<name>.md
+Context pointer: [contexts/<file>.md | Skipped]
+Pending entries: [1 if context pointer written, otherwise 0]
 
-You can now reference this knowledge with:
-**Read:** [knowledge/[type]/[filename].md]
+Run 'abc adopt' to wire the context pointer if one was queued.
 ```
 
 ---
 
 ## Examples
 
-### Example 1: Recording a Decision
+### Example 1: Recording a Decision (with pointer)
 
 **User:**
 ```
-/record-knowledge We decided not to commit temporary handoff docs because they clutter the repo and duplicate proper documentation
+/record-knowledge We decided not to commit temporary handoff docs because they clutter the repo
 ```
 
 **Agent:**
-1. Analyzes: This is a **decision** (key phrase: "decided not to")
-2. Creates: `.agentic-beacon/artifacts/knowledge/decisions/no-temporary-docs.md`
-3. Asks: "Where should I add a pointer?" → User: "AGENTS.md"
-4. Updates: Adds pointer in AGENTS.md under "Development Guidelines"
-5. Confirms: "✅ Knowledge recorded successfully!"
+1. Analyzes: this is a **decision**
+2. Resolves warehouse path via `resolve_warehouse.py`
+3. Creates: `$WAREHOUSE_ROOT/knowledge/decisions/no-temporary-docs.md`
+4. Lists warehouse contexts → user picks `contexts/development-guidelines.md`
+5. Shows diff → user confirms
+6. Writes pointer under appropriate section
+7. Runs `append_pending.py` once for the modified context
+8. Reports with `abc adopt` reminder for the context pointer
 
-### Example 2: Recording a Lesson
+### Example 2: Recording a Lesson (skip pointer)
 
 **User:**
 ```
-/record-knowledge When updating warehouse structure, always regenerate examples/sample-warehouse to keep it in sync
+/record-knowledge When updating warehouse structure, always regenerate examples/sample-warehouse
 ```
 
 **Agent:**
-1. Analyzes: This is a **lesson** (key phrase: "always", pattern description)
-2. Creates: `.agentic-beacon/artifacts/knowledge/lessons/updating-warehouse-structure.md`
-3. Asks: "Where should I add a pointer?" → User: "AGENTS.md"
-4. Updates: Adds pointer in AGENTS.md under "Common Patterns"
-5. Confirms: "✅ Knowledge recorded successfully!"
-
-### Example 3: Recording a Fact
-
-**User:**
-```
-/record-knowledge The CLI package is located in libs/beacon/ and uses uv for building
-```
-
-**Agent:**
-1. Analyzes: This is a **fact** (key phrase: "is located", descriptive)
-2. Creates: `.agentic-beacon/artifacts/knowledge/facts/cli-development-workflow.md`
-3. Asks: "Where should I add a pointer?" → User: "Skip"
-4. Skips context update
-5. Confirms: "✅ Knowledge recorded successfully! (No context update)"
-
----
-
-## Important Notes
-
-- **Analyze carefully** - Read the full context to determine type
-- **Use proper formatting** - Follow the templates exactly
-- **Be atomic** - One knowledge item per file
-- **Always ask** - Don't assume which context file to update
-- **Default to AGENTS.md** - Most common choice for project knowledge
-- **Date everything** - Use current date in YYYY-MM-DD format
+1. Analyzes: this is a **lesson**
+2. Resolves warehouse path
+3. Creates: `$WAREHOUSE_ROOT/knowledge/lessons/updating-warehouse-structure.md`
+4. User chooses: "Skip"
+5. Does not write pending.yaml (knowledge is auto-derived)
+6. Reports completion with no `abc adopt` reminder
 
 ---
 
 ## Checklist for Agent
 
-When executing this skill:
-
 - [ ] Read user's knowledge description carefully
 - [ ] Analyze and determine type (decision/lesson/fact)
+- [ ] Run `resolve_warehouse.py` — STOP if it exits non-zero
 - [ ] Choose appropriate filename (kebab-case)
-- [ ] Create file in correct location
-- [ ] Use correct template format
-- [ ] Fill in all required sections
-- [ ] Ask user where to add pointer
-- [ ] Update context file if requested
-- [ ] Confirm completion with summary
+- [ ] Write file to `$WAREHOUSE_ROOT/knowledge/<type>/` (warehouse, not the project)
+- [ ] Ask user which warehouse `contexts/` file for the pointer — or skip
+- [ ] Show diff before writing pointer; wait for explicit confirmation
+- [ ] Do NOT run `append_pending.py` for the knowledge file
+- [ ] Run `append_pending.py` for the context file if pointer was written
+- [ ] Confirm completion; remind user to run `abc adopt` only if a context pointer was queued
 
 ---
 
-**Skill Version:** 1.0.0
-**Last Updated:** 2026-03-07
+**Skill Version:** 2.0.0
+**Last Updated:** 2026-05-06

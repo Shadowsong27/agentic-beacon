@@ -14,6 +14,7 @@ from loguru import logger
 GITIGNORE_ENTRIES = [
     ".agentic-beacon/config.toml",
     ".agentic-beacon/artifacts/",
+    ".agentic-beacon/pending.yaml",
 ]
 
 # Section header for our entries

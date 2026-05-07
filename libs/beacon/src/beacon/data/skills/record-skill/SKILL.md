@@ -1,6 +1,6 @@
 ---
 name: record-skill
-description: Scaffold new Beacon skills with proper frontmatter, section structure, and optional PEP 723 Python scripts.
+description: Scaffold new Beacon skills in the warehouse with LLM-driven content generation and pending-based wiring
 license: MIT
 compatibility: opencode
 requires:
@@ -11,168 +11,216 @@ requires:
 
 ## Purpose
 
-Create properly structured Beacon skills from an interactive prompt. Generates:
+Create properly structured Beacon skills in the connected warehouse. The bundled
+`write_skill.py` script generates a skill directory at
+`<warehouse>/skills/<name>/` with `SKILL.md` and an optional PEP 723 script,
+then `append_pending.py` queues it for adoption via `abc adopt`.
 
-- `SKILL.md` with frontmatter (`name`, `description`, `license`, `compatibility`)
-- Standard section structure (Purpose / When to Use / Invocation / Process / Examples / Checklist)
-- Optional PEP 723 Python script under `scripts/`
+> **Important:** Do NOT write the skill files using your editor tools directly.
+> Always go through `write_skill.py`. The script enforces that the directory
+> lands inside the warehouse and refuses to write into the project's symlink
+> mirror at `.agentic-beacon/artifacts/skills/`.
 
 ## When to Use
 
 - You want to create a new skill for your team or project
-- You need a PEP 723-headed Python script as part of a skill
+- You need a skill stored in the warehouse and distributed to all connected projects
 - You want consistent skill structure across your warehouse
 
-## Scripts
+## Invocation
 
-| Script | Purpose |
-|--------|---------|
-| `${SKILL_DIR}/scripts/create_skill.py` | Interactive skill scaffolder |
-
-## Usage
-
-```bash
-# Run the interactive scaffolder
-uv run ${SKILL_DIR}/scripts/create_skill.py
+```
+/record-skill
 ```
 
-The tool prompts for:
+Or with context:
 
-1. **Skill name** (auto-normalized to kebab-case)
-2. **One-line description** (→ frontmatter `description`)
-3. **Invocation form** (e.g. `/my-skill <args>`, defaults to `/<name>`)
-4. **Include Python script?** (yes/no — generates PEP 723 inline script)
+```
+/record-skill <brief description of the skill to create>
+```
+
+---
+
+## Prerequisites
+
+This skill requires a connected warehouse. Verify at the start:
+
+```bash
+uv run ${SKILL_DIR}/scripts/resolve_warehouse.py
+```
+
+If this command fails with `Error: no warehouse connected. Run 'abc warehouse connect <path>' first.`, stop immediately and surface the error to the user. Do not continue.
+
+---
 
 ## Process
 
-### Step 1: Run the Scaffolder
+### Step 1: Gather Skill Information
+
+Ask the user for (or infer from context if already provided):
+
+1. **Skill name** — kebab-case, e.g. `deploy-check`
+2. **One-line description** — becomes frontmatter `description:`
+3. **Invocation form** — e.g. `/deploy-check` (defaults to `/<name>`)
+4. **Include Python script?** — yes/no — whether to generate a `scripts/<name>.py` PEP 723 scaffold
+
+### Step 2: Resolve Warehouse
+
+Run the warehouse resolver and capture the path:
 
 ```bash
-uv run ${SKILL_DIR}/scripts/create_skill.py
+WAREHOUSE_ROOT=$(uv run ${SKILL_DIR}/scripts/resolve_warehouse.py)
 ```
 
-### Step 2: Fill in Generated Content
+If the command exits non-zero, surface the stderr output to the user and stop.
 
-The scaffolder creates `.agentic-beacon/artifacts/skills/<name>/` with:
+### Step 3: Suggest `requires.contexts` from Warehouse Scan
+
+Read all context files under `$WAREHOUSE_ROOT/contexts/*.md` (if any exist).
+Based on the skill's name and description, identify which context files are
+relevant.
+
+Present the suggestion to the user:
 
 ```
-skills/<name>/
-├── SKILL.md
-└── scripts/
-    └── <name>.py          # only if you requested a script
+Suggested requires.contexts for "<skill-name>":
+
+  - contexts/python-standards.md
+    Reason: skill relates to Python code patterns
+
+  - contexts/testing.md
+    Reason: skill validates test quality
+
+Options:
+  1. Accept as-is
+  2. Edit the list
+  3. Skip (use empty list)
 ```
 
-Edit `SKILL.md` to complete:
-- **When to Use** — specific situations
-- **Process** — step-by-step workflow
-- **Examples** — concrete usage
+If no warehouse contexts exist or none are relevant, inform the user and use an
+empty list without prompting further.
 
-### Step 3: Implement the Script (if included)
+### Step 4: Scaffold the Skill via `write_skill.py`
 
-The generated `.py` file has a PEP 723 header:
-
-```python
-# /// script
-# requires-python = ">=3.11"
-# dependencies = []
-# ///
-```
-
-Add dependencies as you implement:
-
-```python
-# dependencies = [
-#   "requests>=2.31.0",
-#   "pydantic>=2.0.0",
-# ]
-```
-
-Test without any `pyproject.toml`:
+Invoke the writer to generate the skill directory in the warehouse. **This is
+the only way the SKILL.md and (optional) script are created.** Do not use your
+editor's write tool.
 
 ```bash
-uv run .agentic-beacon/artifacts/skills/<name>/scripts/<name>.py
+WRITTEN_DIR=$(uv run ${SKILL_DIR}/scripts/write_skill.py \
+  --name <kebab-name> \
+  --description "<one-line description>" \
+  [--invocation "/<name>"] \
+  [--include-script] \
+  [--requires-context contexts/<file>.md ...] \
+)
 ```
 
-### Step 4: Register and Sync
+The script:
+- Resolves the warehouse from `.agentic-beacon/config.toml`.
+- Refuses to write outside `<warehouse>/skills/`.
+- Refuses to overwrite an existing skill directory unless `--overwrite` is passed.
+- Creates `SKILL.md` (with `## Purpose`, `## When to Use`, `## Invocation`,
+  `## Process`, `## Examples`, `## Checklist` placeholders) using the requested
+  frontmatter.
+- If `--include-script` is set, also creates `scripts/<name>.py` as a PEP 723
+  scaffold.
+- Prints the warehouse-relative skill directory on stdout (e.g.
+  `skills/deploy-check/`).
 
-Add to `beacon.yaml`:
+If the script exits non-zero, surface the stderr to the user and stop.
 
-```yaml
-artifacts:
-  skills:
-    - skills/<name>/
+### Step 5: Optionally Fill in Body Sections
+
+The scaffolded `SKILL.md` has `<!-- ... -->` placeholders for the
+`When to Use`, `Process`, and `Examples` sections. If the user gave you enough
+context to draft these, edit `$WAREHOUSE_ROOT/skills/<name>/SKILL.md` directly
+to replace the placeholders. This is a normal in-place edit on a fully-qualified
+warehouse path; your editor's edit tool is fine here.
+
+If the user prefers to fill the body themselves, leave the placeholders as-is
+and surface that in the completion message.
+
+### Step 6: Append to pending.yaml
+
+```bash
+uv run ${SKILL_DIR}/scripts/append_pending.py \
+  --path skills/<name>/ \
+  --type skill \
+  --action created \
+  --source record-skill
 ```
 
-Run `abc sync` to distribute.
+### Step 7: Confirm Completion
+
+```
+✅ Skill scaffolded successfully!
+
+Name:              <name>
+Warehouse path:    $WAREHOUSE_ROOT/<written-dir>
+Script:            [created | not included]
+requires.contexts: [list or empty]
+Pending entry:     added to .agentic-beacon/pending.yaml
+
+Next steps:
+  1. Edit $WAREHOUSE_ROOT/skills/<name>/SKILL.md to fill in Process and Examples
+     (if you didn't draft them in Step 5)
+  2. Run 'abc adopt' to wire this skill into your project
+```
+
+---
 
 ## Examples
 
 ### Example 1: Markdown-Only Skill
 
-```bash
-$ uv run ${SKILL_DIR}/scripts/create_skill.py
-============================================================
-Beacon Skill Scaffolder
-============================================================
-
-Skill name (kebab-case): deploy-check
-One-line description: Validate deployment readiness checklist
-Invocation form [/deploy-check]:
-Include PEP 723 Python script [y/N]: n
-
-Scaffolding...
-
-============================================================
-✓ Created skill: deploy-check
-============================================================
-
-  Location: /path/to/project/.agentic-beacon/artifacts/skills/deploy-check
-  SKILL.md: /path/to/project/.agentic-beacon/artifacts/skills/deploy-check/SKILL.md
-
-Next steps:
-  1. Edit .../SKILL.md to fill in Process and Examples
-  4. Add to beacon.yaml: skills/deploy-check/
-  5. Run 'abc sync' to distribute
+**User:**
+```
+/record-skill
 ```
 
-### Example 2: Skill with PEP 723 Script
+**Agent:**
+1. Asks: name=`deploy-check`, description="Validate deployment readiness", invocation=`/deploy-check`, no script.
+2. Runs `resolve_warehouse.py`.
+3. Scans contexts — no relevant matches → user skips.
+4. Calls `write_skill.py --name deploy-check --description "Validate deployment readiness"` → script writes `skills/deploy-check/SKILL.md` to the warehouse.
+5. User chose to fill the body themselves → leave placeholders.
+6. Runs `append_pending.py --path skills/deploy-check/ --type skill --action created --source record-skill`.
+7. Reports: "✅ Skill scaffolded! Run `abc adopt` to wire it."
 
-```bash
-$ uv run ${SKILL_DIR}/scripts/create_skill.py
-Skill name (kebab-case): s3-cleanup
-One-line description: Clean old S3 buckets with configurable retention
-Include PEP 723 Python script [y/N]: y
+### Example 2: Skill with Script and Context Suggestion
 
-Scaffolding...
-
-============================================================
-✓ Created skill: s3-cleanup
-============================================================
-
-  Location: .../.agentic-beacon/artifacts/skills/s3-cleanup
-  SKILL.md: .../.agentic-beacon/artifacts/skills/s3-cleanup/SKILL.md
-  Script:   .../.agentic-beacon/artifacts/skills/s3-cleanup/scripts/s3-cleanup.py
-
-Next steps:
-  1. Edit .../SKILL.md to fill in Process and Examples
-  2. Implement logic in .../scripts/s3-cleanup.py
-  3. Test: uv run .../scripts/s3-cleanup.py
-  4. Add to beacon.yaml: skills/s3-cleanup/
-  5. Run 'abc sync' to distribute
+**User:**
+```
+/record-skill Create a skill that validates Python type annotations
 ```
 
-## Checklist
+**Agent:**
+1. Infers: name=`validate-types`, description="Validate Python type annotations", invocation=`/validate-types`, yes script.
+2. Runs `resolve_warehouse.py`.
+3. Scans contexts → suggests `contexts/python-standards.md` → user accepts.
+4. Calls `write_skill.py --name validate-types --description "Validate Python type annotations" --include-script --requires-context contexts/python-standards.md` → script writes `skills/validate-types/SKILL.md` and `skills/validate-types/scripts/validate-types.py`.
+5. Drafts a brief Process section based on the user's description and edits `SKILL.md` directly in the warehouse.
+6. Runs `append_pending.py`.
+7. Reports: "✅ Skill scaffolded! Run `abc adopt` to wire it."
 
-- [ ] Skill name is kebab-case and descriptive
-- [ ] Description is one line and clear
-- [ ] SKILL.md sections are filled in (not left as stubs)
-- [ ] Scripts run without errors (`uv run ...`)
-- [ ] beacon.yaml entry added before syncing
-- [ ] Skill tested in a real project before sharing
+---
+
+## Checklist for Agent
+
+- [ ] Gather skill name, description, invocation, include-script preference
+- [ ] Run `resolve_warehouse.py` — STOP if it exits non-zero
+- [ ] Scan warehouse contexts and propose `requires.contexts` (accept / edit / skip)
+- [ ] Call `write_skill.py` with the appropriate flags — do NOT write `SKILL.md` or the script with your editor's write tool
+- [ ] Optionally fill `When to Use`, `Process`, `Examples` placeholders by editing the warehouse `SKILL.md` in place
+- [ ] Run `append_pending.py` with `type: skill action: created source: record-skill`
+- [ ] Confirm completion and remind user to run `abc adopt`
+
+---
 
 ## PEP 723 Pattern
 
-PEP 723 (uv inline script metadata) lets Python scripts declare their own dependencies without a `pyproject.toml`:
+PEP 723 lets Python scripts declare their own dependencies without a `pyproject.toml`:
 
 ```python
 # /// script
@@ -191,8 +239,13 @@ PEP 723 (uv inline script metadata) lets Python scripts declare their own depend
 
 **Reference:** [PEP 723 – Inline script metadata](https://peps.python.org/pep-0723/)
 
+---
+
 ## Related
 
 - `record-knowledge` — Capture decisions and lessons into the knowledge base
-- `minio-ops` — Example of a Python PEP 723 skill
-- `runner-disk-cleanup` — Example of a bash skill
+
+---
+
+**Skill Version:** 2.1.0
+**Last Updated:** 2026-05-07

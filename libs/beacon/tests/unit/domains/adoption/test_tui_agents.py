@@ -24,6 +24,7 @@ class TestTUIAgents:
 
         app = AdoptApp(
             candidates,
+            [],
             adopted_paths,
             warehouse_path=wh,
         )

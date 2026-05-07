@@ -1,13 +1,17 @@
 """Artifact discovery and classification for the abc adopt command.
 
-Provides:
+Two independent flows feed the adopt TUI:
+
+1. Warehouse browser — `discover_adoptable()` returns the diff between the
+   warehouse and `beacon.yaml`. Items in `pending.yaml` are excluded so they
+   don't double-show in both sections.
+2. Pending TODO — `discover_pending()` returns the entries currently in
+   `pending.yaml` for resolution.
+
+Other helpers:
 - classify_artifact_type(): map warehouse-relative paths to artifact types
-- find_knowledge_node_for_file(): locate knowledge nodes from file paths
-- list_knowledge_nodes(): scan warehouse for all knowledge nodes
-- discover_adoptable(): full-scan discovery with recent-commit annotation
 - count_unadopted_since(): lightweight count for sync notification
 - is_adopted(): check whether a path is already declared in beacon.yaml
-- build_candidates(): construct AdoptCandidate lists from file paths
 """
 
 from __future__ import annotations
@@ -16,17 +20,14 @@ import fnmatch
 import re
 import subprocess
 from pathlib import Path
-from typing import TYPE_CHECKING
 
+from beacon.core.manifest.beacon import BeaconManifest
+from beacon.core.manifest.pending import PendingEntry, PendingManifest
 from beacon.domains.adoption.models import (
     ADOPTABLE_TYPES,
     NEW_TAG_MAX_COMMITS,
     AdoptCandidate,
 )
-
-if TYPE_CHECKING:
-    from beacon.core.manifest.beacon import BeaconManifest
-
 
 # ─────────────────────────────────────────────────────────────
 # Classification helpers
@@ -230,75 +231,25 @@ def annotate_with_commits_ago(
 
 
 # ─────────────────────────────────────────────────────────────
-# Candidate building
+# Warehouse-vs-beacon.yaml diff (browser flow)
 # ─────────────────────────────────────────────────────────────
-
-
-def build_candidates(
-    warehouse_path: Path,
-    paths: list[str],
-    beacon_settings: BeaconManifest,
-    *,
-    is_new: bool,
-) -> list[AdoptCandidate]:
-    """Build AdoptCandidate list from a list of warehouse-relative file paths.
-
-    Skills are grouped by directory.
-    """
-    seen_skill_dirs: set[str] = set()
-    candidates: list[AdoptCandidate] = []
-
-    for path in paths:
-        artifact_type = classify_artifact_type(path)
-        if artifact_type is None:
-            continue
-
-        if artifact_type == "skills":
-            skill_dir = skill_dir_from_path(path)
-            skill_key = skill_dir.rstrip("/")
-            if skill_key in seen_skill_dirs:
-                continue
-            if is_adopted(skill_dir, beacon_settings):
-                continue
-            seen_skill_dirs.add(skill_key)
-            skill_md = (
-                warehouse_path / "skills" / skill_key.split("/", 1)[-1] / "SKILL.md"
-            )
-            desc = (
-                extract_skill_description(skill_md.read_text(encoding="utf-8"))
-                if skill_md.exists()
-                else ""
-            )
-            candidates.append(
-                AdoptCandidate(
-                    artifact_type="skills",
-                    path=skill_dir,
-                    description=desc,
-                    is_new=is_new,
-                )
-            )
-        else:
-            if is_adopted(path, beacon_settings):
-                continue
-            desc = extract_description(warehouse_path, path)
-            candidates.append(
-                AdoptCandidate(
-                    artifact_type=artifact_type,
-                    path=path,
-                    description=desc,
-                    is_new=is_new,
-                )
-            )
-
-    return candidates
 
 
 def discover_all(
     warehouse_path: Path,
     beacon_settings: BeaconManifest,
+    *,
+    excluded_paths: set[str] | None = None,
 ) -> list[AdoptCandidate]:
-    """Full-scan mode: return every warehouse artifact not in beacon.yaml."""
+    """Full-scan: every warehouse artifact not in beacon.yaml and not excluded.
+
+    *excluded_paths* (optional) — warehouse-relative paths to skip. Used by the
+    CLI to hide entries that are also in pending.yaml so they show up only in
+    the pending section of the TUI.
+    """
     from beacon.domains.distribution.distributor import WarehouseDistributor
+
+    excluded = excluded_paths or set()
 
     distributor = WarehouseDistributor(
         warehouse_root=warehouse_path,
@@ -308,8 +259,9 @@ def discover_all(
 
     candidates: list[AdoptCandidate] = []
 
-    # Contexts — list_available returns paths like "contexts/foo.md"
     for ctx_path in available.get("contexts", []):
+        if ctx_path in excluded:
+            continue
         if not is_adopted(ctx_path, beacon_settings):
             desc = extract_description(warehouse_path, ctx_path)
             candidates.append(
@@ -317,13 +269,13 @@ def discover_all(
                     artifact_type="contexts",
                     path=ctx_path,
                     description=desc,
-                    is_new=False,
                 )
             )
 
-    # Skills — list_available returns skill names like "example-skill"
     for skill_name in available.get("skills", []):
         skill_path = f"skills/{skill_name}/"
+        if skill_path in excluded:
+            continue
         if not is_adopted(skill_path, beacon_settings):
             skill_md = warehouse_path / "skills" / skill_name / "SKILL.md"
             desc = (
@@ -336,18 +288,15 @@ def discover_all(
                     artifact_type="skills",
                     path=skill_path,
                     description=desc,
-                    is_new=False,
                 )
             )
 
-    # Agents — list_available returns paths like "agents/code-reviewer.md".
-    # Per Decision 1, "adopted" for the adopt TUI means "declared in
+    # Agents — Per Decision 1, "adopted" for the adopt TUI means "declared in
     # beacon.yaml.artifacts.agents". Global install state is a side effect of
-    # ticking — not the source of truth for project membership. Filtering on
-    # global state would hide globally-installed agents from existing users
-    # running `abc adopt` post-upgrade to opt into per-project tracking (the
-    # migration path documented in design.md Decision 4).
+    # ticking, not the source of truth for project membership.
     for agent_path in available.get("agents", []):
+        if agent_path in excluded:
+            continue
         if not is_adopted(agent_path, beacon_settings):
             desc = extract_description(warehouse_path, agent_path)
             candidates.append(
@@ -355,16 +304,10 @@ def discover_all(
                     artifact_type="agents",
                     path=agent_path,
                     description=desc,
-                    is_new=False,
                 )
             )
 
     return candidates
-
-
-# ─────────────────────────────────────────────────────────────
-# Public API: discovery
-# ─────────────────────────────────────────────────────────────
 
 
 def discover_adoptable(
@@ -373,6 +316,7 @@ def discover_adoptable(
     sync_sha: str | None = None,
     *,
     show_all: bool = False,
+    excluded_paths: set[str] | None = None,
 ) -> tuple[list[AdoptCandidate], list[str]]:
     """Discover warehouse artifacts available to adopt.
 
@@ -384,15 +328,40 @@ def discover_adoptable(
         beacon_settings: Parsed beacon.yaml settings.
         sync_sha: Kept for backward compatibility; no longer used for discovery.
         show_all: Kept for backward compatibility; full scan is always used.
+        excluded_paths: Warehouse-relative paths to skip (e.g. items in pending.yaml).
 
     Returns:
         (candidates, updated_adopted_paths) where:
         - candidates: unadopted AdoptCandidates with commits_ago annotated
         - updated_adopted_paths: always empty (retained for API compatibility)
     """
-    candidates = discover_all(warehouse_path, beacon_settings)
+    candidates = discover_all(
+        warehouse_path, beacon_settings, excluded_paths=excluded_paths
+    )
     annotate_with_commits_ago(candidates, warehouse_path)
     return candidates, []
+
+
+# ─────────────────────────────────────────────────────────────
+# Pending TODO discovery
+# ─────────────────────────────────────────────────────────────
+
+
+def discover_pending(project_root: Path) -> list[PendingEntry]:
+    """Return the pending.yaml entries for resolution in the adopt TUI.
+
+    The pending TODO is a flat list — each entry came from a specific authoring
+    source (record-knowledge, record-skill, manual edit) and is resolved
+    independently as accept (adopt + remove) or reject (remove only).
+    """
+    pending_path = project_root / ".agentic-beacon" / "pending.yaml"
+    manifest = PendingManifest.from_yaml(pending_path)
+    return list(manifest.pending)
+
+
+# ─────────────────────────────────────────────────────────────
+# Sync notification count
+# ─────────────────────────────────────────────────────────────
 
 
 def count_unadopted_since(

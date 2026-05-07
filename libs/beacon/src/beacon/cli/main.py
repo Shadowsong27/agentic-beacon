@@ -1,6 +1,7 @@
 """Main Click group and command registration for the abc CLI."""
 
 import sys
+from pathlib import Path
 
 import click
 from loguru import logger
@@ -8,6 +9,7 @@ from loguru import logger
 from beacon.cli.adoption import adopt
 from beacon.cli.agent import agents, list_cmd
 from beacon.cli.diagnostics import doctor
+from beacon.cli.pending_alert import maybe_emit_pending_alert
 from beacon.cli.setup import setup
 from beacon.cli.sync import clean, reset_cmd, status, sync, update
 from beacon.cli.warehouse import warehouse
@@ -18,6 +20,7 @@ from beacon.cli.warehouse import warehouse
 @click.option("--verbose", is_flag=True, help="Enable verbose logging")
 def main(*, verbose: bool) -> None:
     """Agentic Beacon CLI (abc) - Guide your agents with distributed knowledge."""
+    maybe_emit_pending_alert(Path.cwd())
     if verbose:
         logger.remove()
         logger.add(sys.stderr, level="DEBUG")
