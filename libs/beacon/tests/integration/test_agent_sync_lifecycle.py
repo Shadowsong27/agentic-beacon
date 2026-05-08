@@ -470,3 +470,145 @@ def test_sync_unwires_removed_agent(project_dir: Path, warehouse: Path, monkeypa
     assert not claude_link.exists() and not claude_link.is_symlink(), (
         ".claude/agents symlink must be removed when agent is pruned"
     )
+
+
+# ---------------------------------------------------------------------------
+# PER-131: rollback when agent wire fails mid-sync
+# ---------------------------------------------------------------------------
+
+
+def test_sync_rollback_when_agent_wire_fails(
+    project_dir: Path, warehouse: Path, monkeypatch
+):
+    """A wire failure mid-sync rolls back successfully-wired agent symlinks.
+
+    Regression guard for PER-131: wire_agent_claudecode / wire_agent_opencode
+    can raise BeaconSyncError (e.g., regular file at destination per the
+    round-5 user-owned-content policy). Without rollback, the project ends up
+    half-wired. The wire_agents_atomically helper must restore all wired
+    destinations to their pre-wire state before re-raising.
+    """
+    runner = CliRunner()
+    monkeypatch.chdir(project_dir)
+
+    # Add a second agent to the warehouse so we have two to wire.
+    (warehouse / "agents" / "agent-b.md").write_text(
+        "---\nname: agent-b\n---\n# Agent B\n"
+    )
+    manifest_path = warehouse / "agents" / "agents.yaml"
+    manifest = yaml.safe_load(manifest_path.read_text()) or {}
+    manifest["agent-b"] = {"skills": []}
+    manifest_path.write_text(yaml.safe_dump(manifest))
+    _git_add_commit(warehouse, "add agent-b")
+
+    # Plant a regular file at agent-b's .claude destination so the second
+    # agent's claudecode wire raises BeaconSyncError (user-owned-content
+    # policy). agent-a's .claude wire must have already succeeded by then;
+    # rollback must remove it.
+    (project_dir / ".claude" / "agents").mkdir(parents=True, exist_ok=True)
+    (project_dir / ".claude" / "agents" / "agent-b.md").write_text("user content")
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n"
+        "  contexts: []\n"
+        "  skills: []\n"
+        "  agents:\n"
+        "    - agents/spec-planner.md\n"
+        "    - agents/agent-b.md\n"
+    )
+
+    # Act: sync must fail due to the regular-file blocker on agent-b.
+    r = runner.invoke(main, ["sync", "--skip-git-check"])
+    assert r.exit_code != 0, (
+        f"sync should have failed but exited {r.exit_code}: {r.output}"
+    )
+
+    # Assert: spec-planner's .claude destination was rolled back.
+    cc_a = project_dir / ".claude" / "agents" / "spec-planner.md"
+    assert not cc_a.exists() and not cc_a.is_symlink(), (
+        f".claude/agents/spec-planner.md must be rolled back; "
+        f"still present: {cc_a.is_symlink()=}, {cc_a.exists()=}"
+    )
+
+    # The user's regular file at agent-b's .claude dest must be UNTOUCHED.
+    assert (project_dir / ".claude" / "agents" / "agent-b.md").read_text() == (
+        "user content"
+    ), "user-owned regular file must be preserved"
+
+
+def test_sync_rollback_when_agent_wire_fails_dual_tool(
+    project_dir: Path, warehouse: Path, monkeypatch
+):
+    """Dual-tool variant of the rollback regression guard.
+
+    When BOTH .claude/ and .opencode/ exist, wire_agents_atomically takes
+    two snapshots per agent (one per tool). The rollback must reverse all
+    snapshots, not just one tool's. This test exercises the path where
+    spec-planner is fully wired into BOTH tools before agent-b's opencode
+    wire fails — both spec-planner destinations must be rolled back.
+    """
+    runner = CliRunner()
+    monkeypatch.chdir(project_dir)
+
+    # Add a second agent to the warehouse.
+    (warehouse / "agents" / "agent-b.md").write_text(
+        "---\nname: agent-b\n---\n# Agent B\n"
+    )
+    manifest_path = warehouse / "agents" / "agents.yaml"
+    manifest = yaml.safe_load(manifest_path.read_text()) or {}
+    manifest["agent-b"] = {"skills": []}
+    manifest_path.write_text(yaml.safe_dump(manifest))
+    _git_add_commit(warehouse, "add agent-b")
+
+    # Ensure BOTH tool dirs exist so detect_agent_targets returns both.
+    (project_dir / ".opencode").mkdir(exist_ok=True)
+
+    # Plant a regular file at agent-b's .opencode destination — this is the
+    # LAST wire in the helper's loop (claudecode runs first per agent), so
+    # spec-planner is fully wired into BOTH tools AND agent-b's claudecode
+    # wire succeeds before the opencode wire on agent-b fails. Rollback
+    # must restore three previously-wired destinations.
+    (project_dir / ".opencode" / "agents").mkdir(parents=True, exist_ok=True)
+    (project_dir / ".opencode" / "agents" / "agent-b.md").write_text("user content")
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n"
+        "  contexts: []\n"
+        "  skills: []\n"
+        "  agents:\n"
+        "    - agents/spec-planner.md\n"
+        "    - agents/agent-b.md\n"
+    )
+
+    # Act: sync must fail due to the regular-file blocker on agent-b's .opencode.
+    r = runner.invoke(main, ["sync", "--skip-git-check"])
+    assert r.exit_code != 0, (
+        f"sync should have failed but exited {r.exit_code}: {r.output}"
+    )
+
+    # Assert: spec-planner's BOTH destinations were rolled back.
+    cc_a = project_dir / ".claude" / "agents" / "spec-planner.md"
+    oc_a = project_dir / ".opencode" / "agents" / "spec-planner.md"
+    assert not cc_a.exists() and not cc_a.is_symlink(), (
+        f".claude/agents/spec-planner.md must be rolled back; "
+        f"still present: {cc_a.is_symlink()=}, {cc_a.exists()=}"
+    )
+    assert not oc_a.exists() and not oc_a.is_symlink(), (
+        f".opencode/agents/spec-planner.md must be rolled back; "
+        f"still present: {oc_a.is_symlink()=}, {oc_a.exists()=}"
+    )
+
+    # Assert: agent-b's .claude wire was rolled back (it succeeded before
+    # the opencode failure).
+    cc_b = project_dir / ".claude" / "agents" / "agent-b.md"
+    assert not cc_b.exists() and not cc_b.is_symlink(), (
+        f".claude/agents/agent-b.md must be rolled back; "
+        f"still present: {cc_b.is_symlink()=}, {cc_b.exists()=}"
+    )
+
+    # The user's regular file at agent-b's .opencode dest must be UNTOUCHED.
+    assert (project_dir / ".opencode" / "agents" / "agent-b.md").read_text() == (
+        "user content"
+    ), "user-owned regular file must be preserved"

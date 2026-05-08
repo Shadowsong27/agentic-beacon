@@ -6,12 +6,15 @@ Covers TC1-TC5 from tasks 1.1, TC1-TC3 from task 1.2, and TC1-TC4 from task 1.3.
 from pathlib import Path
 
 import pytest
+from beacon.core.exceptions import BeaconSyncError
+from beacon.domains.artifact.agent import snapshot_agent_path
 from beacon.domains.setup.wiring import (
     unwire_agent,
     unwire_agent_with_undo,
     unwire_pruned_artifacts,
     wire_agent_claudecode,
     wire_agent_opencode,
+    wire_agents_atomically,
 )
 
 # ---------------------------------------------------------------------------
@@ -365,3 +368,192 @@ def test_wire_agent_opencode_refuses_to_overwrite_regular_file(tmp_path):
         wire_agent_opencode(tmp_path, artifact_file)
     assert "regular file" in str(exc.value)
     assert target.read_text() == "user-authored content"
+
+
+# ---------------------------------------------------------------------------
+# snapshot_agent_path (PER-131)
+# ---------------------------------------------------------------------------
+
+
+class TestSnapshotAgentPath:
+    def test_missing_returns_missing_none(self, tmp_path):
+        """Path that does not exist → ('missing', None)."""
+        p = tmp_path / "nope.md"
+        assert snapshot_agent_path(p) == ("missing", None)
+
+    def test_regular_file_returns_regular_file_none(self, tmp_path):
+        """Regular file at path → ('regular_file', None)."""
+        p = tmp_path / "file.md"
+        p.write_text("user content")
+        assert snapshot_agent_path(p) == ("regular_file", None)
+
+    def test_symlink_returns_symlink_with_target(self, tmp_path):
+        """Symlink at path → ('symlink', target). Target captured even if dangling."""
+        target = tmp_path / "target.md"
+        target.write_text("artifact content")
+        link = tmp_path / "link.md"
+        link.symlink_to(target)
+
+        kind, captured = snapshot_agent_path(link)
+        assert kind == "symlink"
+        assert captured == target
+
+    def test_dangling_symlink_returns_symlink_with_target(self, tmp_path):
+        """Dangling symlink (target deleted) still snapshots as ('symlink', target)."""
+        target = tmp_path / "ghost.md"
+        link = tmp_path / "link.md"
+        link.symlink_to(target)
+        # target never created — symlink is dangling
+
+        kind, captured = snapshot_agent_path(link)
+        assert kind == "symlink"
+        assert captured == target
+
+
+# ---------------------------------------------------------------------------
+# wire_agents_atomically (PER-131)
+# ---------------------------------------------------------------------------
+
+
+def _make_artifact(base: Path, name: str, content: str = "x") -> Path:
+    """Create an artifact file under base/agents/ and return its Path."""
+    artifact = base / "agents" / name
+    artifact.parent.mkdir(parents=True, exist_ok=True)
+    artifact.write_text(content)
+    return artifact
+
+
+class TestWireAgentsAtomically:
+    def test_empty_list_is_noop(self, tmp_path):
+        """No agents → helper returns without touching anything."""
+        project = tmp_path / "proj"
+        project.mkdir()
+
+        wire_agents_atomically(project, [], {"claudecode", "opencode"})
+
+        # No directories should have been created by the helper itself.
+        assert not (project / ".claude" / "agents").exists()
+        assert not (project / ".opencode" / "agents").exists()
+
+    def test_happy_path_single_tool(self, tmp_path):
+        """One agent, one tool, missing dest → wired symlink."""
+        project = tmp_path / "proj"
+        project.mkdir()
+        artifact = _make_artifact(tmp_path / "warehouse", "spec-planner.md")
+
+        wire_agents_atomically(project, [artifact], {"claudecode"})
+
+        dest = project / ".claude" / "agents" / "spec-planner.md"
+        assert dest.is_symlink()
+        assert dest.readlink() == artifact
+
+    def test_happy_path_dual_tool(self, tmp_path):
+        """One agent, both tools detected → wired in both."""
+        project = tmp_path / "proj"
+        project.mkdir()
+        artifact = _make_artifact(tmp_path / "warehouse", "spec-planner.md")
+
+        wire_agents_atomically(project, [artifact], {"claudecode", "opencode"})
+
+        for tool in (".claude", ".opencode"):
+            dest = project / tool / "agents" / "spec-planner.md"
+            assert dest.is_symlink(), f"{dest} must be a symlink"
+            assert dest.readlink() == artifact
+
+    def test_rollback_unwires_when_second_agent_fails(self, tmp_path):
+        """First agent wires; second raises → first is unwired (rollback)."""
+        project = tmp_path / "proj"
+        project.mkdir()
+
+        artifact_a = _make_artifact(tmp_path / "warehouse", "agent-a.md")
+        artifact_b = _make_artifact(tmp_path / "warehouse", "agent-b.md")
+
+        # Plant a regular-file blocker at agent-b's claudecode dest so the
+        # SECOND wire_agent_claudecode call raises BeaconSyncError.
+        blocker = project / ".claude" / "agents" / "agent-b.md"
+        blocker.parent.mkdir(parents=True, exist_ok=True)
+        blocker.write_text("user content")
+
+        with pytest.raises(BeaconSyncError):
+            wire_agents_atomically(project, [artifact_a, artifact_b], {"claudecode"})
+
+        # agent-a's destination must be rolled back (no symlink left).
+        dest_a = project / ".claude" / "agents" / "agent-a.md"
+        assert not dest_a.is_symlink() and not dest_a.exists()
+
+        # User's regular file at agent-b's dest must be untouched.
+        assert blocker.read_text() == "user content"
+
+    def test_rollback_restores_prior_symlink_target(self, tmp_path):
+        """Pre-existing symlink at dest → wire replaces → rollback restores prior target.
+
+        This exercises the 'symlink' branch of _rollback that the missing→wired
+        integration tests don't cover.
+        """
+        project = tmp_path / "proj"
+        project.mkdir()
+
+        # Pre-existing symlink at agent-a's dest → /tmp/.../old-target
+        old_target = tmp_path / "old-target.md"
+        old_target.write_text("old content")
+        dest_a = project / ".claude" / "agents" / "agent-a.md"
+        dest_a.parent.mkdir(parents=True, exist_ok=True)
+        dest_a.symlink_to(old_target)
+
+        # New artifact-a (different from old_target) — wire will replace.
+        artifact_a = _make_artifact(tmp_path / "warehouse", "agent-a.md", "new")
+        artifact_b = _make_artifact(tmp_path / "warehouse", "agent-b.md")
+
+        # Blocker on agent-b's claudecode dest → second wire raises.
+        blocker = project / ".claude" / "agents" / "agent-b.md"
+        blocker.write_text("user content")
+
+        with pytest.raises(BeaconSyncError):
+            wire_agents_atomically(project, [artifact_a, artifact_b], {"claudecode"})
+
+        # agent-a's dest must be restored to point at old_target, NOT artifact_a.
+        assert dest_a.is_symlink(), "agent-a dest must remain a symlink"
+        assert dest_a.readlink() == old_target, (
+            f"agent-a must be restored to old-target; "
+            f"current readlink={dest_a.readlink()}"
+        )
+
+    def test_rollback_preserves_user_regular_file(self, tmp_path):
+        """A regular-file snapshot is recorded but rollback must not touch it.
+
+        The wire helpers refuse to overwrite regular files, so the wire never
+        succeeded for that path and rollback's regular_file branch is a no-op.
+        """
+        project = tmp_path / "proj"
+        project.mkdir()
+
+        # User-owned regular file at the very FIRST destination — wire fails
+        # immediately.
+        dest = project / ".claude" / "agents" / "agent-a.md"
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text("user content")
+
+        artifact_a = _make_artifact(tmp_path / "warehouse", "agent-a.md")
+
+        with pytest.raises(BeaconSyncError):
+            wire_agents_atomically(project, [artifact_a], {"claudecode"})
+
+        # User's file is preserved verbatim.
+        assert dest.read_text() == "user content"
+        assert not dest.is_symlink()
+
+    def test_unknown_tool_in_detected_set_is_ignored(self, tmp_path):
+        """Tool keys not in {'claudecode', 'opencode'} are silently ignored.
+
+        Forward-compat guard: future tool additions must be opt-in via explicit
+        if-branches in the helper, not via the detected_tools set alone.
+        """
+        project = tmp_path / "proj"
+        project.mkdir()
+        artifact = _make_artifact(tmp_path / "warehouse", "spec-planner.md")
+
+        wire_agents_atomically(project, [artifact], {"claudecode", "future-tool"})
+
+        # Only claudecode wired; future-tool was ignored.
+        assert (project / ".claude" / "agents" / "spec-planner.md").is_symlink()
+        assert not (project / ".future-tool").exists()
