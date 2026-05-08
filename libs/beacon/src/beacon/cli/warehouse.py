@@ -11,7 +11,6 @@ from rich.table import Table
 
 from beacon.core.gitignore import GitignoreManager
 from beacon.core.manifest.workspace import WorkspaceConfig
-from beacon.domains.artifact.agent import ensure_agent_dirs_gitignored
 from beacon.domains.distribution.distributor import WarehouseDistributor
 from beacon.domains.distribution.upgrader import WarehouseUpgrader
 from beacon.domains.setup.initializer import WarehouseInitializer, ensure_beacon_dir
@@ -265,7 +264,10 @@ def connect(*, path: Path | None) -> None:
         gitignore_mgr = GitignoreManager(Path.cwd())
         if gitignore_mgr.ensure_entries():
             console.print("[green]✓[/green] Updated .gitignore")
-        ensure_agent_dirs_gitignored(Path.cwd())
+        # PER-130 round-1 (LOW finding): agent-dir gitignore entries are NOT
+        # added during connect — `abc sync` is the authoritative gate, and
+        # adding them eagerly here churns the .gitignore for projects that
+        # will never declare agents.
 
         console.print("\n[bold green]✓ Connected to warehouse[/bold green]")
         console.print(f"  [blue]Location:[/blue] {warehouse_path}")
