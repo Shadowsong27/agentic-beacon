@@ -11,7 +11,7 @@ from rich.table import Table
 
 from beacon.core.gitignore import GitignoreManager
 from beacon.core.manifest.workspace import WorkspaceConfig
-from beacon.domains.artifact.agent import update_agent_gitignores
+from beacon.domains.artifact.agent import ensure_agent_dirs_gitignored
 from beacon.domains.distribution.distributor import WarehouseDistributor
 from beacon.domains.distribution.upgrader import WarehouseUpgrader
 from beacon.domains.setup.initializer import WarehouseInitializer, ensure_beacon_dir
@@ -265,7 +265,7 @@ def connect(*, path: Path | None) -> None:
         gitignore_mgr = GitignoreManager(Path.cwd())
         if gitignore_mgr.ensure_entries():
             console.print("[green]✓[/green] Updated .gitignore")
-        update_agent_gitignores(Path.cwd())
+        ensure_agent_dirs_gitignored(Path.cwd())
 
         console.print("\n[bold green]✓ Connected to warehouse[/bold green]")
         console.print(f"  [blue]Location:[/blue] {warehouse_path}")
