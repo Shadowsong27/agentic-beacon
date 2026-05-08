@@ -1,4 +1,4 @@
-"""Frontmatter parsing and validation for agent and skill artifacts.
+"""Frontmatter parsing and validation for skill artifacts.
 
 Implements the dependency-resolution contract from the auto-pull-artifact-dependencies
 OpenSpec change.
