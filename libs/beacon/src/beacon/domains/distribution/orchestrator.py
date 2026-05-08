@@ -499,13 +499,16 @@ def run_sync(
             force=force,
             skill_conflict_callback=skill_conflict_callback,
         )
-        # Write per-tool gitignore entries for skill directories
-        claude_dir = project_root / ".claude"
-        if claude_dir.is_dir():
-            GitignoreManager(claude_dir).ensure_entries(["skills/"])
-        opencode_dir = project_root / ".opencode"
-        if opencode_dir.is_dir():
-            GitignoreManager(opencode_dir).ensure_entries(["skills/", "command/"])
+
+    # Per-tool gitignore entries — gated on directory existence only (PER-136).
+    # Restores pre-PR-113 behaviour: any project with .claude/ or .opencode/
+    # gets tool-managed skills/ (and command/) subdirs ignored from VCS.
+    claude_dir = project_root / ".claude"
+    if claude_dir.is_dir():
+        GitignoreManager(claude_dir).ensure_entries(["skills/"])
+    opencode_dir = project_root / ".opencode"
+    if opencode_dir.is_dir():
+        GitignoreManager(opencode_dir).ensure_entries(["skills/", "command/"])
 
     # PER-113: gate on declared agents so contexts-only or skills-only projects
     # don't dirty their .gitignore with unused agent dir entries.
