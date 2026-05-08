@@ -169,6 +169,19 @@ git push origin refs/tags/agentic-beacon@vX.X.X:refs/heads/release/vX.X.X
 
 ---
 
+## CI Bot Configuration
+
+**Switch the OpenCode PR review model** without editing the workflow:
+
+```bash
+gh variable set OPENCODE_REVIEW_MODEL -R Shadowsong27/agentic-beacon --body "<model>"
+gh variable delete OPENCODE_REVIEW_MODEL -R Shadowsong27/agentic-beacon  # revert to workflow default
+```
+
+The workflow at `.github/workflows/opencode-review.yml` reads `vars.OPENCODE_REVIEW_MODEL` and falls back to `openai/gpt-5.5`.
+
+---
+
 ## Critical Safeguards
 
 - **Keep examples updated** — `examples/sample-warehouse/` must match `abc warehouse init` output
@@ -176,4 +189,4 @@ git push origin refs/tags/agentic-beacon@vX.X.X:refs/heads/release/vX.X.X
 
 ---
 
-**Last Updated:** 2026-05-06
+**Last Updated:** 2026-05-08
