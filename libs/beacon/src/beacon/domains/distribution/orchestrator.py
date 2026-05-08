@@ -30,7 +30,8 @@ from beacon.core.manifest.beacon import BeaconManifest
 from beacon.domains.adoption.discovery import count_unadopted_since
 from beacon.domains.artifact.agent import (
     detect_agent_targets,
-    update_agent_gitignores,
+    ensure_agent_dirs_gitignored,
+    prune_agent_dirs_gitignore_entries,
 )
 from beacon.domains.artifact.skill import (
     install_bundled_skills_globally,
@@ -511,10 +512,13 @@ def run_sync(
         if opencode_dir.is_dir():
             GitignoreManager(opencode_dir).ensure_entries(["skills/", "command/"])
 
-    # PER-113: gate on declared agents so contexts-only or skills-only projects
-    # don't dirty their .gitignore with unused agent dir entries.
-    if not dry_run and beacon_settings.artifacts.agents:
-        update_agent_gitignores(project_root)
+    # PER-113 / PER-135: keep root .gitignore in sync with declared agents —
+    # ensure entries are present when agents are declared, pruned otherwise.
+    if not dry_run:
+        if beacon_settings.artifacts.agents:
+            ensure_agent_dirs_gitignored(project_root)
+        else:
+            prune_agent_dirs_gitignore_entries(project_root)
 
     if not dry_run:
         bundled_installed, bundled_skipped = install_bundled_skills_globally()

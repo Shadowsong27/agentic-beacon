@@ -96,6 +96,56 @@ class GitignoreManager:
 
         return True
 
+    def remove_entries(self, entries: list[str]) -> bool:
+        """Remove specific entries from .gitignore.
+
+        Reads the .gitignore, drops any line that exactly matches one of the
+        given entries, and writes the result back. The `# Agentic Beacon`
+        section header is preserved (other Beacon entries may still be using it).
+
+        Args:
+            entries: Lines to remove. Each is matched against `.gitignore`
+                lines via exact-string equality (after splitting on newlines).
+                Comments and unrelated entries are preserved.
+
+        Returns:
+            True if .gitignore was modified, False otherwise (file missing or
+            no matching entries).
+
+        Raises:
+            PermissionError: If cannot write to .gitignore.
+        """
+        if not self.gitignore_path.exists():
+            return False
+
+        existing_content = self.gitignore_path.read_text(encoding="utf-8")
+        existing_lines = existing_content.splitlines()
+        to_remove = set(entries)
+
+        filtered = [line for line in existing_lines if line not in to_remove]
+
+        if len(filtered) == len(existing_lines):
+            return False  # nothing matched
+
+        # Preserve trailing-newline state to match the original file's shape.
+        new_content = "\n".join(filtered)
+        if existing_content.endswith("\n") and filtered:
+            new_content += "\n"
+        elif not filtered:
+            new_content = ""
+
+        try:
+            self.gitignore_path.write_text(new_content, encoding="utf-8")
+            logger.debug(
+                "Removed {} entries from .gitignore: {}",
+                len(existing_lines) - len(filtered),
+                [line for line in existing_lines if line in to_remove],
+            )
+        except PermissionError as e:
+            raise PermissionError(f"Cannot write to {self.gitignore_path}: {e}") from e
+
+        return True
+
     def has_entry(self, entry: str) -> bool:
         """Check if a specific entry exists in .gitignore.
 

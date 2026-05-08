@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+from beacon.core.gitignore import GitignoreManager
+
 _ALL_KNOWN_AGENTS = ["opencode", "claudecode"]
 
 
@@ -45,11 +47,13 @@ def detect_agent_targets(project_root: Path) -> list[str]:
     return targets
 
 
-def update_agent_gitignores(project_root: Path) -> None:
-    """Append .claude/agents/ and .opencode/agents/ entries to the project .gitignore.
+def ensure_agent_dirs_gitignored(project_root: Path) -> None:
+    """Ensure `.claude/agents/` and `.opencode/agents/` are in the project root .gitignore.
 
-    Idempotent: if the entries are already present they are not added again.
-    Creates the .gitignore file if it does not exist.
+    Idempotent. Creates the .gitignore file if it does not exist. Delegates
+    to `GitignoreManager.ensure_entries` so the agent-dir entries are
+    consistent with the rest of Beacon's gitignore management (skill dirs,
+    `.agentic-beacon/artifacts/`, etc.).
 
     Args:
         project_root: Project root directory (must be a directory).
@@ -60,27 +64,31 @@ def update_agent_gitignores(project_root: Path) -> None:
     if not project_root.is_dir():
         raise FileNotFoundError(f"project_root is not a directory: {project_root}")
 
-    gitignore_path = project_root / ".gitignore"
-    entries_to_add = [".claude/agents/", ".opencode/agents/"]
+    GitignoreManager(project_root).ensure_entries(
+        [".claude/agents/", ".opencode/agents/"]
+    )
 
-    if gitignore_path.exists():
-        existing_content = gitignore_path.read_text(encoding="utf-8")
-        existing_lines = set(existing_content.splitlines())
-    else:
-        existing_content = ""
-        existing_lines = set()
 
-    missing = [e for e in entries_to_add if e not in existing_lines]
-    if not missing:
-        return
+def prune_agent_dirs_gitignore_entries(project_root: Path) -> None:
+    """Remove `.claude/agents/` and `.opencode/agents/` entries from the project root .gitignore.
 
-    if existing_content and not existing_content.endswith("\n"):
-        prefix = "\n"
-    else:
-        prefix = ""
+    Used when all agents are removed from beacon.yaml — the entries are
+    pruned so the project's .gitignore stays in sync with the declared
+    artifact set. Idempotent: a no-op if .gitignore is missing or the
+    entries are not present.
 
-    new_content = existing_content + prefix + "\n".join(missing) + "\n"
-    gitignore_path.write_text(new_content, encoding="utf-8")
+    Args:
+        project_root: Project root directory (must be a directory).
+
+    Raises:
+        FileNotFoundError: If project_root is not a directory.
+    """
+    if not project_root.is_dir():
+        raise FileNotFoundError(f"project_root is not a directory: {project_root}")
+
+    GitignoreManager(project_root).remove_entries(
+        [".claude/agents/", ".opencode/agents/"]
+    )
 
 
 def snapshot_agent_path(p: Path) -> tuple[str, Path | None]:

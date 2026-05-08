@@ -15,7 +15,7 @@ from unittest.mock import patch
 
 import pytest
 from beacon.cli.main import main
-from beacon.domains.artifact.agent import update_agent_gitignores
+from beacon.domains.artifact.agent import ensure_agent_dirs_gitignored
 from beacon.domains.artifact.skill import (
     normalize_skill_entry,
     skill_name_from_entry,
@@ -308,44 +308,44 @@ def test_wire_skills_post_sync_reinstalls_when_content_changes(project_with_skil
 
 
 # ---------------------------------------------------------------------------
-# Unit tests: update_agent_gitignores
+# Unit tests: ensure_agent_dirs_gitignored
 # ---------------------------------------------------------------------------
 
 
-def test_update_agent_gitignores_creates_claude_gitignore(tmp_path):
-    """PER-113: update_agent_gitignores now writes to project root .gitignore."""
-    update_agent_gitignores(tmp_path)
+def test_ensure_agent_dirs_gitignored_creates_claude_gitignore(tmp_path):
+    """PER-113: ensure_agent_dirs_gitignored writes to project root .gitignore."""
+    ensure_agent_dirs_gitignored(tmp_path)
     content = (tmp_path / ".gitignore").read_text()
     assert ".claude/agents/" in content
 
 
-def test_update_agent_gitignores_creates_opencode_gitignore(tmp_path):
+def test_ensure_agent_dirs_gitignored_creates_opencode_gitignore(tmp_path):
     """PER-113: project .gitignore gets .opencode/agents/ entry."""
-    update_agent_gitignores(tmp_path)
+    ensure_agent_dirs_gitignored(tmp_path)
     content = (tmp_path / ".gitignore").read_text()
     assert ".opencode/agents/" in content
 
 
-def test_update_agent_gitignores_skips_when_no_agent_dirs(tmp_path):
-    """update_agent_gitignores always writes to project root .gitignore."""
-    update_agent_gitignores(tmp_path)
+def test_ensure_agent_dirs_gitignored_skips_when_no_agent_dirs(tmp_path):
+    """ensure_agent_dirs_gitignored always writes to project root .gitignore."""
+    ensure_agent_dirs_gitignored(tmp_path)
     # Now writes to root .gitignore regardless of whether .claude/ / .opencode/ exist
     assert (tmp_path / ".gitignore").exists()
 
 
-def test_update_agent_gitignores_idempotent(tmp_path):
-    """update_agent_gitignores is idempotent on repeated calls."""
-    update_agent_gitignores(tmp_path)
-    update_agent_gitignores(tmp_path)
+def test_ensure_agent_dirs_gitignored_idempotent(tmp_path):
+    """ensure_agent_dirs_gitignored is idempotent on repeated calls."""
+    ensure_agent_dirs_gitignored(tmp_path)
+    ensure_agent_dirs_gitignored(tmp_path)
     content = (tmp_path / ".gitignore").read_text()
     assert content.count(".claude/agents/") == 1
     assert content.count(".opencode/agents/") == 1
 
 
-def test_update_agent_gitignores_appends_to_existing_gitignore(tmp_path):
-    """update_agent_gitignores appends to an existing project .gitignore."""
+def test_ensure_agent_dirs_gitignored_appends_to_existing_gitignore(tmp_path):
+    """ensure_agent_dirs_gitignored appends to an existing project .gitignore."""
     (tmp_path / ".gitignore").write_text("settings.local.json\n")
-    update_agent_gitignores(tmp_path)
+    ensure_agent_dirs_gitignored(tmp_path)
     content = (tmp_path / ".gitignore").read_text()
     assert "settings.local.json" in content
     assert ".claude/agents/" in content

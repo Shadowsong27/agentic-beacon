@@ -302,7 +302,7 @@ def test_sync_with_no_agents_declared_does_not_mutate_gitignore(
 ):
     """A sync with zero declared agents must NOT add agent entries to .gitignore.
 
-    Regression guard for the round-5 over-correction where update_agent_gitignores
+    Regression guard for the round-5 over-correction where ensure_agent_dirs_gitignored
     was hoisted to run on every real sync, dirtying contexts-only and skills-only
     repos with unused .claude/agents/ / .opencode/agents/ entries.
     """
@@ -325,13 +325,50 @@ def test_sync_with_no_agents_declared_does_not_mutate_gitignore(
     post_state = gitignore_path.read_text()
     # The orchestrator's broader gitignore manager may append unrelated
     # .agentic-beacon/* entries; we only assert that THE AGENT-DIR entries
-    # weren't added, since update_agent_gitignores is the gated function.
+    # weren't added, since ensure_agent_dirs_gitignored is the gated function.
     assert ".claude/agents/" not in post_state, (
         f"sync with agents=[] must not add .claude/agents/ to .gitignore: {post_state!r}"
     )
     assert ".opencode/agents/" not in post_state, (
         f"sync with agents=[] must not add .opencode/agents/ to .gitignore: {post_state!r}"
     )
+
+
+def test_sync_with_emptied_agents_prunes_gitignore_entries(
+    project_dir: Path, warehouse: Path, monkeypatch
+):
+    """When agents are removed from beacon.yaml, the prior .gitignore entries are pruned.
+
+    Regression guard for PER-135: previously the .claude/agents/ and
+    .opencode/agents/ entries were never removed once added. Now the
+    orchestrator's prune-on-empty path removes them when artifacts.agents
+    becomes empty.
+    """
+    runner = CliRunner()
+    monkeypatch.chdir(project_dir)
+
+    # Pre-populate the .gitignore with the agent-dir entries (as if a prior
+    # sync with agents declared had added them).
+    gitignore_path = project_dir / ".gitignore"
+    gitignore_path.write_text(
+        "# Existing project content\n__pycache__/\n.claude/agents/\n.opencode/agents/\n"
+    )
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text("artifacts:\n  contexts: []\n  skills: []\n  agents: []\n")
+
+    r = runner.invoke(main, ["sync", "--skip-git-check"])
+    assert r.exit_code == 0, f"sync failed: {r.output}"
+
+    post = gitignore_path.read_text()
+    assert ".claude/agents/" not in post, (
+        f"sync with agents=[] must prune .claude/agents/: {post!r}"
+    )
+    assert ".opencode/agents/" not in post, (
+        f"sync with agents=[] must prune .opencode/agents/: {post!r}"
+    )
+    # User's other content must be preserved.
+    assert "__pycache__/" in post, "pre-existing user entries must survive prune"
 
 
 def test_sync_with_no_skills_declared_writes_skill_gitignore_entries(
