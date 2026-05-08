@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 from beacon.core.dependencies.frontmatter import (
-    AgentFrontmatter,
     FrontmatterResult,
     SkillFrontmatter,
     parse_frontmatter,
@@ -87,48 +86,6 @@ class TestParseFrontmatter:
         assert result.error == "file-not-found"
 
 
-class TestAgentFrontmatter:
-    """Task 4.3: AgentFrontmatter Pydantic model — TDD test cases."""
-
-    def test_tc1_agent_with_contexts_and_skills(self):
-        """TC1: Agent with requires contexts and skills → validates."""
-        raw = {"requires": {"contexts": ["foo"], "skills": ["bar"]}}
-        agent = AgentFrontmatter.model_validate(raw)
-        assert agent.requires.contexts == ["foo"]
-        assert agent.requires.skills == ["bar"]
-
-    def test_tc2_agent_with_empty_lists(self):
-        """TC2: Agent with empty requires lists → validates."""
-        raw = {"requires": {"contexts": [], "skills": []}}
-        agent = AgentFrontmatter.model_validate(raw)
-        assert agent.requires.contexts == []
-        assert agent.requires.skills == []
-
-    def test_tc3_agent_missing_requires(self):
-        """TC3: Agent missing requires entirely → ValidationError."""
-        with pytest.raises(ValidationError):
-            AgentFrontmatter.model_validate({})
-
-    def test_tc4_agent_missing_skills_key(self):
-        """TC4: Agent with requires but missing skills → ValidationError."""
-        with pytest.raises(ValidationError) as exc_info:
-            AgentFrontmatter.model_validate({"requires": {"contexts": ["foo"]}})
-        assert "skills" in str(exc_info.value).lower()
-
-    def test_tc4b_agent_missing_contexts_key(self):
-        """TC4b: Agent with requires but missing contexts → ValidationError."""
-        with pytest.raises(ValidationError) as exc_info:
-            AgentFrontmatter.model_validate({"requires": {"skills": ["foo"]}})
-        assert "contexts" in str(exc_info.value).lower()
-
-    def test_tc8_agent_contexts_is_string(self):
-        """TC8: Agent with requires.contexts as string not list → ValidationError."""
-        with pytest.raises(ValidationError):
-            AgentFrontmatter.model_validate(
-                {"requires": {"contexts": "foo", "skills": []}}
-            )
-
-
 class TestSkillFrontmatter:
     """Task 4.3: SkillFrontmatter Pydantic model — TDD test cases."""
 
@@ -172,38 +129,16 @@ class TestValidateRequiresAgainstWarehouse:
         (wh / "skills").mkdir()
         return wh
 
-    def test_tc1_context_exists(self, tmp_path):
-        """TC1: Agent requires.contexts has matching file → empty error list."""
+    def test_tc1_skill_contexts_exist(self, tmp_path):
+        """TC1: Skill requires.contexts all resolve → empty error list."""
         wh = self._make_warehouse(tmp_path)
         (wh / "contexts" / "python-standards.md").write_text("# Context")
-        agent = AgentFrontmatter.model_validate(
-            {"requires": {"contexts": ["python-standards"], "skills": []}}
+        (wh / "contexts" / "testing.md").write_text("# Context")
+        skill = SkillFrontmatter.model_validate(
+            {"requires": {"contexts": ["python-standards", "testing"]}}
         )
-        errors = validate_requires_against_warehouse(agent, wh)
+        errors = validate_requires_against_warehouse(skill, wh)
         assert errors == []
-
-    def test_tc2_context_missing(self, tmp_path):
-        """TC2: Agent requires.contexts missing → one error naming missing target."""
-        wh = self._make_warehouse(tmp_path)
-        agent = AgentFrontmatter.model_validate(
-            {"requires": {"contexts": ["missing"], "skills": []}}
-        )
-        errors = validate_requires_against_warehouse(agent, wh)
-        assert len(errors) == 1
-        assert "missing" in errors[0]
-        assert "contexts/missing.md" in errors[0]
-
-    def test_tc3_skill_exists_but_no_skill_md(self, tmp_path):
-        """TC3: Skill dir exists but no SKILL.md → error."""
-        wh = self._make_warehouse(tmp_path)
-        (wh / "skills" / "record-knowledge").mkdir()
-        # No SKILL.md inside
-        agent = AgentFrontmatter.model_validate(
-            {"requires": {"contexts": [], "skills": ["record-knowledge"]}}
-        )
-        errors = validate_requires_against_warehouse(agent, wh)
-        assert len(errors) == 1
-        assert "SKILL.md" in errors[0]
 
     def test_tc4_skill_with_missing_context(self, tmp_path):
         """TC4: Skill requires.contexts with one missing → single error."""
@@ -216,11 +151,9 @@ class TestValidateRequiresAgainstWarehouse:
         assert len(errors) == 1
         assert "testing" in errors[0]
 
-    def test_tc5_empty_requires(self, tmp_path):
-        """TC5: Empty requires lists → empty error list."""
+    def test_tc5_skill_empty_requires(self, tmp_path):
+        """TC5: Skill with empty requires.contexts → empty error list."""
         wh = self._make_warehouse(tmp_path)
-        agent = AgentFrontmatter.model_validate(
-            {"requires": {"contexts": [], "skills": []}}
-        )
-        errors = validate_requires_against_warehouse(agent, wh)
+        skill = SkillFrontmatter.model_validate({"requires": {"contexts": []}})
+        errors = validate_requires_against_warehouse(skill, wh)
         assert errors == []
