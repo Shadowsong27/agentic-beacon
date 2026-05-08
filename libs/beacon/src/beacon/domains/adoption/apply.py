@@ -252,7 +252,7 @@ def commit_session(
         if agent_candidates:
             from beacon.domains.artifact.agent import (
                 detect_agent_targets,
-                update_agent_gitignores,
+                ensure_agent_dirs_gitignored,
             )
             from beacon.domains.setup.wiring import (
                 wire_agent_claudecode,
@@ -275,7 +275,7 @@ def commit_session(
                     wire_agent_opencode(project_root, artifact_file)
 
             # PER-113 (Finding 2): ensure root .gitignore has agent dir entries
-            update_agent_gitignores(project_root)
+            ensure_agent_dirs_gitignored(project_root)
 
     post_sync_wiring_fn = _post_sync_wiring_fn or _default_post_sync_wiring
 
