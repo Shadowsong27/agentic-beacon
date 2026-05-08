@@ -420,6 +420,91 @@ def wire_agent_opencode(project_root: Path, artifact_file: Path) -> Path:
     return dest
 
 
+def _snapshot_agent_path(p: Path) -> tuple[str, Path | None]:
+    """Snapshot a per-tool agent destination's pre-wire state.
+
+    Returns:
+        ("symlink", current_target) — already-wired symlink, target captured.
+        ("regular_file", None)      — user-owned file at the destination.
+        ("missing", None)           — nothing there yet.
+    """
+    if p.is_symlink():
+        return ("symlink", p.readlink())
+    if p.exists():
+        return ("regular_file", None)
+    return ("missing", None)
+
+
+def wire_agents_atomically(
+    project_root: Path,
+    agent_artifact_files: list[Path],
+    detected_tools: set[str],
+) -> None:
+    """Wire each agent into every detected tool with snapshot-based rollback.
+
+    For every (agent_artifact_file, tool) pair, snapshots the destination's
+    pre-wire state, then calls the tool-specific wire_agent_* helper. If any
+    wire raises, restores ALL previously-wired destinations to their pre-wire
+    state and re-raises the original exception.
+
+    Args:
+        project_root: Root of the project (where .claude/ / .opencode/ live).
+        agent_artifact_files: Resolved artifact symlink paths
+            (e.g. <project>/.agentic-beacon/artifacts/agents/spec-planner.md).
+        detected_tools: Set of tool keys detected for this project; subset
+            of {"claudecode", "opencode"}.
+
+    Raises:
+        Whatever `wire_agent_claudecode` / `wire_agent_opencode` raise
+        (typically BeaconSyncError) — re-raised AFTER rollback.
+
+    Note:
+        This helper covers ONLY the per-tool agent paths. It does not
+        rollback artifact symlinks under .agentic-beacon/artifacts/agents/
+        or any gitignore changes. Callers that need broader transactional
+        scope (see apply.commit_session) should compose this with their
+        own snapshot machinery in a future refactor.
+    """
+    snapshots: list[tuple[Path, str, Path | None]] = []
+
+    def _rollback() -> None:
+        for path, kind, prior_target in reversed(snapshots):
+            try:
+                if kind == "missing":
+                    if path.is_symlink() or path.exists():
+                        path.unlink()
+                elif kind == "symlink":
+                    if path.is_symlink():
+                        if path.readlink() != prior_target:
+                            path.unlink()
+                            path.symlink_to(prior_target)
+                    else:
+                        if path.exists():
+                            path.unlink()
+                        path.parent.mkdir(parents=True, exist_ok=True)
+                        path.symlink_to(prior_target)
+                # "regular_file" snapshots imply wire never succeeded for
+                # that path (the wire helpers refuse to overwrite regular
+                # files), so no restore is needed.
+            except OSError:
+                pass
+
+    try:
+        for artifact_file in agent_artifact_files:
+            leaf = artifact_file.name
+            if "claudecode" in detected_tools:
+                cc_dest = project_root / ".claude" / "agents" / leaf
+                snapshots.append((cc_dest, *_snapshot_agent_path(cc_dest)))
+                wire_agent_claudecode(project_root, artifact_file)
+            if "opencode" in detected_tools:
+                oc_dest = project_root / ".opencode" / "agents" / leaf
+                snapshots.append((oc_dest, *_snapshot_agent_path(oc_dest)))
+                wire_agent_opencode(project_root, artifact_file)
+    except Exception:
+        _rollback()
+        raise
+
+
 def unwire_agent(project_root: Path, agent_name: str) -> None:
     """Remove project-local agent symlinks for the given agent.
 
