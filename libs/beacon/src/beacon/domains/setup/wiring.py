@@ -486,8 +486,17 @@ def wire_agents_atomically(
                 # "regular_file" snapshots imply wire never succeeded for
                 # that path (the wire helpers refuse to overwrite regular
                 # files), so no restore is needed.
-            except OSError:
-                pass
+            except OSError as e:
+                logger.warning(
+                    "wire_agents_atomically: rollback step failed for "
+                    "{} (kind={}, prior_target={}): {}. "
+                    "Continuing with remaining snapshots; "
+                    "post-failure state may be partially restored.",
+                    path,
+                    kind,
+                    prior_target,
+                    e,
+                )
 
     try:
         for artifact_file in agent_artifact_files:
