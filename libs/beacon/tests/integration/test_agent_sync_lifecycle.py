@@ -383,6 +383,50 @@ def test_sync_with_no_skills_declared_writes_skill_gitignore_entries(
     )
 
 
+def test_sync_dry_run_does_not_write_skill_gitignore_entries(
+    project_dir: Path, warehouse: Path, monkeypatch
+):
+    """A `sync --dry-run` MUST NOT write per-tool skill .gitignore entries.
+
+    Regression guard for PER-136 review Finding 1: when the per-tool gitignore
+    writes were hoisted out of `if has_skills:`, they lost the implicit `not
+    dry_run` gate that came from `has_skills = bool(effective_set.skills) and
+    not dry_run`. Every other mutation in run_sync is gated on `not dry_run`;
+    this test ensures the hoisted block stays consistent with that contract.
+    """
+    runner = CliRunner()
+    monkeypatch.chdir(project_dir)
+
+    # Arrange
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text("artifacts:\n  contexts: []\n  skills: []\n  agents: []\n")
+
+    claude_dir = project_dir / ".claude"
+    claude_dir.mkdir(exist_ok=True)
+    opencode_dir = project_dir / ".opencode"
+    opencode_dir.mkdir(exist_ok=True)
+
+    # Wipe any pre-existing per-tool .gitignore files so we can detect mutation.
+    claude_gitignore = claude_dir / ".gitignore"
+    opencode_gitignore = opencode_dir / ".gitignore"
+    claude_gitignore.unlink(missing_ok=True)
+    opencode_gitignore.unlink(missing_ok=True)
+
+    # Act
+    r = runner.invoke(main, ["sync", "--dry-run", "--skip-git-check"])
+    assert r.exit_code == 0, f"sync --dry-run failed: {r.output}"
+
+    # Assert — neither file should exist after a dry-run
+    assert not claude_gitignore.exists(), (
+        f".claude/.gitignore must NOT be created by --dry-run: "
+        f"{claude_gitignore.read_text() if claude_gitignore.exists() else ''!r}"
+    )
+    assert not opencode_gitignore.exists(), (
+        f".opencode/.gitignore must NOT be created by --dry-run: "
+        f"{opencode_gitignore.read_text() if opencode_gitignore.exists() else ''!r}"
+    )
+
+
 def test_sync_unwires_removed_agent(project_dir: Path, warehouse: Path, monkeypatch):
     """Removing an agent from beacon.yaml and re-syncing removes all three paths.
 
