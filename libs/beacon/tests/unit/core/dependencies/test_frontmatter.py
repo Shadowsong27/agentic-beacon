@@ -129,6 +129,17 @@ class TestValidateRequiresAgainstWarehouse:
         (wh / "skills").mkdir()
         return wh
 
+    def test_tc1_skill_contexts_exist(self, tmp_path):
+        """TC1: Skill requires.contexts all resolve → empty error list."""
+        wh = self._make_warehouse(tmp_path)
+        (wh / "contexts" / "python-standards.md").write_text("# Context")
+        (wh / "contexts" / "testing.md").write_text("# Context")
+        skill = SkillFrontmatter.model_validate(
+            {"requires": {"contexts": ["python-standards", "testing"]}}
+        )
+        errors = validate_requires_against_warehouse(skill, wh)
+        assert errors == []
+
     def test_tc4_skill_with_missing_context(self, tmp_path):
         """TC4: Skill requires.contexts with one missing → single error."""
         wh = self._make_warehouse(tmp_path)
@@ -139,3 +150,10 @@ class TestValidateRequiresAgainstWarehouse:
         errors = validate_requires_against_warehouse(skill, wh)
         assert len(errors) == 1
         assert "testing" in errors[0]
+
+    def test_tc5_skill_empty_requires(self, tmp_path):
+        """TC5: Skill with empty requires.contexts → empty error list."""
+        wh = self._make_warehouse(tmp_path)
+        skill = SkillFrontmatter.model_validate({"requires": {"contexts": []}})
+        errors = validate_requires_against_warehouse(skill, wh)
+        assert errors == []
