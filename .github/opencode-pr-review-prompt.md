@@ -1,17 +1,38 @@
 Review this pull request for the agentic-beacon repository.
 
-Follow AGENTS.md and the project architecture rules.
+Follow AGENTS.md and the rules in .agentic-beacon/artifacts/contexts/.
+Review only the attached diff.
 
-Review only the attached diff. Prioritize:
-- correctness bugs
-- behavioral regressions
-- architecture violations
-- missing or weak tests
-- security or safety issues
-- user-facing CLI behavior changes
-- documentation drift when behavior changes
+## Beacon-specific checks
 
-Output findings first, ordered by severity.
-Include file and line references when possible.
-If there are no findings, say so explicitly.
-Keep the review concise and actionable.
+- Layering: cli/ -> domains/ -> core/, utils/. core/ and utils/
+  must NEVER import from domains/ or cli/. CLI handlers stay
+  thin (parse + one domain call + format).
+- Domain placement: new logic belongs in the owning domain,
+  not core/ or utils/ by default.
+- examples/sample-warehouse/ must match `abc warehouse init`
+  output. Flag drift after edits to domains/setup/initializer.py.
+- Imports: absolute only; never relative. __init__.py files are
+  empty package markers (no re-exports, no __all__).
+- adopt is intentional: warehouse-authored artifacts go through
+  pending.yaml + `abc adopt`. Flag any code that auto-wires into
+  beacon.yaml.
+- Tests: split unit/ vs integration/. Sub-second mocked tests
+  in unit/; real services in integration/.
+- Conventional Commits in PR title and commits.
+
+## Review priorities (ordered)
+
+1. Correctness bugs and behavioral regressions
+2. Architecture violations (layering, domain placement)
+3. Missing/weak tests for changed behavior
+4. CLI UX changes (flags, output, exit codes)
+5. Security/safety issues
+6. Documentation drift when behavior changes
+
+## Output
+
+- Findings first, ordered by severity.
+- File:line references where possible.
+- If no findings, say so explicitly.
+- Be concise and actionable; skip praise.
