@@ -75,7 +75,7 @@ def parse_frontmatter(path: Path) -> FrontmatterResult:
         )
 
     # Strip leading whitespace / BOM
-    content = content.lstrip("﻿").lstrip()
+    content = content.lstrip("\ufeff").lstrip()
 
     if not content.startswith("---"):
         return FrontmatterResult(

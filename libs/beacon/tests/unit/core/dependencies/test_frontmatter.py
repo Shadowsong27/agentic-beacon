@@ -65,7 +65,7 @@ class TestParseFrontmatter:
     def test_tc5_leading_whitespace_and_bom(self, tmp_path):
         """TC5: File starts with BOM or leading whitespace → parser tolerates."""
         f = tmp_path / "agent.md"
-        f.write_text("﻿---\nname: foo\n---\n# Body\n")
+        f.write_text("\ufeff---\nname: foo\n---\n# Body\n")
         result = parse_frontmatter(f)
         assert result.success is True
         assert result.data["name"] == "foo"
