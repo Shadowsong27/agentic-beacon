@@ -1,7 +1,11 @@
-"""Frontmatter parsing and validation for agent and skill artifacts.
+"""Frontmatter parsing and validation for skill artifacts.
 
 Implements the dependency-resolution contract from the auto-pull-artifact-dependencies
 OpenSpec change.
+
+Note: Agent frontmatter parsing was removed in PER-117. Agent dependencies now
+live in <warehouse>/agents/agents.yaml (see core/dependencies/manifest.py).
+This module only handles SKILL frontmatter.
 """
 
 from dataclasses import dataclass
@@ -11,20 +15,10 @@ import yaml
 from pydantic import BaseModel, model_validator
 
 
-class RequiresBlock(BaseModel):
-    """Shared requires block for agents and skills."""
+class SkillRequires(BaseModel):
+    """Skill-specific requires block (forbids skill-to-skill deps)."""
 
     contexts: list[str]
-
-
-class AgentRequires(RequiresBlock):
-    """Agent-specific requires block (allows skills)."""
-
-    skills: list[str]
-
-
-class SkillRequires(RequiresBlock):
-    """Skill-specific requires block (forbids skills)."""
 
     @model_validator(mode="before")
     @classmethod
@@ -37,12 +31,6 @@ class SkillRequires(RequiresBlock):
             )
             raise ValueError(msg)
         return data
-
-
-class AgentFrontmatter(BaseModel):
-    """Validated frontmatter for an agent markdown file."""
-
-    requires: AgentRequires
 
 
 class SkillFrontmatter(BaseModel):
@@ -128,12 +116,12 @@ def parse_frontmatter(path: Path) -> FrontmatterResult:
 
 
 def validate_requires_against_warehouse(
-    frontmatter: AgentFrontmatter | SkillFrontmatter, warehouse_path: Path
+    frontmatter: SkillFrontmatter, warehouse_path: Path
 ) -> list[str]:
     """Validate that every name in frontmatter.requires resolves to an existing warehouse file.
 
     Args:
-        frontmatter: Parsed and validated frontmatter.
+        frontmatter: Parsed and validated skill frontmatter.
         warehouse_path: Root of the warehouse clone.
 
     Returns:
@@ -146,12 +134,5 @@ def validate_requires_against_warehouse(
         expected = warehouse_path / "contexts" / f"{ctx_name}.md"
         if not expected.exists():
             errors.append(f"Missing context '{ctx_name}': expected {expected}")
-
-    # Agent frontmatter may have skills; skill frontmatter rejects skills at parse time
-    if isinstance(req, AgentRequires):
-        for skill_name in req.skills:
-            expected = warehouse_path / "skills" / skill_name / "SKILL.md"
-            if not expected.exists():
-                errors.append(f"Missing skill '{skill_name}': expected {expected}")
 
     return errors

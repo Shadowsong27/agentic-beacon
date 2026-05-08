@@ -334,6 +334,99 @@ def test_sync_with_no_agents_declared_does_not_mutate_gitignore(
     )
 
 
+def test_sync_with_no_skills_declared_writes_skill_gitignore_entries(
+    project_dir: Path, warehouse: Path, monkeypatch
+):
+    """A sync with zero declared skills MUST still write skills/ gitignore entries.
+
+    Regression guard for PER-136: the per-tool .gitignore writes for skills/
+    and command/ were gated inside `if has_skills:` after PR #109, meaning
+    projects with no declared skills never got those entries even when .claude/
+    or .opencode/ directories existed. This test confirms the fix — entries
+    are written on directory existence alone.
+    """
+    runner = CliRunner()
+    monkeypatch.chdir(project_dir)
+
+    # Arrange
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text("artifacts:\n  contexts: []\n  skills: []\n  agents: []\n")
+
+    claude_dir = project_dir / ".claude"
+    claude_dir.mkdir(exist_ok=True)
+    opencode_dir = project_dir / ".opencode"
+    opencode_dir.mkdir(exist_ok=True)
+
+    # Remove any pre-existing per-tool .gitignore files so the assertion detects
+    # that sync wrote them rather than that they already existed.
+    claude_gitignore = claude_dir / ".gitignore"
+    opencode_gitignore = opencode_dir / ".gitignore"
+    claude_gitignore.unlink(missing_ok=True)
+    opencode_gitignore.unlink(missing_ok=True)
+
+    # Act
+    r = runner.invoke(main, ["sync", "--skip-git-check"])
+    assert r.exit_code == 0, f"sync failed: {r.output}"
+
+    # Assert
+    assert claude_gitignore.exists(), ".claude/.gitignore must be created by sync"
+    assert "skills/" in claude_gitignore.read_text(), (
+        f".claude/.gitignore must contain 'skills/' entry: {claude_gitignore.read_text()!r}"
+    )
+    assert opencode_gitignore.exists(), ".opencode/.gitignore must be created by sync"
+    opencode_content = opencode_gitignore.read_text()
+    assert "skills/" in opencode_content, (
+        f".opencode/.gitignore must contain 'skills/' entry: {opencode_content!r}"
+    )
+    assert "command/" in opencode_content, (
+        f".opencode/.gitignore must contain 'command/' entry: {opencode_content!r}"
+    )
+
+
+def test_sync_dry_run_does_not_write_skill_gitignore_entries(
+    project_dir: Path, warehouse: Path, monkeypatch
+):
+    """A `sync --dry-run` MUST NOT write per-tool skill .gitignore entries.
+
+    Regression guard for PER-136 review Finding 1: when the per-tool gitignore
+    writes were hoisted out of `if has_skills:`, they lost the implicit `not
+    dry_run` gate that came from `has_skills = bool(effective_set.skills) and
+    not dry_run`. Every other mutation in run_sync is gated on `not dry_run`;
+    this test ensures the hoisted block stays consistent with that contract.
+    """
+    runner = CliRunner()
+    monkeypatch.chdir(project_dir)
+
+    # Arrange
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text("artifacts:\n  contexts: []\n  skills: []\n  agents: []\n")
+
+    claude_dir = project_dir / ".claude"
+    claude_dir.mkdir(exist_ok=True)
+    opencode_dir = project_dir / ".opencode"
+    opencode_dir.mkdir(exist_ok=True)
+
+    # Wipe any pre-existing per-tool .gitignore files so we can detect mutation.
+    claude_gitignore = claude_dir / ".gitignore"
+    opencode_gitignore = opencode_dir / ".gitignore"
+    claude_gitignore.unlink(missing_ok=True)
+    opencode_gitignore.unlink(missing_ok=True)
+
+    # Act
+    r = runner.invoke(main, ["sync", "--dry-run", "--skip-git-check"])
+    assert r.exit_code == 0, f"sync --dry-run failed: {r.output}"
+
+    # Assert — neither file should exist after a dry-run
+    assert not claude_gitignore.exists(), (
+        f".claude/.gitignore must NOT be created by --dry-run: "
+        f"{claude_gitignore.read_text() if claude_gitignore.exists() else ''!r}"
+    )
+    assert not opencode_gitignore.exists(), (
+        f".opencode/.gitignore must NOT be created by --dry-run: "
+        f"{opencode_gitignore.read_text() if opencode_gitignore.exists() else ''!r}"
+    )
+
+
 def test_sync_unwires_removed_agent(project_dir: Path, warehouse: Path, monkeypatch):
     """Removing an agent from beacon.yaml and re-syncing removes all three paths.
 
@@ -377,3 +470,145 @@ def test_sync_unwires_removed_agent(project_dir: Path, warehouse: Path, monkeypa
     assert not claude_link.exists() and not claude_link.is_symlink(), (
         ".claude/agents symlink must be removed when agent is pruned"
     )
+
+
+# ---------------------------------------------------------------------------
+# PER-131: rollback when agent wire fails mid-sync
+# ---------------------------------------------------------------------------
+
+
+def test_sync_rollback_when_agent_wire_fails(
+    project_dir: Path, warehouse: Path, monkeypatch
+):
+    """A wire failure mid-sync rolls back successfully-wired agent symlinks.
+
+    Regression guard for PER-131: wire_agent_claudecode / wire_agent_opencode
+    can raise BeaconSyncError (e.g., regular file at destination per the
+    round-5 user-owned-content policy). Without rollback, the project ends up
+    half-wired. The wire_agents_atomically helper must restore all wired
+    destinations to their pre-wire state before re-raising.
+    """
+    runner = CliRunner()
+    monkeypatch.chdir(project_dir)
+
+    # Add a second agent to the warehouse so we have two to wire.
+    (warehouse / "agents" / "agent-b.md").write_text(
+        "---\nname: agent-b\n---\n# Agent B\n"
+    )
+    manifest_path = warehouse / "agents" / "agents.yaml"
+    manifest = yaml.safe_load(manifest_path.read_text()) or {}
+    manifest["agent-b"] = {"skills": []}
+    manifest_path.write_text(yaml.safe_dump(manifest))
+    _git_add_commit(warehouse, "add agent-b")
+
+    # Plant a regular file at agent-b's .claude destination so the second
+    # agent's claudecode wire raises BeaconSyncError (user-owned-content
+    # policy). agent-a's .claude wire must have already succeeded by then;
+    # rollback must remove it.
+    (project_dir / ".claude" / "agents").mkdir(parents=True, exist_ok=True)
+    (project_dir / ".claude" / "agents" / "agent-b.md").write_text("user content")
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n"
+        "  contexts: []\n"
+        "  skills: []\n"
+        "  agents:\n"
+        "    - agents/spec-planner.md\n"
+        "    - agents/agent-b.md\n"
+    )
+
+    # Act: sync must fail due to the regular-file blocker on agent-b.
+    r = runner.invoke(main, ["sync", "--skip-git-check"])
+    assert r.exit_code != 0, (
+        f"sync should have failed but exited {r.exit_code}: {r.output}"
+    )
+
+    # Assert: spec-planner's .claude destination was rolled back.
+    cc_a = project_dir / ".claude" / "agents" / "spec-planner.md"
+    assert not cc_a.exists() and not cc_a.is_symlink(), (
+        f".claude/agents/spec-planner.md must be rolled back; "
+        f"still present: {cc_a.is_symlink()=}, {cc_a.exists()=}"
+    )
+
+    # The user's regular file at agent-b's .claude dest must be UNTOUCHED.
+    assert (project_dir / ".claude" / "agents" / "agent-b.md").read_text() == (
+        "user content"
+    ), "user-owned regular file must be preserved"
+
+
+def test_sync_rollback_when_agent_wire_fails_dual_tool(
+    project_dir: Path, warehouse: Path, monkeypatch
+):
+    """Dual-tool variant of the rollback regression guard.
+
+    When BOTH .claude/ and .opencode/ exist, wire_agents_atomically takes
+    two snapshots per agent (one per tool). The rollback must reverse all
+    snapshots, not just one tool's. This test exercises the path where
+    spec-planner is fully wired into BOTH tools before agent-b's opencode
+    wire fails — both spec-planner destinations must be rolled back.
+    """
+    runner = CliRunner()
+    monkeypatch.chdir(project_dir)
+
+    # Add a second agent to the warehouse.
+    (warehouse / "agents" / "agent-b.md").write_text(
+        "---\nname: agent-b\n---\n# Agent B\n"
+    )
+    manifest_path = warehouse / "agents" / "agents.yaml"
+    manifest = yaml.safe_load(manifest_path.read_text()) or {}
+    manifest["agent-b"] = {"skills": []}
+    manifest_path.write_text(yaml.safe_dump(manifest))
+    _git_add_commit(warehouse, "add agent-b")
+
+    # Ensure BOTH tool dirs exist so detect_agent_targets returns both.
+    (project_dir / ".opencode").mkdir(exist_ok=True)
+
+    # Plant a regular file at agent-b's .opencode destination — this is the
+    # LAST wire in the helper's loop (claudecode runs first per agent), so
+    # spec-planner is fully wired into BOTH tools AND agent-b's claudecode
+    # wire succeeds before the opencode wire on agent-b fails. Rollback
+    # must restore three previously-wired destinations.
+    (project_dir / ".opencode" / "agents").mkdir(parents=True, exist_ok=True)
+    (project_dir / ".opencode" / "agents" / "agent-b.md").write_text("user content")
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n"
+        "  contexts: []\n"
+        "  skills: []\n"
+        "  agents:\n"
+        "    - agents/spec-planner.md\n"
+        "    - agents/agent-b.md\n"
+    )
+
+    # Act: sync must fail due to the regular-file blocker on agent-b's .opencode.
+    r = runner.invoke(main, ["sync", "--skip-git-check"])
+    assert r.exit_code != 0, (
+        f"sync should have failed but exited {r.exit_code}: {r.output}"
+    )
+
+    # Assert: spec-planner's BOTH destinations were rolled back.
+    cc_a = project_dir / ".claude" / "agents" / "spec-planner.md"
+    oc_a = project_dir / ".opencode" / "agents" / "spec-planner.md"
+    assert not cc_a.exists() and not cc_a.is_symlink(), (
+        f".claude/agents/spec-planner.md must be rolled back; "
+        f"still present: {cc_a.is_symlink()=}, {cc_a.exists()=}"
+    )
+    assert not oc_a.exists() and not oc_a.is_symlink(), (
+        f".opencode/agents/spec-planner.md must be rolled back; "
+        f"still present: {oc_a.is_symlink()=}, {oc_a.exists()=}"
+    )
+
+    # Assert: agent-b's .claude wire was rolled back (it succeeded before
+    # the opencode failure).
+    cc_b = project_dir / ".claude" / "agents" / "agent-b.md"
+    assert not cc_b.exists() and not cc_b.is_symlink(), (
+        f".claude/agents/agent-b.md must be rolled back; "
+        f"still present: {cc_b.is_symlink()=}, {cc_b.exists()=}"
+    )
+
+    # The user's regular file at agent-b's .opencode dest must be UNTOUCHED.
+    assert (project_dir / ".opencode" / "agents" / "agent-b.md").read_text() == (
+        "user content"
+    ), "user-owned regular file must be preserved"

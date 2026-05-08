@@ -54,8 +54,7 @@ from beacon.domains.setup.wiring import (
     confirm_prune,
     has_synced_contexts,
     unwire_pruned_artifacts,
-    wire_agent_claudecode,
-    wire_agent_opencode,
+    wire_agents_atomically,
     wire_contexts_claudecode,
     wire_contexts_opencode,
 )
@@ -444,16 +443,15 @@ def run_sync(
     if summary.pruned_paths and not dry_run:
         unwire_pruned_artifacts(project_root, summary.pruned_paths, artifacts_dir)
 
-    # Wire declared agents into project-local tool directories
+    # Wire declared agents into project-local tool directories — atomic
+    # with rollback on partial failure (PER-131).
     if not dry_run:
         detected_tools = detect_agent_targets(project_root)
-        for agent_entry in beacon_settings.artifacts.agents:
-            # agent_entry is like "agents/spec-planner.md"
-            artifact_file = artifacts_dir / agent_entry
-            if "claudecode" in detected_tools:
-                wire_agent_claudecode(project_root, artifact_file)
-            if "opencode" in detected_tools:
-                wire_agent_opencode(project_root, artifact_file)
+        agent_artifact_files = [
+            artifacts_dir / agent_entry
+            for agent_entry in beacon_settings.artifacts.agents
+        ]
+        wire_agents_atomically(project_root, agent_artifact_files, detected_tools)
 
     # Use effective set for wiring decisions
     has_contexts = bool(effective_set.contexts) and not dry_run
@@ -499,7 +497,13 @@ def run_sync(
             force=force,
             skill_conflict_callback=skill_conflict_callback,
         )
-        # Write per-tool gitignore entries for skill directories
+
+    # Per-tool gitignore entries — gated on directory existence only (PER-136).
+    # Restores pre-PR-113 behaviour: any project with .claude/ or .opencode/
+    # gets tool-managed skills/ (and command/) subdirs ignored from VCS.
+    # Wrapped in `if not dry_run:` to match the rest of run_sync — no
+    # mutations during dry-run.
+    if not dry_run:
         claude_dir = project_root / ".claude"
         if claude_dir.is_dir():
             GitignoreManager(claude_dir).ensure_entries(["skills/"])
