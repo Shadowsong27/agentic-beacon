@@ -81,3 +81,22 @@ def update_agent_gitignores(project_root: Path) -> None:
 
     new_content = existing_content + prefix + "\n".join(missing) + "\n"
     gitignore_path.write_text(new_content, encoding="utf-8")
+
+
+def snapshot_agent_path(p: Path) -> tuple[str, Path | None]:
+    """Snapshot a per-tool agent destination's pre-wire state.
+
+    Used by transactional wiring helpers (e.g. wire_agents_atomically in
+    domains/setup/wiring.py) to capture enough state to restore the
+    destination if a later wire step fails.
+
+    Returns:
+        ("symlink", current_target) — already-wired symlink, target captured.
+        ("regular_file", None)      — user-owned file at the destination.
+        ("missing", None)           — nothing there yet.
+    """
+    if p.is_symlink():
+        return ("symlink", p.readlink())
+    if p.exists():
+        return ("regular_file", None)
+    return ("missing", None)

@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 from beacon.core.exceptions import BeaconSyncError
+from beacon.domains.artifact.agent import snapshot_agent_path
 from beacon.domains.setup.wiring import (
-    _snapshot_agent_path,
     unwire_agent,
     unwire_agent_with_undo,
     unwire_pruned_artifacts,
@@ -371,7 +371,7 @@ def test_wire_agent_opencode_refuses_to_overwrite_regular_file(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# _snapshot_agent_path (PER-131)
+# snapshot_agent_path (PER-131)
 # ---------------------------------------------------------------------------
 
 
@@ -379,13 +379,13 @@ class TestSnapshotAgentPath:
     def test_missing_returns_missing_none(self, tmp_path):
         """Path that does not exist → ('missing', None)."""
         p = tmp_path / "nope.md"
-        assert _snapshot_agent_path(p) == ("missing", None)
+        assert snapshot_agent_path(p) == ("missing", None)
 
     def test_regular_file_returns_regular_file_none(self, tmp_path):
         """Regular file at path → ('regular_file', None)."""
         p = tmp_path / "file.md"
         p.write_text("user content")
-        assert _snapshot_agent_path(p) == ("regular_file", None)
+        assert snapshot_agent_path(p) == ("regular_file", None)
 
     def test_symlink_returns_symlink_with_target(self, tmp_path):
         """Symlink at path → ('symlink', target). Target captured even if dangling."""
@@ -394,7 +394,7 @@ class TestSnapshotAgentPath:
         link = tmp_path / "link.md"
         link.symlink_to(target)
 
-        kind, captured = _snapshot_agent_path(link)
+        kind, captured = snapshot_agent_path(link)
         assert kind == "symlink"
         assert captured == target
 
@@ -405,7 +405,7 @@ class TestSnapshotAgentPath:
         link.symlink_to(target)
         # target never created — symlink is dangling
 
-        kind, captured = _snapshot_agent_path(link)
+        kind, captured = snapshot_agent_path(link)
         assert kind == "symlink"
         assert captured == target
 

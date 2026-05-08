@@ -2,6 +2,7 @@
 
 import json
 import shutil
+from collections.abc import Iterable
 from pathlib import Path
 
 import click
@@ -9,6 +10,7 @@ from loguru import logger
 from rich.console import Console
 
 from beacon.core.exceptions import BeaconSyncError
+from beacon.domains.artifact.agent import snapshot_agent_path
 
 console = Console()
 
@@ -420,25 +422,10 @@ def wire_agent_opencode(project_root: Path, artifact_file: Path) -> Path:
     return dest
 
 
-def _snapshot_agent_path(p: Path) -> tuple[str, Path | None]:
-    """Snapshot a per-tool agent destination's pre-wire state.
-
-    Returns:
-        ("symlink", current_target) — already-wired symlink, target captured.
-        ("regular_file", None)      — user-owned file at the destination.
-        ("missing", None)           — nothing there yet.
-    """
-    if p.is_symlink():
-        return ("symlink", p.readlink())
-    if p.exists():
-        return ("regular_file", None)
-    return ("missing", None)
-
-
 def wire_agents_atomically(
     project_root: Path,
     agent_artifact_files: list[Path],
-    detected_tools: set[str],
+    detected_tools: Iterable[str],
 ) -> None:
     """Wire each agent into every detected tool with snapshot-based rollback.
 
@@ -451,8 +438,10 @@ def wire_agents_atomically(
         project_root: Root of the project (where .claude/ / .opencode/ live).
         agent_artifact_files: Resolved artifact symlink paths
             (e.g. <project>/.agentic-beacon/artifacts/agents/spec-planner.md).
-        detected_tools: Set of tool keys detected for this project; subset
-            of {"claudecode", "opencode"}.
+        detected_tools: Iterable of tool keys detected for this project;
+            entries outside {"claudecode", "opencode"} are silently ignored
+            (forward-compat). Accepts list or set; in practice the orchestrator
+            passes the list returned by `detect_agent_targets`.
 
     Raises:
         Whatever `wire_agent_claudecode` / `wire_agent_opencode` raise
@@ -464,6 +453,17 @@ def wire_agents_atomically(
         or any gitignore changes. Callers that need broader transactional
         scope (see apply.commit_session) should compose this with their
         own snapshot machinery in a future refactor.
+
+        The internal _rollback closure is intentionally **best-effort** —
+        per-path OSError during restore is logged via loguru.warning and
+        swallowed so the original wire exception always surfaces to the
+        caller. This differs from apply.py's commit_session rollback,
+        which lets restore-step OSError propagate. Rationale: in the sync
+        orchestrator the user's primary signal is the original wire
+        failure (e.g. "regular file at .claude/agents/foo.md"); masking it
+        with a downstream rollback OSError would degrade UX. apply.py
+        operates at a tighter atomic boundary (single session commit) where
+        any partial restore is itself a correctness concern worth raising.
     """
     snapshots: list[tuple[Path, str, Path | None]] = []
 
@@ -503,11 +503,11 @@ def wire_agents_atomically(
             leaf = artifact_file.name
             if "claudecode" in detected_tools:
                 cc_dest = project_root / ".claude" / "agents" / leaf
-                snapshots.append((cc_dest, *_snapshot_agent_path(cc_dest)))
+                snapshots.append((cc_dest, *snapshot_agent_path(cc_dest)))
                 wire_agent_claudecode(project_root, artifact_file)
             if "opencode" in detected_tools:
                 oc_dest = project_root / ".opencode" / "agents" / leaf
-                snapshots.append((oc_dest, *_snapshot_agent_path(oc_dest)))
+                snapshots.append((oc_dest, *snapshot_agent_path(oc_dest)))
                 wire_agent_opencode(project_root, artifact_file)
     except Exception:
         _rollback()
