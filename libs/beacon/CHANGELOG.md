@@ -1,5 +1,56 @@
 # Changelog
 
+## [3.0.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v2.7.1...agentic-beacon@v3.0.0) (2026-05-09)
+
+
+### ⚠ BREAKING CHANGES
+
+* auto-pull artifact dependencies via frontmatter ([#102](https://github.com/Shadowsong27/agentic-beacon/issues/102))
+* 
+
+### Features
+
+* archive previous specs ([f756264](https://github.com/Shadowsong27/agentic-beacon/commit/f75626466bf6c2ee630968033b5014091545ab57))
+* auto-pull artifact dependencies via frontmatter ([#102](https://github.com/Shadowsong27/agentic-beacon/issues/102)) ([e38c162](https://github.com/Shadowsong27/agentic-beacon/commit/e38c1620aabf0517a2b189781b46b3f698dab8c5))
+* **beacon:** project-scoped agents — beacon.yaml.artifacts.agents + abc adopt integration ([#104](https://github.com/Shadowsong27/agentic-beacon/issues/104)) ([4e442ab](https://github.com/Shadowsong27/agentic-beacon/commit/4e442ab574656db394c750cf81bc1c384f8fb2a4))
+* **beacon:** structured regular-file-conflict UX for agent wiring (PER-127) ([#114](https://github.com/Shadowsong27/agentic-beacon/issues/114)) ([d82a8a3](https://github.com/Shadowsong27/agentic-beacon/commit/d82a8a32e0678a7465452c372d00f0b7f0b599c0))
+* **beacon:** unify agent distribution (PER-113) ([#109](https://github.com/Shadowsong27/agentic-beacon/issues/109)) ([9720215](https://github.com/Shadowsong27/agentic-beacon/commit/97202158b0cfbbad384de031d9c545ece93a8c4e))
+* move agent requires from frontmatter to warehouse manifest ([#103](https://github.com/Shadowsong27/agentic-beacon/issues/103)) ([1b7e014](https://github.com/Shadowsong27/agentic-beacon/commit/1b7e014901050134a08ee82a8136f9ba10d44ff3))
+* pending-artifacts flow + record-* skill revamp ([98c3746](https://github.com/Shadowsong27/agentic-beacon/commit/98c3746886910e0e5184922feeb122df76c82a7c))
+* symlink-based artifact sync, single-warehouse-write-entrypoint ([#101](https://github.com/Shadowsong27/agentic-beacon/issues/101)) ([e324cf7](https://github.com/Shadowsong27/agentic-beacon/commit/e324cf782762a6c857c69a8a7e5cf589682fc7b4))
+
+
+### Bug Fixes
+
+* **beacon:** add transactional rollback to abc sync agent wiring (PER-131) ([#112](https://github.com/Shadowsong27/agentic-beacon/issues/112)) ([6d6c9a0](https://github.com/Shadowsong27/agentic-beacon/commit/6d6c9a0d782f4fa4fab27d3f0109e34d75e205b9))
+* **beacon:** agents sync fallback on fresh machine (PER-112) ([#107](https://github.com/Shadowsong27/agentic-beacon/issues/107)) ([4acb916](https://github.com/Shadowsong27/agentic-beacon/commit/4acb91643cbebee3cbd338c58d4686b2185bee10))
+* **beacon:** unwire only Beacon-owned tool symlinks; preserve user symlinks (PER-132) ([#117](https://github.com/Shadowsong27/agentic-beacon/issues/117)) ([037360d](https://github.com/Shadowsong27/agentic-beacon/commit/037360d2c521227dcbc03605ecc14f929410bc31))
+* **beacon:** wire_agent_* compares resolved canonical paths, not raw readlink (PER-134) ([#119](https://github.com/Shadowsong27/agentic-beacon/issues/119)) ([1751e7e](https://github.com/Shadowsong27/agentic-beacon/commit/1751e7e798fc9079728c1871e26f8898fc500f3e))
+* **beacon:** write per-tool .gitignore skills/ entry on dir existence (PER-136) ([#110](https://github.com/Shadowsong27/agentic-beacon/issues/110)) ([0f6cc34](https://github.com/Shadowsong27/agentic-beacon/commit/0f6cc3483f6e3757d9d927a33a7127fd14f5d9b5))
+* **skill:** ignore OS litter during skill operations ([4440103](https://github.com/Shadowsong27/agentic-beacon/commit/444010341098acfd69c38000674f8b781d01eea6))
+* **skill:** migrate legacy copy-based skills instead of silently skipping ([b78d22d](https://github.com/Shadowsong27/agentic-beacon/commit/b78d22d33788033bb660b031e508f616e3a0ecc2))
+* **skill:** symlink live skill files to warehouse instead of copying ([8dae5c1](https://github.com/Shadowsong27/agentic-beacon/commit/8dae5c1c4564f7ef5e0109343867567af1f77a8d))
+
+
+### Code Refactoring
+
+* **beacon:** drop dead AgentFrontmatter / AgentRequires code (PER-117) ([#111](https://github.com/Shadowsong27/agentic-beacon/issues/111)) ([9c713ad](https://github.com/Shadowsong27/agentic-beacon/commit/9c713ad5234240f7b0a87dd011c68d412d4cdad4))
+* **beacon:** drop examples/sample-warehouse, rely on abc warehouse init (PER-116) ([#115](https://github.com/Shadowsong27/agentic-beacon/issues/115)) ([c6d0120](https://github.com/Shadowsong27/agentic-beacon/commit/c6d01204a6af9eb1b28d0dda9a4079b3e1ac748f))
+* **beacon:** drop tombstone commands and dead artifact helpers ([#108](https://github.com/Shadowsong27/agentic-beacon/issues/108)) ([2a96562](https://github.com/Shadowsong27/agentic-beacon/commit/2a965627f7707f25dcb5066273332115b25abf40))
+* **beacon:** drop unused validate_requires_against_warehouse helper (PER-139) ([#116](https://github.com/Shadowsong27/agentic-beacon/issues/116)) ([c1842ae](https://github.com/Shadowsong27/agentic-beacon/commit/c1842aefba0b298617496629863dce2ad55315e1))
+* **beacon:** use GitignoreManager for agent-dir entries + prune when empty (PER-130) ([#113](https://github.com/Shadowsong27/agentic-beacon/issues/113)) ([404e7e6](https://github.com/Shadowsong27/agentic-beacon/commit/404e7e67c1f9e1bac4009c61e8a722d0dbb46a76))
+* **sync:** rename 'Skipped' to 'Up to date' in sync output ([520e8fb](https://github.com/Shadowsong27/agentic-beacon/commit/520e8fbf11b4eddd0783cf048b236006d811b27d))
+
+
+### Miscellaneous Chores
+
+* gitignore pending.yaml in warehouse init seed and repo root ([7b4a501](https://github.com/Shadowsong27/agentic-beacon/commit/7b4a5011bcc4c93bcb5135a7af8ab64a3aea173e))
+
+
+### Performance
+
+* **beacon:** one-shot marker for legacy global-agent cleanup (PER-133) ([#118](https://github.com/Shadowsong27/agentic-beacon/issues/118)) ([9384f97](https://github.com/Shadowsong27/agentic-beacon/commit/9384f972e06009191448f32d8e7d9472200850e5))
+
 ## [2.7.1](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v2.7.0...agentic-beacon@v2.7.1) (2026-04-28)
 
 
