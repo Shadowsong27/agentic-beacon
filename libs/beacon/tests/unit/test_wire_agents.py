@@ -623,3 +623,52 @@ def test_regular_file_conflict_error_empty_conflicts_raises_value_error():
 def test_regular_file_conflict_error_is_beacon_sync_error_subclass():
     """RegularFileConflictError must be a subclass of BeaconSyncError."""
     assert issubclass(RegularFileConflictError, BeaconSyncError)
+
+
+# ---------------------------------------------------------------------------
+# PER-134: resolve()-based path comparison handles relative symlinks
+# ---------------------------------------------------------------------------
+
+
+def test_wire_agent_claudecode_idempotent_with_relative_readlink(tmp_path):
+    """Symlink created with a relative path is treated as identical to the absolute artifact_file."""
+    project_root = tmp_path / "project"
+    artifact_file = project_root / ".agentic-beacon" / "artifacts" / "agents" / "foo.md"
+    artifact_file.parent.mkdir(parents=True, exist_ok=True)
+    artifact_file.write_text("# foo")
+
+    claude_dir = project_root / ".claude" / "agents"
+    claude_dir.mkdir(parents=True, exist_ok=True)
+    rel_target = (
+        Path("..") / ".." / ".agentic-beacon" / "artifacts" / "agents" / "foo.md"
+    )
+    (claude_dir / "foo.md").symlink_to(rel_target)
+
+    pre_inode = (claude_dir / "foo.md").lstat().st_ino
+    result = wire_agent_claudecode(project_root, artifact_file)
+    post_inode = (claude_dir / "foo.md").lstat().st_ino
+
+    assert pre_inode == post_inode  # idempotent — not replaced
+    assert result == claude_dir / "foo.md"
+
+
+def test_wire_agent_opencode_idempotent_with_relative_readlink(tmp_path):
+    """Symmetric test for wire_agent_opencode: relative symlink is kept, not replaced."""
+    project_root = tmp_path / "project"
+    artifact_file = project_root / ".agentic-beacon" / "artifacts" / "agents" / "bar.md"
+    artifact_file.parent.mkdir(parents=True, exist_ok=True)
+    artifact_file.write_text("# bar")
+
+    opencode_dir = project_root / ".opencode" / "agents"
+    opencode_dir.mkdir(parents=True, exist_ok=True)
+    rel_target = (
+        Path("..") / ".." / ".agentic-beacon" / "artifacts" / "agents" / "bar.md"
+    )
+    (opencode_dir / "bar.md").symlink_to(rel_target)
+
+    pre_inode = (opencode_dir / "bar.md").lstat().st_ino
+    result = wire_agent_opencode(project_root, artifact_file)
+    post_inode = (opencode_dir / "bar.md").lstat().st_ino
+
+    assert pre_inode == post_inode  # idempotent — not replaced
+    assert result == opencode_dir / "bar.md"
