@@ -343,3 +343,11 @@ def test_adopt_agent_with_no_tool_dirs_prints_wiring_note(
     assert "mkdir .claude" in r.output, (
         f"Expected remediation hint in adopt output; got:\n{r.output}"
     )
+
+    # The adopt summary must use the wiring-note variant, not the "wired" variant
+    assert "(see wiring note below)" in r.output, (
+        f"Expected '(see wiring note below)' in adopt output; got:\n{r.output}"
+    )
+    assert "(wired via abc sync or adopt)" not in r.output, (
+        f"Contradictory 'wired via abc sync or adopt' must not appear when wiring note fires; got:\n{r.output}"
+    )

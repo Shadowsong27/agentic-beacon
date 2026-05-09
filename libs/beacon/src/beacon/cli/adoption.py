@@ -195,10 +195,16 @@ def adopt(*, dry_run: bool) -> None:
             )
 
     if accepted_agents:
-        console.print(
-            f"[green]✓[/green] Adopted {len(accepted_agents)} agent(s) "
-            "(wired via abc sync or adopt)"
-        )
+        if wiring_notes:
+            console.print(
+                f"[green]✓[/green] Adopted {len(accepted_agents)} agent(s) "
+                "(see wiring note below)"
+            )
+        else:
+            console.print(
+                f"[green]✓[/green] Adopted {len(accepted_agents)} agent(s) "
+                "(wired via abc sync or adopt)"
+            )
 
     for note in wiring_notes:
         console.print(f"[yellow]ℹ[/yellow]\n{note}")
