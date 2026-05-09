@@ -8,8 +8,7 @@ from rich.console import Console
 from rich.table import Table
 
 from beacon.core.manifest.beacon import BeaconManifest
-from beacon.core.manifest.workspace import WorkspaceConfig
-from beacon.domains.distribution.sync_engine import SyncEngine
+from beacon.domains.distribution.artifact_listing import list_artifacts
 
 console = Console()
 
@@ -41,22 +40,8 @@ def list_cmd(*, artifact_type: str | None) -> None:
     beacon_dir = Path.cwd() / ".agentic-beacon"
     artifacts_dir = beacon_dir / "artifacts"
 
-    # Resolve the connected warehouse path from WorkspaceConfig only when a
-    # config.toml is present. SyncEngine.list_artifacts() only reads
-    # artifacts_path today, but the engine's __post_init__ resolves
-    # warehouse_path; fall back to beacon_dir on unconnected projects so the
-    # engine doesn't end up with a semantically-wrong Path.cwd(). A malformed
-    # but present config.toml is allowed to propagate (the user should fix
-    # their config rather than have abc list silently degrade).
-    if (beacon_dir / "config.toml").is_file():
-        warehouse_path = Path(WorkspaceConfig().warehouse.local_path)
-    else:
-        warehouse_path = beacon_dir
-
-    engine = SyncEngine(warehouse_path=warehouse_path, artifacts_path=artifacts_dir)
-
     if artifact_type == "agents":
-        artifacts = engine.list_artifacts("agents")
+        artifacts = list_artifacts(artifacts_dir, "agents")
         agent_files = artifacts.get("agents", [])
         if not agent_files:
             # Distinguish "declared but not synced" from "none declared at all"
@@ -98,7 +83,7 @@ def list_cmd(*, artifact_type: str | None) -> None:
         "skills": ("Synced Skills", "yellow", "Skill"),
     }
 
-    artifacts = engine.list_artifacts(artifact_type)
+    artifacts = list_artifacts(artifacts_dir, artifact_type)
 
     for section, files in artifacts.items():
         title, color, col_name = section_config[section]
