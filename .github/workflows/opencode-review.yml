@@ -76,7 +76,7 @@ jobs:
           echo "## OpenCode PR Review" >> "$GITHUB_STEP_SUMMARY"
           cat /tmp/opencode-review.md >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upsert PR review comment
+      - name: Post PR review comment
         uses: actions/github-script@v7
         with:
           script: |
@@ -100,26 +100,9 @@ jobs:
 
             const { owner, repo } = context.repo
             const issue_number = context.payload.pull_request.number
-            const comments = await github.paginate(github.rest.issues.listComments, {
+            await github.rest.issues.createComment({
               owner,
               repo,
               issue_number,
-              per_page: 100,
+              body,
             })
-            const existing = comments.find((comment) => comment.body.includes(marker))
-
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner,
-                repo,
-                comment_id: existing.id,
-                body,
-              })
-            } else {
-              await github.rest.issues.createComment({
-                owner,
-                repo,
-                issue_number,
-                body,
-              })
-            }
