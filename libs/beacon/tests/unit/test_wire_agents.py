@@ -6,7 +6,10 @@ Covers TC1-TC5 from tasks 1.1, TC1-TC3 from task 1.2, and TC1-TC4 from task 1.3.
 from pathlib import Path
 
 import pytest
-from beacon.core.exceptions import BeaconSyncError
+from beacon.core.exceptions import (
+    BeaconSyncError,
+    RegularFileConflictError,
+)
 from beacon.domains.artifact.agent import snapshot_agent_path
 from beacon.domains.setup.wiring import (
     unwire_agent,
@@ -557,3 +560,68 @@ class TestWireAgentsAtomically:
         # Only claudecode wired; future-tool was ignored.
         assert (project / ".claude" / "agents" / "spec-planner.md").is_symlink()
         assert not (project / ".future-tool").exists()
+
+
+# ---------------------------------------------------------------------------
+# PER-127: pre-flight scan in wire_agents_atomically
+# ---------------------------------------------------------------------------
+
+
+def test_wire_agents_atomically_collects_multiple_regular_file_conflicts(tmp_path):
+    """Pre-flight collects ALL conflicts across different agents and tools."""
+    project = tmp_path / "proj"
+    project.mkdir()
+
+    foo = _make_artifact(tmp_path / "warehouse", "foo.md")
+    bar = _make_artifact(tmp_path / "warehouse", "bar.md")
+
+    # Regular file at foo's claudecode dest
+    foo_cc = project / ".claude" / "agents" / "foo.md"
+    foo_cc.parent.mkdir(parents=True, exist_ok=True)
+    foo_cc.write_text("user foo cc")
+
+    # Regular file at bar's opencode dest
+    bar_oc = project / ".opencode" / "agents" / "bar.md"
+    bar_oc.parent.mkdir(parents=True, exist_ok=True)
+    bar_oc.write_text("user bar oc")
+
+    with pytest.raises(RegularFileConflictError) as exc:
+        wire_agents_atomically(project, [foo, bar], {"claudecode", "opencode"})
+
+    assert len(exc.value.conflicts) >= 2
+
+    # No symlinks created
+    assert not (project / ".claude" / "agents" / "foo.md").is_symlink()
+    assert not (project / ".opencode" / "agents" / "bar.md").is_symlink()
+
+
+def test_wire_agents_atomically_no_partial_wiring_on_conflict(tmp_path):
+    """Pre-flight aborts before any wiring — clean agent is never symlinked."""
+    project = tmp_path / "proj"
+    project.mkdir()
+
+    clean = _make_artifact(tmp_path / "warehouse", "clean.md")
+    conflicting = _make_artifact(tmp_path / "warehouse", "conflicting.md")
+
+    # Regular file only at conflicting agent's claudecode dest
+    blocker = project / ".claude" / "agents" / "conflicting.md"
+    blocker.parent.mkdir(parents=True, exist_ok=True)
+    blocker.write_text("user content")
+
+    with pytest.raises(RegularFileConflictError):
+        wire_agents_atomically(project, [clean, conflicting], {"claudecode"})
+
+    # clean.md must never have been symlinked anywhere
+    assert not (project / ".claude" / "agents" / "clean.md").is_symlink()
+    assert not (project / ".claude" / "agents" / "clean.md").exists()
+
+
+def test_regular_file_conflict_error_empty_conflicts_raises_value_error():
+    """Constructing RegularFileConflictError with empty list raises ValueError."""
+    with pytest.raises(ValueError):
+        RegularFileConflictError(conflicts=[])
+
+
+def test_regular_file_conflict_error_is_beacon_sync_error_subclass():
+    """RegularFileConflictError must be a subclass of BeaconSyncError."""
+    assert issubclass(RegularFileConflictError, BeaconSyncError)

@@ -7,7 +7,12 @@ import click
 from loguru import logger
 from rich.console import Console
 
-from beacon.core.exceptions import BeaconSyncError, DependencyError, ResetError
+from beacon.core.exceptions import (
+    BeaconSyncError,
+    DependencyError,
+    RegularFileConflictError,
+    ResetError,
+)
 from beacon.core.manifest.beacon import BeaconManifest
 from beacon.core.manifest.workspace import WorkspaceConfig
 from beacon.domains.artifact.skill import (
@@ -26,7 +31,7 @@ from beacon.domains.setup.wiring import (
     wire_contexts_claudecode,
     wire_contexts_opencode,
 )
-from beacon.utils.display import is_interactive
+from beacon.utils.display import format_regular_file_conflict, is_interactive
 from beacon.utils.git import find_project_root
 
 console = Console()
@@ -150,6 +155,9 @@ def sync(
         )
     except DependencyError as e:
         console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
+    except RegularFileConflictError as e:
+        console.print(format_regular_file_conflict(e.conflicts))
         sys.exit(1)
     except BeaconSyncError as e:
         console.print(f"[red]Error:[/red] {e}")
