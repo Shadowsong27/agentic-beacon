@@ -447,11 +447,13 @@ def test_accept_agent_rollback_on_wire_failure(
 def test_reject_agent_artifact_symlink_restored_on_failure(
     project: tuple, warehouse: Path
 ):
-    """Reject with mid-commit I/O failure rolls back all 3 symlinks.
+    """Reject with post-artifact-unlink failure rolls back all 3 symlinks.
 
-    Uses the _unlink_fn seam to succeed on the first call (.claude symlink removed)
-    and raise OSError on the second call (.opencode symlink would be removed).
-    Asserts _rollback() restores beacon.yaml and all 3 paths to pre-commit state.
+    Uses the _unlink_fn seam to actually unlink on every call but raise OSError
+    after the third call (artifact symlink), which is the last unlink in the
+    reject sequence (.claude → .opencode → artifact).  Asserts _rollback()
+    restores beacon.yaml and all 3 paths — including the artifact symlink that
+    was successfully removed before the failure — to their pre-commit state.
     """
     project_root, artifacts_path, beacon_yaml = project
 
@@ -485,15 +487,16 @@ def test_reject_agent_artifact_symlink_restored_on_failure(
     oc_link.symlink_to(artifact)
     pre_oc_target = oc_link.readlink()
 
-    # _unlink_fn: succeed on first call (.claude removed), fail on second (.opencode)
+    # _unlink_fn: actually unlink on every call; raise AFTER call 3 (artifact).
+    # This simulates a post-unlink I/O failure that forces rollback after all 3
+    # symlinks have already been removed.
     call_count = {"n": 0}
 
     def _failing_unlink(path: Path) -> None:
         call_count["n"] += 1
-        if call_count["n"] == 1:
-            path.unlink()
-        else:
-            raise OSError("forced unlink failure")
+        path.unlink()
+        if call_count["n"] == 3:
+            raise OSError("forced post-unlink failure")
 
     agent_candidate = AdoptCandidate(
         artifact_type="agents",
@@ -518,15 +521,15 @@ def test_reject_agent_artifact_symlink_restored_on_failure(
             _unlink_fn=_failing_unlink,
         )
 
-    # Failing call was reached (first succeeded, second failed)
-    assert call_count["n"] >= 2
+    # All 3 unlinks were attempted; the 3rd raised after doing its work
+    assert call_count["n"] == 3
 
     # beacon.yaml restored to pre-commit state
     assert beacon_yaml.read_bytes() == pre_beacon_bytes, (
         "beacon.yaml was not rolled back after reject failure"
     )
 
-    # .claude symlink restored (was removed by the first successful unlink)
+    # .claude symlink restored (was removed by unlink call 1)
     assert claude_link.is_symlink(), (
         ".claude/agents/spec-planner.md should be restored after reject rollback"
     )
@@ -534,13 +537,21 @@ def test_reject_agent_artifact_symlink_restored_on_failure(
         ".claude/agents/spec-planner.md target changed after rollback"
     )
 
-    # .opencode symlink untouched (unlink was never attempted due to failure)
-    assert oc_link.is_symlink(), ".opencode/agents/spec-planner.md should still exist"
-    assert oc_link.readlink() == pre_oc_target
+    # .opencode symlink restored (was removed by unlink call 2)
+    assert oc_link.is_symlink(), (
+        ".opencode/agents/spec-planner.md should be restored after reject rollback"
+    )
+    assert oc_link.readlink() == pre_oc_target, (
+        ".opencode/agents/spec-planner.md target changed after rollback"
+    )
 
-    # artifact symlink untouched (never reached)
-    assert artifact.is_symlink(), "artifact symlink should still exist after rollback"
-    assert artifact.readlink() == pre_artifact_target
+    # artifact symlink restored (was removed by unlink call 3 before the raise)
+    assert artifact.is_symlink(), (
+        "artifact symlink should be restored after reject rollback"
+    )
+    assert artifact.readlink() == pre_artifact_target, (
+        "artifact symlink target changed after rollback"
+    )
 
 
 # ---------------------------------------------------------------------------
