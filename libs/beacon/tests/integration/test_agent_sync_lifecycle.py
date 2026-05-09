@@ -874,41 +874,31 @@ def test_sync_repairs_broken_symlink(project_dir: Path, warehouse: Path, monkeyp
 def test_readme_in_warehouse_agents_dir_is_not_wired(
     project_dir: Path, warehouse: Path, monkeypatch
 ):
-    """agents/README.md in the warehouse is filtered and must not become an agent artifact.
+    """_list_agents() filters README.md from warehouse agent discovery.
 
-    README.md is documentation for the warehouse directory. _list_agents() and
-    the run_sync agent-manifest guard both filter it out, so it cannot reach
-    beacon.yaml through normal flows and therefore will not be wired by abc sync.
+    WarehouseDistributor._list_agents() excludes files whose uppercase name
+    equals "README.MD" (guard: ``file.name.upper() != "README.MD"``), so
+    README.md can never appear in the catalog returned to abc adopt / abc sync,
+    even when it physically exists in the warehouse agents/ directory. This test
+    calls _list_agents() directly to exercise that guard rather than relying on
+    a sync path where README.md was never declared in beacon.yaml.
     """
-    runner = CliRunner()
-    monkeypatch.chdir(project_dir)
+    from beacon.domains.distribution.distributor import WarehouseDistributor
 
-    # Plant a README.md in the warehouse agents dir
+    # Plant a README.md alongside a real agent definition in the warehouse.
     readme = warehouse / "agents" / "README.md"
     readme.write_text("# Agents Directory\nContains agent definitions.\n")
 
-    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
-    beacon_yaml.write_text(
-        "artifacts:\n"
-        "  contexts: []\n"
-        "  skills: []\n"
-        "  agents:\n"
-        "    - agents/spec-planner.md\n"
+    distributor = WarehouseDistributor(
+        warehouse_root=warehouse, target_root=project_dir
     )
+    agent_list = distributor._list_agents(warehouse / "agents")
 
-    r = runner.invoke(main, ["sync", "--skip-git-check"])
-    assert r.exit_code == 0, f"sync failed: {r.output}"
-
-    # README.md must not appear in the artifacts directory
-    artifact_readme = (
-        project_dir / ".agentic-beacon" / "artifacts" / "agents" / "README.md"
+    # The real agent must be discoverable …
+    assert "agents/spec-planner.md" in agent_list, (
+        f"spec-planner.md must appear in agent list; got: {agent_list}"
     )
-    assert not artifact_readme.exists() and not artifact_readme.is_symlink(), (
-        "agents/README.md must not be wired as an artifact symlink"
-    )
-
-    # README.md must not appear in the tool symlink directory
-    claude_readme = project_dir / ".claude" / "agents" / "README.md"
-    assert not claude_readme.exists() and not claude_readme.is_symlink(), (
-        "agents/README.md must not be wired into .claude/agents/"
+    # … but README.md must be excluded by the README.MD guard.
+    assert "agents/README.md" not in agent_list, (
+        f"README.md must be filtered from agent list; got: {agent_list}"
     )
