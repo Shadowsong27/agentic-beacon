@@ -9,7 +9,10 @@ import click
 from loguru import logger
 from rich.console import Console
 
-from beacon.core.exceptions import BeaconSyncError
+from beacon.core.exceptions import (
+    AgentWireConflict,
+    RegularFileConflictError,
+)
 from beacon.domains.artifact.agent import snapshot_agent_path
 
 console = Console()
@@ -336,7 +339,8 @@ def wire_agent_claudecode(project_root: Path, artifact_file: Path) -> Path:
     The parent directory is created if it does not exist.
 
     A regular file at the destination is user-owned content. Beacon will not
-    overwrite it; a BeaconSyncError is raised with an actionable hint instead.
+    overwrite it; a RegularFileConflictError (BeaconSyncError subclass) is
+    raised with the conflicting destination attached.
 
     Args:
         project_root: Project root directory.
@@ -346,7 +350,8 @@ def wire_agent_claudecode(project_root: Path, artifact_file: Path) -> Path:
         Path to the created (or existing) symlink.
 
     Raises:
-        BeaconSyncError: If a regular file already exists at the destination.
+        RegularFileConflictError: If a regular file already exists at the
+            destination. Subclass of BeaconSyncError.
         OSError: If the parent directory cannot be created or the symlink
             cannot be written.
     """
@@ -361,13 +366,14 @@ def wire_agent_claudecode(project_root: Path, artifact_file: Path) -> Path:
             pass
         dest.unlink()
     elif dest.exists():
-        raise BeaconSyncError(
-            f"Cannot wire agent: {dest} exists as a regular file (not a Beacon symlink).",
-            hint=(
-                f"Beacon will not overwrite user-authored content. "
-                f"Either remove or rename {dest}, or remove "
-                f"'agents/{artifact_file.stem}' from beacon.yaml.artifacts.agents."
-            ),
+        raise RegularFileConflictError(
+            conflicts=[
+                AgentWireConflict(
+                    dest=dest,
+                    agent_name=artifact_file.stem,
+                    tool="claudecode",
+                ),
+            ],
         )
 
     dest.symlink_to(artifact_file)
@@ -383,7 +389,8 @@ def wire_agent_opencode(project_root: Path, artifact_file: Path) -> Path:
     The parent directory is created if it does not exist.
 
     A regular file at the destination is user-owned content. Beacon will not
-    overwrite it; a BeaconSyncError is raised with an actionable hint instead.
+    overwrite it; a RegularFileConflictError (BeaconSyncError subclass) is
+    raised with the conflicting destination attached.
 
     Args:
         project_root: Project root directory.
@@ -393,7 +400,8 @@ def wire_agent_opencode(project_root: Path, artifact_file: Path) -> Path:
         Path to the created (or existing) symlink.
 
     Raises:
-        BeaconSyncError: If a regular file already exists at the destination.
+        RegularFileConflictError: If a regular file already exists at the
+            destination. Subclass of BeaconSyncError.
         OSError: If the parent directory cannot be created or the symlink
             cannot be written.
     """
@@ -408,13 +416,14 @@ def wire_agent_opencode(project_root: Path, artifact_file: Path) -> Path:
             pass
         dest.unlink()
     elif dest.exists():
-        raise BeaconSyncError(
-            f"Cannot wire agent: {dest} exists as a regular file (not a Beacon symlink).",
-            hint=(
-                f"Beacon will not overwrite user-authored content. "
-                f"Either remove or rename {dest}, or remove "
-                f"'agents/{artifact_file.stem}' from beacon.yaml.artifacts.agents."
-            ),
+        raise RegularFileConflictError(
+            conflicts=[
+                AgentWireConflict(
+                    dest=dest,
+                    agent_name=artifact_file.stem,
+                    tool="opencode",
+                ),
+            ],
         )
 
     dest.symlink_to(artifact_file)
@@ -445,7 +454,7 @@ def wire_agents_atomically(
 
     Raises:
         Whatever `wire_agent_claudecode` / `wire_agent_opencode` raise
-        (typically BeaconSyncError) — re-raised AFTER rollback.
+        (typically RegularFileConflictError or BeaconSyncError) — re-raised AFTER rollback.
 
     Note:
         This helper covers ONLY the per-tool agent paths. It does not
@@ -465,6 +474,38 @@ def wire_agents_atomically(
         operates at a tighter atomic boundary (single session commit) where
         any partial restore is itself a correctness concern worth raising.
     """
+    # Pre-flight: collect ALL regular-file conflicts before touching anything.
+    # Aborts with a structured error so the caller can present every blocked
+    # destination in one pass rather than failing on the first one found.
+    # Use is_file() rather than exists() so a directory (or FIFO/socket) at the
+    # dest path is left to surface as a different error class — the rm/mv
+    # remediation commands shown in the conflict guide assume regular files.
+    pre_conflicts: list[AgentWireConflict] = []
+    for artifact_file in agent_artifact_files:
+        leaf = artifact_file.name
+        if "claudecode" in detected_tools:
+            cc_dest = project_root / ".claude" / "agents" / leaf
+            if cc_dest.is_file() and not cc_dest.is_symlink():
+                pre_conflicts.append(
+                    AgentWireConflict(
+                        dest=cc_dest,
+                        agent_name=artifact_file.stem,
+                        tool="claudecode",
+                    )
+                )
+        if "opencode" in detected_tools:
+            oc_dest = project_root / ".opencode" / "agents" / leaf
+            if oc_dest.is_file() and not oc_dest.is_symlink():
+                pre_conflicts.append(
+                    AgentWireConflict(
+                        dest=oc_dest,
+                        agent_name=artifact_file.stem,
+                        tool="opencode",
+                    )
+                )
+    if pre_conflicts:
+        raise RegularFileConflictError(conflicts=pre_conflicts)
+
     snapshots: list[tuple[Path, str, Path | None]] = []
 
     def _rollback() -> None:

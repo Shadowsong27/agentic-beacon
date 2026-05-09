@@ -7,15 +7,17 @@ import click
 from rich.console import Console
 from rich.table import Table
 
+from beacon.core.exceptions import RegularFileConflictError
 from beacon.core.manifest.beacon import BeaconManifest
 from beacon.core.manifest.workspace import WorkspaceConfig
 from beacon.domains.adoption.apply import (
+    CommitError,
     cleanup_unadopted_artifacts,
     commit_session,
 )
 from beacon.domains.adoption.discovery import discover_adoptable, discover_pending
 from beacon.domains.adoption.tui import AdoptApp
-from beacon.utils.display import is_interactive
+from beacon.utils.display import format_regular_file_conflict, is_interactive
 from beacon.utils.git import find_project_root
 
 console = Console()
@@ -146,18 +148,25 @@ def adopt(*, dry_run: bool) -> None:
         console.print("[dim]No changes made.[/dim]")
         return
 
-    commit_session(
-        to_adopt=result.to_adopt,
-        to_unadopt=result.to_unadopt,
-        pending_accept=result.pending_accept,
-        pending_reject=result.pending_reject,
-        candidates=candidates,
-        pending_entries=pending_entries,
-        project_root=project_root,
-        warehouse_path=warehouse_path,
-        artifacts_path=artifacts_dir,
-        beacon_yaml_path=beacon_yaml,
-    )
+    try:
+        commit_session(
+            to_adopt=result.to_adopt,
+            to_unadopt=result.to_unadopt,
+            pending_accept=result.pending_accept,
+            pending_reject=result.pending_reject,
+            candidates=candidates,
+            pending_entries=pending_entries,
+            project_root=project_root,
+            warehouse_path=warehouse_path,
+            artifacts_path=artifacts_dir,
+            beacon_yaml_path=beacon_yaml,
+        )
+    except CommitError as e:
+        if isinstance(e.__cause__, RegularFileConflictError):
+            console.print(format_regular_file_conflict(e.__cause__.conflicts))
+        else:
+            console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
 
     accepted_paths = result.to_adopt + result.pending_accept
     accepted_non_agents = [p for p in accepted_paths if not p.startswith("agents/")]
