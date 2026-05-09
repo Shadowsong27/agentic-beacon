@@ -2,7 +2,7 @@
 
 import json
 import shutil
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 
 import click
@@ -619,7 +619,9 @@ def unwire_agent(project_root: Path, agent_name: str) -> None:
 
 
 def unwire_agent_with_undo(
-    project_root: Path, agent_name: str
+    project_root: Path,
+    agent_name: str,
+    _unlink_fn: Callable[[Path], None] | None = None,
 ) -> list[tuple[Path, Path]]:
     """Remove project-local agent symlinks, returning (path, target) pairs for rollback.
 
@@ -634,11 +636,15 @@ def unwire_agent_with_undo(
     Args:
         project_root: Project root directory.
         agent_name: Stem name of the agent (without .md extension), or full filename.
+        _unlink_fn: Callable used to unlink each symlink; defaults to Path.unlink.
+            Provided for testing rollback scenarios; production code never passes this.
 
     Returns:
         List of (path, target) pairs for each symlink successfully removed.
         User-owned symlinks and regular files at the agent paths are not included.
     """
+    unlink_fn: Callable[[Path], None] = _unlink_fn or Path.unlink
+
     leaf = Path(agent_name).name
     if not leaf.endswith(".md"):
         leaf = leaf + ".md"
@@ -661,7 +667,7 @@ def unwire_agent_with_undo(
                 )
                 continue
             target = dest.readlink()
-            dest.unlink()
+            unlink_fn(dest)
             removed.append((dest, target))
             logger.debug("Unwired agent: {}", dest)
         elif dest.exists():

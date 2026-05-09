@@ -445,13 +445,102 @@ def test_accept_agent_rollback_on_wire_failure(
 
 
 def test_reject_agent_artifact_symlink_restored_on_failure(
-    project: tuple, warehouse: Path, monkeypatch
+    project: tuple, warehouse: Path
 ):
-    """Reject with mid-commit failure restores artifact symlink and tool symlinks."""
-    pytest.skip(
-        "TODO: patching Path.unlink to force a failure mid-reject is too brittle "
-        "without a dedicated injectable hook in the reject path; skipping per spec allowance."
+    """Reject with mid-commit I/O failure rolls back all 3 symlinks.
+
+    Uses the _unlink_fn seam to succeed on the first call (.claude symlink removed)
+    and raise OSError on the second call (.opencode symlink would be removed).
+    Asserts _rollback() restores beacon.yaml and all 3 paths to pre-commit state.
+    """
+    project_root, artifacts_path, beacon_yaml = project
+
+    # Need .opencode/ so all 3 paths are wired
+    (project_root / ".opencode").mkdir()
+
+    beacon_yaml.write_text(
+        "artifacts:\n"
+        "  contexts: []\n"
+        "  skills: []\n"
+        "  agents:\n"
+        "    - agents/spec-planner.md\n"
     )
+    pre_beacon_bytes = beacon_yaml.read_bytes()
+
+    # Pre-create all 3 symlinks
+    artifact = artifacts_path / "agents" / "spec-planner.md"
+    artifact.parent.mkdir(parents=True, exist_ok=True)
+    artifact.symlink_to(warehouse / "agents" / "spec-planner.md")
+    pre_artifact_target = artifact.readlink()
+
+    claude_agents = project_root / ".claude" / "agents"
+    claude_agents.mkdir(parents=True, exist_ok=True)
+    claude_link = claude_agents / "spec-planner.md"
+    claude_link.symlink_to(artifact)
+    pre_claude_target = claude_link.readlink()
+
+    oc_agents = project_root / ".opencode" / "agents"
+    oc_agents.mkdir(parents=True, exist_ok=True)
+    oc_link = oc_agents / "spec-planner.md"
+    oc_link.symlink_to(artifact)
+    pre_oc_target = oc_link.readlink()
+
+    # _unlink_fn: succeed on first call (.claude removed), fail on second (.opencode)
+    call_count = {"n": 0}
+
+    def _failing_unlink(path: Path) -> None:
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            path.unlink()
+        else:
+            raise OSError("forced unlink failure")
+
+    agent_candidate = AdoptCandidate(
+        artifact_type="agents",
+        path="agents/spec-planner.md",
+        description="Plans specs",
+    )
+
+    from beacon.domains.adoption.apply import CommitError
+
+    with pytest.raises(CommitError):
+        commit_session(
+            to_adopt=[],
+            to_unadopt=["agents/spec-planner.md"],
+            pending_accept=[],
+            pending_reject=[],
+            candidates=[agent_candidate],
+            pending_entries=[],
+            project_root=project_root,
+            warehouse_path=warehouse,
+            artifacts_path=artifacts_path,
+            beacon_yaml_path=beacon_yaml,
+            _unlink_fn=_failing_unlink,
+        )
+
+    # Failing call was reached (first succeeded, second failed)
+    assert call_count["n"] >= 2
+
+    # beacon.yaml restored to pre-commit state
+    assert beacon_yaml.read_bytes() == pre_beacon_bytes, (
+        "beacon.yaml was not rolled back after reject failure"
+    )
+
+    # .claude symlink restored (was removed by the first successful unlink)
+    assert claude_link.is_symlink(), (
+        ".claude/agents/spec-planner.md should be restored after reject rollback"
+    )
+    assert claude_link.readlink() == pre_claude_target, (
+        ".claude/agents/spec-planner.md target changed after rollback"
+    )
+
+    # .opencode symlink untouched (unlink was never attempted due to failure)
+    assert oc_link.is_symlink(), ".opencode/agents/spec-planner.md should still exist"
+    assert oc_link.readlink() == pre_oc_target
+
+    # artifact symlink untouched (never reached)
+    assert artifact.is_symlink(), "artifact symlink should still exist after rollback"
+    assert artifact.readlink() == pre_artifact_target
 
 
 # ---------------------------------------------------------------------------
