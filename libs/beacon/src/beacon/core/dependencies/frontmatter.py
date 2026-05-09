@@ -113,26 +113,3 @@ def parse_frontmatter(path: Path) -> FrontmatterResult:
         )
 
     return FrontmatterResult(success=True, data=data)
-
-
-def validate_requires_against_warehouse(
-    frontmatter: SkillFrontmatter, warehouse_path: Path
-) -> list[str]:
-    """Validate that every name in frontmatter.requires resolves to an existing warehouse file.
-
-    Args:
-        frontmatter: Parsed and validated skill frontmatter.
-        warehouse_path: Root of the warehouse clone.
-
-    Returns:
-        List of human-readable error strings; empty on success.
-    """
-    errors: list[str] = []
-    req = frontmatter.requires
-
-    for ctx_name in req.contexts:
-        expected = warehouse_path / "contexts" / f"{ctx_name}.md"
-        if not expected.exists():
-            errors.append(f"Missing context '{ctx_name}': expected {expected}")
-
-    return errors
