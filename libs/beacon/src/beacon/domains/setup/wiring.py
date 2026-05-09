@@ -555,15 +555,32 @@ def wire_agents_atomically(
         raise
 
 
+def _is_beacon_symlink(dest: Path, expected_artifact: Path) -> bool:
+    """Return True if dest is a symlink whose resolved target matches expected_artifact.
+
+    Handles both absolute and relative symlink targets. Returns False on any
+    OSError (e.g. permission denied reading the link), treating the path as
+    user-owned in that case.
+    """
+    try:
+        raw_target = dest.readlink()
+    except OSError:
+        return False
+    if not raw_target.is_absolute():
+        raw_target = dest.parent / raw_target
+    return raw_target.resolve(strict=False) == expected_artifact
+
+
 def unwire_agent(project_root: Path, agent_name: str) -> None:
     """Remove project-local agent symlinks for the given agent.
 
-    Only Beacon-created symlinks are removed. A regular file at the agent path
-    is user-owned content and is left untouched with a warning logged.
+    Only symlinks whose target resolves to .agentic-beacon/artifacts/agents/<name>.md
+    are removed. Symlinks pointing elsewhere are preserved with a warning (treated as
+    user-owned content). A regular file at the agent path is also left untouched.
 
     Removes both .claude/agents/<agent_name>.md and
-    .opencode/agents/<agent_name>.md if they are Beacon symlinks. Missing files
-    are silently skipped. Does not traverse subdirectories.
+    .opencode/agents/<agent_name>.md if they are Beacon-owned symlinks. Missing
+    files are silently skipped. Does not traverse subdirectories.
 
     Args:
         project_root: Project root directory.
@@ -575,11 +592,22 @@ def unwire_agent(project_root: Path, agent_name: str) -> None:
     if not leaf.endswith(".md"):
         leaf = leaf + ".md"
 
+    expected_artifact = (
+        project_root / ".agentic-beacon" / "artifacts" / "agents" / leaf
+    ).resolve(strict=False)
+
     for dest in (
         project_root / ".claude" / "agents" / leaf,
         project_root / ".opencode" / "agents" / leaf,
     ):
         if dest.is_symlink():
+            if not _is_beacon_symlink(dest, expected_artifact):
+                logger.warning(
+                    "Skipping unwire of {}: symlink points outside "
+                    ".agentic-beacon/artifacts/agents/; treating as user-owned.",
+                    dest,
+                )
+                continue
             dest.unlink()
             logger.debug("Unwired agent: {}", dest)
         elif dest.exists():
@@ -595,11 +623,13 @@ def unwire_agent_with_undo(
 ) -> list[tuple[Path, Path]]:
     """Remove project-local agent symlinks, returning (path, target) pairs for rollback.
 
-    Only Beacon-created symlinks are removed and recorded. A regular file at the
-    agent path is user-owned content and is left untouched with a warning logged.
+    Only symlinks whose target resolves to .agentic-beacon/artifacts/agents/<name>.md
+    are removed and recorded. Symlinks pointing elsewhere are preserved with a warning
+    (treated as user-owned). A regular file at the agent path is also left untouched.
 
     Like unwire_agent but returns a list of (removed_path, original_target) tuples
     for each symlink removed, enabling callers to reconstruct them on rollback.
+    User-owned symlinks that are skipped are NOT included in the returned list.
 
     Args:
         project_root: Project root directory.
@@ -607,11 +637,15 @@ def unwire_agent_with_undo(
 
     Returns:
         List of (path, target) pairs for each symlink successfully removed.
-        Regular files at the agent paths are not included (they are not removed).
+        User-owned symlinks and regular files at the agent paths are not included.
     """
     leaf = Path(agent_name).name
     if not leaf.endswith(".md"):
         leaf = leaf + ".md"
+
+    expected_artifact = (
+        project_root / ".agentic-beacon" / "artifacts" / "agents" / leaf
+    ).resolve(strict=False)
 
     removed: list[tuple[Path, Path]] = []
     for dest in (
@@ -619,6 +653,13 @@ def unwire_agent_with_undo(
         project_root / ".opencode" / "agents" / leaf,
     ):
         if dest.is_symlink():
+            if not _is_beacon_symlink(dest, expected_artifact):
+                logger.warning(
+                    "Skipping unwire of {}: symlink points outside "
+                    ".agentic-beacon/artifacts/agents/; treating as user-owned.",
+                    dest,
+                )
+                continue
             target = dest.readlink()
             dest.unlink()
             removed.append((dest, target))
