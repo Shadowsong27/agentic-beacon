@@ -449,8 +449,8 @@ When reporting issues, include:
    - [Python Project Setup](./python-project-setup.md)
    - [Team Collaboration](./team-collaboration.md)
 
-2. **Check examples:**
-   - Look in `examples/sample-warehouse/` for reference
+2. **Generate a reference warehouse:**
+   - Run `abc warehouse init demo-warehouse` to see a valid structure
 
 3. **Ask for help:**
    - GitHub Discussions
