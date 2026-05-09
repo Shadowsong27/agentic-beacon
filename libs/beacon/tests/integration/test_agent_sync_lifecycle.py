@@ -867,21 +867,30 @@ def test_sync_repairs_broken_symlink(project_dir: Path, warehouse: Path, monkeyp
     assert claude_link.is_symlink(), "Repaired path must be a symlink"
     assert claude_link.exists(), "Repaired symlink must resolve to an existing file"
 
+    expected_artifact = (
+        project_dir / ".agentic-beacon" / "artifacts" / "agents" / "spec-planner.md"
+    )
+    assert claude_link.resolve(strict=True) == expected_artifact.resolve(strict=True), (
+        f"Repaired symlink resolves to {claude_link.resolve()} "
+        f"but expected {expected_artifact.resolve()}"
+    )
+
 
 # Case #13: README-ignored
 
 
-def test_readme_in_warehouse_agents_dir_is_not_wired(
+def test_readme_filtered_from_warehouse_agent_catalog(
     project_dir: Path, warehouse: Path, monkeypatch
 ):
-    """_list_agents() filters README.md from warehouse agent discovery.
+    """_list_agents() excludes README.md from the agent catalog (discovery filter only).
 
     WarehouseDistributor._list_agents() excludes files whose uppercase name
     equals "README.MD" (guard: ``file.name.upper() != "README.MD"``), so
-    README.md can never appear in the catalog returned to abc adopt / abc sync,
-    even when it physically exists in the warehouse agents/ directory. This test
-    calls _list_agents() directly to exercise that guard rather than relying on
-    a sync path where README.md was never declared in beacon.yaml.
+    README.md cannot appear in the catalog returned to abc adopt / abc sync.
+    This test calls _list_agents() directly to exercise that catalog-discovery
+    guard; it does NOT cover the sync wiring path. There is no sync-time guard
+    that refuses to wire agents/README.md if a user manually adds it to
+    beacon.yaml — sync will attempt to wire whatever is declared there.
     """
     from beacon.domains.distribution.distributor import WarehouseDistributor
 
