@@ -79,10 +79,11 @@ class RegularFileConflictError(BeaconSyncError):
         self.conflicts = tuple(conflicts)
         n = len(self.conflicts)
         s = "s" if n != 1 else ""
-        message = f"Cannot wire {n} agent{s}: regular file conflict."
+        message = f"Cannot wire {n} agent{s}: regular file conflict ({n} blocked destination{s})."
         hint = (
-            f"{n} regular file{s} block agent wiring. "
-            "Run abc sync or abc adopt to see a structured remediation guide."
+            "This error should normally be caught by the abc CLI and rendered as a "
+            "structured remediation guide. If you are seeing this raw exception, please "
+            "file a bug — the conflict list is available on `e.conflicts`."
         )
         super().__init__(message, hint=hint)
 

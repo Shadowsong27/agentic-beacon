@@ -339,7 +339,8 @@ def wire_agent_claudecode(project_root: Path, artifact_file: Path) -> Path:
     The parent directory is created if it does not exist.
 
     A regular file at the destination is user-owned content. Beacon will not
-    overwrite it; a BeaconSyncError is raised with an actionable hint instead.
+    overwrite it; a RegularFileConflictError (BeaconSyncError subclass) is
+    raised with the conflicting destination attached.
 
     Args:
         project_root: Project root directory.
@@ -349,7 +350,8 @@ def wire_agent_claudecode(project_root: Path, artifact_file: Path) -> Path:
         Path to the created (or existing) symlink.
 
     Raises:
-        BeaconSyncError: If a regular file already exists at the destination.
+        RegularFileConflictError: If a regular file already exists at the
+            destination. Subclass of BeaconSyncError.
         OSError: If the parent directory cannot be created or the symlink
             cannot be written.
     """
@@ -387,7 +389,8 @@ def wire_agent_opencode(project_root: Path, artifact_file: Path) -> Path:
     The parent directory is created if it does not exist.
 
     A regular file at the destination is user-owned content. Beacon will not
-    overwrite it; a BeaconSyncError is raised with an actionable hint instead.
+    overwrite it; a RegularFileConflictError (BeaconSyncError subclass) is
+    raised with the conflicting destination attached.
 
     Args:
         project_root: Project root directory.
@@ -397,7 +400,8 @@ def wire_agent_opencode(project_root: Path, artifact_file: Path) -> Path:
         Path to the created (or existing) symlink.
 
     Raises:
-        BeaconSyncError: If a regular file already exists at the destination.
+        RegularFileConflictError: If a regular file already exists at the
+            destination. Subclass of BeaconSyncError.
         OSError: If the parent directory cannot be created or the symlink
             cannot be written.
     """
@@ -450,7 +454,7 @@ def wire_agents_atomically(
 
     Raises:
         Whatever `wire_agent_claudecode` / `wire_agent_opencode` raise
-        (typically BeaconSyncError) — re-raised AFTER rollback.
+        (typically RegularFileConflictError or BeaconSyncError) — re-raised AFTER rollback.
 
     Note:
         This helper covers ONLY the per-tool agent paths. It does not
