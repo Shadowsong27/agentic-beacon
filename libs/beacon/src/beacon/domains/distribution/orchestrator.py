@@ -534,7 +534,9 @@ def run_sync(
     # Legacy global agent symlink cleanup (PER-113 migration)
     legacy_agents_cleaned = 0
     if not dry_run:
-        legacy_agents_cleaned = cleanup_legacy_global_agent_symlinks(warehouse_path)
+        legacy_agents_cleaned = cleanup_legacy_global_agent_symlinks(
+            warehouse_path, project_root
+        )
 
     adoption_notification = None
     if not dry_run:

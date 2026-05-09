@@ -50,6 +50,7 @@ uv.lock
 .agentic-beacon/artifacts/
 .agentic-beacon/warehouse-catalog.md
 .agentic-beacon/pending.yaml
+.agentic-beacon/.legacy-migrated
 
 # Local sample-warehouse checkout (developer convenience; never a submodule)
 sample-warehouse/
