@@ -167,7 +167,7 @@ Everything is a per-file **symlink** into the warehouse clone — one physical f
 - **[CLI Reference](./docs/cli-reference.md)** — Full command reference
 
 ### Examples (examples/)
-- **[Sample Warehouse](./examples/sample-warehouse/)** — Mirror of the public starter warehouse
+- **[Beacon Configs](./examples/beacon-configs/)** — Example `beacon.yaml` configurations for common project setups
 
 ---
 

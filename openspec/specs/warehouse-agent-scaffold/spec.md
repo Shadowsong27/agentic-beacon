@@ -28,14 +28,3 @@ The initializer SHALL write a `README.md` into the `agents/` directory explainin
 #### Scenario: README documents agents.yaml
 - **WHEN** the bundled README template is inspected
 - **THEN** it contains a section documenting `agents/agents.yaml` as the location for Beacon dependency metadata and explicitly states that `requires:` must not appear in agent frontmatter
-
-### Requirement: Sample warehouse reflects agents directory
-The `examples/sample-warehouse/` included in the repository SHALL contain an `agents/README.md` matching the current template AND an `agents/agents.yaml` manifest consistent with the current validation rules. Both files stay consistent with the `abc warehouse init` output.
-
-#### Scenario: Sample warehouse is consistent
-- **WHEN** the template file `data/templates/agents/README.md` is updated
-- **THEN** `examples/sample-warehouse/agents/README.md` is manually updated to match before release
-
-#### Scenario: Sample warehouse ships agents.yaml
-- **WHEN** the sample warehouse is inspected
-- **THEN** `examples/sample-warehouse/agents/agents.yaml` exists (empty mapping is valid if no sample agents ship) and passes `abc warehouse status` validation

@@ -328,7 +328,7 @@ Run 'abc adopt' to wire the context pointer if one was queued.
 
 **User:**
 ```
-/record-knowledge When updating warehouse structure, always regenerate examples/sample-warehouse
+/record-knowledge When updating warehouse structure, always run abc warehouse init to verify output
 ```
 
 **Agent:**

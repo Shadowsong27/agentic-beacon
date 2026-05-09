@@ -19,7 +19,7 @@ agentic-beacon/
 │       ├── core/         # Cross-domain primitives: exceptions, manifest models, settings, file_filter
 │       ├── utils/        # Stateless helpers: git, display, interaction, platform
 │       └── data/skills/  # Bundled skills — SSOT for every skill distributed by abc init
-├── examples/sample-warehouse/  # Must always match abc init output exactly
+├── examples/             # Example beacon.yaml configs
 ├── docs/                 # Design documentation
 ├── site-docs/            # MkDocs source
 ├── openspec/             # OpenSpec change artifacts (changes/, specs/)
@@ -134,7 +134,6 @@ from beacon.core.manifest import BeaconManifest
 ## Documentation Standards
 
 - Keep docs current with code changes
-- `examples/sample-warehouse/` must always match `abc warehouse init` output exactly — regenerate after any change to `domains/setup/initializer.py`
 - Warehouse context files use **free descriptive names** — not the `AGENTS.*` prefix (that convention applies only at project/user root level)
 
 ---
@@ -152,9 +151,8 @@ from beacon.core.manifest import BeaconManifest
 ### Updating Warehouse Structure
 
 1. Edit `domains/setup/initializer.py`
-2. Delete and regenerate `examples/sample-warehouse/`
-3. Update any docs that show the structure diagram
-4. Test `abc warehouse init` and `abc setup` end-to-end
+2. Update any docs that show the structure diagram
+3. Test `abc warehouse init` and `abc setup` end-to-end
 
 ---
 
@@ -184,7 +182,6 @@ The workflow at `.github/workflows/opencode-review.yml` reads `vars.OPENCODE_REV
 
 ## Critical Safeguards
 
-- **Keep examples updated** — `examples/sample-warehouse/` must match `abc warehouse init` output
 - **Test before pushing** — `abc --version`, `abc warehouse init test-warehouse`, `pytest`
 
 ---
