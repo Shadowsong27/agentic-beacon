@@ -25,9 +25,23 @@ During `abc sync`, after symlinking declared agents from `<warehouse>/agents/<na
 - **WHEN** wiring an agent and the target tool directory (`.claude/agents/` or `.opencode/agents/`) does not yet exist
 - **THEN** the directory is created automatically before the symlink is written
 
+### Requirement: Unwire only Beacon-owned tool symlinks
+
+When the system removes a project-local tool symlink at `.claude/agents/<name>.md` or `.opencode/agents/<name>.md` (during sync-unwire, adopt-reject, or any other unwire path), it SHALL first verify that the symlink target resolves to the corresponding `.agentic-beacon/artifacts/agents/<name>.md` artifact. Symlinks pointing elsewhere SHALL be preserved as user-owned content with a warning logged. Regular files at the target path retain their existing preservation policy.
+
+#### Scenario: User-created symlink at agent leaf is preserved on unwire
+- **GIVEN** the user has manually created `.claude/agents/foo.md` as a symlink pointing at their own definition file (outside `.agentic-beacon/artifacts/agents/`)
+- **WHEN** `abc sync` prunes a Beacon-managed agent named `foo`, OR `abc adopt reject foo` runs
+- **THEN** the user's symlink is left untouched; a warning is logged; the artifact symlink at `.agentic-beacon/artifacts/agents/foo.md` is removed normally
+
+#### Scenario: Beacon-owned symlink is removed on unwire
+- **GIVEN** `.claude/agents/foo.md` is a Beacon-created symlink pointing at `.agentic-beacon/artifacts/agents/foo.md`
+- **WHEN** `abc sync` prunes the agent, OR `abc adopt reject foo` runs
+- **THEN** the symlink is removed
+
 ### Requirement: Sync unwires pruned agents
 
-During `abc sync`, when an agent is no longer declared in `beacon.yaml.artifacts.agents` (i.e., the entry was removed since the previous sync), the system SHALL remove the project-local symlinks at `.claude/agents/<name>.md` and `.opencode/agents/<name>.md`, in addition to removing the artifact symlink at `.agentic-beacon/artifacts/agents/<name>.md`. The `unwire_pruned_artifacts` mechanism SHALL be extended to handle `artifact_type == "agents"`.
+During `abc sync`, when an agent is no longer declared in `beacon.yaml.artifacts.agents` (i.e., the entry was removed since the previous sync), the system SHALL remove the project-local Beacon-owned symlinks at `.claude/agents/<name>.md` and `.opencode/agents/<name>.md`, in addition to removing the artifact symlink at `.agentic-beacon/artifacts/agents/<name>.md`. The `unwire_pruned_artifacts` mechanism SHALL be extended to handle `artifact_type == "agents"`.
 
 #### Scenario: Agent removed from beacon.yaml
 - **WHEN** `beacon.yaml.artifacts.agents` previously contained `agents/spec-planner.md` and the entry is removed AND `abc sync` is run
@@ -51,7 +65,7 @@ When `abc adopt` accepts an agent (action: `accept`), the system SHALL append th
 
 ### Requirement: Adoption reject unwires agents immediately
 
-When `abc adopt` rejects an agent (action: `reject`), the system SHALL remove the entry from `beacon.yaml.artifacts.agents` (if present), remove the artifact symlink at `.agentic-beacon/artifacts/agents/<name>.md`, AND remove the project-local symlinks at `.claude/agents/<name>.md` and `.opencode/agents/<name>.md`, as part of the atomic adopt commit. Reject SHALL NOT mutate any file in `~/.claude/agents/` or `~/.config/opencode/agents/`.
+When `abc adopt` rejects an agent (action: `reject`), the system SHALL remove the entry from `beacon.yaml.artifacts.agents` (if present), remove the artifact symlink at `.agentic-beacon/artifacts/agents/<name>.md`, AND remove the Beacon-owned project-local symlinks at `.claude/agents/<name>.md` and `.opencode/agents/<name>.md` (symlinks pointing elsewhere are preserved per the "Unwire only Beacon-owned tool symlinks" requirement), as part of the atomic adopt commit. Reject SHALL NOT mutate any file in `~/.claude/agents/` or `~/.config/opencode/agents/`.
 
 #### Scenario: Reject removes wiring
 - **WHEN** the user marks an already-wired `agents/spec-planner.md` as `reject` in `abc adopt` and confirms
