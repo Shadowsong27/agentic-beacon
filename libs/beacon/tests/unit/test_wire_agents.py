@@ -586,7 +586,7 @@ def test_wire_agents_atomically_collects_multiple_regular_file_conflicts(tmp_pat
     with pytest.raises(RegularFileConflictError) as exc:
         wire_agents_atomically(project, [foo, bar], {"claudecode", "opencode"})
 
-    assert len(exc.value.conflicts) >= 2
+    assert len(exc.value.conflicts) == 2
 
     # No symlinks created
     assert not (project / ".claude" / "agents" / "foo.md").is_symlink()

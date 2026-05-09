@@ -161,9 +161,6 @@ def adopt(*, dry_run: bool) -> None:
             artifacts_path=artifacts_dir,
             beacon_yaml_path=beacon_yaml,
         )
-    except RegularFileConflictError as e:
-        console.print(format_regular_file_conflict(e.conflicts))
-        sys.exit(1)
     except CommitError as e:
         if isinstance(e.__cause__, RegularFileConflictError):
             console.print(format_regular_file_conflict(e.__cause__.conflicts))
