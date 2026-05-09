@@ -477,12 +477,15 @@ def wire_agents_atomically(
     # Pre-flight: collect ALL regular-file conflicts before touching anything.
     # Aborts with a structured error so the caller can present every blocked
     # destination in one pass rather than failing on the first one found.
+    # Use is_file() rather than exists() so a directory (or FIFO/socket) at the
+    # dest path is left to surface as a different error class — the rm/mv
+    # remediation commands shown in the conflict guide assume regular files.
     pre_conflicts: list[AgentWireConflict] = []
     for artifact_file in agent_artifact_files:
         leaf = artifact_file.name
         if "claudecode" in detected_tools:
             cc_dest = project_root / ".claude" / "agents" / leaf
-            if cc_dest.exists() and not cc_dest.is_symlink():
+            if cc_dest.is_file() and not cc_dest.is_symlink():
                 pre_conflicts.append(
                     AgentWireConflict(
                         dest=cc_dest,
@@ -492,7 +495,7 @@ def wire_agents_atomically(
                 )
         if "opencode" in detected_tools:
             oc_dest = project_root / ".opencode" / "agents" / leaf
-            if oc_dest.exists() and not oc_dest.is_symlink():
+            if oc_dest.is_file() and not oc_dest.is_symlink():
                 pre_conflicts.append(
                     AgentWireConflict(
                         dest=oc_dest,

@@ -69,5 +69,10 @@ def test_adopt_commit_error_with_regular_file_conflict_cause(tmp_path):
         result = runner.invoke(adopt)
 
     assert result.exit_code == 1
-    assert str(dest) in result.output or "spec-planner" in result.output
     assert "Cannot wire 1 agent" in result.output
+    # Rich wraps long paths at terminal width on CI (no TTY). Normalize whitespace
+    # before substring search so wrap-induced breaks don't split the path.
+    import re
+
+    flat = re.sub(r"\s+", "", result.output)
+    assert "spec-planner.md" in flat
