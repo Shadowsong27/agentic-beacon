@@ -360,7 +360,7 @@ def wire_agent_claudecode(project_root: Path, artifact_file: Path) -> Path:
 
     if dest.is_symlink():
         try:
-            if dest.readlink() == artifact_file:
+            if dest.resolve(strict=False) == artifact_file.resolve(strict=False):
                 return dest
         except OSError:
             pass
@@ -410,7 +410,7 @@ def wire_agent_opencode(project_root: Path, artifact_file: Path) -> Path:
 
     if dest.is_symlink():
         try:
-            if dest.readlink() == artifact_file:
+            if dest.resolve(strict=False) == artifact_file.resolve(strict=False):
                 return dest
         except OSError:
             pass
