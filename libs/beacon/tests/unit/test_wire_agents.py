@@ -389,8 +389,36 @@ def test_unwire_agent_removes_beacon_owned_symlink(tmp_path):
     assert not dest.exists() and not dest.is_symlink()
 
 
+def test_unwire_agent_relative_symlink_target_resolves_correctly(tmp_path):
+    """(c) Beacon-owned symlink stored with a *relative* readlink target is identified and removed.
+
+    Pins the `dest.parent / raw_target` resolution branch in `_is_beacon_symlink`
+    that absolute-target tests don't exercise.
+    """
+    artifact = tmp_path / ".agentic-beacon" / "artifacts" / "agents" / "foo.md"
+    artifact.parent.mkdir(parents=True, exist_ok=True)
+    artifact.write_text("beacon artifact")
+
+    dest_parent = tmp_path / ".claude" / "agents"
+    dest_parent.mkdir(parents=True, exist_ok=True)
+    dest = dest_parent / "foo.md"
+
+    # Relative target: from .claude/agents/ up to project root, then into the artifact
+    rel_target = (
+        Path("..") / ".." / ".agentic-beacon" / "artifacts" / "agents" / "foo.md"
+    )
+    dest.symlink_to(rel_target)
+    # Sanity: readlink really is relative, not absolute
+    assert not dest.readlink().is_absolute()
+
+    unwire_agent(tmp_path, "foo")
+
+    # The relative-target Beacon-owned symlink should be removed
+    assert not dest.exists() and not dest.is_symlink()
+
+
 def test_unwire_agent_with_undo_excludes_user_owned_symlink(tmp_path):
-    """(c) unwire_agent_with_undo returns empty list when only symlink is user-owned."""
+    """(d) unwire_agent_with_undo returns empty list when only symlink is user-owned."""
     user_file = tmp_path / "elsewhere.md"
     user_file.write_text("user content")
 
@@ -406,7 +434,7 @@ def test_unwire_agent_with_undo_excludes_user_owned_symlink(tmp_path):
 
 
 def test_unwire_agent_mixed_beacon_and_user_symlinks(tmp_path):
-    """(c) unwire_agent_with_undo records Beacon-owned but skips user-owned."""
+    """(e) unwire_agent_with_undo records Beacon-owned but skips user-owned."""
     artifact = tmp_path / ".agentic-beacon" / "artifacts" / "agents" / "foo.md"
     artifact.parent.mkdir(parents=True, exist_ok=True)
     artifact.write_text("beacon artifact")
@@ -433,7 +461,7 @@ def test_unwire_agent_mixed_beacon_and_user_symlinks(tmp_path):
 
 
 def test_unwire_agent_dangling_user_symlink_preserved(tmp_path):
-    """(d) dangling symlink pointing outside .agentic-beacon/artifacts/agents/ → preserved."""
+    """(f) dangling symlink pointing outside .agentic-beacon/artifacts/agents/ → preserved."""
     # Create a symlink to a nonexistent path that is NOT in .agentic-beacon/artifacts/agents/
     dest = tmp_path / ".claude" / "agents" / "foo.md"
     dest.parent.mkdir(parents=True, exist_ok=True)
