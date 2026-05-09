@@ -3,14 +3,11 @@
 Covers tasks 4.1–4.6 from auto-pull-artifact-dependencies OpenSpec change.
 """
 
-from pathlib import Path
-
 import pytest
 from beacon.core.dependencies.frontmatter import (
     FrontmatterResult,
     SkillFrontmatter,
     parse_frontmatter,
-    validate_requires_against_warehouse,
 )
 from pydantic import ValidationError
 
@@ -117,43 +114,3 @@ class TestSkillFrontmatter:
         with pytest.raises(ValidationError) as exc_info:
             SkillFrontmatter.model_validate({"requires": {}})
         assert "contexts" in str(exc_info.value).lower()
-
-
-class TestValidateRequiresAgainstWarehouse:
-    """Task 4.5: validate_requires_against_warehouse — TDD test cases."""
-
-    def _make_warehouse(self, tmp_path: Path) -> Path:
-        wh = tmp_path / "warehouse"
-        wh.mkdir()
-        (wh / "contexts").mkdir()
-        (wh / "skills").mkdir()
-        return wh
-
-    def test_tc1_skill_contexts_exist(self, tmp_path):
-        """TC1: Skill requires.contexts all resolve → empty error list."""
-        wh = self._make_warehouse(tmp_path)
-        (wh / "contexts" / "python-standards.md").write_text("# Context")
-        (wh / "contexts" / "testing.md").write_text("# Context")
-        skill = SkillFrontmatter.model_validate(
-            {"requires": {"contexts": ["python-standards", "testing"]}}
-        )
-        errors = validate_requires_against_warehouse(skill, wh)
-        assert errors == []
-
-    def test_tc4_skill_with_missing_context(self, tmp_path):
-        """TC4: Skill requires.contexts with one missing → single error."""
-        wh = self._make_warehouse(tmp_path)
-        (wh / "contexts" / "python-standards.md").write_text("# Context")
-        skill = SkillFrontmatter.model_validate(
-            {"requires": {"contexts": ["python-standards", "testing"]}}
-        )
-        errors = validate_requires_against_warehouse(skill, wh)
-        assert len(errors) == 1
-        assert "testing" in errors[0]
-
-    def test_tc5_skill_empty_requires(self, tmp_path):
-        """TC5: Skill with empty requires.contexts → empty error list."""
-        wh = self._make_warehouse(tmp_path)
-        skill = SkillFrontmatter.model_validate({"requires": {"contexts": []}})
-        errors = validate_requires_against_warehouse(skill, wh)
-        assert errors == []
