@@ -149,7 +149,7 @@ def adopt(*, dry_run: bool) -> None:
         return
 
     try:
-        commit_session(
+        wiring_notes = commit_session(
             to_adopt=result.to_adopt,
             to_unadopt=result.to_unadopt,
             pending_accept=result.pending_accept,
@@ -199,6 +199,9 @@ def adopt(*, dry_run: bool) -> None:
             f"[green]✓[/green] Adopted {len(accepted_agents)} agent(s) "
             "(wired via abc sync or adopt)"
         )
+
+    for note in wiring_notes:
+        console.print(f"[yellow]ℹ[/yellow]\n{note}")
 
     if result.to_unadopt:
         cleanup_unadopted_artifacts(

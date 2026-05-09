@@ -453,6 +453,15 @@ def run_sync(
             for agent_entry in beacon_settings.artifacts.agents
         ]
         wire_agents_atomically(project_root, agent_artifact_files, detected_tools)
+        if beacon_settings.artifacts.agents and not detected_tools:
+            wiring_notes.append(
+                "  Agents declared but not wired — no tool directories found at project root.\n"
+                "  Agent wiring into [bold].claude/agents/[/bold] and"
+                " [bold].opencode/agents/[/bold] was skipped.\n"
+                "  Create a tool directory then re-run [bold]abc sync[/bold]:\n"
+                "    mkdir .claude    [dim]# for Claude Code[/dim]\n"
+                "    mkdir .opencode  [dim]# for OpenCode[/dim]"
+            )
 
     # Use effective set for wiring decisions
     has_contexts = bool(effective_set.contexts) and not dry_run

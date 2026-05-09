@@ -229,6 +229,14 @@ def test_sync_creates_only_artifact_symlink_when_no_tool_dirs(
     assert not (project_dir / ".claude" / "agents" / "spec-planner.md").exists()
     assert not (project_dir / ".opencode" / "agents" / "spec-planner.md").exists()
 
+    # Wiring note must explain the skip and the remediation
+    assert "no tool directories found" in r.output, (
+        f"Expected wiring note in sync output; got:\n{r.output}"
+    )
+    assert "mkdir .claude" in r.output, (
+        f"Expected remediation hint in sync output; got:\n{r.output}"
+    )
+
 
 # ---------------------------------------------------------------------------
 # TC4: empty agents list → sync still succeeds
