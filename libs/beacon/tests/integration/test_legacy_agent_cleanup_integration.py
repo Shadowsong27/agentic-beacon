@@ -134,7 +134,9 @@ def test_sync_removes_legacy_claude_symlink_and_prints_notice(
     _notice_re = re.compile(
         r"Cleaned up \d+ legacy global agent symlinks \(PER-113 migration\)\.$"
     )
-    notice_lines = [line for line in r.output.splitlines() if _notice_re.search(line)]
+    notice_lines = [
+        line for line in r.output.splitlines() if _notice_re.fullmatch(line)
+    ]
     assert len(notice_lines) == 1, (
         f"Expected 1 notice line matching regex, got {len(notice_lines)}. Output:\n{r.output}"
     )
@@ -168,14 +170,14 @@ def test_sync_legacy_cleanup_is_idempotent(
     # First sync cleans up and must print the notice
     r1 = runner.invoke(main, ["sync", "--skip-git-check"])
     assert r1.exit_code == 0, f"first sync failed: {r1.output}"
-    assert any(_notice_re.search(line) for line in r1.output.splitlines()), (
+    assert any(_notice_re.fullmatch(line) for line in r1.output.splitlines()), (
         f"Expected notice on first sync. Output:\n{r1.output}"
     )
 
     # Second sync: no legacy symlinks remain → no notice
     r2 = runner.invoke(main, ["sync", "--skip-git-check"])
     assert r2.exit_code == 0, f"second sync failed: {r2.output}"
-    assert not any(_notice_re.search(line) for line in r2.output.splitlines()), (
+    assert not any(_notice_re.fullmatch(line) for line in r2.output.splitlines()), (
         f"Expected no legacy cleanup notice on second run. Output:\n{r2.output}"
     )
 
