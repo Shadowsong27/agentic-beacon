@@ -10,8 +10,6 @@ Review only the attached diff.
   thin (parse + one domain call + format).
 - Domain placement: new logic belongs in the owning domain,
   not core/ or utils/ by default.
-- examples/sample-warehouse/ must match `abc warehouse init`
-  output. Flag drift after edits to domains/setup/initializer.py.
 - Imports: absolute only; never relative. __init__.py files are
   empty package markers (no re-exports, no __all__).
 - adopt is intentional: warehouse-authored artifacts go through

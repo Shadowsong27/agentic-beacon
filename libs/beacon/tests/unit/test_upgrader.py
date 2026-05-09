@@ -55,7 +55,6 @@ def test_classify_file_legacy_unmodified(tmp_path):
     (wh / ".beacon" / "template-checksums.json").unlink()
     upgrader = WarehouseUpgrader(warehouse_path=wh)
     # README.md was written from template, hash should be in registry
-    # (only if sample-warehouse README matches template — use a template file instead)
     state = upgrader.classify_file("skills/README.md")
     # skills/README.md has no org_name substitution so hash matches template exactly
     assert state == FileState.LEGACY_UNMODIFIED

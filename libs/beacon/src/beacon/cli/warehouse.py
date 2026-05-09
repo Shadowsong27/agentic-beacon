@@ -249,7 +249,7 @@ def connect(*, path: Path | None) -> None:
         for error in validation_result.errors:
             console.print(f"  [red]✗[/red] {error}")
         console.print(
-            "\n[dim]See examples/sample-warehouse for a valid warehouse structure[/dim]"
+            "\n[dim]Run `abc warehouse init demo-warehouse` to see a valid warehouse structure[/dim]"
         )
         sys.exit(1)
 

@@ -1,8 +1,0 @@
-# Beacon agent dependency manifest.
-# Each top-level key maps an agent (agents/<key>.md) to its required skills.
-# When the agent is adopted via `abc adopt`, the listed skills are
-# auto-added to beacon.yaml and globally installed.
-
-code-reviewer:
-  skills:
-    - code-review
