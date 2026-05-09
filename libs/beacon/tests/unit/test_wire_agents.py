@@ -338,9 +338,7 @@ def test_unwire_agent_with_undo_preserves_regular_file(tmp_path):
 
 
 def test_wire_agent_claudecode_refuses_to_overwrite_regular_file(tmp_path):
-    """Regular file at dest must cause BeaconSyncError, not FileExistsError or silent overwrite."""
-    from beacon.core.exceptions import BeaconSyncError
-
+    """Regular file at dest must cause RegularFileConflictError, not FileExistsError or silent overwrite."""
     target = tmp_path / ".claude" / "agents" / "spec-planner.md"
     target.parent.mkdir(parents=True)
     target.write_text("user-authored content")
@@ -349,16 +347,15 @@ def test_wire_agent_claudecode_refuses_to_overwrite_regular_file(tmp_path):
     artifact_file.parent.mkdir(parents=True)
     artifact_file.write_text("warehouse content")
 
-    with pytest.raises(BeaconSyncError) as exc:
+    with pytest.raises(RegularFileConflictError) as excinfo:
         wire_agent_claudecode(tmp_path, artifact_file)
-    assert "regular file" in str(exc.value)
+    assert len(excinfo.value.conflicts) == 1
+    assert excinfo.value.conflicts[0].dest == target
     assert target.read_text() == "user-authored content"  # not overwritten
 
 
 def test_wire_agent_opencode_refuses_to_overwrite_regular_file(tmp_path):
     """Same as above but for opencode side."""
-    from beacon.core.exceptions import BeaconSyncError
-
     target = tmp_path / ".opencode" / "agents" / "spec-planner.md"
     target.parent.mkdir(parents=True)
     target.write_text("user-authored content")
@@ -367,9 +364,10 @@ def test_wire_agent_opencode_refuses_to_overwrite_regular_file(tmp_path):
     artifact_file.parent.mkdir(parents=True)
     artifact_file.write_text("warehouse content")
 
-    with pytest.raises(BeaconSyncError) as exc:
+    with pytest.raises(RegularFileConflictError) as excinfo:
         wire_agent_opencode(tmp_path, artifact_file)
-    assert "regular file" in str(exc.value)
+    assert len(excinfo.value.conflicts) == 1
+    assert excinfo.value.conflicts[0].dest == target
     assert target.read_text() == "user-authored content"
 
 
