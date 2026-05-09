@@ -183,17 +183,20 @@ needing explicit coverage.
 
 ## 13. README-ignored
 
-**Status:** added as `test_readme_in_warehouse_agents_dir_is_not_wired`
+**Status:** added as `test_readme_filtered_from_warehouse_agent_catalog`
 
-`agents/README.md` in the warehouse is filtered out by `Distributor._list_agents`
-(which uses `file.name.upper() != "README.MD"`) and by the `run_sync` agent-manifest
-guard (which checks `f.name != "README.md"`).  These filters prevent README.md from
-appearing in any catalog listing, meaning it cannot reach `beacon.yaml` through
-normal `abc adopt` flows and therefore will not be wired by `abc sync`.
+`agents/README.md` is filtered at catalog discovery time by
+`WarehouseDistributor._list_agents` (guard: `file.name.upper() != "README.MD"`).
+This means README.md cannot appear in the catalog returned to `abc adopt` or
+`abc sync`, so it cannot reach `beacon.yaml` through normal adopt flows.
 
-A dedicated test was added to guard against future regressions where the filtering
-could be removed or bypassed, ensuring README.md never becomes an accidental
-"agent" artifact.
+There is **no** separate sync-time guard: if a user manually edits `beacon.yaml`
+to declare `agents/README.md`, `abc sync` will attempt to wire it following the
+normal "missing source" or "successful wire" path depending on whether the file
+exists in the warehouse.
+
+The added test calls `_list_agents()` directly and covers **only** the
+catalog-discovery filter — it does not exercise the sync wiring path.
 
 ---
 
@@ -213,4 +216,4 @@ could be removed or bypassed, ensuring README.md never becomes an accidental
 |10 | warehouse-edits-visible     | added          | `test_warehouse_edits_visible_through_symlinks`                  |
 |11 | identical-file-replacement  | covered        | `test_sync_rollback_when_agent_wire_fails`, TC8 adopt            |
 |12 | broken-symlink-repair       | added          | `test_sync_repairs_broken_symlink`                               |
-|13 | README-ignored              | added          | `test_readme_in_warehouse_agents_dir_is_not_wired`               |
+|13 | README-ignored              | added          | `test_readme_filtered_from_warehouse_agent_catalog`              |
