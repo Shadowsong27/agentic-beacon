@@ -17,6 +17,10 @@ from pathlib import Path
 from loguru import logger
 from pydantic import BaseModel
 
+from beacon.domains.distribution.artifact_listing import (
+    list_artifacts as _list_artifacts,
+)
+
 
 class SyncResult(BaseModel):
     """Result of a sync operation on a single file."""
@@ -382,20 +386,7 @@ class SyncEngine:
 
     def list_artifacts(self, artifact_type: str | None = None) -> dict[str, list[str]]:
         """List synced artifacts by type."""
-        types_to_show = [artifact_type] if artifact_type else ["contexts", "skills"]
-        result: dict[str, list[str]] = {}
-        for section in types_to_show:
-            section_dir = self.artifacts_path / section
-            if not section_dir.exists():
-                continue
-            files = sorted(
-                str(f.relative_to(self.artifacts_path))
-                for f in section_dir.rglob("*")
-                if f.is_symlink() and not f.name.startswith(".")
-            )
-            if files:
-                result[section] = files
-        return result
+        return _list_artifacts(self.artifacts_path, artifact_type)
 
     def files_identical(self, file1: Path, file2: Path) -> bool:
         """Check if two files have identical content using hash comparison."""
