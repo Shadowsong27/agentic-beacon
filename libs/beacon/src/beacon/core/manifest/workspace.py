@@ -64,11 +64,17 @@ class WorkspaceConfig(BaseSettings):
         )
 
     @classmethod
-    def from_path(cls, local_path: str | Path) -> "WorkspaceConfig":
+    def from_path(
+        cls,
+        local_path: str | Path,
+        *,
+        project_root: Path | None = None,
+    ) -> "WorkspaceConfig":
         """Write warehouse path to config.toml and return loaded config."""
         config = WarehouseConfig(local_path=str(local_path))
 
-        beacon_dir = Path(".agentic-beacon")
+        base = project_root if project_root is not None else Path(".")
+        beacon_dir = base / ".agentic-beacon"
         beacon_dir.mkdir(parents=True, exist_ok=True)
 
         toml_path = beacon_dir / "config.toml"
