@@ -44,6 +44,12 @@ class ValidationError(ConfigurationError):
     pass
 
 
+class WorkspaceConfigError(ConfigurationError):
+    """Raised when workspace config.toml is present but invalid or malformed."""
+
+    pass
+
+
 class DirectoryNotFoundError(ConfigurationError):
     """Raised when .agentic-beacon directory not found."""
 

@@ -7,9 +7,11 @@ import click
 from rich.console import Console
 from rich.table import Table
 
+from beacon.core.exceptions import WorkspaceConfigError
 from beacon.core.manifest.beacon import BeaconManifest
-from beacon.core.manifest.workspace import WorkspaceConfig
-from beacon.domains.distribution.artifact_listing import list_artifacts
+from beacon.domains.distribution.artifact_listing import (
+    list_artifacts_with_config_check,
+)
 
 console = Console()
 
@@ -41,18 +43,12 @@ def list_cmd(*, artifact_type: str | None) -> None:
     beacon_dir = Path.cwd() / ".agentic-beacon"
     artifacts_dir = beacon_dir / "artifacts"
 
-    # Validate config.toml format if present so malformed config surfaces as an
-    # error rather than silently degrading. PER-129 decouples list from SyncEngine
-    # but preserves this validation behavior.
-    if (beacon_dir / "config.toml").is_file():
-        try:
-            WorkspaceConfig()  # constructor validates; result unused
-        except Exception as e:
-            console.print(f"[red]Error:[/red] config.toml is invalid: {e}")
-            sys.exit(1)
-
     if artifact_type == "agents":
-        artifacts = list_artifacts(artifacts_dir, "agents")
+        try:
+            artifacts = list_artifacts_with_config_check(beacon_dir, "agents")
+        except WorkspaceConfigError as e:
+            console.print(f"[red]Error:[/red] {e}")
+            sys.exit(1)
         agent_files = artifacts.get("agents", [])
         if not agent_files:
             # Distinguish "declared but not synced" from "none declared at all"
@@ -94,7 +90,11 @@ def list_cmd(*, artifact_type: str | None) -> None:
         "skills": ("Synced Skills", "yellow", "Skill"),
     }
 
-    artifacts = list_artifacts(artifacts_dir, artifact_type)
+    try:
+        artifacts = list_artifacts_with_config_check(beacon_dir, artifact_type)
+    except WorkspaceConfigError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
 
     for section, files in artifacts.items():
         title, color, col_name = section_config[section]
