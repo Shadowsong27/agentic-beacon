@@ -9,14 +9,13 @@ from loguru import logger
 from rich.console import Console
 from rich.table import Table
 
-from beacon.core.gitignore import GitignoreManager
 from beacon.core.manifest.workspace import WorkspaceConfig
 from beacon.domains.distribution.distributor import WarehouseDistributor
 from beacon.domains.distribution.upgrader import WarehouseUpgrader
-from beacon.domains.setup.initializer import WarehouseInitializer, ensure_beacon_dir
+from beacon.domains.setup.initializer import WarehouseInitializer
+from beacon.domains.warehouse.connector import connect_to_warehouse
 from beacon.domains.warehouse.contribute import contribute
 from beacon.domains.warehouse.status import status as warehouse_status
-from beacon.domains.warehouse.validator import WarehouseValidator
 
 console = Console()
 
@@ -241,12 +240,18 @@ def connect(*, path: Path | None) -> None:
 
     console.print(f"\n[blue]Validating:[/blue] {warehouse_path}")
 
-    validator = WarehouseValidator()
-    validation_result = validator.validate(str(warehouse_path))
+    try:
+        result = connect_to_warehouse(
+            project_root=Path.cwd(), warehouse_path=warehouse_path
+        )
+    except Exception as e:
+        console.print(f"\n[red]Error:[/red] Failed to save connection: {e}")
+        logger.exception("Connection failed")
+        sys.exit(1)
 
-    if not validation_result.valid:
+    if not result.valid:
         console.print("\n[red bold]✗ Invalid warehouse structure[/red bold]\n")
-        for error in validation_result.errors:
+        for error in result.errors:
             console.print(f"  [red]✗[/red] {error}")
         console.print(
             "\n[dim]Run `abc warehouse init demo-warehouse` to see a valid warehouse structure[/dim]"
@@ -254,32 +259,21 @@ def connect(*, path: Path | None) -> None:
         sys.exit(1)
 
     console.print("[green]✓[/green] Warehouse structure validated")
+    console.print("[green]✓[/green] Connection saved")
 
-    ensure_beacon_dir(Path.cwd())
+    # PER-130 round-1 (LOW finding): agent-dir gitignore entries are NOT
+    # added during connect — `abc sync` is the authoritative gate, and
+    # adding them eagerly here churns the .gitignore for projects that
+    # will never declare agents.
+    if result.gitignore_updated:
+        console.print("[green]✓[/green] Updated .gitignore")
 
-    try:
-        WorkspaceConfig.from_path(warehouse_path)
-        console.print("[green]✓[/green] Connection saved")
+    console.print("\n[bold green]✓ Connected to warehouse[/bold green]")
+    console.print(f"  [blue]Location:[/blue] {warehouse_path}")
 
-        gitignore_mgr = GitignoreManager(Path.cwd())
-        if gitignore_mgr.ensure_entries():
-            console.print("[green]✓[/green] Updated .gitignore")
-        # PER-130 round-1 (LOW finding): agent-dir gitignore entries are NOT
-        # added during connect — `abc sync` is the authoritative gate, and
-        # adding them eagerly here churns the .gitignore for projects that
-        # will never declare agents.
-
-        console.print("\n[bold green]✓ Connected to warehouse[/bold green]")
-        console.print(f"  [blue]Location:[/blue] {warehouse_path}")
-
-        console.print("\n[bold]Next Steps:[/bold]")
-        console.print("  1. Run 'abc setup' to configure artifacts")
-        console.print("  2. Run 'abc sync' to sync artifacts")
-
-    except Exception as e:
-        console.print(f"\n[red]Error:[/red] Failed to save connection: {e}")
-        logger.exception("Connection failed")
-        sys.exit(1)
+    console.print("\n[bold]Next Steps:[/bold]")
+    console.print("  1. Run 'abc setup' to configure artifacts")
+    console.print("  2. Run 'abc sync' to sync artifacts")
 
 
 @warehouse.command(name="list")
