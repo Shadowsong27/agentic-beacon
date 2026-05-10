@@ -35,7 +35,18 @@ from pathlib import Path
 VALID_TYPES = ("decision", "lesson", "fact")
 TYPE_TO_DIR = {"decision": "decisions", "lesson": "lessons", "fact": "facts"}
 NAME_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
-TOPIC_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+# Each path segment must be kebab-case. Topics may be nested with '/',
+# e.g. 'data-platform/clickhouse' or 'python-standards'.
+TOPIC_SEGMENT_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+
+
+def is_valid_topic(topic: str) -> bool:
+    """Return True iff *topic* is one-or-more slash-separated kebab-case segments."""
+    if not topic:
+        return False
+    segments = topic.split("/")
+    return all(TOPIC_SEGMENT_PATTERN.match(seg) for seg in segments)
+
 
 ERROR_NO_WAREHOUSE = (
     "Error: no warehouse connected. Run 'abc warehouse connect <path>' first."
@@ -120,8 +131,10 @@ def main() -> None:
         "--topic",
         default=None,
         help=(
-            "Optional kebab-case topic subdirectory under knowledge/ "
-            "(e.g. 'infrastructure'). Default: flat layout."
+            "Optional topic subdirectory under knowledge/. Each segment must "
+            "be kebab-case; nested topics are allowed using '/' as separator "
+            "(e.g. 'infrastructure' or 'data-platform/clickhouse'). "
+            "Default: flat layout (knowledge/<type>s/<name>.md)."
         ),
     )
     parser.add_argument(
@@ -142,9 +155,10 @@ def main() -> None:
             file=sys.stderr,
         )
         sys.exit(2)
-    if args.topic is not None and not TOPIC_PATTERN.match(args.topic):
+    if args.topic is not None and not is_valid_topic(args.topic):
         print(
-            f"Error: --topic must be kebab-case (got {args.topic!r})",
+            f"Error: --topic must be one or more slash-separated kebab-case "
+            f"segments (got {args.topic!r})",
             file=sys.stderr,
         )
         sys.exit(2)
