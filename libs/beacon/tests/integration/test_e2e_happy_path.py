@@ -510,7 +510,11 @@ def test_e2e_contribute_skill_live_modification_goes_to_warehouse(e2e_project):
         warehouse_skill.read_text() + "\n## Local Guardrail\nNo foo.\n"
     )
 
-    result = runner.invoke(main, ["warehouse", "contribute", "-m", "skill update"])
+    result = runner.invoke(
+        main,
+        ["warehouse", "contribute", "-m", "skill update"],
+        env=_git_env(),
+    )
 
     assert result.exit_code == 0, result.output
     assert "Local Guardrail" in warehouse_skill.read_text()
@@ -530,7 +534,11 @@ def test_e2e_contribute_skill_identical_live_is_noop(e2e_project):
     runner.invoke(main, ["sync"])
     # Live dir is untouched after sync — identical to warehouse
 
-    result = runner.invoke(main, ["warehouse", "contribute", "-m", "noop contribute"])
+    result = runner.invoke(
+        main,
+        ["warehouse", "contribute", "-m", "noop contribute"],
+        env=_git_env(),
+    )
 
     assert result.exit_code == 0
     assert "no uncommitted changes to contribute" in result.output.lower()
