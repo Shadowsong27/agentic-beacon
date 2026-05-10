@@ -11,16 +11,20 @@ from beacon.core.exceptions import WorkspaceConfigError
 def list_artifacts_with_config_check(
     beacon_dir: Path, artifact_type: str | None = None
 ) -> dict[str, list[str]]:
-    """Validate workspace config (if present) then list artifacts.
+    """Validate workspace config at beacon_dir/config.toml (if present) then list artifacts.
 
+    Reads and validates config.toml at the path implied by beacon_dir, not cwd.
     Raises WorkspaceConfigError if config.toml is present but malformed.
     """
-    if (beacon_dir / "config.toml").is_file():
+    config_path = beacon_dir / "config.toml"
+    if config_path.is_file():
         from beacon.core.manifest.workspace import WorkspaceConfig
 
         try:
-            WorkspaceConfig()
-        except (PydanticValidationError, tomllib.TOMLDecodeError) as exc:
+            with open(config_path, "rb") as f:
+                data = tomllib.load(f)
+            WorkspaceConfig.model_validate(data)
+        except (PydanticValidationError, tomllib.TOMLDecodeError, OSError) as exc:
             raise WorkspaceConfigError(f"config.toml is invalid: {exc}") from exc
     return list_artifacts(beacon_dir / "artifacts", artifact_type)
 

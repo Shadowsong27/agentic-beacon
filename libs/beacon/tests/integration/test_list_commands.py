@@ -483,9 +483,12 @@ def test_list_fails_with_malformed_config_toml(runner, tmp_path, monkeypatch):
     result = runner.invoke(main, ["list"])
 
     assert result.exit_code != 0
-    assert "config.toml" in result.output.lower() or any(
-        kw in result.output.lower()
-        for kw in ("invalid", "error", "warehouse", "validation")
+    output_lower = result.output.lower()
+    assert "config.toml" in output_lower, (
+        f"Expected 'config.toml' in error output; got:\n{result.output}"
+    )
+    assert "invalid" in output_lower or "validation" in output_lower, (
+        f"Expected 'invalid' or 'validation' in error output; got:\n{result.output}"
     )
 
 
