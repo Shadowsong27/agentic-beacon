@@ -4,105 +4,11 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
 
-concurrency:
-  group: opencode-review-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
-
 jobs:
   review:
-    if: |
-      github.event.pull_request.draft == false &&
-      github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: self-hosted
-    timeout-minutes: 20
-
-    permissions:
-      contents: read
-      issues: write
-      pull-requests: write
-
-    env:
-      OPENCODE_REVIEW_MODEL: ${{ vars.OPENCODE_REVIEW_MODEL || 'openai/gpt-5.5' }}
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Fetch base branch
-        run: git fetch origin ${{ github.base_ref }}
-
-      - name: Generate PR diff
-        run: git diff --merge-base origin/${{ github.base_ref }} HEAD > opencode-pr.diff
-
-      - name: Run OpenCode review
-        env:
-          PATH: /home/runner/.opencode/bin:/home/runner/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-        run: |
-          set -o pipefail
-          opencode run \
-            --format json \
-            --model "$OPENCODE_REVIEW_MODEL" \
-            --title "PR review #${{ github.event.pull_request.number }}" \
-            "$(cat .github/opencode-pr-review-prompt.md)" \
-            --file opencode-pr.diff \
-            | tee /tmp/opencode-events.ndjson
-
-          jq -r 'select(.type == "text") | .part.text' /tmp/opencode-events.ndjson > /tmp/opencode-review.md
-          jq -rs '
-            [.[] | select(.type == "step_finish") | .part.tokens] as $tokens |
-            {
-              input: ($tokens | map(.input // 0) | add // 0),
-              output: ($tokens | map(.output // 0) | add // 0),
-              reasoning: ($tokens | map(.reasoning // 0) | add // 0),
-              cache_read: ($tokens | map(.cache.read // 0) | add // 0),
-              cache_write: ($tokens | map(.cache.write // 0) | add // 0),
-              total: ($tokens | map(.total // 0) | add // 0)
-            } |
-            [
-              "### Token Usage",
-              "",
-              "Input tokens: `\(.input)`",
-              "Output tokens: `\(.output)`",
-              "Reasoning tokens: `\(.reasoning)`",
-              "Cache read tokens: `\(.cache_read)`",
-              "Cache write tokens: `\(.cache_write)`",
-              "Total tokens: `\(.total)`"
-            ] | join("\n")
-          ' /tmp/opencode-events.ndjson > /tmp/opencode-usage.md
-
-      - name: Publish step summary
-        run: |
-          echo "## OpenCode PR Review" >> "$GITHUB_STEP_SUMMARY"
-          cat /tmp/opencode-review.md >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Post PR review comment
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require("fs")
-            const marker = "<!-- opencode-pr-review -->"
-            const review = fs.readFileSync("/tmp/opencode-review.md", "utf8").trim()
-            const usage = fs.readFileSync("/tmp/opencode-usage.md", "utf8").trim()
-            const body = [
-              marker,
-              "",
-              "## OpenCode Review",
-              "",
-              `Model: \`${process.env.OPENCODE_REVIEW_MODEL}\``,
-              `Reviewed commit: \`${context.payload.pull_request.head.sha}\``,
-              `Workflow run: ${process.env.GITHUB_SERVER_URL}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
-              "",
-              review || "OpenCode produced no review output.",
-              "",
-              usage,
-            ].join("\n")
-
-            const { owner, repo } = context.repo
-            const issue_number = context.payload.pull_request.number
-            await github.rest.issues.createComment({
-              owner,
-              repo,
-              issue_number,
-              body,
-            })
+    uses: Shadowsong27/gh-actions-commons/.github/workflows/opencode-review.yml@main
+    with:
+      model: ${{ vars.OPENCODE_REVIEW_MODEL || 'openai/gpt-5.5' }}
+      prompt-file: '.github/opencode-pr-review-prompt.md'
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
