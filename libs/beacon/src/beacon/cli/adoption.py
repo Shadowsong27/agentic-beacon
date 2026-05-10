@@ -209,9 +209,14 @@ def adopt(*, dry_run: bool) -> None:
     for note in wiring_notes:
         console.print(f"[yellow]ℹ[/yellow]\n{note}")
 
-    if result.to_unadopt:
+    # Agents are handled atomically inside commit_session() (round-3 reject atomicity
+    # contract); skip them here to avoid double-processing.
+    non_agent_unadoptions = [
+        p for p in result.to_unadopt if not p.startswith("agents/")
+    ]
+    if non_agent_unadoptions:
         cleanup_unadopted_artifacts(
-            result.to_unadopt,
+            non_agent_unadoptions,
             artifacts_dir,
             warehouse_path,
             project_root=project_root,
