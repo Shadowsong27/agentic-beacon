@@ -78,18 +78,36 @@ Examine the user's description and determine:
 **Filename** (`--name`): kebab-case, descriptive but concise.
 Example: `use-pydantic-for-data-carriers`.
 
-**Topic** (`--topic`, optional): kebab-case category. Inspect the existing
-warehouse layout to follow the established convention:
+**Topic** (`--topic`, optional): Inspect the existing warehouse layout to
+follow the established convention:
 
 ```bash
 WAREHOUSE_ROOT=$(uv run ${SKILL_DIR}/scripts/resolve_warehouse.py)
 ls "$WAREHOUSE_ROOT/knowledge/"
+# For nested-topic warehouses, also check one level deeper:
+find "$WAREHOUSE_ROOT/knowledge" -maxdepth 2 -type d
 ```
 
-If the warehouse already groups knowledge by topic (e.g.
-`knowledge/python-standards/`, `knowledge/infrastructure/`), pick the matching
-topic. Otherwise omit `--topic` for a flat layout
-(`knowledge/<type>s/<name>.md`).
+Rules for `--topic`:
+
+- Each path segment must be kebab-case (`^[a-z0-9]+(?:-[a-z0-9]+)*$`).
+- **Nested topics are allowed** using `/` as the separator — e.g.
+  `data-platform/clickhouse`, `cicd`, `infrastructure`.
+- Pick the deepest existing topic that matches the subject. If the warehouse
+  already has `knowledge/data-platform/clickhouse/lessons/`, pass
+  `--topic data-platform/clickhouse` — do **not** flatten it to
+  `data-platform-clickhouse`, and do **not** drop to `data-platform` only.
+- If no existing topic fits and the knowledge is broadly scoped, omit
+  `--topic` entirely for a flat layout (`knowledge/<type>s/<name>.md`).
+
+Examples of valid `--topic` values:
+
+| Topic | Resulting path (for a lesson) |
+|---|---|
+| `infrastructure` | `knowledge/infrastructure/lessons/<name>.md` |
+| `data-platform/clickhouse` | `knowledge/data-platform/clickhouse/lessons/<name>.md` |
+| `python-standards` | `knowledge/python-standards/lessons/<name>.md` |
+| *(omitted)* | `knowledge/lessons/<name>.md` |
 
 ### Step 3: Generate the Markdown Body
 
