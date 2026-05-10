@@ -32,6 +32,47 @@ def _is_docstring_node(node: ast.AST) -> bool:
     return isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant)
 
 
+def _is_click_command_decorator(node: ast.expr) -> bool:
+    """Return True if *node* is a @<group>.command() or @click.command() decorator."""
+    if isinstance(node, ast.Call):
+        func = node.func
+        if isinstance(func, ast.Attribute):
+            return func.attr == "command"
+        if isinstance(func, ast.Name):
+            return func.id == "command"
+    return False
+
+
+def _collect_domain_symbols(tree: ast.AST) -> set[str]:
+    """Return the local names of all symbols imported from beacon.domains.*."""
+    symbols: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            if module.startswith("beacon.domains."):
+                for alias in node.names:
+                    symbols.add(alias.asname if alias.asname else alias.name)
+    return symbols
+
+
+def _count_domain_calls_in_handler(
+    func: ast.FunctionDef, domain_symbols: set[str]
+) -> int:
+    """Count ast.Call nodes that directly invoke a domain-imported symbol.
+
+    Only counts calls where the callee is an ast.Name matching a domain symbol.
+    Method calls on instances (e.g. ``obj.method()``) are NOT counted, keeping
+    instantiation + method-chain as one logical domain interaction.
+    """
+    count = 0
+    for node in ast.walk(func):
+        if isinstance(node, ast.Call):
+            func_node = node.func
+            if isinstance(func_node, ast.Name) and func_node.id in domain_symbols:
+                count += 1
+    return count
+
+
 # ---------------------------------------------------------------------------
 # TC1: Six domain packages exist
 # ---------------------------------------------------------------------------
@@ -252,16 +293,6 @@ def test_cli_handlers_have_no_io():
         ("os", "walk"),
     }
 
-    def _is_click_command_decorator(node: ast.expr) -> bool:
-        """Heuristic: is this decorator a click command registration?"""
-        if isinstance(node, ast.Call):
-            func = node.func
-            if isinstance(func, ast.Attribute):
-                return func.attr == "command"
-            if isinstance(func, ast.Name):
-                return func.id == "command"
-        return False
-
     def _check_node_for_io(node: ast.AST, path: Path, func_name: str) -> None:
         """Walk a function body looking for forbidden I/O calls."""
         for child in ast.walk(node):
@@ -355,69 +386,112 @@ def test_cli_has_no_free_functions():
 
 
 # ---------------------------------------------------------------------------
-# TC9b: cli/warehouse.py handlers have at most ONE domain call
+# TC9b: every CLI handler invokes at most ONE domain function
+#
+# A "domain call" is a direct call (ast.Name node) to a symbol imported from
+# beacon.domains.*. Method calls on domain instances are NOT counted separately
+# (instantiation + subsequent method chain = one logical interaction).
+#
+# Known violations pending cleanup — each entry is (filename, handler_name).
+# To clean a waiver: fix the handler, remove its entry, and re-run the tests.
 # ---------------------------------------------------------------------------
 
+_TC9B_WAIVERS: set[tuple[str, str]] = {
+    # TODO: wrap multiple setup-wiring calls in a single domain function (PER-120 follow-up)
+    ("sync.py", "sync"),
+    ("sync.py", "status"),
+    # TODO: wrap discovery + commit + cleanup into a single adopt domain function
+    ("adoption.py", "adopt"),
+}
 
-def test_warehouse_cli_handlers_have_one_domain_call():
-    """
-    Each top-level click command function in cli/warehouse.py shall contain
-    at most ONE call into a domains.* module (plus argument parsing and
-    output formatting).
-    """
-    cli_file = BEACON_SRC / "cli" / "warehouse.py"
-    tree = _parse_file(cli_file)
-    assert tree is not None, f"Could not parse {cli_file}"
 
-    def _is_click_command_decorator(node: ast.expr) -> bool:
-        """Heuristic: is this decorator a click command registration?"""
-        if isinstance(node, ast.Call):
-            func = node.func
-            if isinstance(func, ast.Attribute):
-                return func.attr == "command"
-            if isinstance(func, ast.Name):
-                return func.id == "command"
-        return False
+def test_cli_handlers_have_one_domain_call():
+    """Each click command handler in beacon/cli/**/*.py shall invoke at most one
+    domain function per handler body (direct call to a beacon.domains.* symbol).
+    """
+    cli_dir = BEACON_SRC / "cli"
+    if not cli_dir.exists():
+        pytest.skip("cli/ directory does not exist yet")
 
     failures: list[str] = []
 
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.FunctionDef):
-            continue
-        is_handler = any(_is_click_command_decorator(d) for d in node.decorator_list)
-        if not is_handler:
+    for path in _all_py_files_under(cli_dir):
+        tree = _parse_file(path)
+        if tree is None:
             continue
 
-        domain_calls = 0
-        for child in ast.walk(node):
-            if isinstance(child, ast.Call):
-                # Check for module.function pattern where module starts with domains
-                func = child.func
-                if isinstance(func, ast.Attribute):
-                    # e.g. some_module.some_function()
-                    # Walk up the attribute chain to find the module name
-                    attr_chain = []
-                    obj = func
-                    while isinstance(obj, ast.Attribute):
-                        attr_chain.append(obj.attr)
-                        obj = obj.value
-                    if isinstance(obj, ast.Name):
-                        attr_chain.append(obj.id)
-                    attr_chain.reverse()
-                    # Check if it's a domains import: domains.X.Y or beacon.domains.X.Y
-                    if len(attr_chain) >= 2:
-                        mod_name = ".".join(attr_chain[:-1])
-                        if "domains" in mod_name:
-                            domain_calls += 1
+        domain_symbols = _collect_domain_symbols(tree)
+        filename = path.name
 
-        if domain_calls > 1:
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.FunctionDef):
+                continue
+            if not any(_is_click_command_decorator(d) for d in node.decorator_list):
+                continue
+
+            if (filename, node.name) in _TC9B_WAIVERS:
+                continue
+
+            count = _count_domain_calls_in_handler(node, domain_symbols)
+            if count > 1:
+                failures.append(
+                    f"{path}::{node.name}: {count} domain calls — max 1 allowed "
+                    f"(wrap extras into a single domain function)"
+                )
+
+    # Verify no waived file has disappeared (stale waivers are noise)
+    all_cli_filenames = {p.name for p in _all_py_files_under(cli_dir)}
+    for waived_file, waived_handler in _TC9B_WAIVERS:
+        if waived_file not in all_cli_filenames:
             failures.append(
-                f"{cli_file}::{node.name}: has {domain_calls} domain calls, "
-                f"max allowed is 1"
+                f"_TC9B_WAIVERS entry ('{waived_file}', '{waived_handler}') "
+                f"no longer exists — remove the stale waiver"
             )
 
     if failures:
         pytest.fail("\n" + "\n".join(failures))
+
+
+# ---------------------------------------------------------------------------
+# TC9c: negative test — multi-domain-call violation IS detectable
+# ---------------------------------------------------------------------------
+
+
+def test_cli_multi_domain_call_violation_is_detected():
+    """TC9c: the TC9b rule must flag a synthetic handler with two domain calls.
+
+    This proves the detection logic actually works; if the rule is broken the
+    negative test fails first, making the breakage obvious.
+    """
+    import textwrap
+
+    src = textwrap.dedent("""\
+        import click
+        from beacon.domains.setup.wiring import create_beacon_template
+        from beacon.domains.warehouse.validator import WarehouseValidator
+
+        @click.command()
+        def bad_handler():
+            validator = WarehouseValidator()
+            create_beacon_template(some_path)
+    """)
+    tree = ast.parse(src, filename="<synthetic>")
+    domain_symbols = _collect_domain_symbols(tree)
+
+    violations: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.FunctionDef):
+            continue
+        if not any(_is_click_command_decorator(d) for d in node.decorator_list):
+            continue
+        count = _count_domain_calls_in_handler(node, domain_symbols)
+        if count > 1:
+            violations.append(f"{node.name}: {count} domain calls")
+
+    assert violations, (
+        "TC9c FAILED: multi-domain-call violation was NOT detected — "
+        "the architecture rule in test_cli_handlers_have_one_domain_call is broken"
+    )
 
 
 # ---------------------------------------------------------------------------
