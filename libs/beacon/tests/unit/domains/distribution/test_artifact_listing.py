@@ -1,9 +1,13 @@
-"""Unit tests for beacon.domains.distribution.artifact_listing.list_artifacts."""
+"""Unit tests for beacon.domains.distribution.artifact_listing."""
 
 from pathlib import Path
 
 import pytest
-from beacon.domains.distribution.artifact_listing import list_artifacts
+from beacon.core.exceptions import WorkspaceConfigError
+from beacon.domains.distribution.artifact_listing import (
+    list_artifacts,
+    list_artifacts_with_config_check,
+)
 
 
 @pytest.fixture
@@ -129,3 +133,63 @@ class TestListArtifactsSymlinkFiltering:
         result = list_artifacts(artifacts_dir, "skills")
 
         assert all(not Path(p).is_absolute() for p in result["skills"])
+
+
+class TestListArtifactsWithConfigCheck:
+    def test_returns_empty_dict_when_no_config_toml(self, tmp_path: Path) -> None:
+        beacon_dir = tmp_path / ".agentic-beacon"
+        beacon_dir.mkdir()
+
+        result = list_artifacts_with_config_check(beacon_dir)
+
+        assert result == {}
+
+    def test_raises_workspace_config_error_for_invalid_toml(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        beacon_dir = tmp_path / ".agentic-beacon"
+        beacon_dir.mkdir()
+        (beacon_dir / "config.toml").write_text("not valid toml !!!\n")
+
+        with pytest.raises(WorkspaceConfigError, match="config.toml is invalid"):
+            list_artifacts_with_config_check(beacon_dir)
+
+    def test_raises_workspace_config_error_for_missing_required_field(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        beacon_dir = tmp_path / ".agentic-beacon"
+        beacon_dir.mkdir()
+        # Valid TOML but missing required [warehouse] section
+        (beacon_dir / "config.toml").write_text("[other]\nkey = 'value'\n")
+
+        with pytest.raises(WorkspaceConfigError, match="config.toml is invalid"):
+            list_artifacts_with_config_check(beacon_dir)
+
+    def test_valid_config_does_not_raise(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        beacon_dir = tmp_path / ".agentic-beacon"
+        beacon_dir.mkdir()
+        (beacon_dir / "config.toml").write_text(
+            '[warehouse]\nlocal_path = "/some/absolute/path"\n'
+        )
+
+        result = list_artifacts_with_config_check(beacon_dir)
+
+        assert result == {}
+
+    def test_no_config_check_when_config_missing(self, tmp_path: Path) -> None:
+        beacon_dir = tmp_path / ".agentic-beacon"
+        beacon_dir.mkdir()
+        (beacon_dir / "artifacts" / "contexts").mkdir(parents=True)
+        ctx = beacon_dir / "artifacts" / "contexts" / "test.md"
+        target = beacon_dir / "artifacts" / "contexts" / "real.md"
+        target.write_text("content")
+        ctx.symlink_to(target)
+
+        result = list_artifacts_with_config_check(beacon_dir, "contexts")
+
+        assert "contexts" in result

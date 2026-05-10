@@ -1,6 +1,28 @@
 """Free-function artifact listing — reads artifacts_path without requiring SyncEngine."""
 
+import tomllib
 from pathlib import Path
+
+from pydantic import ValidationError as PydanticValidationError
+
+from beacon.core.exceptions import WorkspaceConfigError
+
+
+def list_artifacts_with_config_check(
+    beacon_dir: Path, artifact_type: str | None = None
+) -> dict[str, list[str]]:
+    """Validate workspace config (if present) then list artifacts.
+
+    Raises WorkspaceConfigError if config.toml is present but malformed.
+    """
+    if (beacon_dir / "config.toml").is_file():
+        from beacon.core.manifest.workspace import WorkspaceConfig
+
+        try:
+            WorkspaceConfig()
+        except (PydanticValidationError, tomllib.TOMLDecodeError) as exc:
+            raise WorkspaceConfigError(f"config.toml is invalid: {exc}") from exc
+    return list_artifacts(beacon_dir / "artifacts", artifact_type)
 
 
 def list_artifacts(
