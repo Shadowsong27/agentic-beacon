@@ -215,6 +215,8 @@ def commit_session(
 
     sync_fn = _symlink_sync_fn or _default_symlink_sync
 
+    wiring_notes: list[str] = []
+
     # Accumulators for filesystem rollback (Bug 2 fix)
     created_paths: list[Path] = []
     removed_paths_with_target: list[tuple[Path, Path]] = []
@@ -276,6 +278,17 @@ def commit_session(
                     kind, prior = _snapshot_path(oc_dest)
                     tool_snapshots.append((oc_dest, kind, prior))
                     wire_agent_opencode(project_root, artifact_file)
+
+            if not detected_tools:
+                wiring_notes.append(
+                    "  Agents accepted but not wired — no tool directories found at"
+                    " project root.\n"
+                    "  Agent wiring into [bold].claude/agents/[/bold] and"
+                    " [bold].opencode/agents/[/bold] was skipped.\n"
+                    "  Create a tool directory then re-run [bold]abc sync[/bold]:\n"
+                    "    mkdir .claude    [dim]# for Claude Code[/dim]\n"
+                    "    mkdir .opencode  [dim]# for OpenCode[/dim]"
+                )
 
             # PER-113 (Finding 2): ensure root .gitignore has agent dir entries
             ensure_agent_dirs_gitignored(project_root)
@@ -389,6 +402,8 @@ def commit_session(
     except Exception as exc:
         _rollback()
         raise CommitError(f"Commit failed: {exc}") from exc
+
+    return wiring_notes
 
 
 def warehouse_uncommitted_paths(warehouse_path: Path) -> set[str]:

@@ -303,3 +303,51 @@ def test_adopt_mixed_agent_and_skill_records_both_in_beacon_yaml(
     )
     assert beacon["artifacts"]["agents"] == ["agents/code-reviewer.md"]
     assert beacon["artifacts"]["skills"] == ["skills/code-review/"]
+
+
+def test_adopt_agent_with_no_tool_dirs_prints_wiring_note(
+    valid_warehouse, temp_dir, monkeypatch, isolated_home
+):
+    """PER-121: when an agent is accepted but no .claude/ or .opencode/ dirs exist,
+    the adopt output must include a wiring note explaining the skip and remediation."""
+    import shutil
+
+    wh = _agent_warehouse(valid_warehouse)
+    project_dir, runner = _connected_project(wh, temp_dir, monkeypatch)
+
+    # Ensure no tool directories exist
+    for tool_dir in [project_dir / ".claude", project_dir / ".opencode"]:
+        if tool_dir.exists():
+            shutil.rmtree(tool_dir)
+
+    _force_interactive(monkeypatch)
+    _stub_adopt_app(monkeypatch, to_adopt=["agents/code-reviewer.md"])
+
+    r = runner.invoke(main, ["adopt"])
+    assert r.exit_code == 0, r.output
+
+    # beacon.yaml updated with agent
+    beacon = yaml.safe_load(
+        (project_dir / ".agentic-beacon" / "beacon.yaml").read_text()
+    )
+    assert beacon["artifacts"]["agents"] == ["agents/code-reviewer.md"]
+
+    # No tool symlinks created
+    assert not (project_dir / ".claude" / "agents" / "code-reviewer.md").exists()
+    assert not (project_dir / ".opencode" / "agents" / "code-reviewer.md").exists()
+
+    # Wiring note must explain the skip and the remediation
+    assert "no tool directories found" in r.output, (
+        f"Expected wiring note in adopt output; got:\n{r.output}"
+    )
+    assert "mkdir .claude" in r.output, (
+        f"Expected remediation hint in adopt output; got:\n{r.output}"
+    )
+
+    # The adopt summary must use the wiring-note variant, not the "wired" variant
+    assert "(see wiring note below)" in r.output, (
+        f"Expected '(see wiring note below)' in adopt output; got:\n{r.output}"
+    )
+    assert "(wired via abc sync or adopt)" not in r.output, (
+        f"Contradictory 'wired via abc sync or adopt' must not appear when wiring note fires; got:\n{r.output}"
+    )
