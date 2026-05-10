@@ -6,7 +6,7 @@
 ### ⚠ BREAKING CHANGES
 
 * auto-pull artifact dependencies via frontmatter ([#102](https://github.com/Shadowsong27/agentic-beacon/issues/102))
-* 
+*
 
 ### Features
 

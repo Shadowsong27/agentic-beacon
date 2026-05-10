@@ -439,13 +439,27 @@ def test_cli_handlers_have_one_domain_call():
                     f"(wrap extras into a single domain function)"
                 )
 
-    # Verify no waived file has disappeared (stale waivers are noise)
-    all_cli_filenames = {p.name for p in _all_py_files_under(cli_dir)}
+    # Verify no waived file or handler has disappeared (stale waivers are noise)
+    cli_files_by_name = {p.name: p for p in _all_py_files_under(cli_dir)}
     for waived_file, waived_handler in _TC9B_WAIVERS:
-        if waived_file not in all_cli_filenames:
+        waived_path = cli_files_by_name.get(waived_file)
+        if waived_path is None:
             failures.append(
-                f"_TC9B_WAIVERS entry ('{waived_file}', '{waived_handler}') "
-                f"no longer exists — remove the stale waiver"
+                f"stale waiver: {waived_file}::{waived_handler} — "
+                f"file no longer exists; remove the waiver"
+            )
+            continue
+        waived_tree = _parse_file(waived_path)
+        handler_found = waived_tree is not None and any(
+            isinstance(node, ast.FunctionDef)
+            and node.name == waived_handler
+            and any(_is_click_command_decorator(d) for d in node.decorator_list)
+            for node in ast.walk(waived_tree)
+        )
+        if not handler_found:
+            failures.append(
+                f"stale waiver: {waived_file}::{waived_handler} no longer exists; "
+                f"remove the waiver"
             )
 
     if failures:
