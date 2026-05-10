@@ -4,11 +4,29 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
 
+concurrency:
+  group: opencode-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   review:
-    uses: Shadowsong27/gh-actions-commons/.github/workflows/opencode-review.yml@main
-    with:
-      model: ${{ vars.OPENCODE_REVIEW_MODEL || 'openai/gpt-5.5' }}
-      prompt-file: '.github/opencode-pr-review-prompt.md'
-    secrets:
-      github-token: ${{ secrets.GITHUB_TOKEN }}
+    if: |
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: self-hosted
+    timeout-minutes: 20
+
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: Shadowsong27/gh-actions-commons/opencode-review@main
+        with:
+          model: ${{ vars.OPENCODE_REVIEW_MODEL || 'openai/gpt-5.5' }}
+          prompt-file: '.github/opencode-pr-review-prompt.md'
