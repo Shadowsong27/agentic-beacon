@@ -3,9 +3,9 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from beacon.core.beacon_dir import ensure_beacon_dir
 from beacon.core.gitignore import GitignoreManager
 from beacon.core.manifest.workspace import WorkspaceConfig
-from beacon.domains.setup.initializer import ensure_beacon_dir
 from beacon.domains.warehouse.validator import WarehouseValidator
 
 
@@ -28,7 +28,7 @@ def connect_to_warehouse(project_root: Path, warehouse_path: Path) -> ConnectRes
         return ConnectResult(valid=False, errors=list(validation_result.errors))
 
     ensure_beacon_dir(project_root)
-    WorkspaceConfig.from_path(warehouse_path)
+    WorkspaceConfig.from_path(warehouse_path, project_root=project_root)
 
     gitignore_mgr = GitignoreManager(project_root)
     updated = gitignore_mgr.ensure_entries()
