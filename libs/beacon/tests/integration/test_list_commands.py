@@ -463,6 +463,36 @@ def test_list_agents_no_artifacts_dir_needed(tmp_path, monkeypatch):
     assert "abc adopt" in result.output
 
 
+def test_list_fails_with_malformed_config_toml(runner, tmp_path, monkeypatch):
+    """abc list exits non-zero with a config.toml hint when the file is malformed.
+
+    Regression for PER-129: decoupling from SyncEngine must NOT silently degrade
+    when config.toml is present but invalid. The old code validated WorkspaceConfig
+    before listing; this test documents that contract.
+    """
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.chdir(project)
+
+    beacon_dir = project / ".agentic-beacon"
+    beacon_dir.mkdir()
+    # No artifacts dir — exercises the path where config is validated before the
+    # artifacts-dir existence check (regression for PER-129 round 4).
+    # Plant invalid TOML — missing required [warehouse] section
+    (beacon_dir / "config.toml").write_text("not valid toml !!!\n")
+
+    result = runner.invoke(main, ["list"])
+
+    assert result.exit_code != 0
+    output_lower = result.output.lower()
+    assert "config.toml" in output_lower, (
+        f"Expected 'config.toml' in error output; got:\n{result.output}"
+    )
+    assert "invalid" in output_lower or "validation" in output_lower, (
+        f"Expected 'invalid' or 'validation' in error output; got:\n{result.output}"
+    )
+
+
 def test_list_agents_not_shown_in_default_list(synced_project):
     """TC2: abc list (no filter) → agents section not shown (backward compatible).
 
