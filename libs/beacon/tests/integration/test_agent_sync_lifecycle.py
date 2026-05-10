@@ -657,3 +657,265 @@ def test_sync_rollback_when_agent_wire_fails_dual_tool(
     assert (project_dir / ".opencode" / "agents" / "agent-b.md").read_text() == (
         "user content"
     ), "user-owned regular file must be preserved"
+
+
+# ---------------------------------------------------------------------------
+# PER-126 additions: cover edge cases from deleted test_agents_sync_command.py
+# ---------------------------------------------------------------------------
+
+# Case #1: opencode-only install
+
+
+def test_sync_wires_only_opencode_when_no_claude_dir(
+    project_dir: Path, warehouse: Path, monkeypatch
+):
+    """When only .opencode/ exists, only .opencode/agents/ is wired; no .claude/ error."""
+    import shutil
+
+    runner = CliRunner()
+    monkeypatch.chdir(project_dir)
+
+    # Remove .claude/ so only .opencode/ remains
+    claude_dir = project_dir / ".claude"
+    if claude_dir.exists():
+        shutil.rmtree(claude_dir)
+    (project_dir / ".opencode").mkdir(exist_ok=True)
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n"
+        "  contexts: []\n"
+        "  skills: []\n"
+        "  agents:\n"
+        "    - agents/spec-planner.md\n"
+    )
+
+    r = runner.invoke(main, ["sync", "--skip-git-check"])
+    assert r.exit_code == 0, f"sync failed: {r.output}"
+
+    # .opencode/agents/ symlink created
+    opencode_link = project_dir / ".opencode" / "agents" / "spec-planner.md"
+    assert opencode_link.is_symlink(), "Expected .opencode/agents/spec-planner.md"
+    assert opencode_link.exists(), ".opencode/agents symlink is broken"
+
+    # No .claude/ wiring (dir does not exist)
+    claude_link = project_dir / ".claude" / "agents" / "spec-planner.md"
+    assert not claude_link.exists() and not claude_link.is_symlink(), (
+        "Expected no .claude/agents/ wiring when .claude/ dir is absent"
+    )
+
+
+# Case #3: both-tools install (happy path)
+
+
+def test_sync_wires_both_tools_when_both_dirs_present(
+    project_dir: Path, warehouse: Path, monkeypatch
+):
+    """When both .claude/ and .opencode/ exist, both tool dirs get agent symlinks."""
+    runner = CliRunner()
+    monkeypatch.chdir(project_dir)
+
+    (project_dir / ".opencode").mkdir(exist_ok=True)
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n"
+        "  contexts: []\n"
+        "  skills: []\n"
+        "  agents:\n"
+        "    - agents/spec-planner.md\n"
+    )
+
+    r = runner.invoke(main, ["sync", "--skip-git-check"])
+    assert r.exit_code == 0, f"sync failed: {r.output}"
+
+    claude_link = project_dir / ".claude" / "agents" / "spec-planner.md"
+    opencode_link = project_dir / ".opencode" / "agents" / "spec-planner.md"
+    assert claude_link.is_symlink(), "Expected .claude/agents/spec-planner.md symlink"
+    assert claude_link.exists(), ".claude/agents symlink is broken"
+    assert opencode_link.is_symlink(), (
+        "Expected .opencode/agents/spec-planner.md symlink"
+    )
+    assert opencode_link.exists(), ".opencode/agents symlink is broken"
+
+
+# Case #5: idempotent re-run
+
+
+def test_sync_is_idempotent(project_dir: Path, warehouse: Path, monkeypatch):
+    """Running abc sync twice produces the same symlink state as running it once."""
+    runner = CliRunner()
+    monkeypatch.chdir(project_dir)
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n"
+        "  contexts: []\n"
+        "  skills: []\n"
+        "  agents:\n"
+        "    - agents/spec-planner.md\n"
+    )
+
+    # First sync
+    r = runner.invoke(main, ["sync", "--skip-git-check"])
+    assert r.exit_code == 0, f"first sync failed: {r.output}"
+
+    artifact = (
+        project_dir / ".agentic-beacon" / "artifacts" / "agents" / "spec-planner.md"
+    )
+    claude_link = project_dir / ".claude" / "agents" / "spec-planner.md"
+    assert artifact.is_symlink()
+    assert claude_link.is_symlink()
+    first_artifact_target = artifact.readlink()
+    first_claude_target = claude_link.readlink()
+
+    # Second sync — must exit 0 and leave symlinks unchanged
+    r = runner.invoke(main, ["sync", "--skip-git-check"])
+    assert r.exit_code == 0, f"second sync failed: {r.output}"
+
+    assert artifact.is_symlink(), "Artifact symlink must persist after second sync"
+    assert claude_link.is_symlink(), ".claude symlink must persist after second sync"
+    assert artifact.readlink() == first_artifact_target, (
+        "Artifact symlink target must be unchanged after idempotent sync"
+    )
+    assert claude_link.readlink() == first_claude_target, (
+        ".claude symlink target must be unchanged after idempotent sync"
+    )
+
+
+# Case #10: warehouse-edits-visible (cross-project design property)
+
+
+def test_warehouse_edits_visible_through_symlinks(
+    project_dir: Path, warehouse: Path, monkeypatch
+):
+    """Warehouse edits are immediately visible through project artifact symlinks.
+
+    Core cross-project visibility guarantee: artifact paths are symlinks to the
+    warehouse, so any write to the warehouse file is reflected without re-running
+    abc sync.
+    """
+    runner = CliRunner()
+    monkeypatch.chdir(project_dir)
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n"
+        "  contexts: []\n"
+        "  skills: []\n"
+        "  agents:\n"
+        "    - agents/spec-planner.md\n"
+    )
+
+    r = runner.invoke(main, ["sync", "--skip-git-check"])
+    assert r.exit_code == 0, f"sync failed: {r.output}"
+
+    artifact = (
+        project_dir / ".agentic-beacon" / "artifacts" / "agents" / "spec-planner.md"
+    )
+    assert artifact.is_symlink()
+
+    # Edit the warehouse source file directly
+    warehouse_agent = warehouse / "agents" / "spec-planner.md"
+    original_content = warehouse_agent.read_text()
+    warehouse_agent.write_text(original_content + "\n## Cross-Project Edit\n")
+
+    # Change must be immediately visible through the artifact symlink
+    assert "Cross-Project Edit" in artifact.read_text(), (
+        "Warehouse edit must be visible through the artifact symlink without re-syncing"
+    )
+
+
+# Case #12: broken-symlink-repair
+
+
+def test_sync_repairs_broken_symlink(project_dir: Path, warehouse: Path, monkeypatch):
+    """A dangling .claude/agents/<name>.md symlink (target missing) is repaired by sync.
+
+    wire_agent_claudecode replaces any symlink whose resolved target differs from
+    the current artifact file, which covers broken (dangling) symlinks as well as
+    stale ones.
+    """
+    runner = CliRunner()
+    monkeypatch.chdir(project_dir)
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n"
+        "  contexts: []\n"
+        "  skills: []\n"
+        "  agents:\n"
+        "    - agents/spec-planner.md\n"
+    )
+
+    # First sync to establish the symlink chain
+    r = runner.invoke(main, ["sync", "--skip-git-check"])
+    assert r.exit_code == 0, f"first sync failed: {r.output}"
+
+    claude_link = project_dir / ".claude" / "agents" / "spec-planner.md"
+    assert claude_link.is_symlink()
+    assert claude_link.exists()
+
+    # Plant a broken symlink: unlink the correct symlink and replace it with
+    # one that points to a non-existent path (dangling).
+    ghost_target = project_dir / "ghost-agent.md"  # never created → always missing
+    claude_link.unlink()
+    claude_link.symlink_to(ghost_target)
+    assert claude_link.is_symlink(), "Broken symlink must be recognised as a symlink"
+    assert not claude_link.exists(), (
+        "Broken symlink must not resolve to an existing file"
+    )
+
+    # Second sync must repair the broken symlink
+    r = runner.invoke(main, ["sync", "--skip-git-check"])
+    assert r.exit_code == 0, (
+        f"second sync failed (broken symlink not repaired): {r.output}"
+    )
+
+    assert claude_link.is_symlink(), "Repaired path must be a symlink"
+    assert claude_link.exists(), "Repaired symlink must resolve to an existing file"
+
+    expected_artifact = (
+        project_dir / ".agentic-beacon" / "artifacts" / "agents" / "spec-planner.md"
+    )
+    assert claude_link.resolve(strict=True) == expected_artifact.resolve(strict=True), (
+        f"Repaired symlink resolves to {claude_link.resolve()} "
+        f"but expected {expected_artifact.resolve()}"
+    )
+
+
+# Case #13: README-ignored
+
+
+def test_readme_filtered_from_warehouse_agent_catalog(
+    project_dir: Path, warehouse: Path, monkeypatch
+):
+    """_list_agents() excludes README.md from the agent catalog (discovery filter only).
+
+    WarehouseDistributor._list_agents() excludes files whose uppercase name
+    equals "README.MD" (guard: ``file.name.upper() != "README.MD"``), so
+    README.md cannot appear in the catalog returned to abc adopt / abc sync.
+    This test calls _list_agents() directly to exercise that catalog-discovery
+    guard; it does NOT cover the sync wiring path. There is no sync-time guard
+    that refuses to wire agents/README.md if a user manually adds it to
+    beacon.yaml — sync will attempt to wire whatever is declared there.
+    """
+    from beacon.domains.distribution.distributor import WarehouseDistributor
+
+    # Plant a README.md alongside a real agent definition in the warehouse.
+    readme = warehouse / "agents" / "README.md"
+    readme.write_text("# Agents Directory\nContains agent definitions.\n")
+
+    distributor = WarehouseDistributor(
+        warehouse_root=warehouse, target_root=project_dir
+    )
+    agent_list = distributor._list_agents(warehouse / "agents")
+
+    # The real agent must be discoverable …
+    assert "agents/spec-planner.md" in agent_list, (
+        f"spec-planner.md must appear in agent list; got: {agent_list}"
+    )
+    # … but README.md must be excluded by the README.MD guard.
+    assert "agents/README.md" not in agent_list, (
+        f"README.md must be filtered from agent list; got: {agent_list}"
+    )
