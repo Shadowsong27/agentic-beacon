@@ -243,3 +243,32 @@ class TestSettingsSelfWriting:
 
         settings2 = BeaconManifest.from_yaml(str(output_file))
         assert settings2.ignore.skills == ["openspec-*"]
+
+    def test_tc14_from_path_project_root_returns_config_for_that_root(
+        self, tmp_path: Path
+    ):
+        """TC14: from_path with project_root returns config reflecting that root, not cwd.
+
+        The returned WorkspaceConfig must reflect the path written under project_root,
+        even when cwd is a different directory that has no config.toml.
+        """
+        warehouse_path = str(tmp_path / "warehouse")
+        project_root = tmp_path / "project"
+        project_root.mkdir()
+        unrelated_dir = tmp_path / "unrelated"
+        unrelated_dir.mkdir()
+
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(unrelated_dir)
+            result = WorkspaceConfig.from_path(
+                warehouse_path, project_root=project_root
+            )
+        finally:
+            os.chdir(original_cwd)
+
+        assert isinstance(result, WorkspaceConfig)
+        assert result.warehouse.local_path == warehouse_path
+        config_file = project_root / ".agentic-beacon" / "config.toml"
+        assert config_file.exists()
+        assert warehouse_path in config_file.read_text()

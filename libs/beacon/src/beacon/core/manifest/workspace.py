@@ -82,7 +82,7 @@ class WorkspaceConfig(BaseSettings):
         with open(toml_path, "w", encoding="utf-8") as f:
             f.write(toml_content)
 
-        return cls()  # type: ignore[call-arg]
+        return cls.model_construct(warehouse=config)
 
     def to_toml(self, path: str | Path) -> None:
         """Write workspace config to TOML file.
