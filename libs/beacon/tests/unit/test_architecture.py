@@ -44,7 +44,13 @@ def _is_click_command_decorator(node: ast.expr) -> bool:
 
 
 def _collect_domain_symbols(tree: ast.AST) -> set[str]:
-    """Return the local names of all symbols imported from beacon.domains.*."""
+    """Return the local names of all symbols imported from beacon.domains.*.
+
+    Handles both forms:
+    - ``from beacon.domains.foo import bar`` → symbol ``bar`` (or asname)
+    - ``import beacon.domains.foo`` → symbol ``beacon`` (root) and ``foo`` (leaf)
+    - ``import beacon.domains.foo as alias`` → symbol ``alias``
+    """
     symbols: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom):
@@ -52,6 +58,19 @@ def _collect_domain_symbols(tree: ast.AST) -> set[str]:
             if module.startswith("beacon.domains."):
                 for alias in node.names:
                     symbols.add(alias.asname if alias.asname else alias.name)
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name.startswith("beacon.domains."):
+                    if alias.asname:
+                        symbols.add(alias.asname)
+                    else:
+                        # ``import beacon.domains.foo`` — the local name is the
+                        # dotted root accessible as ``beacon.domains.foo.bar()``,
+                        # but callers use the first segment; record all segments
+                        # so attribute-call detection can match any prefix.
+                        parts = alias.name.split(".")
+                        for part in parts:
+                            symbols.add(part)
     return symbols
 
 
@@ -60,15 +79,25 @@ def _count_domain_calls_in_handler(
 ) -> int:
     """Count ast.Call nodes that directly invoke a domain-imported symbol.
 
-    Only counts calls where the callee is an ast.Name matching a domain symbol.
-    Method calls on instances (e.g. ``obj.method()``) are NOT counted, keeping
-    instantiation + method-chain as one logical domain interaction.
+    Counts two call forms:
+    - Direct call: ``symbol(...)`` where symbol ∈ domain_symbols
+    - Attribute call: ``alias.method(...)`` where alias ∈ domain_symbols
+      (covers ``import beacon.domains.foo as alias; alias.bar()``)
+
+    Method calls on plain instances are NOT counted separately; instantiation +
+    method chain = one logical domain interaction.
     """
     count = 0
     for node in ast.walk(func):
         if isinstance(node, ast.Call):
             func_node = node.func
             if isinstance(func_node, ast.Name) and func_node.id in domain_symbols:
+                count += 1
+            elif (
+                isinstance(func_node, ast.Attribute)
+                and isinstance(func_node.value, ast.Name)
+                and func_node.value.id in domain_symbols
+            ):
                 count += 1
     return count
 
@@ -505,6 +534,48 @@ def test_cli_multi_domain_call_violation_is_detected():
     assert violations, (
         "TC9c FAILED: multi-domain-call violation was NOT detected — "
         "the architecture rule in test_cli_handlers_have_one_domain_call is broken"
+    )
+
+
+# ---------------------------------------------------------------------------
+# TC9d: negative test — ``import ... as alias`` form is also detected
+# ---------------------------------------------------------------------------
+
+
+def test_cli_multi_domain_call_via_import_as_is_detected():
+    """TC9d: the TC9b rule must flag a handler using two ``import X as alias`` calls.
+
+    This proves the attribute-call detection path works; a handler that does
+    ``import beacon.domains.foo as foo; foo.bar(); foo.baz()`` must be caught.
+    """
+    import textwrap
+
+    src = textwrap.dedent("""\
+        import click
+        import beacon.domains.warehouse.connector as connector
+        import beacon.domains.setup.wiring as wiring
+
+        @click.command()
+        def bad_handler():
+            connector.connect_to_warehouse(proj, wh)
+            wiring.create_beacon_template(some_path)
+    """)
+    tree = ast.parse(src, filename="<synthetic>")
+    domain_symbols = _collect_domain_symbols(tree)
+
+    violations: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.FunctionDef):
+            continue
+        if not any(_is_click_command_decorator(d) for d in node.decorator_list):
+            continue
+        count = _count_domain_calls_in_handler(node, domain_symbols)
+        if count > 1:
+            violations.append(f"{node.name}: {count} domain calls")
+
+    assert violations, (
+        "TC9d FAILED: import-as alias domain-call violation was NOT detected — "
+        "_collect_domain_symbols or _count_domain_calls_in_handler is broken"
     )
 
 
