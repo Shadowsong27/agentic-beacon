@@ -74,6 +74,13 @@ def _collect_domain_symbols(tree: ast.AST) -> set[str]:
     return symbols
 
 
+def _attr_chain_root(node: ast.expr) -> ast.expr:
+    """Walk a nested ast.Attribute chain and return the root ast.Name (or other node)."""
+    while isinstance(node, ast.Attribute):
+        node = node.value
+    return node
+
+
 def _count_domain_calls_in_handler(
     func: ast.FunctionDef, domain_symbols: set[str]
 ) -> int:
@@ -81,8 +88,8 @@ def _count_domain_calls_in_handler(
 
     Counts two call forms:
     - Direct call: ``symbol(...)`` where symbol ∈ domain_symbols
-    - Attribute call: ``alias.method(...)`` where alias ∈ domain_symbols
-      (covers ``import beacon.domains.foo as alias; alias.bar()``)
+    - Attribute call: any dotted chain whose root name ∈ domain_symbols
+      (covers ``alias.bar()``, ``beacon.domains.foo.bar()``, etc.)
 
     Method calls on plain instances are NOT counted separately; instantiation +
     method chain = one logical domain interaction.
@@ -93,12 +100,10 @@ def _count_domain_calls_in_handler(
             func_node = node.func
             if isinstance(func_node, ast.Name) and func_node.id in domain_symbols:
                 count += 1
-            elif (
-                isinstance(func_node, ast.Attribute)
-                and isinstance(func_node.value, ast.Name)
-                and func_node.value.id in domain_symbols
-            ):
-                count += 1
+            elif isinstance(func_node, ast.Attribute):
+                root = _attr_chain_root(func_node)
+                if isinstance(root, ast.Name) and root.id in domain_symbols:
+                    count += 1
     return count
 
 
@@ -576,6 +581,48 @@ def test_cli_multi_domain_call_via_import_as_is_detected():
     assert violations, (
         "TC9d FAILED: import-as alias domain-call violation was NOT detected — "
         "_collect_domain_symbols or _count_domain_calls_in_handler is broken"
+    )
+
+
+# ---------------------------------------------------------------------------
+# TC9e: negative test — non-aliased dotted attribute chains are detected
+# ---------------------------------------------------------------------------
+
+
+def test_cli_multi_domain_call_via_dotted_chain_is_detected():
+    """TC9e: the TC9b rule must flag a handler using non-aliased dotted imports.
+
+    Proves that ``import beacon.domains.foo.bar; beacon.domains.foo.bar.fn()``
+    is caught by walking the full attribute chain to the root ``ast.Name``.
+    """
+    import textwrap
+
+    src = textwrap.dedent("""\
+        import click
+        import beacon.domains.warehouse.connector
+        import beacon.domains.setup.wiring
+
+        @click.command()
+        def bad_handler():
+            beacon.domains.warehouse.connector.connect_to_warehouse(proj, wh)
+            beacon.domains.setup.wiring.create_beacon_template(some_path)
+    """)
+    tree = ast.parse(src, filename="<synthetic>")
+    domain_symbols = _collect_domain_symbols(tree)
+
+    violations: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.FunctionDef):
+            continue
+        if not any(_is_click_command_decorator(d) for d in node.decorator_list):
+            continue
+        count = _count_domain_calls_in_handler(node, domain_symbols)
+        if count > 1:
+            violations.append(f"{node.name}: {count} domain calls")
+
+    assert violations, (
+        "TC9e FAILED: non-aliased dotted-chain domain-call violation was NOT detected — "
+        "_count_domain_calls_in_handler does not walk full attribute chains"
     )
 
 
