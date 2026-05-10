@@ -80,6 +80,12 @@ def list_cmd(*, artifact_type: str | None) -> None:
         console.print(table)
         return
 
+    try:
+        artifacts = list_artifacts_with_config_check(beacon_dir, artifact_type)
+    except WorkspaceConfigError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
+
     if not artifacts_dir.exists():
         console.print("[red]Error:[/red] No synced artifacts found.")
         console.print("Run 'abc sync' to download artifacts from the warehouse.")
@@ -89,12 +95,6 @@ def list_cmd(*, artifact_type: str | None) -> None:
         "contexts": ("Synced Contexts", "cyan", "Context"),
         "skills": ("Synced Skills", "yellow", "Skill"),
     }
-
-    try:
-        artifacts = list_artifacts_with_config_check(beacon_dir, artifact_type)
-    except WorkspaceConfigError as e:
-        console.print(f"[red]Error:[/red] {e}")
-        sys.exit(1)
 
     for section, files in artifacts.items():
         title, color, col_name = section_config[section]
