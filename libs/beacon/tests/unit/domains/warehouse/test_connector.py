@@ -17,7 +17,9 @@ def _make_invalid_result(errors: list[str]) -> ValidationResult:
 
 
 class TestConnectToWarehouseValidation:
-    def test_raises_when_warehouse_invalid(self, tmp_path: Path) -> None:
+    def test_returns_invalid_connect_result_when_warehouse_invalid(
+        self, tmp_path: Path
+    ) -> None:
         warehouse = tmp_path / "wh"
         project = tmp_path / "proj"
         project.mkdir()
