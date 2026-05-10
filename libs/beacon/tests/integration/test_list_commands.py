@@ -476,7 +476,8 @@ def test_list_fails_with_malformed_config_toml(runner, tmp_path, monkeypatch):
 
     beacon_dir = project / ".agentic-beacon"
     beacon_dir.mkdir()
-    (beacon_dir / "artifacts").mkdir()
+    # No artifacts dir — exercises the path where config is validated before the
+    # artifacts-dir existence check (regression for PER-129 round 4).
     # Plant invalid TOML — missing required [warehouse] section
     (beacon_dir / "config.toml").write_text("not valid toml !!!\n")
 
