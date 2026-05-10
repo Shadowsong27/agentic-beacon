@@ -1,5 +1,31 @@
 # Changelog
 
+## [3.1.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v3.0.0...agentic-beacon@v3.1.0) (2026-05-10)
+
+
+### Features
+
+* **beacon:** wiring note when agents declared but no tool dirs (PER-121) ([#123](https://github.com/Shadowsong27/agentic-beacon/issues/123)) ([489801c](https://github.com/Shadowsong27/agentic-beacon/commit/489801c51c11db4fe2299042a194a834189bf986))
+
+
+### Bug Fixes
+
+* configure git identity in release e2e tests ([c767d6b](https://github.com/Shadowsong27/agentic-beacon/commit/c767d6b76e081b000e6f65bc78db81e414c84b7c))
+
+
+### Code Refactoring
+
+* **adoption:** filter agents from cleanup_unadopted_artifacts (PER-122) ([#125](https://github.com/Shadowsong27/agentic-beacon/issues/125)) ([5ee4137](https://github.com/Shadowsong27/agentic-beacon/commit/5ee4137740d8c311a969fce636e0ac4281339cfe))
+* **beacon:** decouple abc list from SyncEngine via free function (PER-129) ([#124](https://github.com/Shadowsong27/agentic-beacon/issues/124)) ([8337383](https://github.com/Shadowsong27/agentic-beacon/commit/83373837ace18103f76950a9ac1f882de45a226c))
+* **beacon:** one-domain-call-per-handler + AST architecture test (PER-120) ([#126](https://github.com/Shadowsong27/agentic-beacon/issues/126)) ([67a0996](https://github.com/Shadowsong27/agentic-beacon/commit/67a0996f9af5bec5d6c5496be585dc73e3f2373d))
+
+
+### Tests
+
+* **beacon:** audit deleted agent-sync edge cases (PER-126) ([#120](https://github.com/Shadowsong27/agentic-beacon/issues/120)) ([3948fea](https://github.com/Shadowsong27/agentic-beacon/commit/3948fea183a32bce29ad6782e709a8ede5566ea1))
+* **integration:** tighten legacy cleanup notice assertions (PER-128) ([6659beb](https://github.com/Shadowsong27/agentic-beacon/commit/6659beb7bc0a54bb033667117d0f3a3a53a02925))
+* unskip TC7 reject-rollback (PER-124) + fix latent rollback gap ([#122](https://github.com/Shadowsong27/agentic-beacon/issues/122)) ([1187968](https://github.com/Shadowsong27/agentic-beacon/commit/1187968fc9bec8e6edd3aee344876aba8cfd9147))
+
 ## [3.0.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v2.7.1...agentic-beacon@v3.0.0) (2026-05-09)
 
 
