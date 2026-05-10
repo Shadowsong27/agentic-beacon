@@ -3,7 +3,6 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from beacon.core.beacon_dir import ensure_beacon_dir
 from beacon.core.gitignore import GitignoreManager
 from beacon.core.manifest.workspace import WorkspaceConfig
 from beacon.domains.warehouse.validator import WarehouseValidator
@@ -14,6 +13,12 @@ class ConnectResult:
     valid: bool
     errors: list[str] = field(default_factory=list)
     gitignore_updated: bool = False
+
+
+def _ensure_beacon_dir(project_root: Path) -> Path:
+    beacon_dir = project_root / ".agentic-beacon"
+    beacon_dir.mkdir(exist_ok=True)
+    return beacon_dir
 
 
 def connect_to_warehouse(project_root: Path, warehouse_path: Path) -> ConnectResult:
@@ -27,7 +32,7 @@ def connect_to_warehouse(project_root: Path, warehouse_path: Path) -> ConnectRes
     if not validation_result.valid:
         return ConnectResult(valid=False, errors=list(validation_result.errors))
 
-    ensure_beacon_dir(project_root)
+    _ensure_beacon_dir(project_root)
     WorkspaceConfig.from_path(warehouse_path, project_root=project_root)
 
     gitignore_mgr = GitignoreManager(project_root)
