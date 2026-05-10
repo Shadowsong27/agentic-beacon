@@ -149,7 +149,9 @@ class TestCrossProjectSingleSourceOfTruth:
         monkeypatch.chdir(project_b)
         runner = CliRunner()
         result = runner.invoke(
-            main, ["warehouse", "contribute", "-m", "Cross-project edit"]
+            main,
+            ["warehouse", "contribute", "-m", "Cross-project edit"],
+            env=_git_env(),
         )
         assert result.exit_code == 0, f"contribute from B failed:\n{result.output}"
 

@@ -445,12 +445,112 @@ def test_accept_agent_rollback_on_wire_failure(
 
 
 def test_reject_agent_artifact_symlink_restored_on_failure(
-    project: tuple, warehouse: Path, monkeypatch
+    project: tuple, warehouse: Path
 ):
-    """Reject with mid-commit failure restores artifact symlink and tool symlinks."""
-    pytest.skip(
-        "TODO: patching Path.unlink to force a failure mid-reject is too brittle "
-        "without a dedicated injectable hook in the reject path; skipping per spec allowance."
+    """Reject with post-artifact-unlink failure rolls back all 3 symlinks.
+
+    Uses the _unlink_fn seam to actually unlink on every call but raise OSError
+    after the third call (artifact symlink), which is the last unlink in the
+    reject sequence (.claude → .opencode → artifact).  Asserts _rollback()
+    restores beacon.yaml and all 3 paths — including the artifact symlink that
+    was successfully removed before the failure — to their pre-commit state.
+    """
+    project_root, artifacts_path, beacon_yaml = project
+
+    # Need .opencode/ so all 3 paths are wired
+    (project_root / ".opencode").mkdir()
+
+    beacon_yaml.write_text(
+        "artifacts:\n"
+        "  contexts: []\n"
+        "  skills: []\n"
+        "  agents:\n"
+        "    - agents/spec-planner.md\n"
+    )
+    pre_beacon_bytes = beacon_yaml.read_bytes()
+
+    # Pre-create all 3 symlinks
+    artifact = artifacts_path / "agents" / "spec-planner.md"
+    artifact.parent.mkdir(parents=True, exist_ok=True)
+    artifact.symlink_to(warehouse / "agents" / "spec-planner.md")
+    pre_artifact_target = artifact.readlink()
+
+    claude_agents = project_root / ".claude" / "agents"
+    claude_agents.mkdir(parents=True, exist_ok=True)
+    claude_link = claude_agents / "spec-planner.md"
+    claude_link.symlink_to(artifact)
+    pre_claude_target = claude_link.readlink()
+
+    oc_agents = project_root / ".opencode" / "agents"
+    oc_agents.mkdir(parents=True, exist_ok=True)
+    oc_link = oc_agents / "spec-planner.md"
+    oc_link.symlink_to(artifact)
+    pre_oc_target = oc_link.readlink()
+
+    # _unlink_fn: actually unlink on every call; raise AFTER call 3 (artifact).
+    # This simulates a post-unlink I/O failure that forces rollback after all 3
+    # symlinks have already been removed.
+    call_count = {"n": 0}
+
+    def _failing_unlink(path: Path) -> None:
+        call_count["n"] += 1
+        path.unlink()
+        if call_count["n"] == 3:
+            raise OSError("forced post-unlink failure")
+
+    agent_candidate = AdoptCandidate(
+        artifact_type="agents",
+        path="agents/spec-planner.md",
+        description="Plans specs",
+    )
+
+    from beacon.domains.adoption.apply import CommitError
+
+    with pytest.raises(CommitError):
+        commit_session(
+            to_adopt=[],
+            to_unadopt=["agents/spec-planner.md"],
+            pending_accept=[],
+            pending_reject=[],
+            candidates=[agent_candidate],
+            pending_entries=[],
+            project_root=project_root,
+            warehouse_path=warehouse,
+            artifacts_path=artifacts_path,
+            beacon_yaml_path=beacon_yaml,
+            _unlink_fn=_failing_unlink,
+        )
+
+    # All 3 unlinks were attempted; the 3rd raised after doing its work
+    assert call_count["n"] == 3
+
+    # beacon.yaml restored to pre-commit state
+    assert beacon_yaml.read_bytes() == pre_beacon_bytes, (
+        "beacon.yaml was not rolled back after reject failure"
+    )
+
+    # .claude symlink restored (was removed by unlink call 1)
+    assert claude_link.is_symlink(), (
+        ".claude/agents/spec-planner.md should be restored after reject rollback"
+    )
+    assert claude_link.readlink() == pre_claude_target, (
+        ".claude/agents/spec-planner.md target changed after rollback"
+    )
+
+    # .opencode symlink restored (was removed by unlink call 2)
+    assert oc_link.is_symlink(), (
+        ".opencode/agents/spec-planner.md should be restored after reject rollback"
+    )
+    assert oc_link.readlink() == pre_oc_target, (
+        ".opencode/agents/spec-planner.md target changed after rollback"
+    )
+
+    # artifact symlink restored (was removed by unlink call 3 before the raise)
+    assert artifact.is_symlink(), (
+        "artifact symlink should be restored after reject rollback"
+    )
+    assert artifact.readlink() == pre_artifact_target, (
+        "artifact symlink target changed after rollback"
     )
 
 
