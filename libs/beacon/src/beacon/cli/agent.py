@@ -8,6 +8,7 @@ from rich.console import Console
 from rich.table import Table
 
 from beacon.core.manifest.beacon import BeaconManifest
+from beacon.core.manifest.workspace import WorkspaceConfig
 from beacon.domains.distribution.artifact_listing import list_artifacts
 
 console = Console()
@@ -39,6 +40,16 @@ def list_cmd(*, artifact_type: str | None) -> None:
     """
     beacon_dir = Path.cwd() / ".agentic-beacon"
     artifacts_dir = beacon_dir / "artifacts"
+
+    # Validate config.toml format if present so malformed config surfaces as an
+    # error rather than silently degrading. PER-129 decouples list from SyncEngine
+    # but preserves this validation behavior.
+    if (beacon_dir / "config.toml").is_file():
+        try:
+            WorkspaceConfig()  # constructor validates; result unused
+        except Exception as e:
+            console.print(f"[red]Error:[/red] config.toml is invalid: {e}")
+            sys.exit(1)
 
     if artifact_type == "agents":
         artifacts = list_artifacts(artifacts_dir, "agents")
