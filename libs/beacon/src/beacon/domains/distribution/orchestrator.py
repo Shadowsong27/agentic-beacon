@@ -232,7 +232,7 @@ def run_sync(
 
     project_root = project_root or find_project_root()
 
-    warehouse_path = ensure_sync_ready(project_root)
+    warehouse_path, workspace_config = ensure_sync_ready(project_root)
 
     # Validate agent manifest (only when agents/ has content)
     agents_dir = warehouse_path / "agents"
@@ -259,7 +259,10 @@ def run_sync(
             raise BeaconSyncError(git_result.error_message, hint=git_result.hint)
 
     if not dry_run and not skip_git_check:
-        branch_result = check_warehouse_on_main_branch(warehouse_path)
+        branch_result = check_warehouse_on_main_branch(
+            warehouse_path,
+            main_branch=workspace_config.warehouse.main_branch,
+        )
         if not branch_result.ok:
             raise BeaconSyncError(branch_result.error_message, hint=branch_result.hint)
 

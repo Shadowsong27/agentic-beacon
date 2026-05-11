@@ -205,6 +205,118 @@ def test_sync_proceeds_on_master_branch(tmp_path, monkeypatch):
     ).exists()
 
 
+# ---------------------------------------------------------------------------
+# config.toml — configurable main_branch
+# ---------------------------------------------------------------------------
+
+
+def test_sync_proceeds_on_configured_branch(tmp_path, monkeypatch):
+    """abc sync proceeds when warehouse branch matches main_branch in config.toml."""
+    wh = tmp_path / "warehouse"
+    wh.mkdir()
+    for d in ("contexts", "skills", "docs"):
+        (wh / d).mkdir()
+    (wh / "README.md").write_text("# Warehouse\n")
+    (wh / "contexts" / "lesson.md").write_text("# Lesson\n")
+
+    subprocess.run(
+        ["git", "init", "-b", "dev"], cwd=str(wh), check=True, capture_output=True
+    )
+    _git(["config", "user.email", "test@test.com"], wh)
+    _git(["config", "user.name", "Test"], wh)
+    _git(["add", "."], wh)
+    _git(["commit", "-m", "initial"], wh)
+
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.chdir(project)
+    beacon_dir = project / ".agentic-beacon"
+    beacon_dir.mkdir()
+    (beacon_dir / "config.toml").write_text(
+        f'[warehouse]\nlocal_path = "{wh}"\nmain_branch = "dev"\n'
+    )
+    (beacon_dir / "beacon.yaml").write_text(
+        "artifacts:\n  contexts:\n    - contexts/lesson.md\n  skills: []\n\n"
+    )
+
+    result = CliRunner().invoke(main, ["sync"])
+
+    assert result.exit_code == 0
+    assert (
+        project / ".agentic-beacon" / "artifacts" / "contexts" / "lesson.md"
+    ).exists()
+
+
+def test_sync_blocked_when_not_on_configured_branch(tmp_path, monkeypatch):
+    """abc sync is blocked when warehouse branch differs from main_branch in config.toml."""
+    wh = tmp_path / "warehouse"
+    wh.mkdir()
+    for d in ("contexts", "skills", "docs"):
+        (wh / d).mkdir()
+    (wh / "README.md").write_text("# Warehouse\n")
+    (wh / "contexts" / "lesson.md").write_text("# Lesson\n")
+
+    subprocess.run(
+        ["git", "init", "-b", "dev"], cwd=str(wh), check=True, capture_output=True
+    )
+    _git(["config", "user.email", "test@test.com"], wh)
+    _git(["config", "user.name", "Test"], wh)
+    _git(["add", "."], wh)
+    _git(["commit", "-m", "initial"], wh)
+    _git(["checkout", "-b", "feat/something"], wh)
+
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.chdir(project)
+    beacon_dir = project / ".agentic-beacon"
+    beacon_dir.mkdir()
+    (beacon_dir / "config.toml").write_text(
+        f'[warehouse]\nlocal_path = "{wh}"\nmain_branch = "dev"\n'
+    )
+    (beacon_dir / "beacon.yaml").write_text(
+        "artifacts:\n  contexts:\n    - contexts/lesson.md\n  skills: []\n\n"
+    )
+
+    result = CliRunner().invoke(main, ["sync"])
+
+    assert result.exit_code != 0
+    assert "feat/something" in result.output
+    assert "config.toml" in result.output
+
+
+def test_sync_blocked_on_main_when_config_requires_dev(tmp_path, monkeypatch):
+    """abc sync is blocked when warehouse is on 'main' but config.toml requires 'dev'."""
+    wh = tmp_path / "warehouse"
+    wh.mkdir()
+    for d in ("contexts", "skills", "docs"):
+        (wh / d).mkdir()
+    (wh / "README.md").write_text("# Warehouse\n")
+    (wh / "contexts" / "lesson.md").write_text("# Lesson\n")
+
+    _git(["init"], wh)
+    _git(["config", "user.email", "test@test.com"], wh)
+    _git(["config", "user.name", "Test"], wh)
+    _git(["add", "."], wh)
+    _git(["commit", "-m", "initial"], wh)
+
+    project = tmp_path / "project"
+    project.mkdir()
+    monkeypatch.chdir(project)
+    beacon_dir = project / ".agentic-beacon"
+    beacon_dir.mkdir()
+    (beacon_dir / "config.toml").write_text(
+        f'[warehouse]\nlocal_path = "{wh}"\nmain_branch = "dev"\n'
+    )
+    (beacon_dir / "beacon.yaml").write_text(
+        "artifacts:\n  contexts:\n    - contexts/lesson.md\n  skills: []\n\n"
+    )
+
+    result = CliRunner().invoke(main, ["sync"])
+
+    assert result.exit_code != 0
+    assert "config.toml" in result.output
+
+
 # Unstaged modification — sync blocked
 # ---------------------------------------------------------------------------
 

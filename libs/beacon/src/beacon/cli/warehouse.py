@@ -191,7 +191,16 @@ def init(
     type=click.Path(path_type=Path),
     help="Path to local warehouse directory",
 )
-def connect(*, path: Path | None) -> None:
+@click.option(
+    "--main-branch",
+    type=str,
+    default=None,
+    help=(
+        "Override the warehouse's main branch (e.g. 'dev'). "
+        "Defaults to accepting 'main' or 'master'."
+    ),
+)
+def connect(*, path: Path | None, main_branch: str | None) -> None:
     """
     Connect project to a local warehouse.
 
@@ -201,6 +210,7 @@ def connect(*, path: Path | None) -> None:
 
     Example:
         abc warehouse connect --path ~/org-warehouse
+        abc warehouse connect --path ~/org-warehouse --main-branch dev
         abc warehouse connect  # Interactive mode
     """
     if not path:
@@ -242,7 +252,9 @@ def connect(*, path: Path | None) -> None:
 
     try:
         result = connect_to_warehouse(
-            project_root=Path.cwd(), warehouse_path=warehouse_path
+            project_root=Path.cwd(),
+            warehouse_path=warehouse_path,
+            main_branch=main_branch,
         )
     except Exception as e:
         console.print(f"\n[red]Error:[/red] Failed to save connection: {e}")

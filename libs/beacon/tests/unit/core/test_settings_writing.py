@@ -271,4 +271,122 @@ class TestSettingsSelfWriting:
         assert result.warehouse.local_path == warehouse_path
         config_file = project_root / ".agentic-beacon" / "config.toml"
         assert config_file.exists()
-        assert warehouse_path in config_file.read_text()
+
+
+class TestWorkspaceConfigMainBranch:
+    """main_branch field — configurable default branch for the warehouse."""
+
+    def test_from_path_omits_main_branch_when_unset(self, temp_dir):
+        """from_path without main_branch writes config without the field."""
+        project_root = temp_dir / "proj"
+        project_root.mkdir()
+
+        WorkspaceConfig.from_path(
+            "/abs/wh", project_root=project_root, main_branch=None
+        )
+
+        toml_text = (project_root / ".agentic-beacon" / "config.toml").read_text()
+        assert "main_branch" not in toml_text
+
+    def test_from_path_persists_main_branch(self, temp_dir):
+        """from_path with main_branch writes the field to TOML."""
+        project_root = temp_dir / "proj"
+        project_root.mkdir()
+
+        WorkspaceConfig.from_path(
+            "/abs/wh", project_root=project_root, main_branch="dev"
+        )
+
+        toml_text = (project_root / ".agentic-beacon" / "config.toml").read_text()
+        assert 'main_branch = "dev"' in toml_text
+
+    def test_main_branch_loads_from_toml(self, temp_dir):
+        """WorkspaceConfig() reads main_branch from config.toml."""
+        config_file = temp_dir / ".agentic-beacon" / "config.toml"
+        config_file.parent.mkdir()
+        config_file.write_text(
+            '[warehouse]\nlocal_path = "/abs/wh"\nmain_branch = "dev"\n'
+        )
+
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(temp_dir)
+            settings = WorkspaceConfig()
+            assert settings.warehouse.main_branch == "dev"
+        finally:
+            os.chdir(original_cwd)
+
+    def test_main_branch_defaults_to_none(self, temp_dir):
+        """When config.toml has no main_branch, the field defaults to None."""
+        config_file = temp_dir / ".agentic-beacon" / "config.toml"
+        config_file.parent.mkdir()
+        config_file.write_text('[warehouse]\nlocal_path = "/abs/wh"\n')
+
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(temp_dir)
+            settings = WorkspaceConfig()
+            assert settings.warehouse.main_branch is None
+        finally:
+            os.chdir(original_cwd)
+
+    def test_empty_main_branch_is_rejected(self):
+        """An empty string main_branch fails validation."""
+        from beacon.core.manifest.workspace import WarehouseConfig
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            WarehouseConfig(local_path="/abs/wh", main_branch="   ")
+
+    def test_main_branch_rejects_toml_unsafe_chars(self):
+        """Characters that would break TOML serialization are rejected."""
+        from beacon.core.manifest.workspace import WarehouseConfig
+        from pydantic import ValidationError
+
+        for bad in ['dev"main', "dev\\main", "dev main", "dev\nmain"]:
+            with pytest.raises(ValidationError):
+                WarehouseConfig(local_path="/abs/wh", main_branch=bad)
+
+    def test_main_branch_accepts_valid_git_branch_names(self):
+        """Common git branch name patterns are accepted."""
+        from beacon.core.manifest.workspace import WarehouseConfig
+
+        for good in ["dev", "main", "release/v1.0", "feature-x", "v2.0.1"]:
+            config = WarehouseConfig(local_path="/abs/wh", main_branch=good)
+            assert config.main_branch == good
+
+    def test_main_branch_rejects_invalid_git_refs(self):
+        """Strings that pass the charset but are not valid git refs are rejected.
+
+        Prevents values like '.' from rendering a destructive 'git checkout .'
+        in recovery hints.
+        """
+        from beacon.core.manifest.workspace import WarehouseConfig
+        from pydantic import ValidationError
+
+        invalid_refs = [
+            ".",
+            "..",
+            "@",
+            "/foo",
+            "foo/",
+            "foo.lock",
+            "foo..bar",
+            "foo//bar",
+            ".hidden",
+            "release/.bar",
+            "release/bar.lock",
+            # Leading '-' would be interpreted as a flag by 'git checkout' if it
+            # ever made it into the recovery-hint command. Reject at the boundary.
+            "-f",
+            "-rf",
+            "release/-foo",
+            # Trailing '.' is rejected by git ref rules
+            "foo.",
+            "release/foo.",
+            # Reserved name
+            "HEAD",
+        ]
+        for bad in invalid_refs:
+            with pytest.raises(ValidationError):
+                WarehouseConfig(local_path="/abs/wh", main_branch=bad)

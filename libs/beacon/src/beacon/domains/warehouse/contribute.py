@@ -57,7 +57,7 @@ def contribute(
     if not message or not message.strip():
         raise ValueError("Commit message cannot be empty")
 
-    warehouse_path = ensure_sync_ready(project_root)
+    warehouse_path, _ = ensure_sync_ready(project_root)
 
     beacon_yaml = project_root / ".agentic-beacon" / "beacon.yaml"
     tracked_paths = get_tracked_paths(warehouse_path, beacon_yaml)
