@@ -354,3 +354,29 @@ class TestWorkspaceConfigMainBranch:
         for good in ["dev", "main", "release/v1.0", "feature-x", "v2.0.1"]:
             config = WarehouseConfig(local_path="/abs/wh", main_branch=good)
             assert config.main_branch == good
+
+    def test_main_branch_rejects_invalid_git_refs(self):
+        """Strings that pass the charset but are not valid git refs are rejected.
+
+        Prevents values like '.' from rendering a destructive 'git checkout .'
+        in recovery hints.
+        """
+        from beacon.core.manifest.workspace import WarehouseConfig
+        from pydantic import ValidationError
+
+        invalid_refs = [
+            ".",
+            "..",
+            "@",
+            "/foo",
+            "foo/",
+            "foo.lock",
+            "foo..bar",
+            "foo//bar",
+            ".hidden",
+            "release/.bar",
+            "release/bar.lock",
+        ]
+        for bad in invalid_refs:
+            with pytest.raises(ValidationError):
+                WarehouseConfig(local_path="/abs/wh", main_branch=bad)

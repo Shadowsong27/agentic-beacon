@@ -20,6 +20,33 @@ from pydantic_settings import (
 _BRANCH_NAME_RE = re.compile(r"[A-Za-z0-9._/-]+")
 
 
+def _is_valid_git_branch_name(name: str) -> bool:
+    """Apply the subset of git-check-ref-format rules relevant for a branch name.
+
+    Rejects inputs that pass the basic charset check but are not legal git refs
+    (e.g. '.', '..', '/foo', 'foo/', 'foo.lock', 'foo..bar'). This matters
+    because the value is later interpolated into a 'git checkout <branch>'
+    recovery hint shown to users; a value like '.' would render a destructive
+    'git checkout .' command.
+    """
+    if not _BRANCH_NAME_RE.fullmatch(name):
+        return False
+    if name in {".", "..", "@"}:
+        return False
+    if name.startswith("/") or name.endswith("/"):
+        return False
+    if ".." in name or "//" in name:
+        return False
+    for component in name.split("/"):
+        if not component:
+            return False
+        if component.startswith("."):
+            return False
+        if component.endswith(".lock"):
+            return False
+    return True
+
+
 class WarehouseConfig(BaseModel):
     """Warehouse connection details."""
 
@@ -53,10 +80,11 @@ class WarehouseConfig(BaseModel):
         v = v.strip()
         if not v:
             raise ValueError("main_branch cannot be empty if set")
-        if not _BRANCH_NAME_RE.fullmatch(v):
+        if not _is_valid_git_branch_name(v):
             raise ValueError(
-                "main_branch must contain only letters, digits, '.', '_', '/', or '-' "
-                f"(got: {v!r})"
+                "main_branch must be a valid git branch name "
+                "(letters, digits, '.', '_', '/', '-'; no leading/trailing '/' or '.', "
+                f"no '..', no '.lock' suffix). Got: {v!r}"
             )
         return v
 
