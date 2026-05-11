@@ -12,10 +12,10 @@ from beacon.domains.warehouse.warehouse_path import (
 from beacon.utils.platform import UnsupportedPlatformError, ensure_supported_platform
 
 
-def ensure_sync_ready(project_root: Path) -> Path:
+def ensure_sync_ready(project_root: Path) -> tuple[Path, WorkspaceConfig]:
     """Check platform support and warehouse path validity.
 
-    Returns the resolved warehouse path on success.
+    Returns the resolved warehouse path and the loaded WorkspaceConfig on success.
     Raises BeaconSyncError with an actionable message on failure.
     """
     try:
@@ -50,4 +50,4 @@ def ensure_sync_ready(project_root: Path) -> Path:
             "Run 'abc warehouse connect --path <warehouse>' to reconnect."
         )
 
-    return result.path
+    return result.path, warehouse_settings

@@ -21,7 +21,12 @@ def _ensure_beacon_dir(project_root: Path) -> Path:
     return beacon_dir
 
 
-def connect_to_warehouse(project_root: Path, warehouse_path: Path) -> ConnectResult:
+def connect_to_warehouse(
+    project_root: Path,
+    warehouse_path: Path,
+    *,
+    main_branch: str | None = None,
+) -> ConnectResult:
     """Validate warehouse and connect the project to it.
 
     Orchestrates validation, beacon-dir setup, config persistence, and gitignore
@@ -33,7 +38,11 @@ def connect_to_warehouse(project_root: Path, warehouse_path: Path) -> ConnectRes
         return ConnectResult(valid=False, errors=list(validation_result.errors))
 
     _ensure_beacon_dir(project_root)
-    WorkspaceConfig.from_path(warehouse_path, project_root=project_root)
+    WorkspaceConfig.from_path(
+        warehouse_path,
+        project_root=project_root,
+        main_branch=main_branch,
+    )
 
     gitignore_mgr = GitignoreManager(project_root)
     updated = gitignore_mgr.ensure_entries()

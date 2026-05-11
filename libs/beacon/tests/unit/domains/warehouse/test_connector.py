@@ -96,7 +96,9 @@ class TestConnectToWarehouseSuccess:
 
             connect_to_warehouse(project, warehouse)
 
-        mock_from_path.assert_called_once_with(warehouse, project_root=project)
+        mock_from_path.assert_called_once_with(
+            warehouse, project_root=project, main_branch=None
+        )
 
     def test_updates_gitignore(self, project: Path, warehouse: Path) -> None:
         with (

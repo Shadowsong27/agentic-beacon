@@ -104,16 +104,31 @@ def check_warehouse_git_clean(warehouse_path: Path) -> GitHealthResult:
     return GitHealthResult(ok=True)
 
 
-def check_warehouse_on_main_branch(warehouse_path: Path) -> GitHealthResult:
-    """Check that the warehouse git repo is on the main (or master) branch.
+def check_warehouse_on_main_branch(
+    warehouse_path: Path,
+    main_branch: str | None = None,
+) -> GitHealthResult:
+    """Check that the warehouse git repo is on the expected main branch.
 
-    Returns GitHealthResult(ok=True) if on main/master, not a git repo,
+    When ``main_branch`` is provided, it is the sole allowed branch.
+    When ``main_branch`` is None, both 'main' and 'master' are accepted.
+
+    Returns GitHealthResult(ok=True) if on an accepted branch, not a git repo,
     or git not installed. Returns GitHealthResult(ok=False) otherwise.
     """
     if not (warehouse_path / ".git").exists():
         return GitHealthResult(ok=True)
 
     short_path = str(warehouse_path).replace(str(Path.home()), "~")
+
+    if main_branch:
+        allowed_branches = {main_branch}
+        expected_label = f"'{main_branch}' (configured in config.toml)"
+        recovery_branch = main_branch
+    else:
+        allowed_branches = {"main", "master"}
+        expected_label = "'main'"
+        recovery_branch = "main"
 
     try:
         result = subprocess.run(
@@ -136,26 +151,25 @@ def check_warehouse_on_main_branch(warehouse_path: Path) -> GitHealthResult:
                 f"  Warehouse: {short_path}\n\n"
                 f"  Switch to the main branch before syncing:\n"
                 f"    cd {short_path}\n"
-                f"    git checkout main"
+                f"    git checkout {recovery_branch}"
             ),
             hint="Use --skip-git-check to bypass this check.",
         )
 
     current_branch = result.stdout.strip()
-    main_branches = {"main", "master"}
-    if current_branch not in main_branches:
+    if current_branch not in allowed_branches:
         return GitHealthResult(
             ok=False,
             error_message=(
-                f"Warehouse is on branch '{current_branch}', not 'main'.\n"
+                f"Warehouse is on branch '{current_branch}', not {expected_label}.\n"
                 f"  Warehouse: {short_path}\n\n"
                 f"  This usually means you have a contribution in progress.\n"
                 f"  Before switching branches, make sure your work is published:\n"
                 f"    - Open a PR or push your branch so the work isn't lost\n"
                 f"    - Or run 'abc warehouse contribute -m \"…\" --push' to commit and push\n\n"
-                f"  Then switch to main:\n"
+                f"  Then switch to the main branch:\n"
                 f"    cd {short_path}\n"
-                f"    git checkout main"
+                f"    git checkout {recovery_branch}"
             ),
             hint="Use --skip-git-check to bypass this check.",
         )

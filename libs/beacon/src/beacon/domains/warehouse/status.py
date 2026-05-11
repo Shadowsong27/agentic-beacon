@@ -66,7 +66,7 @@ def status(
     Returns:
         StatusResult with modifications and ahead/behind counts.
     """
-    warehouse_path = ensure_sync_ready(project_root)
+    warehouse_path, _ = ensure_sync_ready(project_root)
 
     # Validate agent manifest (only when agents/ has content)
     agents_dir = warehouse_path / "agents"
