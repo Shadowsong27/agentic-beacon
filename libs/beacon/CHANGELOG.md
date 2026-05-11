@@ -1,5 +1,17 @@
 # Changelog
 
+## [3.2.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v3.1.0...agentic-beacon@v3.2.0) (2026-05-11)
+
+
+### Features
+
+* **warehouse:** make sync's main-branch check configurable ([#131](https://github.com/Shadowsong27/agentic-beacon/issues/131)) ([4d86b87](https://github.com/Shadowsong27/agentic-beacon/commit/4d86b873052e4f5b2d973f0798f5e50bc434aec0))
+
+
+### Bug Fixes
+
+* **record-knowledge:** allow nested kebab-case topics like data-platform/clickhouse ([6f238ba](https://github.com/Shadowsong27/agentic-beacon/commit/6f238bac4d22b70e272b2629b749e20db08a4607))
+
 ## [3.1.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v3.0.0...agentic-beacon@v3.1.0) (2026-05-10)
 
 
