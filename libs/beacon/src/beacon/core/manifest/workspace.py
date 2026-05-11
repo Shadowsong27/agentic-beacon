@@ -40,7 +40,7 @@ def _is_valid_git_branch_name(name: str) -> bool:
     for component in name.split("/"):
         if not component:
             return False
-        if component.startswith("."):
+        if component.startswith(".") or component.startswith("-"):
             return False
         if component.endswith(".lock"):
             return False
@@ -83,7 +83,7 @@ class WarehouseConfig(BaseModel):
         if not _is_valid_git_branch_name(v):
             raise ValueError(
                 "main_branch must be a valid git branch name "
-                "(letters, digits, '.', '_', '/', '-'; no leading/trailing '/' or '.', "
+                "(letters, digits, '.', '_', '/', '-'; no leading '-', '.', or '/', "
                 f"no '..', no '.lock' suffix). Got: {v!r}"
             )
         return v

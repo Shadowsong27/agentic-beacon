@@ -376,6 +376,11 @@ class TestWorkspaceConfigMainBranch:
             ".hidden",
             "release/.bar",
             "release/bar.lock",
+            # Leading '-' would be interpreted as a flag by 'git checkout' if it
+            # ever made it into the recovery-hint command. Reject at the boundary.
+            "-f",
+            "-rf",
+            "release/-foo",
         ]
         for bad in invalid_refs:
             with pytest.raises(ValidationError):
