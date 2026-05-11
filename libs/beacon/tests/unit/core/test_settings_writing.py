@@ -337,3 +337,20 @@ class TestWorkspaceConfigMainBranch:
 
         with pytest.raises(ValidationError):
             WarehouseConfig(local_path="/abs/wh", main_branch="   ")
+
+    def test_main_branch_rejects_toml_unsafe_chars(self):
+        """Characters that would break TOML serialization are rejected."""
+        from beacon.core.manifest.workspace import WarehouseConfig
+        from pydantic import ValidationError
+
+        for bad in ['dev"main', "dev\\main", "dev main", "dev\nmain"]:
+            with pytest.raises(ValidationError):
+                WarehouseConfig(local_path="/abs/wh", main_branch=bad)
+
+    def test_main_branch_accepts_valid_git_branch_names(self):
+        """Common git branch name patterns are accepted."""
+        from beacon.core.manifest.workspace import WarehouseConfig
+
+        for good in ["dev", "main", "release/v1.0", "feature-x", "v2.0.1"]:
+            config = WarehouseConfig(local_path="/abs/wh", main_branch=good)
+            assert config.main_branch == good

@@ -43,12 +43,13 @@ def list_cmd(*, artifact_type: str | None) -> None:
     beacon_dir = Path.cwd() / ".agentic-beacon"
     artifacts_dir = beacon_dir / "artifacts"
 
+    try:
+        artifacts = list_artifacts_with_config_check(beacon_dir, artifact_type)
+    except WorkspaceConfigError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
+
     if artifact_type == "agents":
-        try:
-            artifacts = list_artifacts_with_config_check(beacon_dir, "agents")
-        except WorkspaceConfigError as e:
-            console.print(f"[red]Error:[/red] {e}")
-            sys.exit(1)
         agent_files = artifacts.get("agents", [])
         if not agent_files:
             # Distinguish "declared but not synced" from "none declared at all"
@@ -79,12 +80,6 @@ def list_cmd(*, artifact_type: str | None) -> None:
             table.add_row(Path(rel).stem)
         console.print(table)
         return
-
-    try:
-        artifacts = list_artifacts_with_config_check(beacon_dir, artifact_type)
-    except WorkspaceConfigError as e:
-        console.print(f"[red]Error:[/red] {e}")
-        sys.exit(1)
 
     if not artifacts_dir.exists():
         console.print("[red]Error:[/red] No synced artifacts found.")

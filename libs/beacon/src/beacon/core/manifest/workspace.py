@@ -4,6 +4,7 @@ Defines the structure of config.toml — a local, gitignored file that stores
 project-specific connection settings (e.g. which warehouse to use).
 """
 
+import re
 from pathlib import Path
 
 from pydantic import BaseModel, Field, field_validator
@@ -13,6 +14,10 @@ from pydantic_settings import (
     SettingsConfigDict,
     TomlConfigSettingsSource,
 )
+
+# Conservative subset of valid git branch name characters. Rejects characters
+# that would break naive TOML serialization (quotes, backslashes, whitespace).
+_BRANCH_NAME_RE = re.compile(r"[A-Za-z0-9._/-]+")
 
 
 class WarehouseConfig(BaseModel):
@@ -48,6 +53,11 @@ class WarehouseConfig(BaseModel):
         v = v.strip()
         if not v:
             raise ValueError("main_branch cannot be empty if set")
+        if not _BRANCH_NAME_RE.fullmatch(v):
+            raise ValueError(
+                "main_branch must contain only letters, digits, '.', '_', '/', or '-' "
+                f"(got: {v!r})"
+            )
         return v
 
 
