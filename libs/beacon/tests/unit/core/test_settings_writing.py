@@ -381,6 +381,11 @@ class TestWorkspaceConfigMainBranch:
             "-f",
             "-rf",
             "release/-foo",
+            # Trailing '.' is rejected by git ref rules
+            "foo.",
+            "release/foo.",
+            # Reserved name
+            "HEAD",
         ]
         for bad in invalid_refs:
             with pytest.raises(ValidationError):

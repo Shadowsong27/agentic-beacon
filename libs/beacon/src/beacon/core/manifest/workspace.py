@@ -31,7 +31,7 @@ def _is_valid_git_branch_name(name: str) -> bool:
     """
     if not _BRANCH_NAME_RE.fullmatch(name):
         return False
-    if name in {".", "..", "@"}:
+    if name in {".", "..", "@", "HEAD"}:
         return False
     if name.startswith("/") or name.endswith("/"):
         return False
@@ -42,7 +42,7 @@ def _is_valid_git_branch_name(name: str) -> bool:
             return False
         if component.startswith(".") or component.startswith("-"):
             return False
-        if component.endswith(".lock"):
+        if component.endswith(".") or component.endswith(".lock"):
             return False
     return True
 
