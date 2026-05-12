@@ -626,6 +626,6 @@ Default log level: DEBUG  # I prefer verbose logging
 ---
 
 **Related Documentation:**
-- [Agentic Warehouse Design](./agentic-warehouse-design.md) - Full architecture details
+- [Agentic Warehouse Design](../agentic-warehouse-design.md) - Full architecture details
 - [Warehouse Contribution Guide](../../guides/warehouse-contribution-guide.md) - How to contribute improvements
 - [Getting Started](../../guides/getting-started.md) - Installing and syncing artifacts
