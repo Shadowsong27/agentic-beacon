@@ -38,6 +38,13 @@ artifacts:
 ### Minimal Template
 
 ```markdown
+---
+name: <name>
+description: One sentence description of what this skill does.
+requires:
+  contexts: []
+---
+
 # Skill: <Name>
 
 ## Purpose
@@ -58,6 +65,13 @@ What should the agent produce or report back?
 ### Full Template
 
 ```markdown
+---
+name: code-review
+description: Perform a structured code review of a PR or diff, following team standards.
+requires:
+  contexts: [python-standards]
+---
+
 # Skill: Code Review
 
 ## Purpose
@@ -98,6 +112,13 @@ A structured review with:
 ### Generate Unit Tests
 
 ````markdown
+---
+name: generate-tests
+description: Generate comprehensive unit tests for a given Python function or class.
+requires:
+  contexts: [python-standards]
+---
+
 # Skill: Generate Unit Tests
 
 ## Purpose
@@ -118,6 +139,13 @@ A complete test file ready to run with `pytest`.
 ### Write PR Description
 
 ````markdown
+---
+name: write-pr-description
+description: Generate a clear, structured PR description from a diff or set of commits.
+requires:
+  contexts: []
+---
+
 # Skill: Write PR Description
 
 ## Purpose
@@ -180,6 +208,13 @@ mkdir -p skills/generate-tests
 
 # 2. Write SKILL.md
 cat > skills/generate-tests/SKILL.md << 'EOF'
+---
+name: generate-tests
+description: Generate pytest unit tests for a given function or class.
+requires:
+  contexts: [python-standards]
+---
+
 # Skill: Generate Unit Tests
 
 ## Purpose

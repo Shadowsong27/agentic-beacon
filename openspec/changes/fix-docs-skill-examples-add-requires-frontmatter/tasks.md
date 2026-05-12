@@ -15,26 +15,26 @@
 
 ## Phase 1 — site-docs/guides/warehouse-creation.md
 
-- [ ] **1.1** Read the file end-to-end. Note every fenced YAML block whose frontmatter starts with `name:` followed by `description:`.
-- [ ] **1.2** For each such block, insert a `requires:` key immediately AFTER `description:` (preserving indentation and surrounding fields). Choose realistic dependencies for the example's domain:
+- [x] **1.1** Read the file end-to-end. Note every fenced YAML block whose frontmatter starts with `name:` followed by `description:`.
+- [x] **1.2** For each such block, insert a `requires:` key immediately AFTER `description:` (preserving indentation and surrounding fields). Choose realistic dependencies for the example's domain:
   - The `code-review` example: `contexts: [python-standards]`.
   - Any example with no obvious dependency: `contexts: []`.
-- [ ] **1.3** Where the surrounding prose enumerates the SKILL.md fields ("the frontmatter contains name, description, ..."), add `requires:` to the enumeration in the same sentence.
-- [ ] **1.4** Do not rewrite the body Markdown of the SKILL.md examples; only edit the frontmatter and the immediately-adjacent prose.
+- [x] **1.3** Where the surrounding prose enumerates the SKILL.md fields ("the frontmatter contains name, description, ..."), add `requires:` to the enumeration in the same sentence.
+- [x] **1.4** Do not rewrite the body Markdown of the SKILL.md examples; only edit the frontmatter and the immediately-adjacent prose.
 
 ## Phase 2 — site-docs/guides/creating-skills.md
 
-- [ ] **2.1** Read the file end-to-end. Note every fenced YAML frontmatter block.
-- [ ] **2.2** For each block, insert `requires:` as above. Pick realistic dependencies based on the example's purpose:
+- [x] **2.1** Read the file end-to-end. Note every fenced YAML frontmatter block.
+- [x] **2.2** For each block, insert `requires:` as above. Pick realistic dependencies based on the example's purpose:
   - Examples that mention contexts: include them in `contexts:`.
   - Examples that mention knowledge files: include them in `knowledge:`.
   - Otherwise: `contexts: []`.
-- [ ] **2.3** If the guide has a "fields explained" table or list, add a row for `requires:` with a one-line explanation: "declares the contexts and knowledge files this skill depends on; consumed by `abc sync` for transitive resolution".
-- [ ] **2.4** Do not introduce new top-level sections or rewrite surrounding prose beyond the immediate caption.
+- [x] **2.3** If the guide has a "fields explained" table or list, add a row for `requires:` with a one-line explanation: "declares the contexts and knowledge files this skill depends on; consumed by `abc sync` for transitive resolution".
+- [x] **2.4** Do not introduce new top-level sections or rewrite surrounding prose beyond the immediate caption.
 
 ## Phase 3 — Verification
 
-- [ ] **3.1** Run this command and confirm zero output:
+- [x] **3.1** Run this command and confirm zero output:
   ```bash
   for f in site-docs/guides/warehouse-creation.md site-docs/guides/creating-skills.md; do
     # For each YAML block in the file, confirm `requires:` appears.
@@ -49,8 +49,8 @@
   "
   done
   ```
-- [ ] **3.2** `grep -c "^requires:" site-docs/guides/warehouse-creation.md site-docs/guides/creating-skills.md` — both files should report ≥ 1.
-- [ ] **3.3** Commit message: `docs: add requires: frontmatter to SKILL.md examples in user guides`. Conventional Commits.
+- [x] **3.2** `grep -c "^requires:" site-docs/guides/warehouse-creation.md site-docs/guides/creating-skills.md` — both files should report ≥ 1.
+- [x] **3.3** Commit message: `docs: add requires: frontmatter to SKILL.md examples in user guides`. Conventional Commits.
 
 ## Out of scope — DO NOT MODIFY
 
