@@ -114,7 +114,7 @@ agents/      ── abc sync (symlink) ──►  .claude/agents/<name>.md
                                          .opencode/agents/<name>.md
 ```
 
-Everything is a per-file **symlink** into the warehouse clone — one physical file per artifact per machine, no duplicate copies. Edits made through any symlink (project artifacts or global agent files) land directly in the warehouse working tree. Commit with `abc warehouse contribute` and teammates get it through their existing symlinks on the next `git pull` — no per-project resync.
+Everything is a per-file **symlink** into the warehouse clone — one physical file per artifact per machine, no duplicate copies. Edits made through any symlink (project artifacts or project-local agent files) land directly in the warehouse working tree. Commit with `abc warehouse contribute` and teammates get it through their existing symlinks on the next `git pull` — no per-project resync.
 
 **Knowledge is auto-derived.** There is no `knowledge:` key in `beacon.yaml`. `abc sync` scans markdown links inside adopted contexts and skills, resolves warehouse knowledge references, and symlinks them transitively. Add a reference — it appears. Remove the last one — the symlink is pruned.
 

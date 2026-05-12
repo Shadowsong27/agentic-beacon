@@ -63,6 +63,10 @@ abc adopt --dry-run
 
 Lists available artifacts in the terminal without opening the TUI. Useful for scripting or quick inspection.
 
+### Show already-adopted artifacts
+
+By default the TUI hides artifacts you've already added to `beacon.yaml`. To review your current selection (or unadopt entries), press `t` inside the TUI to toggle the show-all view. There is no `--all` CLI flag — the toggle is in-TUI only.
+
 ---
 
 ## Discovering New Artifacts
