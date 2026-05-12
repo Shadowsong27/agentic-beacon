@@ -55,6 +55,8 @@
 ## Phase 5 — Small nits
 
 - [ ] **5.1** `site-docs/reference/beacon-yaml.md` (~lines 107-111): Locate the duplicated `contexts/teams/backend/AGENTS.md` line in the contexts example. Delete the duplicate; keep one occurrence.
+- [ ] **5.2** `site-docs/troubleshooting.md` (~line 36): The row `| \`abc install <artifact>\` | Edit \`beacon.yaml\`, then \`abc sync\` |` references a command that doesn't exist. Replace the left cell with realistic, supported guidance (e.g. delete the row entirely, or rewrite as `| Edit \`beacon.yaml\` and run \`abc sync\` | …  |`).
+- [ ] **5.3** `site-docs/reference/cli.md` (~line 307): Same `abc install <artifact>` row. Same treatment as 5.2.
 
 ## Phase 6 — Verification
 
@@ -65,7 +67,8 @@
 - [ ] **6.5** `grep -n "^knowledge:" docs/specs-vs-artifacts.md`. Expected: zero output (no top-level `knowledge:` key).
 - [ ] **6.6** `python3 -c "import yaml; yaml.safe_load(open('docs/specs-vs-artifacts.md').read().split('\`\`\`yaml')[1].split('\`\`\`')[0])"` (or equivalent) — should parse without error AND have keys `warehouse` and/or `artifacts` only.
 - [ ] **6.7** `awk '/contexts\/teams\/backend\/AGENTS.md/{c++} END{print c}' site-docs/reference/beacon-yaml.md`. Expected: `1` (single occurrence).
-- [ ] **6.8** Commit message: `docs: fix broken cross-references, stale examples, and pip→uv guidance`. Conventional Commits.
+- [ ] **6.8** `grep -rn "abc install " site-docs/`. Expected: zero output (Phase 5.2 and 5.3 must have removed the last two stragglers).
+- [ ] **6.9** Commit message: `docs: fix broken cross-references, stale examples, and pip→uv guidance`. Conventional Commits.
 
 ## Out of scope — DO NOT MODIFY
 

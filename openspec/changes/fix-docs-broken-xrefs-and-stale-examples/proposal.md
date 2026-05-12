@@ -44,6 +44,7 @@ None of these is severe enough to warrant its own change, but together they mean
 ### Small nits
 
 - **site-docs/reference/beacon-yaml.md (~lines 107-111):** Remove the duplicate `contexts/teams/backend/AGENTS.md` line from the contexts example.
+- **site-docs/troubleshooting.md (~line 36) and site-docs/reference/cli.md (~line 307):** Remove or rewrite the `abc install <artifact>` rows. The command does not exist in the CLI (`abc --help` shows no `install` subcommand). Out-of-scope stragglers from `fix-docs-agents-are-project-local`.
 
 ## Out of Scope
 
