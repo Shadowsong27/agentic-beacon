@@ -25,7 +25,11 @@ from beacon.core.dependencies.resolver import (
     compute_effective_set,
 )
 from beacon.core.exceptions import BeaconSyncError, DependencyError
-from beacon.core.gitignore import GitignoreManager
+from beacon.core.gitignore import (
+    CLAUDE_DIR_GITIGNORE_ENTRIES,
+    OPENCODE_DIR_GITIGNORE_ENTRIES,
+    GitignoreManager,
+)
 from beacon.core.manifest.beacon import BeaconManifest
 from beacon.domains.adoption.discovery import count_unadopted_since
 from beacon.domains.artifact.agent import (
@@ -512,17 +516,20 @@ def run_sync(
         )
 
     # Per-tool gitignore entries — gated on directory existence only (PER-136).
-    # Restores pre-PR-113 behaviour: any project with .claude/ or .opencode/
-    # gets tool-managed skills/ (and command/) subdirs ignored from VCS.
+    # Covers Beacon-owned subdirs (skills/, command/) plus tool-runtime
+    # byproducts (bun.lock, node_modules/, scheduled_tasks.lock, …) that
+    # opencode / Claude Code create inside their agent folders.
     # Wrapped in `if not dry_run:` to match the rest of run_sync — no
     # mutations during dry-run.
     if not dry_run:
         claude_dir = project_root / ".claude"
         if claude_dir.is_dir():
-            GitignoreManager(claude_dir).ensure_entries(["skills/"])
+            GitignoreManager(claude_dir).ensure_entries(CLAUDE_DIR_GITIGNORE_ENTRIES)
         opencode_dir = project_root / ".opencode"
         if opencode_dir.is_dir():
-            GitignoreManager(opencode_dir).ensure_entries(["skills/", "command/"])
+            GitignoreManager(opencode_dir).ensure_entries(
+                OPENCODE_DIR_GITIGNORE_ENTRIES
+            )
 
     # PER-113 / PER-135: keep root .gitignore in sync with declared agents —
     # ensure entries are present when agents are declared, pruned otherwise.

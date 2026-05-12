@@ -17,6 +17,24 @@ GITIGNORE_ENTRIES = [
     ".agentic-beacon/pending.yaml",
 ]
 
+# Per-tool entries written into the agent-folder .gitignore files.
+# Covers both Beacon-owned directories (skills/, command/) and tool-runtime
+# byproducts that opencode / Claude Code create when running inside these
+# folders (lockfiles, package manifests, local-only state).
+CLAUDE_DIR_GITIGNORE_ENTRIES = [
+    "skills/",
+    "scheduled_tasks.lock",
+    "worktrees/",
+]
+OPENCODE_DIR_GITIGNORE_ENTRIES = [
+    "skills/",
+    "command/",
+    "bun.lock",
+    "package.json",
+    "package-lock.json",
+    "node_modules/",
+]
+
 # Section header for our entries
 SECTION_HEADER = "# Agentic Beacon"
 
