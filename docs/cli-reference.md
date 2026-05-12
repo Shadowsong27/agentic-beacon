@@ -23,12 +23,6 @@
 | `abc sync --contribute-local` / `--discard-local` | Non-interactive migration from a copy-based tree |
 | `abc doctor` | Validate project health: warehouse connection, `beacon.yaml` validity, broken symlinks |
 | `abc reset` | Force-rebuild all symlinks from the warehouse |
-| `abc list` | List synced artifacts; `abc list agents` shows globally installed agents |
+| `abc list` | List synced artifacts; `abc list agents` shows agents wired into the current project (`.claude/agents/`, `.opencode/agents/`) |
 | `abc status` | Show current warehouse connection and project sync status |
 | `abc clean` | Remove synced artifacts from the project |
-
-## Agent Commands
-
-| Command | Description |
-|---------|-------------|
-| `abc agents sync` | Symlink all warehouse agent definitions into global tool directories (`--force` to overwrite conflicts) |

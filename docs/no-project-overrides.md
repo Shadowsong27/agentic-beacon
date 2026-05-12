@@ -27,4 +27,4 @@ When a team genuinely needs different harness behavior for different projects, t
 
 ## Historical note
 
-Earlier versions of this document described the sync-time `--preserve` flag as "a narrow escape hatch for avoiding accidental overwrites during an active editing session." Under the symlink-based sync model, `abc sync` does not overwrite files (it creates or repairs symlinks pointing at the warehouse), and the preserve flag was removed from `abc sync`. The flag remains on `abc install`, which still materializes real files in target locations outside the warehouse tree — see [`install-flags`](../openspec/specs/install-flags/spec.md).
+Earlier versions of this document described the sync-time `--preserve` flag as "a narrow escape hatch for avoiding accidental overwrites during an active editing session." Under the symlink-based sync model, `abc sync` does not overwrite files (it creates or repairs symlinks pointing at the warehouse), and the preserve flag was removed from `abc sync`.

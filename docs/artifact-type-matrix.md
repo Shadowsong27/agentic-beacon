@@ -18,8 +18,8 @@ Those two questions produce four cells:
 
 |  | Tool-agnostic | Tool-specific |
 |---|---|---|
-| **Project-scoped** | 📄 Contexts · 🧠 Knowledge | ⚡ Skills |
-| **Global** | — | 🤖 Agents |
+| **Project-scoped** | 📄 Contexts · 🧠 Knowledge | ⚡ Skills · 🤖 Agents |
+| **Global** | — | — |
 
 The bottom-left cell (global + tool-agnostic) is intentionally empty: a globally shared, tool-agnostic artifact would be a system-wide context file with no natural home, which is not a pattern Agentic Beacon supports.
 
@@ -52,14 +52,14 @@ Skills are reusable procedures available as slash commands during a session. To 
 
   The skill directory must be present in each tool's location for the tool to discover it. Under the symlink-based sync model, this is achieved by symlinking individual skill files into the project's `.agentic-beacon/artifacts/skills/` tree and wiring each tool's live skill directory via per-tool installation.
 
-### Agents — global, tool-specific
+### Agents — project-scoped, tool-specific
 
-Agent definitions are sub-agent profiles (e.g. a "code reviewer" agent that can be invoked from any project). They have no dependency on any one project's codebase.
+Agent definitions are sub-agent profiles (e.g. a "code reviewer" agent that can be invoked from the current project). They have no dependency on any one project's codebase.
 
-- **Global** because a specialized agent (test writer, PR reviewer) should be available everywhere without per-project configuration. Installing it once in a machine-level directory is enough.
-- **Tool-specific** because each tool has its own global agent directory:
-  - Claude Code: `~/.claude/agents/`
-  - OpenCode: `~/.config/opencode/agents/`
+- **Project-scoped** because agents are declared per-project in `beacon.yaml.artifacts.agents`.
+- **Tool-specific** because each tool has its own project-local agent directory:
+  - Claude Code: `.claude/agents/`
+  - OpenCode: `.opencode/agents/`
 
 ---
 
@@ -74,39 +74,25 @@ Agent definitions are sub-agent profiles (e.g. a "code reviewer" agent that can 
 | Contexts | Creates symlinks at `.agentic-beacon/artifacts/contexts/<path>` pointing into the warehouse clone; adds path references to `opencode.json` / `AGENTS.md` |
 | Knowledge | Creates symlinks at `.agentic-beacon/artifacts/knowledge/<path>`; no automatic wiring (referenced from contexts) |
 | Skills | Creates symlinks at `.agentic-beacon/artifacts/skills/<path>`; then wires each detected tool's live skill and command directories |
-| Agents | Reads `agents/` from the warehouse; creates per-file symlinks in global tool directories; no project artifact entry created |
+| Agents | Reads `agents/` from the warehouse; creates per-file symlinks in project-local `.claude/agents/` and `.opencode/agents/` |
 
 The asymmetry between knowledge and skills is intentional: knowledge does not need to be in a tool-specific location because agents read it via a path reference in the context. Skills need to be wired into tool-specific directories because agents discover them by scanning those directories.
 
-Global agent directories (`~/.claude/agents/`, `~/.config/opencode/agents/`) live outside project trees, but they still use the same single-source-of-truth model: each installed agent file is a symlink to the corresponding file under `<warehouse>/agents/`. Only selected agent files are linked; the rest of the warehouse is never exposed through the global tool directories.
-
-### `abc agents sync`
-
-Because agents are **project-agnostic**, syncing them does not require `beacon.yaml`. Any project with a warehouse connection can run `abc agents sync` to pull the latest agent definitions from the warehouse into the global directories — independently of which knowledge or skills that project has declared.
-
-This command exists separately from `abc sync` precisely because the global install has no project-scoped configuration to gate it.
+Agent symlinks in `.claude/agents/` and `.opencode/agents/` use the same single-source-of-truth model: each agent file is a symlink to the corresponding file under `<warehouse>/agents/`. Only selected agent files are linked; the rest of the warehouse is never exposed through the project-local tool directories.
 
 ### `abc warehouse status`
 
 `abc warehouse status` reports uncommitted and unpushed state of the warehouse clone, scoped by the current project's `beacon.yaml`. Because symlinks collapse project-vs-warehouse duplication into a single physical file, there is no project-vs-warehouse delta to compute — the question "what did I change in this project?" becomes "what's unstaged/uncommitted in the warehouse?".
 
 - **Contexts / Knowledge / Skills**: runs `git status` / `git diff` in the warehouse working tree, filtered to paths matched by `beacon.yaml`.
-- **Agents (global)**: NOT surfaced by project-scoped `abc warehouse status` filtering because agents are not declared in `beacon.yaml`; edit warehouse agent files directly and commit from the warehouse clone.
+- **Agents**: surfaced by `abc warehouse status` filtering when declared in `beacon.yaml`; editing via a project symlink writes to the warehouse working tree.
 
 ### `abc warehouse contribute`
 
 `abc warehouse contribute` commits modifications inside the warehouse clone. The matrix determines what is committed:
 
 - **Contexts / Knowledge / Skills**: any warehouse working-tree modifications to paths matched by the project's `beacon.yaml`. The source is the warehouse file itself — editing via a project symlink is writing to the warehouse.
-- **Agents**: NOT auto-contributed by this command because agents are not project-scoped through `beacon.yaml`. To contribute an agent edit, edit the file inside the warehouse clone directly (or through its global symlink) and commit it.
-
-### `abc install <artifact>`
-
-`abc install` handles a single artifact path and applies the same type-specific logic as `abc sync`:
-
-- `abc install contexts/python.md` — creates symlink and wires into agent config.
-- `abc install skills/code-review/` — creates symlinks and wires each detected tool directory.
-- `abc install agents/reviewer.md` — creates symlinks in global agent directories (respects `--force` / `--preserve`).
+- **Agents**: auto-contributed when declared in `beacon.yaml`; editing via a project symlink is writing to the warehouse.
 
 ---
 

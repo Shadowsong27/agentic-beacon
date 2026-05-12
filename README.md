@@ -110,8 +110,8 @@ skills/      ── abc sync (symlink) ──►  .agentic-beacon/artifacts/skil
 knowledge/   ── auto-derived      ──►  .agentic-beacon/artifacts/knowledge/
              (from markdown links            (symlinked on demand)
               in contexts & skills)
-agents/      ── abc agents sync   ──►  ~/.claude/agents/<name>.md
-             (symlink)                  ~/.config/opencode/agents/<name>.md
+agents/      ── abc sync (symlink) ──►  .claude/agents/<name>.md
+                                         .opencode/agents/<name>.md
 ```
 
 Everything is a per-file **symlink** into the warehouse clone — one physical file per artifact per machine, no duplicate copies. Edits made through any symlink (project artifacts or global agent files) land directly in the warehouse working tree. Commit with `abc warehouse contribute` and teammates get it through their existing symlinks on the next `git pull` — no per-project resync.
@@ -120,7 +120,7 @@ Everything is a per-file **symlink** into the warehouse clone — one physical f
 
 **Frontmatter dependencies.** Skills declare `requires:` in YAML frontmatter; agents declare dependencies in `agents/agents.yaml`. `abc sync` validates all declared dependencies are adopted and errors early if any are missing.
 
-> **Read:** [Decision — Single Warehouse Write Entrypoint](./knowledge/decisions/single-warehouse-write-entrypoint.md) for the full design rationale.
+> **Read:** [Decision — Single Warehouse Write Entrypoint](docs/no-project-overrides.md) for the full design rationale.
 
 > **Platform support:** macOS and Linux only.
 
@@ -128,13 +128,13 @@ Everything is a per-file **symlink** into the warehouse clone — one physical f
 
 |  | Tool-agnostic | Tool-specific |
 |---|---|---|
-| **Project-scoped** | 📄 Contexts · 🧠 Knowledge | ⚡ Skills |
-| **Global** | — | 🤖 Agents |
+| **Project-scoped** | 📄 Contexts · 🧠 Knowledge | ⚡ Skills · 🤖 Agents |
+| **Global** | — | — |
 
 - **Contexts** — boot instructions and coding standards; wired into `opencode.json` / `AGENTS.md` automatically on sync.
 - **Knowledge** — atomic decisions, lessons, and facts; auto-derived from markdown links in contexts and skills.
 - **Skills** — reusable workflows wired as slash commands into each tool's live directories.
-- **Agents** — sub-agent definitions declared per-project in `beacon.yaml` and symlinked into global tool directories (`~/.claude/agents/`, `~/.config/opencode/agents/`); edits flow back to the warehouse through the symlink.
+- **Agents** — sub-agent definitions declared per-project in `beacon.yaml` and symlinked into project-local `.claude/agents/` and `.opencode/agents/`; edits flow back to the warehouse through the symlink.
 
 > See **[Artifact Type Matrix](./docs/artifact-type-matrix.md)** for the full design rationale.
 
