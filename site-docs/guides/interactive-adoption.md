@@ -38,17 +38,18 @@ The TUI opens in your terminal, showing all warehouse artifacts grouped by type 
 
 ## What Happens After You Confirm
 
-When you press `Enter`:
+When you press `Enter`, `abc adopt` runs a single session-atomic commit:
 
 1. Selected artifacts (contexts, skills, and agents) are appended to `.agentic-beacon/beacon.yaml`
 2. Matching entries are removed from `.agentic-beacon/pending.yaml`
+3. The newly-adopted artifacts are immediately synced — symlinks are created under `.agentic-beacon/artifacts/`
+4. Contexts are wired into your agent config (`CLAUDE.md` / `opencode.json`)
+5. Skills are installed into each detected tool's directories
+6. Agents are wired into project-local `.claude/agents/` and `.opencode/agents/` directories
 
-The adopt command is manifest-only; it does **not** create symlinks. After confirming, run `abc sync` to:
+The entire workflow — select → write config → sync → wire — happens in one step. If anything fails mid-commit, the manifests are restored to their pre-commit state.
 
-- Create symlinks in `.agentic-beacon/artifacts/`
-- Wire contexts into your agent config
-- Install skills into each detected tool's directories
-- Wire agents into project-local `.claude/agents/` and `.opencode/agents/` directories
+> Editing `beacon.yaml` manually instead of going through the TUI? Run `abc sync` yourself afterward — the auto-sync described above only fires from the TUI confirm path.
 
 ---
 

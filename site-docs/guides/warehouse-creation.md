@@ -137,7 +137,7 @@ cat > skills/code-review/SKILL.md << 'EOF'
 name: code-review
 description: Review code changes for correctness, style, and test coverage.
 requires:
-  contexts: [python-standards]
+  contexts: [global]
 ---
 
 # Skill: Code Review

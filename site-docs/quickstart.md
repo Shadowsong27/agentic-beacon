@@ -67,10 +67,11 @@ abc warehouse connect --path ~/my-org-warehouse
 
 ```bash
 abc adopt          # opens interactive TUI — Space to select, Enter to confirm
-abc sync           # materialise symlinks, wire agent config, install skills
 ```
 
-`abc adopt` writes your selections to `beacon.yaml` (and clears matching entries from `pending.yaml`), but does **not** create symlinks. Run `abc sync` afterward to materialise the symlinks, wire agent config, and install skills as slash commands.
+When you press Enter inside the TUI, `abc adopt` writes your selections to `beacon.yaml` (clearing matching entries from `pending.yaml`) **and** syncs them immediately — symlinks are created, agent config is wired, and skills are installed as slash commands.
+
+> If you edit `beacon.yaml` manually instead of going through the TUI, run `abc sync` yourself to apply the changes.
 
 ---
 
@@ -84,11 +85,8 @@ git clone git@github.com:your-org/warehouse.git ~/my-org-warehouse
 cd ~/my-project
 abc warehouse connect --path ~/my-org-warehouse
 
-# 3. Browse and select artifacts
+# 3. Browse and select artifacts (the TUI syncs on apply)
 abc adopt
-
-# 4. Materialise the symlinks
-abc sync
 ```
 
 Done. Your agent now has the team's contexts, knowledge, and skills loaded.

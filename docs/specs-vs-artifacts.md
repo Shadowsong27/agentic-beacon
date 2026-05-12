@@ -90,8 +90,6 @@ my-project/
 
 ```yaml
 # .agentic-beacon/beacon.yaml
-warehouse:
-  path: ../my-warehouse
 artifacts:
   contexts:
     - backend/api-design-rules.md     # The "How" - rules for APIs
@@ -167,8 +165,6 @@ payment-service/
 ### Warehouse (Artifacts)
 ```yaml
 # .agentic-beacon/beacon.yaml
-warehouse:
-  path: ../my-warehouse
 artifacts:
   contexts:
     - backend/api-security-rules.md      # How: Handle sensitive data
