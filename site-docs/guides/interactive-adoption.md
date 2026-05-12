@@ -41,12 +41,14 @@ The TUI opens in your terminal, showing all warehouse artifacts grouped by type 
 When you press `Enter`:
 
 1. Selected artifacts (contexts, skills, and agents) are appended to `.agentic-beacon/beacon.yaml`
-2. `abc sync` runs automatically for the newly selected artifacts
-3. Contexts are wired into your agent config
-4. Skills are installed into each detected tool's directories
-5. Agents are wired into project-local `.claude/agents/` and `.opencode/agents/` directories
+2. Matching entries are removed from `.agentic-beacon/pending.yaml`
 
-The entire workflow — select → write config → sync — happens in one step.
+The adopt command is manifest-only; it does **not** create symlinks. After confirming, run `abc sync` to:
+
+- Create symlinks in `.agentic-beacon/artifacts/`
+- Wire contexts into your agent config
+- Install skills into each detected tool's directories
+- Wire agents into project-local `.claude/agents/` and `.opencode/agents/` directories
 
 ---
 
@@ -55,18 +57,11 @@ The entire workflow — select → write config → sync — happens in one step
 ```bash
 # Preview what's available without making any changes
 abc adopt --dry-run
-
-# Show ALL warehouse artifacts, including already-adopted ones
-abc adopt --all
 ```
 
 ### `--dry-run`
 
 Lists available artifacts in the terminal without opening the TUI. Useful for scripting or quick inspection.
-
-### `--all` (or `-t` toggle in the TUI)
-
-By default, `abc adopt` only shows artifacts that are **not yet in `beacon.yaml`**. Use `--all` (or press `t` in the TUI) to also see artifacts you've already adopted — handy for reviewing your current selection.
 
 ---
 
