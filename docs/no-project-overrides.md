@@ -11,7 +11,7 @@ Agentic Beacon does not support project-local overrides of warehouse artifacts. 
 
 Project-local overrides promote divergence. If an artifact needs to be different for a project, that difference is almost always worth sharing with the whole team — which means it belongs in the warehouse, not hidden in a project directory.
 
-Under the current symlink-based sync model (see [`single-warehouse-write-entrypoint`](../knowledge/decisions/single-warehouse-write-entrypoint.md)), the warehouse clone **is** the single source of truth on any given machine — a project's `.agentic-beacon/artifacts/` tree is symlinks into the warehouse. "Overriding" a warehouse artifact per-project is therefore not just discouraged, it is mechanically prevented.
+Under the current symlink-based sync model, the warehouse clone **is** the single source of truth on any given machine — a project's `.agentic-beacon/artifacts/` tree is symlinks into the warehouse. "Overriding" a warehouse artifact per-project is therefore not just discouraged, it is mechanically prevented.
 
 The right workflow when a local change is discovered:
 

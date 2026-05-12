@@ -306,7 +306,6 @@ release, replace any scripted invocations with the modern equivalents below:
 |---------|-------------|
 | `abc delta` | `abc warehouse status` |
 | `abc contribute` | `abc warehouse contribute -m "message"` |
-| `abc install <artifact>` | Edit `beacon.yaml`, then `abc sync` |
 | `abc update` | `abc sync` (or `abc reset` to force-overwrite) |
 
 ---

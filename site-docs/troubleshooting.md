@@ -9,7 +9,7 @@ Common issues and solutions for Agentic Beacon.
 | No warehouse connected | `abc warehouse connect --path <path>` |
 | No `beacon.yaml` | `abc setup` |
 | Files not syncing | Check paths in `beacon.yaml` match warehouse |
-| Wrong version | `pip install --upgrade agentic-beacon` |
+| Wrong version | `uv tool upgrade agentic-beacon` |
 | Warehouse moved | `abc warehouse connect --path <new-path>` |
 | Artifacts in git | Add to `.gitignore` and `git rm --cached` |
 | Team out of sync | `cd warehouse && git pull && cd project && abc sync` |
@@ -33,7 +33,6 @@ Removed commands and their replacements:
 |---------|-------------|
 | `abc delta` | `abc warehouse status` |
 | `abc contribute` | `abc warehouse contribute -m "message"` |
-| `abc install <artifact>` | Edit `beacon.yaml`, then `abc sync` |
 | `abc update` | `abc sync` (or `abc reset` to force-overwrite) |
 | `abc sync --preserve` | `abc sync --contribute-local` or `--discard-local` |
 | `abc setup --manual` | `abc setup` (no flags needed) |
@@ -43,7 +42,6 @@ Upgrade:
 
 ```bash
 uv tool upgrade agentic-beacon
-# or: pip install --upgrade agentic-beacon
 ```
 
 ### "No warehouse connected"

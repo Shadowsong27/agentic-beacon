@@ -166,7 +166,7 @@ Before running `abc sync`, Agentic Beacon checks that:
 - The local branch is not behind its remote
 - The warehouse is on `main` (not a feature branch)
 
-These checks can be bypassed with `--skip-git-check` if needed.
+These checks can be bypassed with `--skip-git-check` if needed. The main-branch check is configurable via `abc warehouse connect --main-branch <name>`.
 
 ---
 

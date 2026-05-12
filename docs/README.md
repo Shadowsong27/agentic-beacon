@@ -37,13 +37,6 @@ Files:
 - When specs should (and should not) live in the warehouse
 - Blueprint vs. building code analogy
 
-### Design Decisions
-
-**[Local Warehouse Workflow](./local-warehouse-workflow.md)**
-- Why snapshot/copy model over symlinks
-- The six-phase workflow (clone → connect → snapshot → iterate → contribute → sync)
-- Design rationale for the distribution approach
-
 ### Concepts
 
 **[Understanding Agent Skills](./understanding-agent-skills.md)**
@@ -71,7 +64,6 @@ For step-by-step instructions and how-to guides, see:
 | `boot-context-design/project-level-agents-design.md` | Learn how to write effective project AGENTS.md | Project maintainers |
 | `spec-driven-development.md` | Learn structured feature planning | Developers planning features |
 | `specs-vs-artifacts.md` | Understand distinction between specs and artifacts | Everyone |
-| `local-warehouse-workflow.md` | Understand snapshot/copy design rationale | Framework contributors, curious users |
 | `understanding-agent-skills.md` | Understand what agent skills are conceptually | Anyone designing or evaluating skills |
 
 ---

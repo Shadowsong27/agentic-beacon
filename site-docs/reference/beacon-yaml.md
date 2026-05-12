@@ -106,8 +106,7 @@ artifacts:
     # Team context
     - contexts/teams/backend/AGENTS.md
 
-    # Multiple contexts — all are loaded (they stack, not override)
-    - contexts/teams/backend/AGENTS.md
+    # Project context
     - contexts/projects/my-service/AGENTS.md
 ```
 
@@ -156,7 +155,7 @@ artifacts:
 
   contexts:
     - contexts/global.md
-    - contexts/teams/backend/AGENTS.md
+    - contexts/teams/frontend/AGENTS.md
 
   agents:
     - agents/spec-planner.md
