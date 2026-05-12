@@ -25,11 +25,7 @@ from beacon.core.dependencies.resolver import (
     compute_effective_set,
 )
 from beacon.core.exceptions import BeaconSyncError, DependencyError
-from beacon.core.gitignore import (
-    CLAUDE_DIR_GITIGNORE_ENTRIES,
-    OPENCODE_DIR_GITIGNORE_ENTRIES,
-    GitignoreManager,
-)
+from beacon.core.gitignore import GitignoreManager
 from beacon.core.manifest.beacon import BeaconManifest
 from beacon.domains.adoption.discovery import count_unadopted_since
 from beacon.domains.artifact.agent import (
@@ -71,6 +67,25 @@ from beacon.domains.warehouse.preconditions import ensure_sync_ready
 from beacon.utils.git import find_project_root
 
 MIGRATION_DOC_URL = "docs/migrations/artifact-dependencies-frontmatter.md"
+
+# Per-tool entries written into agent-folder .gitignore files during sync.
+# Covers Beacon-owned subdirs (skills/, command/) plus tool-runtime byproducts
+# (lockfiles, package manifests, local-only state) created by opencode / Claude
+# Code when running inside those folders. Distribution-domain policy — not a
+# cross-domain primitive, so kept here rather than in core/gitignore.
+CLAUDE_DIR_GITIGNORE_ENTRIES = [
+    "skills/",
+    "scheduled_tasks.lock",
+    "worktrees/",
+]
+OPENCODE_DIR_GITIGNORE_ENTRIES = [
+    "skills/",
+    "command/",
+    "bun.lock",
+    "package.json",
+    "package-lock.json",
+    "node_modules/",
+]
 
 
 @dataclass
