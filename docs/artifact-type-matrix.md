@@ -74,11 +74,11 @@ Agent definitions are sub-agent profiles (e.g. a "code reviewer" agent that can 
 | Contexts | Creates symlinks at `.agentic-beacon/artifacts/contexts/<path>` pointing into the warehouse clone; adds path references to `opencode.json` / `AGENTS.md` |
 | Knowledge | Creates symlinks at `.agentic-beacon/artifacts/knowledge/<path>`; no automatic wiring (referenced from contexts) |
 | Skills | Creates symlinks at `.agentic-beacon/artifacts/skills/<path>`; then wires each detected tool's live skill and command directories |
-| Agents | Reads `agents/` from the warehouse; creates per-file symlinks in project-local `.claude/agents/` and `.opencode/agents/` |
+| Agents | Reads `agents/` from the warehouse; creates artifact symlinks at `.agentic-beacon/artifacts/agents/<name>.md` pointing into the warehouse, then per-tool symlinks at project-local `.claude/agents/<name>.md` and `.opencode/agents/<name>.md` pointing at those artifact files |
 
 The asymmetry between knowledge and skills is intentional: knowledge does not need to be in a tool-specific location because agents read it via a path reference in the context. Skills need to be wired into tool-specific directories because agents discover them by scanning those directories.
 
-Agent symlinks in `.claude/agents/` and `.opencode/agents/` use the same single-source-of-truth model: each agent file is a symlink to the corresponding file under `<warehouse>/agents/`. Only selected agent files are linked; the rest of the warehouse is never exposed through the project-local tool directories.
+Agents follow a **two-hop symlink** model: the per-tool symlinks at `.claude/agents/<name>.md` and `.opencode/agents/<name>.md` point at the artifact-layer symlink under `.agentic-beacon/artifacts/agents/<name>.md`, which in turn points at the warehouse file. This indirection keeps `abc list / status / contribute` consistent across artifact types — all four cells route through `.agentic-beacon/artifacts/`.
 
 ### `abc warehouse status`
 
