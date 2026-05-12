@@ -415,17 +415,63 @@ def test_sync_with_no_skills_declared_writes_skill_gitignore_entries(
 
     # Assert
     assert claude_gitignore.exists(), ".claude/.gitignore must be created by sync"
-    assert "skills/" in claude_gitignore.read_text(), (
-        f".claude/.gitignore must contain 'skills/' entry: {claude_gitignore.read_text()!r}"
-    )
+    claude_lines = set(claude_gitignore.read_text().splitlines())
+    for entry in ("skills/", "scheduled_tasks.lock", "worktrees/"):
+        assert entry in claude_lines, (
+            f".claude/.gitignore must contain {entry!r}: {claude_lines!r}"
+        )
     assert opencode_gitignore.exists(), ".opencode/.gitignore must be created by sync"
-    opencode_content = opencode_gitignore.read_text()
-    assert "skills/" in opencode_content, (
-        f".opencode/.gitignore must contain 'skills/' entry: {opencode_content!r}"
+    opencode_lines = set(opencode_gitignore.read_text().splitlines())
+    for entry in (
+        "skills/",
+        "command/",
+        "bun.lock",
+        "package.json",
+        "package-lock.json",
+        "node_modules/",
+    ):
+        assert entry in opencode_lines, (
+            f".opencode/.gitignore must contain {entry!r}: {opencode_lines!r}"
+        )
+
+
+def test_sync_appends_missing_entries_to_existing_per_tool_gitignore(
+    project_dir: Path, warehouse: Path, monkeypatch
+):
+    """Sync must extend an existing per-tool .gitignore without duplicating lines.
+
+    Projects upgrading from an older Beacon may already have `.opencode/.gitignore`
+    with the original `skills/` + `command/` entries. Re-syncing must:
+      - leave the existing entries untouched (no duplicates)
+      - preserve any user-added lines
+      - append the newly-tracked entries (bun.lock, node_modules/, …)
+    """
+    runner = CliRunner()
+    monkeypatch.chdir(project_dir)
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text("artifacts:\n  contexts: []\n  skills: []\n  agents: []\n")
+
+    opencode_dir = project_dir / ".opencode"
+    opencode_dir.mkdir(exist_ok=True)
+    opencode_gitignore = opencode_dir / ".gitignore"
+    opencode_gitignore.write_text(
+        "# Agentic Beacon\nskills/\ncommand/\n# user-added\nmy-local-notes.md\n"
     )
-    assert "command/" in opencode_content, (
-        f".opencode/.gitignore must contain 'command/' entry: {opencode_content!r}"
-    )
+
+    r = runner.invoke(main, ["sync", "--skip-git-check"])
+    assert r.exit_code == 0, f"sync failed: {r.output}"
+
+    lines = opencode_gitignore.read_text().splitlines()
+    # No duplicates of pre-existing entries.
+    assert lines.count("skills/") == 1, f"duplicate 'skills/': {lines!r}"
+    assert lines.count("command/") == 1, f"duplicate 'command/': {lines!r}"
+    assert lines.count("# Agentic Beacon") == 1, f"duplicate section header: {lines!r}"
+    # User content preserved.
+    assert "my-local-notes.md" in lines, f"user entry dropped: {lines!r}"
+    # New entries appended.
+    for entry in ("bun.lock", "package.json", "package-lock.json", "node_modules/"):
+        assert entry in lines, f"missing newly-tracked entry {entry!r}: {lines!r}"
 
 
 def test_sync_dry_run_does_not_write_skill_gitignore_entries(

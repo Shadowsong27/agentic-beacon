@@ -68,6 +68,25 @@ from beacon.utils.git import find_project_root
 
 MIGRATION_DOC_URL = "docs/migrations/artifact-dependencies-frontmatter.md"
 
+# Per-tool entries written into agent-folder .gitignore files during sync.
+# Covers Beacon-owned subdirs (skills/, command/) plus tool-runtime byproducts
+# (lockfiles, package manifests, local-only state) created by opencode / Claude
+# Code when running inside those folders. Distribution-domain policy — not a
+# cross-domain primitive, so kept here rather than in core/gitignore.
+CLAUDE_DIR_GITIGNORE_ENTRIES = [
+    "skills/",
+    "scheduled_tasks.lock",
+    "worktrees/",
+]
+OPENCODE_DIR_GITIGNORE_ENTRIES = [
+    "skills/",
+    "command/",
+    "bun.lock",
+    "package.json",
+    "package-lock.json",
+    "node_modules/",
+]
+
 
 @dataclass
 class Orphan:
@@ -512,17 +531,20 @@ def run_sync(
         )
 
     # Per-tool gitignore entries — gated on directory existence only (PER-136).
-    # Restores pre-PR-113 behaviour: any project with .claude/ or .opencode/
-    # gets tool-managed skills/ (and command/) subdirs ignored from VCS.
+    # Covers Beacon-owned subdirs (skills/, command/) plus tool-runtime
+    # byproducts (bun.lock, node_modules/, scheduled_tasks.lock, …) that
+    # opencode / Claude Code create inside their agent folders.
     # Wrapped in `if not dry_run:` to match the rest of run_sync — no
     # mutations during dry-run.
     if not dry_run:
         claude_dir = project_root / ".claude"
         if claude_dir.is_dir():
-            GitignoreManager(claude_dir).ensure_entries(["skills/"])
+            GitignoreManager(claude_dir).ensure_entries(CLAUDE_DIR_GITIGNORE_ENTRIES)
         opencode_dir = project_root / ".opencode"
         if opencode_dir.is_dir():
-            GitignoreManager(opencode_dir).ensure_entries(["skills/", "command/"])
+            GitignoreManager(opencode_dir).ensure_entries(
+                OPENCODE_DIR_GITIGNORE_ENTRIES
+            )
 
     # PER-113 / PER-135: keep root .gitignore in sync with declared agents —
     # ensure entries are present when agents are declared, pruned otherwise.
