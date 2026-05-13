@@ -37,6 +37,7 @@ logs/
 .claude/worktrees/
 .claude/commands/opsx/
 .claude/skills/
+.claude/settings.json
 
 # Distributed warehouse content (project-specific)
 .opencode/
