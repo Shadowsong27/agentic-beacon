@@ -245,7 +245,7 @@ def sync(
         for note in result.wiring_notes:
             console.print(note)
 
-    if result.agent_config_init_needed:
+    if result.agent_config_init_needed and not result.dry_run:
         init_opencode_json(result.project_root)
         oc_init = wire_contexts_opencode(result.project_root, result.artifacts_dir)
         if oc_init:

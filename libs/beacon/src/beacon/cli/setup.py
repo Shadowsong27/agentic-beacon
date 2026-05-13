@@ -45,12 +45,12 @@ def setup() -> None:
     # added later by `abc sync` or `abc adopt` accept when agents are first
     # declared. Doing it here unconditionally would dirty the .gitignore on
     # projects that never declare agents.
-    setup_project(beacon_yaml, beacon_dir.parent)
+    result = setup_project(beacon_yaml, beacon_dir.parent)
     console.print("\n[bold green]✓ Created beacon.yaml template[/bold green]")
     console.print(f"  [blue]Location:[/blue] {beacon_yaml}")
-    if (beacon_dir.parent / "opencode.json").exists():
+    if result.opencode_created:
         console.print("[green]✓[/green] Initialized opencode.json")
-    if (beacon_dir.parent / "CLAUDE.md").exists():
+    if result.claude_created:
         console.print("[green]✓[/green] Initialized CLAUDE.md")
     console.print("\n[bold]Next Steps:[/bold]")
     console.print("  1. Run 'abc adopt' to select artifacts from the warehouse")

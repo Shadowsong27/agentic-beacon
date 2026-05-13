@@ -849,6 +849,30 @@ def test_sync_no_agent_config_dry_run_does_not_wire(skills_only_project, monkeyp
     assert not (project / ".claude" / "skills").exists()
 
 
+def test_sync_dry_run_does_not_create_agent_config_files(
+    full_sync_project, monkeypatch
+):
+    """abc sync --dry-run must NOT create opencode.json or CLAUDE.md.
+
+    Defends against the implicit-gate breakage described in PER-151: even if the
+    orchestrator's agent_config_init_needed flag is unexpectedly True during
+    dry-run, the CLI layer must guard explicitly and write nothing to disk.
+    """
+    project, runner = full_sync_project
+    monkeypatch.chdir(project)
+    # No opencode.json, no CLAUDE.md — dry-run must not create either
+    assert not (project / "opencode.json").exists()
+    assert not (project / "CLAUDE.md").exists()
+
+    result = runner.invoke(main, ["sync", "--dry-run"])
+
+    assert result.exit_code == 0
+    assert not (project / "opencode.json").exists(), (
+        "dry-run must not create opencode.json"
+    )
+    assert not (project / "CLAUDE.md").exists(), "dry-run must not create CLAUDE.md"
+
+
 def test_sync_full_project_skills_and_agent_configs_wired_unconditionally(
     full_sync_project, monkeypatch
 ):

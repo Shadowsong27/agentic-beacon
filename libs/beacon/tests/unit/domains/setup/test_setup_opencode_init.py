@@ -63,3 +63,22 @@ def test_setup_idempotent_does_not_overwrite_existing_files(tmp_path, monkeypatc
     assert result.exit_code == 0, result.output
     assert (project / "opencode.json").read_text() == custom_opencode
     assert (project / "CLAUDE.md").read_text() == custom_claude
+
+
+def test_setup_does_not_claim_initialization_when_files_preexisted(
+    tmp_path, monkeypatch
+):
+    """abc setup must not print 'Initialized' for files that already existed."""
+    project, runner = _connected_project(tmp_path, monkeypatch)
+
+    (project / "opencode.json").write_text('{"custom": true}\n')
+    (project / "CLAUDE.md").write_text("# Mine\n")
+
+    result = runner.invoke(main, ["setup"], catch_exceptions=False)
+
+    assert result.exit_code == 0, result.output
+    assert "Initialized opencode.json" not in result.output
+    assert "Initialized CLAUDE.md" not in result.output
+    # Files must remain unchanged
+    assert (project / "opencode.json").read_text() == '{"custom": true}\n'
+    assert (project / "CLAUDE.md").read_text() == "# Mine\n"
