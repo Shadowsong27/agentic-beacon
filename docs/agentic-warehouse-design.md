@@ -310,7 +310,6 @@ Context files should be a **pointer system**, not an encyclopedia.
 - **Minimal setup:** Install once, works everywhere
 - **Stay current:** Update command pulls latest standards
 - **Contribute easily:** Proven patterns flow back to central repo
-- **Override when needed:** Project `AGENTS.md` can override warehouse contexts for special cases
 
 ---
 
@@ -394,7 +393,7 @@ knowledge/
 - Referenced by domain-specific contexts (e.g., `data-platform.md`, `web-app.md`)
 - Domain-specific infrastructure, tools, and practices
 
-**Selective installation:** When teams configure `beacon.yaml` and run `abc sync`, the CLI only copies the declared artifacts to `.agentic-beacon/artifacts/`. A project using Python + Data Platform knowledge gets `global/`, `languages/python/`, and `domains/data-platform/` knowledge, but not `web-app/` or `typescript/` knowledge.
+**Selective installation:** When teams configure `beacon.yaml` and run `abc sync`, the CLI creates symlinks for the declared artifacts under `.agentic-beacon/artifacts/`. A project using Python + Data Platform knowledge gets `global/`, `languages/python/`, and `domains/data-platform/` knowledge, but not `web-app/` or `typescript/` knowledge.
 
 ### Discovery: Proactive vs Reactive Pointers
 

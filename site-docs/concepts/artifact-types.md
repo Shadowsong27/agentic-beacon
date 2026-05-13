@@ -6,7 +6,7 @@ Agentic Beacon organizes warehouse artifacts along two independent axes — **pr
 
 |  | Tool-agnostic | Tool-specific |
 |---|---|---|
-| **Project-scoped** | 📄 Contexts · 🧠 Knowledge · 🤖 Agents | ⚡ Skills |
+| **Project-scoped** | 📄 Contexts · 🧠 Knowledge | ⚡ Skills · 🤖 Agents |
 | **Global** | — | — |
 
 The bottom-left cell (global + tool-agnostic) is intentionally empty: a globally shared, tool-agnostic artifact would have no natural installation location, which is not a pattern Agentic Beacon supports.

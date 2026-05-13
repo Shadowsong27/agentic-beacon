@@ -133,6 +133,13 @@ EOF
 # 4. Add a skill
 mkdir -p skills/code-review
 cat > skills/code-review/SKILL.md << 'EOF'
+---
+name: code-review
+description: Review code changes for correctness, style, and test coverage.
+requires:
+  contexts: [global]
+---
+
 # Skill: Code Review
 
 ## Purpose

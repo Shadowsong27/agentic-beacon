@@ -27,7 +27,7 @@ uv tool install agentic-beacon
 abc --version
 ```
 
-You should see the current version (`2.7.1` or higher).
+You should see a version number printed (e.g. `3.x.y`).
 
 ## Upgrade
 

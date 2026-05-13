@@ -67,5 +67,5 @@ In Agentic Beacon, `SKILL.md`-based skills are primarily **cognitive and workflo
 
 ## Further Reading
 
-- [Creating Skills](../../guides/creating-skills.md) — How to write and distribute skills in Agentic Beacon
-- [Agentic Warehouse Design](../agentic-warehouse-design.md) — Where skills fit in the overall architecture
+- [Creating Skills](../guides/creating-skills.md) — How to write and distribute skills in Agentic Beacon
+- [Agentic Warehouse Design](./agentic-warehouse-design.md) — Where skills fit in the overall architecture

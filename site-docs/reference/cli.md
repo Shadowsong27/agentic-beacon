@@ -162,7 +162,7 @@ abc setup
 
 ### `abc adopt`
 
-Open an interactive TUI to browse and select warehouse artifacts. Writes selections to `beacon.yaml` and syncs immediately.
+Open an interactive TUI to browse and select warehouse artifacts. Applying your selection writes the new entries to `beacon.yaml` (clearing matching `pending.yaml` entries) and immediately syncs them — symlinks are created and contexts / skills / agents are wired into the project. In non-interactive contexts (no TTY) the command prints the candidate list and exits; you must edit `beacon.yaml` manually and then run `abc sync`.
 
 ```bash
 abc adopt [OPTIONS]
@@ -170,7 +170,7 @@ abc adopt [OPTIONS]
 
 | Option | Description |
 |--------|-------------|
-| `--dry-run` | Preview available artifacts without making changes |
+| `--dry-run` | Preview adoptable artifacts without modifying beacon.yaml |
 
 **Keyboard shortcuts in TUI:**
 
@@ -304,7 +304,6 @@ release, replace any scripted invocations with the modern equivalents below:
 |---------|-------------|
 | `abc delta` | `abc warehouse status` |
 | `abc contribute` | `abc warehouse contribute -m "message"` |
-| `abc install <artifact>` | Edit `beacon.yaml`, then `abc sync` |
 | `abc update` | `abc sync` (or `abc reset` to force-overwrite) |
 
 ---

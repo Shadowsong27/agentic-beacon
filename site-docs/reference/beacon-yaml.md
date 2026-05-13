@@ -81,10 +81,12 @@ artifacts:
     ---
     requires:
       contexts:
-        - global.md
-        - teams/backend/AGENTS.md
+        - global
+        - teams/backend/AGENTS
     ---
     ```
+
+    Entries are **bare context names** (without the `.md` extension) — the resolver appends `.md` and looks under `<warehouse>/contexts/<name>.md`. Using `.md`-suffixed names would resolve to `<name>.md.md` and fail.
 
     Missing or malformed frontmatter on any adopted skill causes `abc sync` to fail with a hard error.
 
@@ -106,8 +108,7 @@ artifacts:
     # Team context
     - contexts/teams/backend/AGENTS.md
 
-    # Multiple contexts — all are loaded (they stack, not override)
-    - contexts/teams/backend/AGENTS.md
+    # Project context
     - contexts/projects/my-service/AGENTS.md
 ```
 
@@ -156,7 +157,7 @@ artifacts:
 
   contexts:
     - contexts/global.md
-    - contexts/teams/backend/AGENTS.md
+    - contexts/teams/frontend/AGENTS.md
 
   agents:
     - agents/spec-planner.md

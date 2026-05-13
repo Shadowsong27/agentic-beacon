@@ -94,7 +94,7 @@ Reads `beacon.yaml`, resolves skill→context dependencies via frontmatter, auto
 - **Contexts** → symlinked into `.agentic-beacon/artifacts/contexts/` and wired into `CLAUDE.md` or `opencode.json`
 - **Skills** → symlinked into `.agentic-beacon/artifacts/skills/` and installed into each detected tool's directories
 - **Knowledge** → auto-derived from markdown links and symlinked into `.agentic-beacon/artifacts/knowledge/`
-- **Agents** → declared per-project in `beacon.yaml` and installed into global tool directories
+- **Agents** → declared per-project in `beacon.yaml` and wired into project-local `.claude/agents/` and `.opencode/agents/` symlinks
 
 ---
 

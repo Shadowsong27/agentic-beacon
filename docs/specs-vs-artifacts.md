@@ -91,13 +91,12 @@ my-project/
 ```yaml
 # .agentic-beacon/beacon.yaml
 artifacts:
+  contexts:
     - backend/api-design-rules.md     # The "How" - rules for APIs
+    - specs/core-auth-api.yaml        # The shared "What" - auth API spec
 
   skills:
     - generate-api-client             # The "Tool" - generate client code
-
-  contexts:
-    - specs/core-auth-api.yaml        # The shared "What" - auth API spec
 ```
 
 **When to treat specs as artifacts:**
@@ -167,16 +166,15 @@ payment-service/
 ```yaml
 # .agentic-beacon/beacon.yaml
 artifacts:
+  contexts:
     - backend/api-security-rules.md      # How: Handle sensitive data
     - backend/error-handling-patterns.md # How: Return error responses
     - payments/pci-compliance-rules.md   # How: PCI-DSS requirements
+    - specs/stripe-api-contract.yaml     # Shared: Stripe integration spec
 
   skills:
     - generate-api-tests                  # Tool: Generate test suites
     - security-audit                      # Tool: Check for vulnerabilities
-
-  contexts:
-    - specs/stripe-api-contract.yaml     # Shared: Stripe integration spec
 ```
 
 **Agent's Process:**
@@ -198,7 +196,6 @@ This ensures your warehouse remains a **lean, highly reusable library of "Agenti
 ---
 
 **See Also:**
-- [Local Warehouse Workflow](local-warehouse-workflow.md) - How to sync artifacts from warehouse to project
 - [Warehouse Structure](../README.md) - Understanding warehouse organization
 - [beacon.yaml Reference](../guides/beacon-yaml-reference.md) - How to declare artifact dependencies
 

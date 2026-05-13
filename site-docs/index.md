@@ -54,7 +54,7 @@ Four types form the core of a warehouse, organized by two axes: **project scope*
 
 |  | Tool-agnostic | Tool-specific |
 |---|---|---|
-| **Project-scoped** | 📄 Contexts · 🧠 Knowledge · 🤖 Agents | ⚡ Skills |
+| **Project-scoped** | 📄 Contexts · 🧠 Knowledge | ⚡ Skills · 🤖 Agents |
 | **Global** | — | — |
 
 - **Contexts** — boot instructions and coding standards; declared in `beacon.yaml`, wired into `opencode.json` / `CLAUDE.md` on sync
