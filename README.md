@@ -22,7 +22,7 @@
 uv tool install agentic-beacon
 ```
 
-> Air-gapped? Download the wheel from the [Releases page](https://github.com/Shadowsong27/agentic-beacon/releases) and run `uv tool install ./agentic-beacon-*.whl`.
+> Air-gapped? Download the wheel from the [Releases page](https://github.com/Shadowsong27/agentic-beacon/releases) and run `uv tool install ./agentic-beacon-*.whl`. To upgrade an existing install, pass `--reinstall`: `uv tool install ./agentic-beacon-*.whl --reinstall`.
 
 ### First-time Setup
 
@@ -149,6 +149,8 @@ Everything is a per-file **symlink** into the warehouse clone — one physical f
 | You're running multiple AI tools (Claude Code, OpenCode) and want one source of truth for all of them | |
 
 ## Documentation
+
+📚 **Full documentation site:** [shadowsong27.github.io/agentic-beacon](https://shadowsong27.github.io/agentic-beacon/)
 
 ### Conceptual Design (docs/)
 - **[Artifact Type Matrix](./docs/artifact-type-matrix.md)** — Scope and tool-specificity axes; how they drive command design
