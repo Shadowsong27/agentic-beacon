@@ -826,6 +826,86 @@ def test_existing_entry_impossible_hour_rejected(mod, tmp_path, capsys):
     assert pending_path.read_bytes() == original_content
 
 
+# ----
+# New tests: non-canonical zero-padding rejected (PER-150 review round 3)
+# ----
+
+
+def test_existing_entry_non_canonical_zero_padding_rejected(mod, tmp_path, capsys):
+    # Arrange: all components unpadded — strptime accepts but round-trip differs
+    root = _make_project(tmp_path)
+    pending_path = root / ".agentic-beacon" / "pending.yaml"
+    pending_path.write_text(
+        "pending:\n"
+        "- path: skills/x/\n"
+        "  type: skill\n"
+        "  action: created\n"
+        "  source: x\n"
+        "  created_at: '2026-1-1T0:0:0Z'\n"
+    )
+    original_content = pending_path.read_bytes()
+
+    # Act
+    with pytest.raises(SystemExit) as exc:
+        mod.append_pending_entry(root, "skills/new/", "skill", "created", "s")
+
+    # Assert
+    assert exc.value.code != 0
+    err = capsys.readouterr().err
+    assert "canonical" in err
+    assert pending_path.read_bytes() == original_content
+
+
+def test_existing_entry_unpadded_day_rejected(mod, tmp_path, capsys):
+    # Arrange: day component unpadded ('1' instead of '01')
+    root = _make_project(tmp_path)
+    pending_path = root / ".agentic-beacon" / "pending.yaml"
+    pending_path.write_text(
+        "pending:\n"
+        "- path: skills/x/\n"
+        "  type: skill\n"
+        "  action: created\n"
+        "  source: x\n"
+        "  created_at: '2026-01-1T07:00:00Z'\n"
+    )
+    original_content = pending_path.read_bytes()
+
+    # Act
+    with pytest.raises(SystemExit) as exc:
+        mod.append_pending_entry(root, "skills/new/", "skill", "created", "s")
+
+    # Assert
+    assert exc.value.code != 0
+    err = capsys.readouterr().err
+    assert "canonical" in err
+    assert pending_path.read_bytes() == original_content
+
+
+def test_existing_entry_unpadded_hour_rejected(mod, tmp_path, capsys):
+    # Arrange: hour component unpadded ('7' instead of '07')
+    root = _make_project(tmp_path)
+    pending_path = root / ".agentic-beacon" / "pending.yaml"
+    pending_path.write_text(
+        "pending:\n"
+        "- path: skills/x/\n"
+        "  type: skill\n"
+        "  action: created\n"
+        "  source: x\n"
+        "  created_at: '2026-01-01T7:00:00Z'\n"
+    )
+    original_content = pending_path.read_bytes()
+
+    # Act
+    with pytest.raises(SystemExit) as exc:
+        mod.append_pending_entry(root, "skills/new/", "skill", "created", "s")
+
+    # Assert
+    assert exc.value.code != 0
+    err = capsys.readouterr().err
+    assert "canonical" in err
+    assert pending_path.read_bytes() == original_content
+
+
 def test_existing_entry_valid_canonical_string_accepted(mod, tmp_path):
     # Arrange: well-formed, in-range timestamp as quoted string
     root = _make_project(tmp_path)

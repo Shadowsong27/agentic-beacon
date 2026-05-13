@@ -101,11 +101,20 @@ def _validate_entry(entry: dict, index: int) -> dict:
         pass
     elif isinstance(created_at, str):
         try:
-            datetime.strptime(created_at, "%Y-%m-%dT%H:%M:%SZ")
+            parsed = datetime.strptime(created_at, "%Y-%m-%dT%H:%M:%SZ")
         except ValueError as exc:
             print(
                 f"Error: pending.yaml entry #{index}: 'created_at' is not a valid"
                 f" UTC timestamp in '%Y-%m-%dT%H:%M:%SZ' format ({exc})",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        canonical = parsed.strftime("%Y-%m-%dT%H:%M:%SZ")
+        if canonical != created_at:
+            print(
+                f"Error: pending.yaml entry #{index}: 'created_at' {created_at!r}"
+                f" is not in canonical '%Y-%m-%dT%H:%M:%SZ' form"
+                f" (expected {canonical!r}; check zero-padding)",
                 file=sys.stderr,
             )
             sys.exit(1)
