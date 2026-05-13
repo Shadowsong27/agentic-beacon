@@ -186,4 +186,12 @@ The workflow at `.github/workflows/opencode-review.yml` reads `vars.OPENCODE_REV
 
 ---
 
-**Last Updated:** 2026-05-08
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the full contributor onboarding guide, including
+environment setup, architecture deep-dives, code style conventions, testing strategy, and the
+contribution workflow.
+
+---
+
+**Last Updated:** 2026-05-13
