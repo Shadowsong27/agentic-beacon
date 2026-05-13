@@ -65,7 +65,7 @@ Claude Code discovers skills directly from `.claude/skills/` — there's no equi
 Two commands wire bundled skills:
 
 - **`abc sync`** — wires bundled skills as part of its normal artifact-sync flow.
-- **`abc adopt`** — also wires bundled skills after its commit step (added in PER-151). This means the standard first-run sequence `connect → setup → adopt` leaves bundled skills fully available without a separate `abc sync`.
+- **`abc adopt`** — also wires bundled skills after its commit step (added in PER-151). This means the standard first-run sequence `connect → setup → adopt` leaves bundled skills fully available without a separate `abc sync`. Note: `abc adopt` only triggers bundled wiring when at least one entry is committed in the TUI. If you open `abc adopt` and exit without any accept/reject changes, the commit doesn't fire and bundled skills won't be wired — run `abc sync` instead in that case.
 
 ```bash
 abc warehouse connect --path ~/my-org-warehouse

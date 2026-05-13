@@ -26,7 +26,8 @@ my-org-warehouse/
 ├── contexts/
 ├── knowledge/
 ├── skills/
-│   └── record-knowledge/   # bundled starter skill (see Concepts → Bundled Skills)
+│   ├── record-knowledge/   # bundled starter skill (see Concepts → Bundled Skills)
+│   └── record-skill/       # bundled starter skill
 ├── docs/
 └── README.md
 ```

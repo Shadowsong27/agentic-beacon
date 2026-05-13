@@ -21,7 +21,9 @@ my-warehouse/
 ├── contexts/
 ├── knowledge/
 ├── skills/
-│   └── record-knowledge/   # bundled starter skill (see Concepts → Bundled Skills)
+│   ├── record-knowledge/   # bundled starter skill (see Concepts → Bundled Skills)
+│   │   └── SKILL.md
+│   └── record-skill/       # bundled starter skill
 │       └── SKILL.md
 ├── docs/
 └── README.md
