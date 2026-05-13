@@ -1,9 +1,10 @@
 """Integration tests: append_pending.py works without beacon installed.
 
-Invokes scripts via `uv run --no-project --isolated` with a clean environment
-that strips PYTHONPATH, VIRTUAL_ENV, and BEACON_* variables. This proves the
-PEP 723 pyyaml dependency is resolved in a fresh ephemeral venv, independent
-of the workspace venv that has beacon installed.
+These tests run `uv run --no-project --isolated`, which resolves PEP 723
+dependencies (`pyyaml`) from the active package index. On a cache-cold CI
+environment the first invocation will hit the network; subsequent calls reuse
+uv's local cache. Tests are marked `@pytest.mark.integration` and are expected
+to be skipped in offline or pre-commit fast-path runs.
 
 This is the direct regression test for PER-150.
 """
@@ -47,14 +48,17 @@ def _make_project(root: Path) -> None:
 
 
 # ----
-# Core: script resolves pyyaml from PEP 723 header, not workspace venv
+# Smoke test: PEP 723 + ephemeral venv path works end-to-end
 # ----
 
 
 @pytest.mark.integration
 @pytest.mark.parametrize("skill_name", ["record-skill", "record-knowledge"])
-def test_script_works_without_beacon_package(skill_name: str, tmp_path: Path) -> None:
-    """Script runs in an isolated env where beacon is NOT on sys.path."""
+def test_uv_run_pep723_executes_script_without_beacon(
+    skill_name: str, tmp_path: Path
+) -> None:
+    """Script runs in an isolated env where beacon is NOT on sys.path and
+    pyyaml is resolved from the PEP 723 header — not the workspace venv."""
     _make_project(tmp_path)
     script_path = _SCRIPT_PATHS[skill_name]
 
@@ -96,52 +100,3 @@ def test_script_works_without_beacon_package(skill_name: str, tmp_path: Path) ->
     assert entry.type == "skill"
     assert entry.action == "created"
     assert entry.source == skill_name
-
-
-# ----
-# find_project_root walks up from nested subdirectory
-# ----
-
-
-@pytest.mark.integration
-@pytest.mark.parametrize("skill_name", ["record-skill", "record-knowledge"])
-def test_script_finds_project_root_from_nested_subdir(
-    skill_name: str, tmp_path: Path
-) -> None:
-    """find_project_root walks up correctly when invoked from a nested subdirectory."""
-    _make_project(tmp_path)
-    nested = tmp_path / "a" / "b" / "c"
-    nested.mkdir(parents=True)
-    script_path = _SCRIPT_PATHS[skill_name]
-
-    result = subprocess.run(
-        [
-            "uv",
-            "run",
-            "--no-project",
-            "--isolated",
-            str(script_path),
-            "--path",
-            "contexts/test.md",
-            "--type",
-            "context",
-            "--action",
-            "created",
-            "--source",
-            skill_name,
-        ],
-        cwd=str(nested),
-        env=_clean_env(),
-        capture_output=True,
-        text=True,
-    )
-
-    assert result.returncode == 0, (
-        f"Script failed from nested subdir:\nstderr: {result.stderr}"
-    )
-
-    pending_path = tmp_path / ".agentic-beacon" / "pending.yaml"
-    assert pending_path.exists()
-    manifest = PendingManifest.from_yaml(pending_path)
-    assert len(manifest.pending) == 1
-    assert manifest.pending[0].path == "contexts/test.md"

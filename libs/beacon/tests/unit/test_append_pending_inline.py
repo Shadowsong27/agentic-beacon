@@ -936,3 +936,36 @@ def test_existing_entry_valid_canonical_string_accepted(mod, tmp_path):
         created_at = created_at.strftime("%Y-%m-%dT%H:%M:%SZ")
     assert created_at == "2026-05-13T07:00:00Z"
     assert data["pending"][1]["path"] == "skills/new/"
+
+
+# ----
+# 16. find_project_root walks up from nested subdirectory
+# ----
+
+
+def test_find_project_root_walks_up_from_nested_subdir(mod, tmp_path):
+    # Arrange
+    _make_project(tmp_path)
+    nested = tmp_path / "a" / "b" / "c"
+    nested.mkdir(parents=True)
+
+    # Act
+    result = mod.find_project_root(nested)
+
+    # Assert
+    assert result == tmp_path
+
+
+# ----
+# 17. find_project_root returns None when no config above
+# ----
+
+
+def test_find_project_root_returns_none_when_no_config(mod, tmp_path):
+    # Arrange -- tmp_path has no .agentic-beacon/config.toml
+
+    # Act
+    result = mod.find_project_root(tmp_path)
+
+    # Assert
+    assert result is None
