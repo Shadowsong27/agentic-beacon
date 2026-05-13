@@ -3,6 +3,10 @@
 </p>
 
 <p align="center">
+  <strong>📖 <a href="https://shadowsong27.github.io/agentic-beacon/">Read the full documentation →</a></strong>
+</p>
+
+<p align="center">
   <a href="https://github.com/Shadowsong27/agentic-beacon/blob/main/LICENSE"><img src="https://img.shields.io/github/license/Shadowsong27/agentic-beacon" alt="License: MIT" /></a>
   <a href="https://pypi.org/project/agentic-beacon/"><img src="https://img.shields.io/pypi/pyversions/agentic-beacon" alt="Python Version" /></a>
   <a href="https://github.com/Shadowsong27/agentic-beacon/stargazers"><img src="https://img.shields.io/github/stars/Shadowsong27/agentic-beacon" alt="GitHub Stars" /></a>
