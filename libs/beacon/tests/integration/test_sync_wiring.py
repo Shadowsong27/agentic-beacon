@@ -480,52 +480,38 @@ def test_sync_wiring_is_idempotent(full_sync_project, monkeypatch):
     assert instructions.count(".agentic-beacon/artifacts/contexts/global.md") == 1
 
 
-def test_sync_prints_manual_instructions_when_no_agent_config_non_interactive(
-    full_sync_project, monkeypatch
-):
+def test_sync_auto_inits_agent_configs_when_missing(full_sync_project, monkeypatch):
+    """abc sync unconditionally creates opencode.json + CLAUDE.md and wires contexts."""
     project, runner = full_sync_project
     monkeypatch.chdir(project)
-    # No opencode.json, no CLAUDE.md; simulate non-interactive (CI) environment
+    # No opencode.json, no CLAUDE.md — sync should auto-init both
 
-    with patch("beacon.cli.sync.is_interactive", return_value=False):
-        result = runner.invoke(main, ["sync"])
-
-    assert result.exit_code == 0
-    assert "manual" in result.output.lower() or "wire" in result.output.lower()
-
-
-def test_sync_interactive_init_opencode_json(full_sync_project, monkeypatch):
-    project, runner = full_sync_project
-    monkeypatch.chdir(project)
-    # No opencode.json, no CLAUDE.md; user answers yes/no to prompts
-
-    with patch("beacon.cli.sync.is_interactive", return_value=True):
-        # "y" for opencode.json prompt, "n" for CLAUDE.md prompt
-        result = runner.invoke(main, ["sync"], input="y\nn\n")
+    result = runner.invoke(main, ["sync"])
 
     assert result.exit_code == 0
     assert (project / "opencode.json").exists()
+    assert (project / "CLAUDE.md").exists()
     data = json.loads((project / "opencode.json").read_text())
     assert ".agentic-beacon/artifacts/contexts/global.md" in data["instructions"]
-    assert not (project / "CLAUDE.md").exists()
-
-
-def test_sync_interactive_init_claude_md(full_sync_project, monkeypatch):
-    project, runner = full_sync_project
-    monkeypatch.chdir(project)
-    # No opencode.json, no CLAUDE.md; user answers no/yes to prompts
-
-    with patch("beacon.cli.sync.is_interactive", return_value=True):
-        # "n" for opencode.json (contexts), "y" for CLAUDE.md (contexts),
-        # "n" for opencode.json (skills), "n" for CLAUDE.md (skills)
-        # (CLAUDE.md alone doesn't create .claude/ so skill prompt also fires)
-        result = runner.invoke(main, ["sync"], input="n\ny\nn\nn\n")
-
-    assert result.exit_code == 0
-    assert not (project / "opencode.json").exists()
-    assert (project / "CLAUDE.md").exists()
     content = (project / "CLAUDE.md").read_text()
     assert "@.agentic-beacon/artifacts/contexts/global.md" in content
+
+
+def test_sync_initializes_missing_agent_config_files(
+    full_sync_project, monkeypatch, isolated_home
+):
+    """Backward-compat: projects set up before Bug 1 fix still get opencode.json + CLAUDE.md on sync."""
+    project, runner = full_sync_project
+    monkeypatch.chdir(project)
+    # Simulate a project where abc setup was run BEFORE the fix (no opencode.json, no CLAUDE.md)
+    assert not (project / "opencode.json").exists()
+    assert not (project / "CLAUDE.md").exists()
+
+    result = runner.invoke(main, ["sync"])
+
+    assert result.exit_code == 0
+    assert (project / "opencode.json").exists()
+    assert (project / "CLAUDE.md").exists()
 
 
 def test_sync_does_not_report_installed_skills_on_second_run(
@@ -863,23 +849,50 @@ def test_sync_no_agent_config_dry_run_does_not_wire(skills_only_project, monkeyp
     assert not (project / ".claude" / "skills").exists()
 
 
-def test_sync_full_project_skills_wired_even_when_contexts_need_agent_config(
+def test_sync_dry_run_does_not_create_agent_config_files(
     full_sync_project, monkeypatch
 ):
-    """When no agent config exists, skills wire unconditionally while contexts still prompt."""
+    """abc sync --dry-run must NOT create opencode.json or CLAUDE.md.
+
+    Defends against the implicit-gate breakage described in PER-151: even if the
+    orchestrator's agent_config_init_needed flag is unexpectedly True during
+    dry-run, the CLI layer must guard explicitly and write nothing to disk.
+    """
     project, runner = full_sync_project
     monkeypatch.chdir(project)
+    # No opencode.json, no CLAUDE.md — dry-run must not create either
+    assert not (project / "opencode.json").exists()
+    assert not (project / "CLAUDE.md").exists()
 
-    with patch("beacon.cli.sync.is_interactive", return_value=False):
-        result = runner.invoke(main, ["sync"])
+    result = runner.invoke(main, ["sync", "--dry-run"])
+
+    assert result.exit_code == 0
+    assert not (project / "opencode.json").exists(), (
+        "dry-run must not create opencode.json"
+    )
+    assert not (project / "CLAUDE.md").exists(), "dry-run must not create CLAUDE.md"
+
+
+def test_sync_full_project_skills_and_agent_configs_wired_unconditionally(
+    full_sync_project, monkeypatch
+):
+    """abc sync wires skills AND auto-inits opencode.json + CLAUDE.md unconditionally."""
+    project, runner = full_sync_project
+    monkeypatch.chdir(project)
+    # No opencode.json, no CLAUDE.md — sync should auto-init both and wire skills
+
+    result = runner.invoke(main, ["sync"])
 
     assert result.exit_code == 0
     # Skills wired to both agents
     assert (project / ".opencode" / "skills" / "my-skill" / "SKILL.md").exists()
     assert (project / ".claude" / "skills" / "my-skill" / "SKILL.md").exists()
     assert "installed" in result.output.lower()
-    # Contexts still need manual wiring (no opencode.json / CLAUDE.md)
-    assert "manual wiring required" in result.output.lower()
+    # Agent configs auto-initialized and contexts wired (Bug 1 fix)
+    assert (project / "opencode.json").exists()
+    assert (project / "CLAUDE.md").exists()
+    assert "created opencode.json" in result.output.lower()
+    assert "created claude.md" in result.output.lower()
 
 
 def test_sync_no_agent_config_second_run_idempotent(skills_only_project, monkeypatch):

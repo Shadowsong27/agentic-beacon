@@ -4,6 +4,7 @@ import json
 import shutil
 from collections.abc import Callable, Iterable
 from pathlib import Path
+from typing import NamedTuple
 
 import click
 from loguru import logger
@@ -146,19 +147,49 @@ def wire_contexts_claudecode(project_root: Path, artifacts_dir: Path) -> list[st
     return added
 
 
-def init_opencode_json(project_root: Path) -> None:
-    """Create a minimal opencode.json if one does not already exist."""
+class SetupResult(NamedTuple):
+    """Outcome of setup_project — which files were newly created."""
+
+    opencode_created: bool
+    claude_created: bool
+
+
+def setup_project(beacon_yaml: Path, project_root: Path) -> SetupResult:
+    """Bootstrap all project-level scaffolding in one call.
+
+    Creates beacon.yaml from the template and conditionally initializes
+    opencode.json and CLAUDE.md (both are no-ops if the files already exist).
+    Returns a SetupResult indicating which files were newly created.
+    """
+    create_beacon_template(beacon_yaml)
+    opencode_created = init_opencode_json(project_root)
+    claude_created = init_claude_md(project_root)
+    return SetupResult(opencode_created=opencode_created, claude_created=claude_created)
+
+
+def init_opencode_json(project_root: Path) -> bool:
+    """Create a minimal opencode.json if one does not already exist.
+
+    Returns True when the file was newly created, False when it already existed.
+    """
     opencode_json = project_root / "opencode.json"
     if not opencode_json.exists():
         data = {"$schema": "https://opencode.ai/config.json", "instructions": []}
         opencode_json.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+        return True
+    return False
 
 
-def init_claude_md(project_root: Path) -> None:
-    """Create an empty CLAUDE.md at the project root if none exists."""
+def init_claude_md(project_root: Path) -> bool:
+    """Create an empty CLAUDE.md at the project root if none exists.
+
+    Returns True when the file was newly created, False when it already existed.
+    """
     claude_md = project_root / "CLAUDE.md"
     if not claude_md.exists():
         claude_md.write_text("", encoding="utf-8")
+        return True
+    return False
 
 
 def confirm_prune(orphans: list, *, dry_run: bool = False) -> list[str]:

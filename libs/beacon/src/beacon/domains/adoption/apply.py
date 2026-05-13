@@ -293,6 +293,23 @@ def commit_session(
             # PER-113 (Finding 2): ensure root .gitignore has agent dir entries
             ensure_agent_dirs_gitignored(project_root)
 
+        # Wire bundled skills into the project's agent directories
+        from beacon.domains.artifact.skill import wire_bundled_skills_per_project
+
+        bundled_wired, bundled_errors = wire_bundled_skills_per_project(project_root)
+        if bundled_wired:
+            skill_names = ", ".join(
+                dict.fromkeys(s.split(" (")[0] for s in bundled_wired)
+            )
+            wiring_notes.append(
+                f"  Wired bundled skills: {skill_names}"
+                " → .opencode/command/, .claude/skills/"
+            )
+        for err in bundled_errors:
+            wiring_notes.append(
+                f"  [yellow]warning[/yellow] Bundled skill wiring: {err}"
+            )
+
     post_sync_wiring_fn = _post_sync_wiring_fn or _default_post_sync_wiring
 
     def _rollback() -> None:

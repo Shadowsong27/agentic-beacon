@@ -245,40 +245,20 @@ def sync(
         for note in result.wiring_notes:
             console.print(note)
 
-    if result.agent_config_init_needed:
-        if is_interactive():
+    if result.agent_config_init_needed and not result.dry_run:
+        init_opencode_json(result.project_root)
+        oc_init = wire_contexts_opencode(result.project_root, result.artifacts_dir)
+        if oc_init:
             console.print(
-                "\n[yellow]No agent config detected.[/yellow] "
-                "Set one up to wire contexts automatically."
+                f"[green]✓[/green] Created opencode.json and "
+                f"wired {len(oc_init)} context(s)"
             )
-            if click.confirm("  Initialize opencode.json?", default=False):
-                init_opencode_json(result.project_root)
-                oc_init = wire_contexts_opencode(
-                    result.project_root, result.artifacts_dir
-                )
-                if oc_init:
-                    console.print(
-                        f"[green]✓[/green] Created opencode.json and "
-                        f"wired {len(oc_init)} context(s)"
-                    )
-            if click.confirm("  Initialize CLAUDE.md?", default=False):
-                init_claude_md(result.project_root)
-                cc_init = wire_contexts_claudecode(
-                    result.project_root, result.artifacts_dir
-                )
-                if cc_init:
-                    console.print(
-                        f"[green]✓[/green] Created CLAUDE.md and "
-                        f"wired {len(cc_init)} context(s)"
-                    )
-        else:
+        init_claude_md(result.project_root)
+        cc_init = wire_contexts_claudecode(result.project_root, result.artifacts_dir)
+        if cc_init:
             console.print(
-                "\n[bold]Manual wiring required:[/bold]\n"
-                "  Contexts synced — wire them into your agent config:\n"
-                '  [bold]opencode.json[/bold] → add to "instructions" array:\n'
-                '    ".agentic-beacon/artifacts/contexts/<name>.md"\n'
-                "  [bold]CLAUDE.md[/bold] → add a line per context:\n"
-                "    @.agentic-beacon/artifacts/contexts/<name>.md"
+                f"[green]✓[/green] Created CLAUDE.md and "
+                f"wired {len(cc_init)} context(s)"
             )
 
     print_bundled_install_result(result.bundled_installed, result.bundled_skipped)

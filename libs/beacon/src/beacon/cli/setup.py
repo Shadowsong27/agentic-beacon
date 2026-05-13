@@ -6,7 +6,7 @@ from pathlib import Path
 import click
 from rich.console import Console
 
-from beacon.domains.setup.wiring import create_beacon_template
+from beacon.domains.setup.wiring import setup_project
 
 console = Console()
 
@@ -41,13 +41,17 @@ def setup() -> None:
             console.print("Setup cancelled.")
             sys.exit(0)
 
-    create_beacon_template(beacon_yaml)
     # Note: .gitignore entries for .claude/agents/ and .opencode/agents/ are
     # added later by `abc sync` or `abc adopt` accept when agents are first
     # declared. Doing it here unconditionally would dirty the .gitignore on
     # projects that never declare agents.
+    result = setup_project(beacon_yaml, beacon_dir.parent)
     console.print("\n[bold green]✓ Created beacon.yaml template[/bold green]")
     console.print(f"  [blue]Location:[/blue] {beacon_yaml}")
+    if result.opencode_created:
+        console.print("[green]✓[/green] Initialized opencode.json")
+    if result.claude_created:
+        console.print("[green]✓[/green] Initialized CLAUDE.md")
     console.print("\n[bold]Next Steps:[/bold]")
     console.print("  1. Run 'abc adopt' to select artifacts from the warehouse")
     console.print("  2. Or edit .agentic-beacon/beacon.yaml directly")
