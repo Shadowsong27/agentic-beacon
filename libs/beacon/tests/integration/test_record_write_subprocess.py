@@ -14,6 +14,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 _SKILLS_DIR = (
     Path(__file__).resolve().parent.parent.parent / "src" / "beacon" / "data" / "skills"
 )
@@ -164,6 +166,7 @@ def test_write_skill_no_warehouse_exits_nonzero(tmp_path: Path) -> None:
 _APPEND_PENDING_SKILL = _SKILLS_DIR / "record-skill" / "scripts" / "append_pending.py"
 
 
+@pytest.mark.integration
 def test_record_skill_e2e_write_then_append_pending(tmp_path: Path) -> None:
     """Full record-skill flow: write_skill.py then append_pending.py via uv run.
 
