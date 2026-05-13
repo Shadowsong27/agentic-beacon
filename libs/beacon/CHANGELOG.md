@@ -1,5 +1,18 @@
 # Changelog
 
+## [3.3.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v3.2.0...agentic-beacon@v3.3.0) (2026-05-13)
+
+
+### Features
+
+* add more gitignore file natively to abc ([#132](https://github.com/Shadowsong27/agentic-beacon/issues/132)) ([72cfcdb](https://github.com/Shadowsong27/agentic-beacon/commit/72cfcdbb3ea081b1021591aefb969cfeaaa1d674))
+* **setup:** auto-init agent config + wire bundled skills on adopt (PER-151) ([#137](https://github.com/Shadowsong27/agentic-beacon/issues/137)) ([5fe42cc](https://github.com/Shadowsong27/agentic-beacon/commit/5fe42ccbbb39c6fc27509af861267cefc0fd06e8))
+
+
+### Bug Fixes
+
+* **skills:** self-contained append_pending.py for record-* skills (PER-150) ([#136](https://github.com/Shadowsong27/agentic-beacon/issues/136)) ([388b724](https://github.com/Shadowsong27/agentic-beacon/commit/388b7247d33863d64040192c5675afb029e7c548))
+
 ## [3.2.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v3.1.0...agentic-beacon@v3.2.0) (2026-05-11)
 
 
