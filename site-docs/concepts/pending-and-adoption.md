@@ -23,12 +23,6 @@ pending:
     action: created
     source: record-skill
     created_at: '2026-05-13T14:32:07Z'
-
-  - path: knowledge/python-standards/lessons/type-hints.md
-    type: context
-    action: created
-    source: record-knowledge
-    created_at: '2026-05-13T14:45:22Z'
 ```
 
 | Field | Values | Meaning |
@@ -45,7 +39,7 @@ Knowledge files are **not** tracked in `pending.yaml`. They are auto-derived dur
 
 ## The Author → Pending Pipeline
 
-The bundled skills (`record-knowledge`, `record-skill`) write to two places in a single agent action:
+`record-skill` (and `record-context`, `record-agent` for other artifact types) writes to two places in a single agent action:
 
 ```
 /record-skill
@@ -60,6 +54,8 @@ The bundled skills (`record-knowledge`, `record-skill`) write to two places in a
 `scripts/append_pending.py` is a self-contained script with no dependency on the `beacon` package — it only requires `pyyaml>=6.0`. This makes the pipeline work for any `abc` installation (pipx, pip, uv tool install) without needing the agentic-beacon source checkout.
 
 The script walks up the directory tree from the calling agent's working directory to find the project root (the nearest ancestor containing `.agentic-beacon/config.toml`), then appends or de-duplicates the entry.
+
+**Knowledge files are a special case.** `record-knowledge` writes to `<warehouse>/knowledge/` but does **not** append to `pending.yaml`. Knowledge files are auto-derived during `abc sync` / `abc adopt` — they appear in your project's `.agentic-beacon/artifacts/knowledge/` as symlinks the next time you sync, with no explicit accept step required.
 
 ---
 
@@ -101,7 +97,7 @@ Proposed changes
     + .agentic-beacon/pending.yaml (1 entry removed)
 
   Rejecting:
-    - knowledge/python-standards/lessons/type-hints.md (removed from pending)
+    ~ (nothing)
 
   Deferring:
     ~ (nothing)
@@ -134,13 +130,13 @@ It is gitignored. Future `abc adopt` invocations use it to detect hand-edited wa
 ## Full Walkthrough
 
 ```bash
-# 1. Author a knowledge file via the bundled skill
+# 1. Author a new skill via the bundled skill
 #    (inside a Claude Code or OpenCode agent session)
-/record-knowledge
-# Agent prompts: topic, title, content summary
+/record-skill
+# Agent prompts: skill name, description, initial process steps
 # Agent writes:
-#   <warehouse>/knowledge/python-standards/lessons/type-hints.md
-#   .agentic-beacon/pending.yaml  (appended)
+#   <warehouse>/skills/python-type-hints/SKILL.md
+#   .agentic-beacon/pending.yaml  (appended with type: skill)
 
 # 2. Pending alert appears on every abc command from now on:
 abc warehouse status
@@ -149,10 +145,10 @@ abc warehouse status
 # 3. Inspect the pending file directly if you like:
 cat .agentic-beacon/pending.yaml
 # pending:
-# - path: knowledge/python-standards/lessons/type-hints.md
-#   type: context
+# - path: skills/python-type-hints/SKILL.md
+#   type: skill
 #   action: created
-#   source: record-knowledge
+#   source: record-skill
 #   created_at: '2026-05-13T14:32:07Z'
 
 # 4. Run adopt — TUI opens, pending entry shown alongside warehouse artifacts
@@ -162,13 +158,13 @@ abc adopt
 # → press y to commit
 
 # After commit (accept path):
-#   .agentic-beacon/beacon.yaml   ← knowledge path added
+#   .agentic-beacon/beacon.yaml   ← skills/python-type-hints/ added
 #   .agentic-beacon/pending.yaml  ← entry removed (or empty)
 #   .agentic-beacon/.last-adopt   ← timestamp updated
-#   .agentic-beacon/artifacts/knowledge/python-standards/lessons/type-hints.md  ← symlink
+#   .agentic-beacon/artifacts/skills/python-type-hints/SKILL.md  ← symlink
 ```
 
-For the `/record-skill` walkthrough (authoring a skill through the same pipeline), see [Bundled Skills](bundled-skills.md#full-walkthrough-record-skill).
+For details on how bundled skills are wired into your project after `abc adopt`, see [Bundled Skills](bundled-skills.md).
 
 ---
 

@@ -10,14 +10,13 @@ Agentic Beacon ships two skills inside the `abc` package. These **bundled skills
 
 ### `record-knowledge`
 
-Captures a decision, lesson, or fact into the warehouse's `knowledge/` directory and appends a `pending.yaml` entry in your project.
+Captures a decision, lesson, or fact into the warehouse's `knowledge/` directory.
 
 **What it does:**
 
 1. Agent prompts you for a topic, title, and content summary
 2. Writes a markdown file to `<warehouse>/knowledge/<topic>/<slug>.md`
-3. Calls `scripts/append_pending.py` to append a `context` entry to `.agentic-beacon/pending.yaml`
-4. You run `abc adopt` to wire the knowledge file into your project
+3. Knowledge files are auto-derived during `abc sync` / `abc adopt` — no `pending.yaml` entry is created and no explicit accept step is required
 
 **When to invoke:** after a notable decision, a hard-won lesson, or a fact worth sharing across teams.
 
@@ -85,6 +84,29 @@ abc adopt          # select warehouse artifacts; bundled skills wired here too
 | **How discovered by agents** | Same: `skills/<name>/SKILL.md` in tool directories | Same |
 
 Warehouse skills are distributed to teammates via `abc sync`. Bundled skills follow the developer — wherever `abc` is installed, those two skills are available.
+
+> **Note:** `abc warehouse init` copies each bundled skill into the new warehouse's `skills/` directory as a starting-point template. This means a freshly initialised warehouse will contain `skills/record-knowledge/` and `skills/record-skill/` entries that look like ordinary warehouse skills — but the canonical version used for project wiring is always the one inside the `abc` package. See [Bundled Skills in the Warehouse Template](#bundled-skills-in-the-warehouse-template) below.
+
+---
+
+## Bundled Skills in the Warehouse Template
+
+When you run `abc warehouse init`, the initializer copies each bundled skill from the `abc` package into the new warehouse's `skills/` directory (via `_install_bundled_skills`). This produces real files — not symlinks — at paths like:
+
+```
+my-warehouse/
+└── skills/
+    ├── record-knowledge/
+    │   └── SKILL.md
+    └── record-skill/
+        └── SKILL.md
+```
+
+These copies exist so teams have a visible, editable starting point. You can modify `<warehouse>/skills/record-knowledge/SKILL.md` to adjust the workflow for your organisation and commit that change into the warehouse.
+
+However, **the copies are not automatically used for project wiring**. When `abc sync` or `abc adopt` wires bundled skills into a project, it always reads from the `abc` package source — the warehouse copy is informational unless you explicitly adopt it as a regular warehouse skill via `beacon.yaml`. There is currently no automatic override mechanism that promotes a customised warehouse copy back into the wiring pipeline.
+
+In practice this means: a fresh warehouse visually contains bundled skills alongside other warehouse content, but teams that want to distribute a customised variant should treat it as a new warehouse skill (with a different name) rather than expecting the warehouse copy to shadow the bundled version.
 
 ---
 
