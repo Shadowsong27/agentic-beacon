@@ -3,7 +3,7 @@
 The original bug was: record-knowledge wrote a real file into the project's
 symlink-mirror at .agentic-beacon/artifacts/knowledge/ instead of the warehouse.
 These tests pin that the new write_*.py scripts, when launched as a fresh
-process from inside a project's CWD, only write under the resolved warehouse —
+process from inside a project's CWD, only write under the resolved warehouse --
 never under the project's .agentic-beacon/artifacts/.
 """
 
@@ -118,7 +118,7 @@ def test_write_skill_subprocess_lands_in_warehouse(tmp_path: Path) -> None:
 
 
 def test_write_knowledge_no_warehouse_exits_nonzero(tmp_path: Path) -> None:
-    """Run from a directory with no .agentic-beacon/config.toml → hard error."""
+    """Run from a directory with no .agentic-beacon/config.toml -- hard error."""
     result = subprocess.run(
         [
             sys.executable,
@@ -157,9 +157,9 @@ def test_write_skill_no_warehouse_exits_nonzero(tmp_path: Path) -> None:
     assert list(tmp_path.iterdir()) == []
 
 
-# ─────────────────────────────────────────────────────────────
+# ----
 # E2E smoke: full record-skill flow (PER-150 regression guard)
-# ─────────────────────────────────────────────────────────────
+# ----
 
 _APPEND_PENDING_SKILL = _SKILLS_DIR / "record-skill" / "scripts" / "append_pending.py"
 
@@ -172,7 +172,7 @@ def test_record_skill_e2e_write_then_append_pending(tmp_path: Path) -> None:
     """
     project, warehouse = _setup(tmp_path)
 
-    # Step 1: write_skill.py — stdlib-only, no uv run needed
+    # Step 1: write_skill.py -- stdlib-only, no uv run needed
     write_result = subprocess.run(
         [
             sys.executable,
@@ -190,7 +190,7 @@ def test_record_skill_e2e_write_then_append_pending(tmp_path: Path) -> None:
     skill_path_out = write_result.stdout.strip()  # e.g. "skills/e2e-skill/"
     assert skill_path_out == "skills/e2e-skill/"
 
-    # Step 2: append_pending.py — requires pyyaml; use uv run --isolated to
+    # Step 2: append_pending.py -- requires pyyaml; use uv run --isolated to
     # prove it works in a fresh environment where beacon is NOT importable.
     clean_env = {
         k: v

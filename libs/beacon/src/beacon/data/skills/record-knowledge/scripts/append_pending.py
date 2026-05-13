@@ -2,7 +2,7 @@
 # requires-python = ">=3.11"
 # dependencies = ["pyyaml>=6.0"]
 # ///
-# Self-contained script — no beacon package required at runtime.
+# Self-contained script -- no beacon package required at runtime.
 """Append an entry to .agentic-beacon/pending.yaml.
 
 Usage:
@@ -10,6 +10,7 @@ Usage:
 """
 
 import argparse
+import re
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -22,6 +23,8 @@ ERROR_NO_WAREHOUSE = (
     "Error: no warehouse connected. Run 'abc warehouse connect <path>' first."
 )
 
+_CANONICAL_DATETIME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+
 
 def find_project_root(start: Path) -> Path | None:
     """Walk up from start to find a directory containing .agentic-beacon/config.toml."""
@@ -33,6 +36,81 @@ def find_project_root(start: Path) -> Path | None:
         if parent == current:
             return None
         current = parent
+
+
+def _canonicalize_entry(entry: dict) -> dict:
+    """Return a new dict with created_at normalized to canonical Z string form."""
+    created_at = entry.get("created_at")
+    if isinstance(created_at, datetime):
+        if created_at.tzinfo is None:
+            ts = created_at.replace(tzinfo=UTC)
+        else:
+            ts = created_at.astimezone(UTC)
+        return {**entry, "created_at": ts.strftime("%Y-%m-%dT%H:%M:%SZ")}
+    return entry
+
+
+def _validate_entry(entry: dict, index: int) -> dict:
+    """Validate a pending.yaml entry; exit 1 with a clear message on failure."""
+    if not isinstance(entry, dict):
+        print(
+            f"Error: pending.yaml entry #{index}: must be a mapping,"
+            f" got {type(entry).__name__}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    required_fields = ("path", "type", "action", "source", "created_at")
+    for field in required_fields:
+        if field not in entry:
+            print(
+                f"Error: pending.yaml entry #{index}: missing required field '{field}'",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+    if entry["type"] not in VALID_TYPES:
+        print(
+            f"Error: pending.yaml entry #{index}: invalid type {entry['type']!r},"
+            f" must be one of {VALID_TYPES}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    if entry["action"] not in VALID_ACTIONS:
+        print(
+            f"Error: pending.yaml entry #{index}: invalid action {entry['action']!r},"
+            f" must be one of {VALID_ACTIONS}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    if not isinstance(entry["path"], str):
+        print(
+            f"Error: pending.yaml entry #{index}: 'path' must be a string",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    if not isinstance(entry["source"], str):
+        print(
+            f"Error: pending.yaml entry #{index}: 'source' must be a string",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    created_at = entry["created_at"]
+    if not isinstance(created_at, datetime) and not (
+        isinstance(created_at, str) and _CANONICAL_DATETIME_RE.match(created_at)
+    ):
+        print(
+            f"Error: pending.yaml entry #{index}: 'created_at' must be a datetime"
+            f" or a string in '%Y-%m-%dT%H:%M:%SZ' format",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    return entry
 
 
 def append_pending_entry(
@@ -73,7 +151,8 @@ def append_pending_entry(
                 )
                 sys.exit(1)
             else:
-                entries = list(raw_entries)
+                validated = [_validate_entry(e, i) for i, e in enumerate(raw_entries)]
+                entries = [_canonicalize_entry(e) for e in validated]
 
     created_at_str = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     new_entry = {

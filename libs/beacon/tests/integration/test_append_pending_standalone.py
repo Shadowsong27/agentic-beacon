@@ -46,9 +46,9 @@ def _make_project(root: Path) -> None:
     )
 
 
-# ─────────────────────────────────────────────────────────────
+# ----
 # Core: script resolves pyyaml from PEP 723 header, not workspace venv
-# ─────────────────────────────────────────────────────────────
+# ----
 
 
 @pytest.mark.integration
@@ -98,9 +98,9 @@ def test_script_works_without_beacon_package(skill_name: str, tmp_path: Path) ->
     assert entry.source == skill_name
 
 
-# ─────────────────────────────────────────────────────────────
+# ----
 # find_project_root walks up from nested subdirectory
-# ─────────────────────────────────────────────────────────────
+# ----
 
 
 @pytest.mark.integration
