@@ -10,7 +10,6 @@ Usage:
 """
 
 import argparse
-import re
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -22,8 +21,6 @@ VALID_ACTIONS = ("created", "modified")
 ERROR_NO_WAREHOUSE = (
     "Error: no warehouse connected. Run 'abc warehouse connect <path>' first."
 )
-
-_CANONICAL_DATETIME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 
 
 def find_project_root(start: Path) -> Path | None:
@@ -100,9 +97,19 @@ def _validate_entry(entry: dict, index: int) -> dict:
         sys.exit(1)
 
     created_at = entry["created_at"]
-    if not isinstance(created_at, datetime) and not (
-        isinstance(created_at, str) and _CANONICAL_DATETIME_RE.match(created_at)
-    ):
+    if isinstance(created_at, datetime):
+        pass
+    elif isinstance(created_at, str):
+        try:
+            datetime.strptime(created_at, "%Y-%m-%dT%H:%M:%SZ")
+        except ValueError as exc:
+            print(
+                f"Error: pending.yaml entry #{index}: 'created_at' is not a valid"
+                f" UTC timestamp in '%Y-%m-%dT%H:%M:%SZ' format ({exc})",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+    else:
         print(
             f"Error: pending.yaml entry #{index}: 'created_at' must be a datetime"
             f" or a string in '%Y-%m-%dT%H:%M:%SZ' format",

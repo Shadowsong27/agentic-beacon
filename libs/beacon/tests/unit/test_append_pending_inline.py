@@ -723,3 +723,136 @@ def test_existing_entry_malformed_created_at_rejected(mod, tmp_path, capsys):
     assert exc.value.code != 0
     assert "created_at" in capsys.readouterr().err
     assert pending_path.read_bytes() == original_content
+
+
+# ----
+# New tests: impossible date/time values rejected (PER-150 review round 2)
+# ----
+
+
+def test_existing_entry_impossible_month_rejected(mod, tmp_path, capsys):
+    # Arrange: month=99 passes shape regex but strptime raises ValueError
+    root = _make_project(tmp_path)
+    pending_path = root / ".agentic-beacon" / "pending.yaml"
+    pending_path.write_text(
+        yaml.dump(
+            {
+                "pending": [
+                    {
+                        "path": "skills/bad/",
+                        "type": "skill",
+                        "action": "created",
+                        "source": "s",
+                        "created_at": "2026-99-01T00:00:00Z",
+                    }
+                ]
+            },
+            default_flow_style=False,
+        )
+    )
+    original_content = pending_path.read_bytes()
+
+    # Act
+    with pytest.raises(SystemExit) as exc:
+        mod.append_pending_entry(root, "skills/new/", "skill", "created", "s")
+
+    # Assert
+    assert exc.value.code != 0
+    assert "created_at" in capsys.readouterr().err
+    assert pending_path.read_bytes() == original_content
+
+
+def test_existing_entry_impossible_day_rejected(mod, tmp_path, capsys):
+    # Arrange: Feb 30 doesn't exist
+    root = _make_project(tmp_path)
+    pending_path = root / ".agentic-beacon" / "pending.yaml"
+    pending_path.write_text(
+        yaml.dump(
+            {
+                "pending": [
+                    {
+                        "path": "skills/bad/",
+                        "type": "skill",
+                        "action": "created",
+                        "source": "s",
+                        "created_at": "2026-02-30T00:00:00Z",
+                    }
+                ]
+            },
+            default_flow_style=False,
+        )
+    )
+    original_content = pending_path.read_bytes()
+
+    # Act
+    with pytest.raises(SystemExit) as exc:
+        mod.append_pending_entry(root, "skills/new/", "skill", "created", "s")
+
+    # Assert
+    assert exc.value.code != 0
+    assert "created_at" in capsys.readouterr().err
+    assert pending_path.read_bytes() == original_content
+
+
+def test_existing_entry_impossible_hour_rejected(mod, tmp_path, capsys):
+    # Arrange: hour=25 is out of range
+    root = _make_project(tmp_path)
+    pending_path = root / ".agentic-beacon" / "pending.yaml"
+    pending_path.write_text(
+        yaml.dump(
+            {
+                "pending": [
+                    {
+                        "path": "skills/bad/",
+                        "type": "skill",
+                        "action": "created",
+                        "source": "s",
+                        "created_at": "2026-01-01T25:00:00Z",
+                    }
+                ]
+            },
+            default_flow_style=False,
+        )
+    )
+    original_content = pending_path.read_bytes()
+
+    # Act
+    with pytest.raises(SystemExit) as exc:
+        mod.append_pending_entry(root, "skills/new/", "skill", "created", "s")
+
+    # Assert
+    assert exc.value.code != 0
+    assert "created_at" in capsys.readouterr().err
+    assert pending_path.read_bytes() == original_content
+
+
+def test_existing_entry_valid_canonical_string_accepted(mod, tmp_path):
+    # Arrange: well-formed, in-range timestamp as quoted string
+    root = _make_project(tmp_path)
+    pending_path = root / ".agentic-beacon" / "pending.yaml"
+    original_entry = {
+        "path": "skills/preexisting/",
+        "type": "skill",
+        "action": "created",
+        "source": "s",
+        "created_at": "2026-05-13T07:00:00Z",
+    }
+    pending_path.write_text(
+        yaml.dump(
+            {"pending": [original_entry]}, default_flow_style=False, sort_keys=False
+        )
+    )
+
+    # Act
+    mod.append_pending_entry(root, "skills/new/", "skill", "created", "record-skill")
+
+    # Assert: script succeeded, original entry preserved verbatim, new entry appended
+    data = yaml.safe_load(pending_path.read_text())
+    assert len(data["pending"]) == 2
+    first = data["pending"][0]
+    assert first["path"] == "skills/preexisting/"
+    created_at = first["created_at"]
+    if not isinstance(created_at, str):
+        created_at = created_at.strftime("%Y-%m-%dT%H:%M:%SZ")
+    assert created_at == "2026-05-13T07:00:00Z"
+    assert data["pending"][1]["path"] == "skills/new/"
