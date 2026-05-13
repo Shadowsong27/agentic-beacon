@@ -33,7 +33,7 @@ pending:
 | `source` | skill name | Which bundled skill wrote the entry |
 | `created_at` | `YYYY-MM-DDTHH:MM:SSZ` (UTC) | When the entry was appended |
 
-Knowledge files are **not** tracked in `pending.yaml`. They are auto-derived during sync/adopt by scanning context and skill markdown for links into `knowledge/`.
+Knowledge files are **not** tracked in `pending.yaml`. The knowledge resolver scans contexts and skills that are already wired into your project for markdown links into `knowledge/`; only reachable files are synced.
 
 ---
 
@@ -55,7 +55,9 @@ Knowledge files are **not** tracked in `pending.yaml`. They are auto-derived dur
 
 The script walks up the directory tree from the calling agent's working directory to find the project root (the nearest ancestor containing `.agentic-beacon/config.toml`), then appends a `PendingEntry` to `pending.yaml` after validating field types and enum values. Duplicate entries are not detected — if the same artifact path is recorded twice, both entries will land in the file.
 
-**Knowledge files are a special case.** `record-knowledge` writes to `<warehouse>/knowledge/` but does **not** append to `pending.yaml`. Knowledge files are auto-derived during `abc sync` / `abc adopt` — they appear in your project's `.agentic-beacon/artifacts/knowledge/` as symlinks the next time you sync, with no explicit accept step required.
+**Knowledge files are a special case.** `record-knowledge` writes to `<warehouse>/knowledge/` but does **not** append to `pending.yaml`. Knowledge files are also **not** synced automatically. The knowledge resolver scans contexts and skills that are already wired into your project (via `beacon.yaml`) and follows their markdown links into `<warehouse>/knowledge/`. Only knowledge files reachable from an adopted context or skill appear under `.agentic-beacon/artifacts/knowledge/` after `abc sync` / `abc adopt`.
+
+So in practice: if `record-knowledge` writes a new lesson and a context already adopted in your project links to that lesson's path, the lesson will sync automatically on the next `abc sync`. If no adopted context or skill links to it yet, you'll need to author or adopt a context first (or hand-edit an existing one) that references the new knowledge path.
 
 ---
 
@@ -111,7 +113,7 @@ Press `Enter` to commit. Press `Escape` or `q` to return to the TUI without writ
 
 ## Atomic Commit with Rollback
 
-The write step is atomic. If anything fails mid-commit — a permission error, an unexpected exception, a signal — Agentic Beacon restores `beacon.yaml`, `pending.yaml`, and `.last-adopt` to their exact pre-commit state. No partial changes are left behind.
+The write step is atomic. If the commit raises an unhandled exception mid-write — disk full, permission error, malformed `beacon.yaml` after the change — the rollback restores `beacon.yaml`, `pending.yaml`, and `.last-adopt` to their pre-commit state. **Limit:** rollback handles caught Python exceptions only. A hard process kill (`SIGKILL`, system crash, or Ctrl-C delivered to an unprotected operation) could leave the commit half-applied. Re-running `abc adopt` is safe and the inconsistency is usually limited to `pending.yaml` vs `beacon.yaml` drift.
 
 ---
 

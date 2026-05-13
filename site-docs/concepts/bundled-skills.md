@@ -16,7 +16,7 @@ Captures a decision, lesson, or fact into the warehouse's `knowledge/` directory
 
 1. Agent prompts you for a topic, title, and content summary
 2. Writes a markdown file to `<warehouse>/knowledge/<topic>/<type>s/<slug>.md` (with `--topic`), or `<warehouse>/knowledge/<type>s/<slug>.md` (without topic), where `<type>` is `decision`, `lesson`, or `fact`
-3. Knowledge files are auto-derived during `abc sync` / `abc adopt` — no `pending.yaml` entry is created and no explicit accept step is required
+3. No `pending.yaml` entry is created — but knowledge files are **not** synced automatically. They appear under `.agentic-beacon/artifacts/knowledge/` only when a context or skill already wired into your project (via `beacon.yaml`) links to the new knowledge file's path. If no such link exists yet, adopt or hand-edit a context that references the path first.
 
 **When to invoke:** after a notable decision, a hard-won lesson, or a fact worth sharing across teams.
 
