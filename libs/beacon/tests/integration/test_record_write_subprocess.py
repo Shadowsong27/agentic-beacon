@@ -3,15 +3,18 @@
 The original bug was: record-knowledge wrote a real file into the project's
 symlink-mirror at .agentic-beacon/artifacts/knowledge/ instead of the warehouse.
 These tests pin that the new write_*.py scripts, when launched as a fresh
-process from inside a project's CWD, only write under the resolved warehouse —
+process from inside a project's CWD, only write under the resolved warehouse --
 never under the project's .agentic-beacon/artifacts/.
 """
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 _SKILLS_DIR = (
     Path(__file__).resolve().parent.parent.parent / "src" / "beacon" / "data" / "skills"
@@ -117,7 +120,7 @@ def test_write_skill_subprocess_lands_in_warehouse(tmp_path: Path) -> None:
 
 
 def test_write_knowledge_no_warehouse_exits_nonzero(tmp_path: Path) -> None:
-    """Run from a directory with no .agentic-beacon/config.toml → hard error."""
+    """Run from a directory with no .agentic-beacon/config.toml -- hard error."""
     result = subprocess.run(
         [
             sys.executable,
@@ -154,3 +157,82 @@ def test_write_skill_no_warehouse_exits_nonzero(tmp_path: Path) -> None:
     assert result.returncode != 0
     assert "no warehouse connected" in result.stderr
     assert list(tmp_path.iterdir()) == []
+
+
+# ----
+# E2E smoke: full record-skill flow (PER-150 regression guard)
+# ----
+
+_APPEND_PENDING_SKILL = _SKILLS_DIR / "record-skill" / "scripts" / "append_pending.py"
+
+
+@pytest.mark.integration
+def test_record_skill_e2e_write_then_append_pending(tmp_path: Path) -> None:
+    """Full record-skill flow: write_skill.py then append_pending.py via uv run.
+
+    Without the PER-150 fix, append_pending.py fails with:
+        ModuleNotFoundError: No module named 'beacon'
+    """
+    project, warehouse = _setup(tmp_path)
+
+    # Step 1: write_skill.py -- stdlib-only, no uv run needed
+    write_result = subprocess.run(
+        [
+            sys.executable,
+            str(WRITE_SKILL),
+            "--name",
+            "e2e-skill",
+            "--description",
+            "End-to-end test skill",
+        ],
+        cwd=project,
+        capture_output=True,
+        text=True,
+    )
+    assert write_result.returncode == 0, write_result.stderr
+    skill_path_out = write_result.stdout.strip()  # e.g. "skills/e2e-skill/"
+    assert skill_path_out == "skills/e2e-skill/"
+
+    # Step 2: append_pending.py -- requires pyyaml; use uv run --isolated to
+    # prove it works in a fresh environment where beacon is NOT importable.
+    clean_env = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in ("PYTHONPATH", "VIRTUAL_ENV") and not k.startswith("BEACON_")
+    }
+    append_result = subprocess.run(
+        [
+            "uv",
+            "run",
+            "--no-project",
+            "--isolated",
+            str(_APPEND_PENDING_SKILL),
+            "--path",
+            skill_path_out,
+            "--type",
+            "skill",
+            "--action",
+            "created",
+            "--source",
+            "record-skill",
+        ],
+        cwd=project,
+        env=clean_env,
+        capture_output=True,
+        text=True,
+    )
+    assert append_result.returncode == 0, (
+        f"append_pending.py failed: {append_result.stderr}"
+    )
+
+    # Verify pending.yaml exists and round-trips through PendingManifest
+    from beacon.core.manifest.pending import PendingManifest
+
+    pending_path = project / ".agentic-beacon" / "pending.yaml"
+    assert pending_path.exists()
+    manifest = PendingManifest.from_yaml(pending_path)
+    assert len(manifest.pending) == 1
+    entry = manifest.pending[0]
+    assert entry.path == skill_path_out
+    assert entry.type == "skill"
+    assert entry.source == "record-skill"

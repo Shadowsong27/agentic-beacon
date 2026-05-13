@@ -1,9 +1,8 @@
 # /// script
 # requires-python = ">=3.11"
-# dependencies = []
+# dependencies = ["pyyaml>=6.0"]
 # ///
-# Requires the beacon package installed in the active environment.
-# Run `uv sync` from the agentic-beacon repo root before invoking this script.
+# Self-contained script -- no beacon package required at runtime.
 """Append an entry to .agentic-beacon/pending.yaml.
 
 Usage:
@@ -15,7 +14,7 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-from beacon.core.manifest.pending import PendingEntry, PendingManifest
+import yaml
 
 VALID_TYPES = ("skill", "context", "agent")
 VALID_ACTIONS = ("created", "modified")
@@ -36,6 +35,100 @@ def find_project_root(start: Path) -> Path | None:
         current = parent
 
 
+def _canonicalize_entry(entry: dict) -> dict:
+    """Return a new dict with created_at normalized to canonical Z string form."""
+    created_at = entry.get("created_at")
+    if isinstance(created_at, datetime):
+        if created_at.tzinfo is None:
+            ts = created_at.replace(tzinfo=UTC)
+        else:
+            ts = created_at.astimezone(UTC)
+        return {**entry, "created_at": ts.strftime("%Y-%m-%dT%H:%M:%SZ")}
+    return entry
+
+
+def _validate_entry(entry: dict, index: int) -> dict:
+    """Validate a pending.yaml entry; exit 1 with a clear message on failure."""
+    if not isinstance(entry, dict):
+        print(
+            f"Error: pending.yaml entry #{index}: must be a mapping,"
+            f" got {type(entry).__name__}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    required_fields = ("path", "type", "action", "source", "created_at")
+    for field in required_fields:
+        if field not in entry:
+            print(
+                f"Error: pending.yaml entry #{index}: missing required field '{field}'",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+    if entry["type"] not in VALID_TYPES:
+        print(
+            f"Error: pending.yaml entry #{index}: invalid type {entry['type']!r},"
+            f" must be one of {VALID_TYPES}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    if entry["action"] not in VALID_ACTIONS:
+        print(
+            f"Error: pending.yaml entry #{index}: invalid action {entry['action']!r},"
+            f" must be one of {VALID_ACTIONS}",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    if not isinstance(entry["path"], str):
+        print(
+            f"Error: pending.yaml entry #{index}: 'path' must be a string",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    if not isinstance(entry["source"], str):
+        print(
+            f"Error: pending.yaml entry #{index}: 'source' must be a string",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    created_at = entry["created_at"]
+    if isinstance(created_at, datetime):
+        pass
+    elif isinstance(created_at, str):
+        try:
+            parsed = datetime.strptime(created_at, "%Y-%m-%dT%H:%M:%SZ")
+        except ValueError as exc:
+            print(
+                f"Error: pending.yaml entry #{index}: 'created_at' is not a valid"
+                f" UTC timestamp in '%Y-%m-%dT%H:%M:%SZ' format ({exc})",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        canonical = parsed.strftime("%Y-%m-%dT%H:%M:%SZ")
+        if canonical != created_at:
+            print(
+                f"Error: pending.yaml entry #{index}: 'created_at' {created_at!r}"
+                f" is not in canonical '%Y-%m-%dT%H:%M:%SZ' form"
+                f" (expected {canonical!r}; check zero-padding)",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+    else:
+        print(
+            f"Error: pending.yaml entry #{index}: 'created_at' must be a datetime"
+            f" or a string in '%Y-%m-%dT%H:%M:%SZ' format",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    return entry
+
+
 def append_pending_entry(
     project_root: Path,
     path: str,
@@ -45,16 +138,57 @@ def append_pending_entry(
 ) -> None:
     """Append a pending entry to .agentic-beacon/pending.yaml."""
     pending_path = project_root / ".agentic-beacon" / "pending.yaml"
-    manifest = PendingManifest.from_yaml(pending_path)
-    entry = PendingEntry(
-        path=path,
-        type=type_,
-        action=action,
-        source=source,
-        created_at=datetime.now(UTC),
-    )
-    manifest.append(entry)
-    manifest.to_yaml(pending_path)
+
+    entries: list[dict] = []
+    if pending_path.exists():
+        try:
+            with open(pending_path, encoding="utf-8") as f:
+                data = yaml.safe_load(f)
+        except yaml.YAMLError as e:
+            print(f"Error: invalid YAML in {pending_path}: {e}", file=sys.stderr)
+            sys.exit(1)
+
+        if data is None:
+            entries = []
+        elif not isinstance(data, dict):
+            print(
+                f"Error: pending.yaml must be a YAML mapping, got {type(data).__name__}",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        else:
+            raw_entries = data.get("pending", [])
+            if raw_entries is None:
+                entries = []
+            elif not isinstance(raw_entries, list):
+                print(
+                    "Error: 'pending' field must be a list",
+                    file=sys.stderr,
+                )
+                sys.exit(1)
+            else:
+                validated = [_validate_entry(e, i) for i, e in enumerate(raw_entries)]
+                entries = [_canonicalize_entry(e) for e in validated]
+
+    created_at_str = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    new_entry = {
+        "path": path,
+        "type": type_,
+        "action": action,
+        "source": source,
+        "created_at": created_at_str,
+    }
+    entries.append(new_entry)
+
+    pending_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(pending_path, "w", encoding="utf-8") as f:
+        yaml.dump(
+            {"pending": entries},
+            f,
+            default_flow_style=False,
+            sort_keys=False,
+            allow_unicode=True,
+        )
 
 
 def main() -> None:
