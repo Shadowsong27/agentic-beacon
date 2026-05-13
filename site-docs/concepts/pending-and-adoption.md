@@ -39,7 +39,7 @@ Knowledge files are **not** tracked in `pending.yaml`. They are auto-derived dur
 
 ## The Author → Pending Pipeline
 
-`record-skill` (and `record-context`, `record-agent` for other artifact types) writes to two places in a single agent action:
+`record-skill` writes to two places in a single agent action (future bundled skills may add `/record-context` and `/record-agent` to author contexts and agents directly; for now, contexts and agents are authored by hand and added to `pending.yaml` manually):
 
 ```
 /record-skill
@@ -102,10 +102,10 @@ Proposed changes
   Deferring:
     ~ (nothing)
 
-Apply? [y/N]
+Enter to proceed  Escape to cancel
 ```
 
-Press `y` (or `Enter`) to commit. Press `n` or `Esc` to return to the TUI without writing anything.
+Press `Enter` to commit. Press `Escape` or `q` to return to the TUI without writing anything.
 
 ---
 
@@ -155,7 +155,7 @@ cat .agentic-beacon/pending.yaml
 abc adopt
 # → mark the entry as: accept / reject / defer (↑↓ to navigate, Space to select)
 # → confirm screen shows projected mutations
-# → press y to commit
+# → press Enter to commit
 
 # After commit (accept path):
 #   .agentic-beacon/beacon.yaml   ← skills/python-type-hints/ added

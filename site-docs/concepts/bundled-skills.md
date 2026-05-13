@@ -39,12 +39,11 @@ Scaffolds a new skill in the warehouse's `skills/<name>/` directory and appends 
 
 ## Where Skills Are Wired
 
-After `abc adopt` (or `abc sync`) runs, each bundled skill appears in three locations in your project:
+After `abc adopt` (or `abc sync`) runs, each bundled skill appears in these locations in your project:
 
 ```
 my-project/
 ├── .claude/
-│   ├── commands/record-knowledge.md   # Claude Code slash-command stub
 │   └── skills/record-knowledge/
 │       └── SKILL.md
 └── .opencode/
@@ -53,7 +52,11 @@ my-project/
         └── SKILL.md
 ```
 
-Both tools discover skills identically — a file at `skills/<name>/SKILL.md` under their config directory. You do not need separate configuration for each tool.
+- `.opencode/command/<skill>.md` — OpenCode slash-command stub
+- `.opencode/skills/<skill>/SKILL.md` — OpenCode skill copy
+- `.claude/skills/<skill>/SKILL.md` — Claude Code skill copy
+
+Claude Code discovers skills directly from `.claude/skills/` — there's no equivalent of the `.opencode/command/` stub file.
 
 ---
 
