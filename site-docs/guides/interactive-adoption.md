@@ -49,6 +49,8 @@ When you press `Enter`, `abc adopt` runs a single session-atomic commit:
 
 The entire workflow — select → write config → sync → wire — happens in one step. If anything fails mid-commit, the manifests are restored to their pre-commit state.
 
+For the underlying storage model (`pending.yaml`, `.last-adopt`, atomic rollback), see [Pending & Adoption](../concepts/pending-and-adoption.md).
+
 > Editing `beacon.yaml` manually instead of going through the TUI? Run `abc sync` yourself afterward — the auto-sync described above only fires from the TUI confirm path.
 
 ---

@@ -79,6 +79,8 @@ nav:
   - Quick Start: quickstart.md
   - Concepts:
     - How It Works: concepts/how-it-works.md
+    - Bundled Skills: concepts/bundled-skills.md
+    - Pending & Adoption: concepts/pending-and-adoption.md
     - Artifact Types: concepts/artifact-types.md
   - Guides:
     - Creating a Warehouse: guides/warehouse-creation.md

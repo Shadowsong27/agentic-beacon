@@ -1,5 +1,7 @@
 # Creating Skills
 
+> This guide covers user-authored **warehouse skills**. For the `record-*` skills shipped with `abc`, see [Bundled Skills](../concepts/bundled-skills.md).
+
 Skills are reusable agent workflows stored in your warehouse. When a project syncs a skill, the agent can invoke it as a slash command to follow a consistent, repeatable process.
 
 ## What Is a Skill?

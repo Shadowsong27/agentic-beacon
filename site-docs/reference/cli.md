@@ -162,7 +162,7 @@ abc setup
 
 ### `abc adopt`
 
-Open an interactive TUI to browse and select warehouse artifacts. Applying your selection writes the new entries to `beacon.yaml` (clearing matching `pending.yaml` entries) and immediately syncs them — symlinks are created and contexts / skills / agents are wired into the project. In non-interactive contexts (no TTY) the command prints the candidate list and exits; you must edit `beacon.yaml` manually and then run `abc sync`.
+Open an interactive TUI to browse and select warehouse artifacts. Applying your selection writes the new entries to `beacon.yaml` (clearing matching `pending.yaml` entries) and immediately syncs them — symlinks are created and contexts / skills / agents are wired into the project. In non-interactive contexts (no TTY) the command prints the candidate list and exits; you must edit `beacon.yaml` manually and then run `abc sync`. See [Pending & Adoption](../concepts/pending-and-adoption.md) for the underlying file model.
 
 ```bash
 abc adopt [OPTIONS]
@@ -227,7 +227,7 @@ abc status [OPTIONS]
 |--------|-------------|
 | `--project PATH` | Check a specific project directory |
 
-Displays the connected warehouse path, configured contexts/skills (with ✓/✗ for synced status), bundled skills status, and total synced file count.
+Displays the connected warehouse path, configured contexts/skills (with ✓/✗ for synced status), bundled skills status, and total synced file count. See [Bundled Skills](../concepts/bundled-skills.md) for the list and walkthrough.
 
 ---
 
