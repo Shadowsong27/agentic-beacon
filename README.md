@@ -18,6 +18,8 @@
 
 > *Git for AI Prompts. DRY for AI Agents.*
 
+Beacon also handles **agent config wiring** — it bootstraps and maintains your agent's config files (`opencode.json`, `CLAUDE.md`) so synced artifacts are picked up without hand-editing. See [Agent Config Wiring](https://shadowsong27.github.io/agentic-beacon/concepts/how-it-works/#agent-config-wiring) for details.
+
 ## Quickstart
 
 ### Installation

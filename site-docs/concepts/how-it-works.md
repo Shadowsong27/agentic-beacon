@@ -131,6 +131,33 @@ The dependency resolver finds that reference and adds it to the sync set automat
 
 ---
 
+## Agent Config Wiring
+
+Beacon does not just distribute warehouse content — it also owns the **agent config files** that wire that content into the agent's runtime.
+
+Agent config files are the per-project files your AI tool reads at session start:
+
+| Tool | Agent config file |
+|------|-------------------|
+| OpenCode | `opencode.json` (project root) |
+| Claude Code | `CLAUDE.md` (project root or `.claude/CLAUDE.md`) |
+
+Two stages of wiring happen automatically:
+
+1. **Bootstrap on setup.** `abc setup` and `abc warehouse init` create a minimal `opencode.json` (with `$schema` + empty `instructions`) and an empty `CLAUDE.md` if either is missing. If they already exist, beacon never overwrites them.
+2. **Reference wiring on sync.** Every `abc sync` updates the agent config files so the synced contexts are loaded by the agent on next start:
+   - In `opencode.json`, the relative path of each adopted context is added to the `instructions` array.
+   - In `CLAUDE.md`, an `@.agentic-beacon/artifacts/contexts/<name>.md` reference is appended for each adopted context.
+3. **Pruning on unsync.** When a context is removed from `beacon.yaml`, beacon also removes its reference from `opencode.json` and `CLAUDE.md` — so the config never points at a stale or missing file.
+
+Guarantees:
+
+- **Idempotent.** Running `abc sync` repeatedly never duplicates entries.
+- **Non-destructive.** Beacon only adds/removes its own references; user-authored entries in `opencode.json` and `CLAUDE.md` are preserved.
+- **Tool-detected.** Wiring is performed only for tools whose config files are present. Beacon will not silently install a config for a tool you do not use.
+
+---
+
 ## Tool Detection
 
 `abc sync` auto-detects which AI tools are installed and wires artifacts accordingly:

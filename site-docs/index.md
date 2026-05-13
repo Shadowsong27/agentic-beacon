@@ -2,7 +2,7 @@
 
 **The package manager for AI coding agents.**
 
-Centrally manage and distribute contexts, knowledge, and skills across your team — with native support for Claude Code and OpenCode.
+Centrally manage and distribute contexts, knowledge, and skills across your team — with native support for Claude Code and OpenCode. Beacon also handles **agent config wiring**: it bootstraps and maintains your agent's config files (`opencode.json`, `CLAUDE.md`) so synced artifacts are picked up without hand-editing.
 
 > *Git for AI Prompts. DRY for AI Agents.*
 
@@ -57,7 +57,7 @@ Four types form the core of a warehouse, organized by two axes: **project scope*
 | **Project-scoped** | 📄 Contexts · 🧠 Knowledge | ⚡ Skills · 🤖 Agents |
 | **Global** | — | — |
 
-- **Contexts** — boot instructions and coding standards; declared in `beacon.yaml`, wired into `opencode.json` / `CLAUDE.md` on sync
+- **Contexts** — boot instructions and coding standards; declared in `beacon.yaml`. Beacon performs **agent config wiring** — it creates `opencode.json` / `CLAUDE.md` if missing and writes synced context references into them on every `abc sync`.
 - **Knowledge** — decisions, lessons, and facts; auto-derived from markdown links in contexts and skills — no manual configuration needed
 - **Skills** — reusable workflows with frontmatter `requires:` dependencies; installed as slash commands
 - **Agents** — sub-agent definitions declared per-project in `beacon.yaml`; wired into project-local `.claude/agents/` and `.opencode/agents/` on sync
