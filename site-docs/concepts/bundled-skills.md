@@ -2,7 +2,7 @@
 
 > This page covers skills shipped inside `abc` itself. For user-authored warehouse skills, see [Creating Skills](../guides/creating-skills.md).
 
-Agentic Beacon ships two skills inside the `abc` package. These **bundled skills** are available in every project the moment you run `abc adopt` — no warehouse content required. Their purpose is to bootstrap content authoring: on a fresh project, before your warehouse has any skills, you can still invoke `/record-knowledge` and `/record-skill` to start building it.
+Agentic Beacon ships two skills inside the `abc` package. These **bundled skills** become available in a project after `abc sync` runs (always wires them), or after `abc adopt` (only when an adoption commit fires — see [When Wiring Happens](#when-wiring-happens) below) — no warehouse content required. Their purpose is to bootstrap content authoring: on a fresh project, before your warehouse has any skills, you can still invoke `/record-knowledge` and `/record-skill` to start building it.
 
 ---
 
@@ -143,7 +143,7 @@ This walkthrough assumes you have already run `abc warehouse connect`, `abc setu
 
 # 2. Back in your shell — notice the pending alert:
 abc warehouse status
-# → "[yellow]Pending:[/yellow] 1 unadopted artifact (run 'abc adopt')"
+# → "⚠ 1 pending artifacts. Run 'abc adopt' to wire them."
 
 # 3. Review and accept the pending entry
 abc adopt

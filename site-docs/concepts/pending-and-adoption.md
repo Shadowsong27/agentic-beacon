@@ -64,7 +64,7 @@ The script walks up the directory tree from the calling agent's working director
 Every `abc` subcommand prints a one-line notice to stderr when `pending.yaml` is non-empty:
 
 ```
-[yellow]Pending:[/yellow] 2 unadopted artifacts (run 'abc adopt')
+⚠ 2 pending artifacts. Run 'abc adopt' to wire them.
 ```
 
 This does not affect the subcommand's exit code. It fires on every command — `abc sync`, `abc warehouse status`, `abc doctor` — until you run `abc adopt` and clear the entries.
@@ -140,7 +140,7 @@ It is gitignored. Future `abc adopt` invocations use it to detect hand-edited wa
 
 # 2. Pending alert appears on every abc command from now on:
 abc warehouse status
-# → "[yellow]Pending:[/yellow] 1 unadopted artifact (run 'abc adopt')"
+# → "⚠ 1 pending artifacts. Run 'abc adopt' to wire them."
 
 # 3. Inspect the pending file directly if you like:
 cat .agentic-beacon/pending.yaml
