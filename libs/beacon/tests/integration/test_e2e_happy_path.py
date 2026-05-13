@@ -17,10 +17,13 @@ unit tests:
 
 import os
 import subprocess
+from datetime import UTC, datetime
 
 import pytest
 import yaml
 from beacon.cli.main import main
+from beacon.core.manifest.pending import PendingEntry, PendingManifest
+from beacon.domains.adoption.apply import commit_session
 from click.testing import CliRunner
 
 
@@ -542,3 +545,58 @@ def test_e2e_contribute_skill_identical_live_is_noop(e2e_project):
 
     assert result.exit_code == 0
     assert "no uncommitted changes to contribute" in result.output.lower()
+
+
+# ---------------------------------------------------------------------------
+# Bug 2 (PER-151): connect → setup → adopt wires bundled skills
+# ---------------------------------------------------------------------------
+
+
+def test_e2e_adopt_wires_bundled_skills(e2e_project, isolated_home):
+    """After connect → setup → adopt, bundled skills exist as slash commands.
+
+    Regression test for PER-151: abc adopt did not wire bundled skills because
+    _default_post_sync_wiring omitted the wire_bundled_skills_per_project call.
+    """
+    project_dir, warehouse, runner = e2e_project
+
+    # Step 1: Connect (fixture's monkeypatch.chdir ensures CWD = project_dir)
+    result = runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
+    assert result.exit_code == 0, result.output
+
+    # Step 2: Setup — creates beacon.yaml, opencode.json, CLAUDE.md
+    result = runner.invoke(main, ["setup"])
+    assert result.exit_code == 0, result.output
+    assert (project_dir / "opencode.json").exists()
+
+    # Step 3: Simulate adopt commit via commit_session (non-interactive CLI exits early)
+    ab = project_dir / ".agentic-beacon"
+    artifacts = ab / "artifacts"
+    artifacts.mkdir(exist_ok=True)
+    beacon_yaml = ab / "beacon.yaml"
+
+    entry = PendingEntry(
+        path="contexts/team.md",
+        type="context",
+        action="created",
+        source="record-knowledge",
+        created_at=datetime(2026, 5, 6, 12, 0, tzinfo=UTC),
+    )
+    PendingManifest(pending=[entry]).to_yaml(ab / "pending.yaml")
+
+    commit_session(
+        to_adopt=[],
+        to_unadopt=[],
+        pending_accept=["contexts/team.md"],
+        pending_reject=[],
+        candidates=[],
+        pending_entries=[entry],
+        project_root=project_dir,
+        warehouse_path=warehouse,
+        artifacts_path=artifacts,
+        beacon_yaml_path=beacon_yaml,
+    )
+
+    # Bundled skills must be wired as OpenCode slash commands (Bug 2 regression)
+    assert (project_dir / ".opencode" / "command" / "record-knowledge.md").exists()
+    assert (project_dir / ".opencode" / "command" / "record-skill.md").exists()

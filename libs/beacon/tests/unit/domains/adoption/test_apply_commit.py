@@ -344,3 +344,115 @@ def test_sync_failure_triggers_rollback(tmp_path):
 
     assert beacon_yaml.read_bytes() == pre_beacon
     assert pending_yaml.read_bytes() == pre_pending
+
+
+# ─────────────────────────────────────────────────────────────
+# Bug 2 (PER-151): bundled skill wiring in _default_post_sync_wiring
+# ─────────────────────────────────────────────────────────────
+
+
+def test_adopt_commit_wires_bundled_skills(tmp_path, monkeypatch):
+    """commit_session calls wire_bundled_skills_per_project for the project root."""
+    wh = _make_warehouse(tmp_path)
+    (wh / "contexts" / "foo.md").write_text("# Foo\n")
+    _git_commit(wh, "add foo")
+
+    project, beacon_yaml, artifacts, ab = _make_project(tmp_path)
+    pending_entries = [_pending_entry("contexts/foo.md", "context")]
+    _write_pending(project, pending_entries)
+
+    called_with: list[Path] = []
+
+    def _fake_wire(project_root: Path, agents=None):
+        called_with.append(project_root)
+        return (["record-knowledge (opencode)", "record-skill (opencode)"], [])
+
+    monkeypatch.setattr(
+        "beacon.domains.artifact.skill.wire_bundled_skills_per_project",
+        _fake_wire,
+    )
+
+    commit_session(
+        to_adopt=[],
+        to_unadopt=[],
+        pending_accept=["contexts/foo.md"],
+        pending_reject=[],
+        candidates=[],
+        pending_entries=pending_entries,
+        project_root=project,
+        warehouse_path=wh,
+        artifacts_path=artifacts,
+        beacon_yaml_path=beacon_yaml,
+        _symlink_sync_fn=_noop_sync,
+    )
+
+    assert called_with == [project]
+
+
+def test_adopt_commit_emits_bundled_skill_summary(tmp_path, monkeypatch):
+    """wiring_notes contains the bundled-skill summary when skills were wired."""
+    wh = _make_warehouse(tmp_path)
+    (wh / "contexts" / "bar.md").write_text("# Bar\n")
+    _git_commit(wh, "add bar")
+
+    project, beacon_yaml, artifacts, ab = _make_project(tmp_path)
+    pending_entries = [_pending_entry("contexts/bar.md", "context")]
+    _write_pending(project, pending_entries)
+
+    monkeypatch.setattr(
+        "beacon.domains.artifact.skill.wire_bundled_skills_per_project",
+        lambda *a, **kw: (
+            ["record-knowledge (opencode)", "record-skill (opencode)"],
+            [],
+        ),
+    )
+
+    wiring_notes = commit_session(
+        to_adopt=[],
+        to_unadopt=[],
+        pending_accept=["contexts/bar.md"],
+        pending_reject=[],
+        candidates=[],
+        pending_entries=pending_entries,
+        project_root=project,
+        warehouse_path=wh,
+        artifacts_path=artifacts,
+        beacon_yaml_path=beacon_yaml,
+        _symlink_sync_fn=_noop_sync,
+    )
+
+    assert any("record-knowledge" in note for note in wiring_notes)
+    assert any("record-skill" in note for note in wiring_notes)
+
+
+def test_adopt_commit_no_bundled_skills_no_summary_noise(tmp_path, monkeypatch):
+    """No summary line emitted when bundled-wire returns empty wired + empty errors."""
+    wh = _make_warehouse(tmp_path)
+    (wh / "contexts" / "baz.md").write_text("# Baz\n")
+    _git_commit(wh, "add baz")
+
+    project, beacon_yaml, artifacts, ab = _make_project(tmp_path)
+    pending_entries = [_pending_entry("contexts/baz.md", "context")]
+    _write_pending(project, pending_entries)
+
+    monkeypatch.setattr(
+        "beacon.domains.artifact.skill.wire_bundled_skills_per_project",
+        lambda *a, **kw: ([], []),
+    )
+
+    wiring_notes = commit_session(
+        to_adopt=[],
+        to_unadopt=[],
+        pending_accept=["contexts/baz.md"],
+        pending_reject=[],
+        candidates=[],
+        pending_entries=pending_entries,
+        project_root=project,
+        warehouse_path=wh,
+        artifacts_path=artifacts,
+        beacon_yaml_path=beacon_yaml,
+        _symlink_sync_fn=_noop_sync,
+    )
+
+    bundled_notes = [n for n in wiring_notes if "bundled" in n.lower()]
+    assert bundled_notes == []
