@@ -146,6 +146,17 @@ def wire_contexts_claudecode(project_root: Path, artifacts_dir: Path) -> list[st
     return added
 
 
+def setup_project(beacon_yaml: Path, project_root: Path) -> None:
+    """Bootstrap all project-level scaffolding in one call.
+
+    Creates beacon.yaml from the template and unconditionally initializes
+    opencode.json and CLAUDE.md (both are no-ops if the files already exist).
+    """
+    create_beacon_template(beacon_yaml)
+    init_opencode_json(project_root)
+    init_claude_md(project_root)
+
+
 def init_opencode_json(project_root: Path) -> None:
     """Create a minimal opencode.json if one does not already exist."""
     opencode_json = project_root / "opencode.json"
