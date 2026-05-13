@@ -18,7 +18,7 @@ The file is absent or contains `pending: []` when nothing is pending. It is rege
 
 ```yaml
 pending:
-  - path: skills/python-type-hints/SKILL.md
+  - path: skills/python-type-hints/
     type: skill
     action: created
     source: record-skill
@@ -53,7 +53,7 @@ Knowledge files are **not** tracked in `pending.yaml`. They are auto-derived dur
 
 `scripts/append_pending.py` is a self-contained script with no dependency on the `beacon` package — it only requires `pyyaml>=6.0`. This makes the pipeline work for any `abc` installation (pipx, pip, uv tool install) without needing the agentic-beacon source checkout.
 
-The script walks up the directory tree from the calling agent's working directory to find the project root (the nearest ancestor containing `.agentic-beacon/config.toml`), then appends or de-duplicates the entry.
+The script walks up the directory tree from the calling agent's working directory to find the project root (the nearest ancestor containing `.agentic-beacon/config.toml`), then appends a `PendingEntry` to `pending.yaml` after validating field types and enum values. Duplicate entries are not detected — if the same artifact path is recorded twice, both entries will land in the file.
 
 **Knowledge files are a special case.** `record-knowledge` writes to `<warehouse>/knowledge/` but does **not** append to `pending.yaml`. Knowledge files are auto-derived during `abc sync` / `abc adopt` — they appear in your project's `.agentic-beacon/artifacts/knowledge/` as symlinks the next time you sync, with no explicit accept step required.
 
@@ -145,7 +145,7 @@ abc warehouse status
 # 3. Inspect the pending file directly if you like:
 cat .agentic-beacon/pending.yaml
 # pending:
-# - path: skills/python-type-hints/SKILL.md
+# - path: skills/python-type-hints/
 #   type: skill
 #   action: created
 #   source: record-skill

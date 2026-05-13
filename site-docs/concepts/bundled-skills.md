@@ -15,7 +15,7 @@ Captures a decision, lesson, or fact into the warehouse's `knowledge/` directory
 **What it does:**
 
 1. Agent prompts you for a topic, title, and content summary
-2. Writes a markdown file to `<warehouse>/knowledge/<topic>/<slug>.md`
+2. Writes a markdown file to `<warehouse>/knowledge/<topic>/<type>s/<slug>.md` (with `--topic`), or `<warehouse>/knowledge/<type>s/<slug>.md` (without topic), where `<type>` is `decision`, `lesson`, or `fact`
 3. Knowledge files are auto-derived during `abc sync` / `abc adopt` — no `pending.yaml` entry is created and no explicit accept step is required
 
 **When to invoke:** after a notable decision, a hard-won lesson, or a fact worth sharing across teams.
@@ -65,7 +65,7 @@ Claude Code discovers skills directly from `.claude/skills/` — there's no equi
 Two commands wire bundled skills:
 
 - **`abc sync`** — wires bundled skills as part of its normal artifact-sync flow.
-- **`abc adopt`** — also wires bundled skills after its commit step (added in PER-151). This means the standard first-run sequence `connect → setup → adopt` leaves bundled skills fully available without a separate `abc sync`. Note: `abc adopt` only triggers bundled wiring when at least one entry is committed in the TUI. If you open `abc adopt` and exit without any accept/reject changes, the commit doesn't fire and bundled skills won't be wired — run `abc sync` instead in that case.
+- **`abc adopt`** — also wires bundled skills after its commit step (added in PER-151). This means the standard first-run sequence `connect → setup → adopt` leaves bundled skills fully available without a separate `abc sync`. Note: `abc adopt` only triggers bundled wiring when at least one entry is accepted in the TUI (reject-only or defer-only commits do not fire post-sync wiring). If you open `abc adopt` and exit without accepting anything, run `abc sync` to wire bundled skills.
 
 ```bash
 abc warehouse connect --path ~/my-org-warehouse
