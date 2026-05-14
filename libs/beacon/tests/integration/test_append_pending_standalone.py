@@ -18,6 +18,16 @@ from pathlib import Path
 import pytest
 from beacon.core.manifest.pending import PendingManifest
 
+from tests.integration._offline_guard import _is_offline_or_cache_cold
+
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.skipif(
+        _is_offline_or_cache_cold(),
+        reason="BEACON_OFFLINE=1 set; skipping uv-network-dependent integration test",
+    ),
+]
+
 _SKILLS_DIR = (
     Path(__file__).resolve().parent.parent.parent / "src" / "beacon" / "data" / "skills"
 )
@@ -52,7 +62,6 @@ def _make_project(root: Path) -> None:
 # ----
 
 
-@pytest.mark.integration
 @pytest.mark.parametrize("skill_name", ["record-skill", "record-knowledge"])
 def test_uv_run_pep723_executes_script_without_beacon(
     skill_name: str, tmp_path: Path

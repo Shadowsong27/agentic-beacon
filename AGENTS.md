@@ -43,6 +43,20 @@ pytest                     # run from repo root (testpaths configured in root py
 
 Never `cd libs/beacon` to run tests. Never create a venv inside `libs/beacon/`.
 
+### Skipping integration tests offline
+
+Some integration tests invoke `uv run --no-project --isolated`, which resolves `pyyaml`
+from the package index on a cache-cold machine. Set `BEACON_OFFLINE=1` to skip them:
+
+```bash
+BEACON_OFFLINE=1 pytest -m integration   # skips uv-network-dependent tests
+pytest -m integration                    # runs all integration tests (default)
+```
+
+When to set it: working on a plane, on a flaky network, or deliberately running the
+suite without registry access. CI pre-warms the uv cache before the integration-test
+step, so cache-cold flakiness is eliminated there automatically.
+
 ---
 
 ## Architecture
