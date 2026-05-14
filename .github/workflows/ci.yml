@@ -49,6 +49,9 @@ jobs:
           git config --global user.email "ci@agentic-beacon.test"
           git config --global user.name "Agentic Beacon CI"
 
+      - name: Check shared scripts are in sync
+        run: python libs/beacon/scripts/sync_shared_scripts.py --check
+
       - name: Run unit tests
         run: uv run pytest -m "not integration" -q
 

@@ -25,3 +25,17 @@ repos:
     - id: ruff-format
       types_or: [ python, pyi ]
       args: [--config=pyproject.toml]
+
+- repo: local
+  hooks:
+  - id: sync-shared-scripts-check
+    name: Check shared bundled-skill scripts are in sync
+    language: python
+    entry: python libs/beacon/scripts/sync_shared_scripts.py --check
+    pass_filenames: false
+    files: >-
+      (?x)^(
+        libs/beacon/src/beacon/data/skills/_shared/scripts/.*|
+        libs/beacon/src/beacon/data/skills/record-skill/scripts/.*|
+        libs/beacon/src/beacon/data/skills/record-knowledge/scripts/.*
+      )$
