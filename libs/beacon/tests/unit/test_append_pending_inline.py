@@ -493,6 +493,12 @@ def test_main_success_path_writes_pending(mod, monkeypatch, tmp_path):
 
 
 def test_both_script_copies_byte_identical():
+    """Assert both append_pending.py copies are byte-identical.
+
+    If this test fails, run:
+        python libs/beacon/scripts/sync_skill_scripts.py --from <skill-with-correct-copy>
+    to propagate the fix to the other skill's copy.
+    """
     # Arrange
     skill_path = _SKILLS_DIR / "record-skill" / "scripts" / "append_pending.py"
     knowledge_path = _SKILLS_DIR / "record-knowledge" / "scripts" / "append_pending.py"
@@ -505,6 +511,45 @@ def test_both_script_copies_byte_identical():
     assert _sha256(skill_path) == _sha256(knowledge_path), (
         "record-skill and record-knowledge append_pending.py copies have diverged"
     )
+
+
+def test_sync_skill_scripts_detects_drift(tmp_path: Path):
+    """The sync tool's check() returns False when copies diverge."""
+    # Arrange: create a controlled pair of script dirs under tmp_path
+
+    sync_module_path = (
+        Path(__file__).resolve().parent.parent.parent
+        / "scripts"
+        / "sync_skill_scripts.py"
+    )
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "sync_skill_scripts", sync_module_path
+    )
+    sync_mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(sync_mod)
+
+    skills_dir = tmp_path / "skills"
+    for skill in ["record-skill", "record-knowledge"]:
+        (skills_dir / skill / "scripts").mkdir(parents=True)
+        (skills_dir / skill / "scripts" / "append_pending.py").write_text("# shared\n")
+        (skills_dir / skill / "scripts" / "resolve_warehouse.py").write_text(
+            "# shared\n"
+        )
+
+    # Act: identical copies → check returns True
+    assert sync_mod.check(skills_dir) is True
+
+    # Act: tamper one copy → check returns False
+    (skills_dir / "record-skill" / "scripts" / "append_pending.py").write_text(
+        "# TAMPERED\n"
+    )
+    assert sync_mod.check(skills_dir) is False
+
+    # Act: sync from the tampered skill → the other copy now matches
+    sync_mod.sync_from("record-skill", skills_dir)
+    assert sync_mod.check(skills_dir) is True
 
 
 # ----
