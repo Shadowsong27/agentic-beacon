@@ -15,3 +15,4 @@ artifacts:
   - agents/spec-planner.md
   - agents/implementation-supervisor.md
   - agents/diligent-supervisor.md
+  - agents/spec-reviewer.md
