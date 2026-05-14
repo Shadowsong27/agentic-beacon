@@ -16,6 +16,8 @@ from pathlib import Path
 
 import pytest
 
+from tests.integration._offline_guard import _is_offline_or_cache_cold
+
 _SKILLS_DIR = (
     Path(__file__).resolve().parent.parent.parent / "src" / "beacon" / "data" / "skills"
 )
@@ -167,6 +169,10 @@ _APPEND_PENDING_SKILL = _SKILLS_DIR / "record-skill" / "scripts" / "append_pendi
 
 
 @pytest.mark.integration
+@pytest.mark.skipif(
+    _is_offline_or_cache_cold(),
+    reason="BEACON_OFFLINE=1 set; skipping uv-network-dependent integration test",
+)
 def test_record_skill_e2e_write_then_append_pending(tmp_path: Path) -> None:
     """Full record-skill flow: write_skill.py then append_pending.py via uv run.
 
