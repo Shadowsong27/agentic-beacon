@@ -512,6 +512,12 @@ def test_both_script_copies_byte_identical():
         "record-skill and record-knowledge append_pending.py copies have diverged"
     )
 
+    skill_rw = _SKILLS_DIR / "record-skill" / "scripts" / "resolve_warehouse.py"
+    knowledge_rw = _SKILLS_DIR / "record-knowledge" / "scripts" / "resolve_warehouse.py"
+    assert _sha256(skill_rw) == _sha256(knowledge_rw), (
+        "record-skill and record-knowledge resolve_warehouse.py copies have diverged"
+    )
+
 
 def test_sync_skill_scripts_detects_drift(tmp_path: Path):
     """The sync tool's check() returns False when copies diverge."""
