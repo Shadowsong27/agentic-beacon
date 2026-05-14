@@ -91,6 +91,9 @@ jobs:
           git config --global user.email "ci@agentic-beacon.test"
           git config --global user.name "Agentic Beacon CI"
 
+      - name: Pre-warm uv cache for PEP 723 deps
+        run: uv run --no-project --isolated --with pyyaml python -c "import yaml"
+
       - name: Run e2e integration tests
         run: uv run pytest -m integration -v
 
