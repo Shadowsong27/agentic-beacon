@@ -154,6 +154,18 @@ from beacon.core.manifest import BeaconManifest
 2. Update any docs that show the structure diagram
 3. Test `abc warehouse init` and `abc setup` end-to-end
 
+### Editing shared bundled-skill scripts
+
+`record-skill` and `record-knowledge` each carry identical copies of `append_pending.py` and
+`resolve_warehouse.py`. Edit one copy, then propagate the change with:
+
+```bash
+python libs/beacon/scripts/sync_skill_scripts.py --from <skill-you-edited>
+```
+
+The pre-commit hook runs `--check` automatically on any commit touching either skill's `scripts/`
+directory and will block the commit if the copies have diverged.
+
 ---
 
 ## Release Process

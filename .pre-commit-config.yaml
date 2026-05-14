@@ -25,3 +25,12 @@ repos:
     - id: ruff-format
       types_or: [ python, pyi ]
       args: [--config=pyproject.toml]
+
+- repo: local
+  hooks:
+  - id: sync-skill-scripts-check
+    name: Check record-skill/record-knowledge scripts are byte-identical
+    language: python
+    entry: python libs/beacon/scripts/sync_skill_scripts.py --check
+    pass_filenames: false
+    files: ^libs/beacon/src/beacon/data/skills/(record-skill|record-knowledge)/scripts/
