@@ -174,3 +174,57 @@ def test_catalog_skills_example_uses_skills_prefix(temp_dir):
     catalog = generate_warehouse_catalog(wh)
 
     assert "skills/" in catalog
+
+
+# ========== PER-164: _partials filtering ==========
+
+
+@pytest.fixture
+def warehouse_with_partials(temp_dir):
+    """Warehouse with agents, partials, and underscore-prefixed dirs."""
+    wh = temp_dir / "warehouse"
+    wh.mkdir()
+    (wh / "agents").mkdir()
+    (wh / "contexts").mkdir()
+    (wh / "knowledge").mkdir()
+    (wh / "skills").mkdir()
+    (wh / "agents" / "foo.md").write_text("# Agent Foo")
+    (wh / "agents" / "_partials").mkdir()
+    (wh / "agents" / "_partials" / "p.md").write_text("# Partial")
+    (wh / "agents" / "_internal").mkdir()
+    (wh / "agents" / "_internal" / "q.md").write_text("# Internal")
+    (wh / "agents" / "some-dir").mkdir()
+    (wh / "agents" / "some-dir" / "regular.md").write_text("# Regular")
+    return wh
+
+
+def test_list_agents_skips_partials_dir(warehouse_with_partials, temp_dir):
+    """_list_agents skips agents/_partials/*.md (PER-164)."""
+    distributor = WarehouseDistributor(
+        warehouse_root=warehouse_with_partials,
+        target_root=temp_dir / "project",
+    )
+    result = distributor._list_agents(warehouse_with_partials / "agents")
+    assert "agents/_partials/p.md" not in result
+    assert "agents/foo.md" in result
+
+
+def test_list_agents_skips_any_underscore_dir(warehouse_with_partials, temp_dir):
+    """_list_agents skips any agents/_*/*.md (PER-164)."""
+    distributor = WarehouseDistributor(
+        warehouse_root=warehouse_with_partials,
+        target_root=temp_dir / "project",
+    )
+    result = distributor._list_agents(warehouse_with_partials / "agents")
+    assert "agents/_internal/q.md" not in result
+
+
+def test_list_agents_still_lists_plain_agents(warehouse_with_partials, temp_dir):
+    """Plain agents and nested non-underscore dirs are still listed (PER-164)."""
+    distributor = WarehouseDistributor(
+        warehouse_root=warehouse_with_partials,
+        target_root=temp_dir / "project",
+    )
+    result = distributor._list_agents(warehouse_with_partials / "agents")
+    assert "agents/foo.md" in result
+    assert "agents/some-dir/regular.md" in result

@@ -813,3 +813,123 @@ def test_wire_agent_opencode_idempotent_with_relative_readlink(tmp_path):
 
     assert pre_inode == post_inode  # idempotent — not replaced
     assert result == opencode_dir / "bar.md"
+
+
+# ---------------------------------------------------------------------------
+# PER-164: partial wiring
+# ---------------------------------------------------------------------------
+
+
+def _make_partial(base: Path, rel: str, content: str = "partial") -> Path:
+    """Create a partial file under base/agents/_partials/ and return its Path."""
+    partial = base / "agents" / "_partials" / rel
+    partial.parent.mkdir(parents=True, exist_ok=True)
+    partial.write_text(content)
+    return partial
+
+
+class TestWireAgentsAtomicallyPartials:
+    def test_partials_wired_to_both_tools(self, tmp_path):
+        """Partials under artifacts/agents/_partials/ get symlinked into both tools (PER-164)."""
+        project = tmp_path / "proj"
+        project.mkdir()
+        artifact = _make_artifact(tmp_path / "warehouse", "spec-planner.md")
+        partial = _make_partial(
+            project / ".agentic-beacon" / "artifacts",
+            "deep-review-checklist.md",
+        )
+
+        wire_agents_atomically(project, [artifact], {"claudecode", "opencode"})
+
+        cc_partial = (
+            project / ".claude" / "agents" / "_partials" / "deep-review-checklist.md"
+        )
+        oc_partial = (
+            project / ".opencode" / "agents" / "_partials" / "deep-review-checklist.md"
+        )
+        assert cc_partial.is_symlink(), (
+            f"Expected .claude partial symlink at {cc_partial}"
+        )
+        assert cc_partial.readlink() == partial
+        assert oc_partial.is_symlink(), (
+            f"Expected .opencode partial symlink at {oc_partial}"
+        )
+        assert oc_partial.readlink() == partial
+
+    def test_partials_idempotent(self, tmp_path):
+        """Re-running wire_agents_atomically does not duplicate partial symlinks (PER-164)."""
+        project = tmp_path / "proj"
+        project.mkdir()
+        artifact = _make_artifact(tmp_path / "warehouse", "spec-planner.md")
+        _make_partial(
+            project / ".agentic-beacon" / "artifacts",
+            "deep-review-checklist.md",
+        )
+
+        wire_agents_atomically(project, [artifact], {"claudecode"})
+        cc_partial = (
+            project / ".claude" / "agents" / "_partials" / "deep-review-checklist.md"
+        )
+        mtime_before = cc_partial.lstat().st_mtime
+
+        wire_agents_atomically(project, [artifact], {"claudecode"})
+        assert cc_partial.lstat().st_mtime == mtime_before
+
+    def test_partials_preserve_subdirectory_structure(self, tmp_path):
+        """Nested partial files retain their subdirectory under _partials/ (PER-164)."""
+        project = tmp_path / "proj"
+        project.mkdir()
+        artifact = _make_artifact(tmp_path / "warehouse", "spec-planner.md")
+        nested = _make_partial(
+            project / ".agentic-beacon" / "artifacts",
+            "sub/dir/nested.md",
+        )
+
+        wire_agents_atomically(project, [artifact], {"claudecode"})
+
+        cc_nested = (
+            project / ".claude" / "agents" / "_partials" / "sub" / "dir" / "nested.md"
+        )
+        assert cc_nested.is_symlink()
+        assert cc_nested.readlink() == nested
+
+    def test_no_partials_dir_is_noop(self, tmp_path):
+        """When no _partials/ directory exists, wire_agents_atomically still works."""
+        project = tmp_path / "proj"
+        project.mkdir()
+        artifact = _make_artifact(tmp_path / "warehouse", "spec-planner.md")
+
+        wire_agents_atomically(project, [artifact], {"claudecode"})
+
+        assert (project / ".claude" / "agents" / "spec-planner.md").is_symlink()
+        assert not (project / ".claude" / "agents" / "_partials").exists()
+
+    def test_partial_rollback_on_agent_failure(self, tmp_path):
+        """If an agent wire fails, partials wired before the failure are rolled back."""
+        project = tmp_path / "proj"
+        project.mkdir()
+
+        artifact_a = _make_artifact(tmp_path / "warehouse", "agent-a.md")
+        artifact_b = _make_artifact(tmp_path / "warehouse", "agent-b.md")
+        _make_partial(
+            project / ".agentic-beacon" / "artifacts",
+            "deep-review-checklist.md",
+        )
+
+        # Plant a regular file at agent-b's destination so wiring fails.
+        blocker = project / ".claude" / "agents" / "agent-b.md"
+        blocker.parent.mkdir(parents=True, exist_ok=True)
+        blocker.write_text("user content")
+
+        with pytest.raises(BeaconSyncError):
+            wire_agents_atomically(project, [artifact_a, artifact_b], {"claudecode"})
+
+        # agent-a's symlink must be rolled back.
+        dest_a = project / ".claude" / "agents" / "agent-a.md"
+        assert not dest_a.is_symlink() and not dest_a.exists()
+
+        # The partial symlink must also be rolled back.
+        cc_partial = (
+            project / ".claude" / "agents" / "_partials" / "deep-review-checklist.md"
+        )
+        assert not cc_partial.is_symlink() and not cc_partial.exists()

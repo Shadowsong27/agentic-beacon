@@ -417,9 +417,13 @@ class DeltaComparator:
             if self.agents_paths:
                 agents_dir = self.warehouse_path / "agents"
                 if agents_dir.is_dir():
+                    from beacon.domains.distribution.distributor import is_partial_path
+
                     for agent_file in sorted(agents_dir.rglob("*")):
                         if agent_file.is_file():
                             rel_path = str(agent_file.relative_to(self.warehouse_path))
+                            if is_partial_path(rel_path):
+                                continue
                             result = self.compare_file(rel_path)
                             summary.results.append(result)
 

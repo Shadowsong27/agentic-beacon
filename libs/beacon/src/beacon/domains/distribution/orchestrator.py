@@ -360,6 +360,13 @@ def run_sync(
     for agent_entry in beacon_settings.artifacts.agents:
         artifact_paths.append(agent_entry)
 
+    # Co-distribute agent partials alongside declared agents (PER-164).
+    if beacon_settings.artifacts.agents:
+        partial_matches = sync_engine.expand_glob("agents/_partials/**/*")
+        for partial_path in partial_matches:
+            if (warehouse_path / partial_path).is_file():
+                artifact_paths.append(partial_path)
+
     total_explicit = (
         len(beacon_settings.artifacts.skills)
         + len(beacon_settings.artifacts.contexts)
