@@ -209,14 +209,22 @@ def test_list_agents_skips_partials_dir(warehouse_with_partials, temp_dir):
     assert "agents/foo.md" in result
 
 
-def test_list_agents_skips_any_underscore_dir(warehouse_with_partials, temp_dir):
-    """_list_agents skips any agents/_*/*.md (PER-164)."""
+def test_list_agents_only_skips_partials_not_other_underscore_dirs(
+    warehouse_with_partials, temp_dir
+):
+    """Filter is scoped to ``_partials/`` specifically — other underscore dirs
+    are still listed because sync only co-distributes ``_partials/`` (PER-164).
+    """
     distributor = WarehouseDistributor(
         warehouse_root=warehouse_with_partials,
         target_root=temp_dir / "project",
     )
     result = distributor._list_agents(warehouse_with_partials / "agents")
-    assert "agents/_internal/q.md" not in result
+    # Anything under _partials/ is hidden …
+    assert "agents/_partials/p.md" not in result
+    # … but other leading-underscore dirs are NOT hidden, so they don't get
+    # silently swallowed by discovery while never being co-distributed.
+    assert "agents/_internal/q.md" in result
 
 
 def test_list_agents_still_lists_plain_agents(warehouse_with_partials, temp_dir):

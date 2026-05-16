@@ -10,25 +10,25 @@ from beacon.core.file_filter import ARTIFACT_IGNORE_PATTERNS
 
 
 def is_partial_path(rel: Path | str) -> bool:
-    """Return True if any directory component after 'agents/' starts with '_'.
+    """Return True if the path is under an ``agents/_partials/`` directory.
 
-    This matches the warehouse convention for shared agent partials
-    (e.g. ``agents/_partials/deep-review-checklist.md``).  Files under
-    any ``agents/_*/`` tree are treated as non-agent fragments.
+    Matches the warehouse convention for shared agent partials
+    (e.g. ``agents/_partials/deep-review-checklist.md``). The filter is
+    intentionally scoped to ``_partials/`` specifically — the same string
+    drives co-distribution in ``run_sync`` (``agents/_partials/**/*``), so
+    broadening the filter without broadening co-distribution would hide
+    files from agent listings while silently failing to ship them.
     """
-    path = Path(rel)
-    parts = path.parts
+    parts = Path(rel).parts
 
-    # Find the 'agents' prefix and inspect every directory after it.
+    # Accept both warehouse-relative ('agents/_partials/...') and
+    # agents-dir-relative ('_partials/...') input. Find the first occurrence
+    # of either marker and check the next segment.
     try:
         agents_idx = parts.index("agents")
+        return len(parts) > agents_idx + 1 and parts[agents_idx + 1] == "_partials"
     except ValueError:
-        # No 'agents' segment — treat as partial if any directory starts with '_'.
-        return any(part.startswith("_") for part in parts[:-1])
-
-    # Every directory component strictly after 'agents/' that starts with '_'
-    # makes the path a partial.  The final element (filename) is ignored.
-    return any(part.startswith("_") for part in parts[agents_idx + 1 : -1])
+        return len(parts) > 0 and parts[0] == "_partials"
 
 
 class WarehouseDistributor:
