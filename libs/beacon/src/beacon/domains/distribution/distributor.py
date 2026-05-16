@@ -9,6 +9,28 @@ from loguru import logger
 from beacon.core.file_filter import ARTIFACT_IGNORE_PATTERNS
 
 
+def is_partial_path(rel: Path | str) -> bool:
+    """Return True if the path is under an ``agents/_partials/`` directory.
+
+    Matches the warehouse convention for shared agent partials
+    (e.g. ``agents/_partials/deep-review-checklist.md``). The filter is
+    intentionally scoped to ``_partials/`` specifically — the same string
+    drives co-distribution in ``run_sync`` (``agents/_partials/**/*``), so
+    broadening the filter without broadening co-distribution would hide
+    files from agent listings while silently failing to ship them.
+    """
+    parts = Path(rel).parts
+
+    # Accept both warehouse-relative ('agents/_partials/...') and
+    # agents-dir-relative ('_partials/...') input. Find the first occurrence
+    # of either marker and check the next segment.
+    try:
+        agents_idx = parts.index("agents")
+        return len(parts) > agents_idx + 1 and parts[agents_idx + 1] == "_partials"
+    except ValueError:
+        return len(parts) > 0 and parts[0] == "_partials"
+
+
 class WarehouseDistributor:
     """Handles distribution of warehouse content to project .opencode folder."""
 
@@ -338,6 +360,8 @@ class WarehouseDistributor:
         for file in sorted(agents_dir.rglob("*.md")):
             if not file.name.startswith(".") and file.name.upper() != "README.MD":
                 rel = file.relative_to(agents_dir.parent)
+                if is_partial_path(rel):
+                    continue
                 agents.append(str(rel))
 
         return sorted(agents)

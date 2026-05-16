@@ -413,7 +413,10 @@ class DeltaComparator:
                         result = self.compare_file(rel_path)
                         summary.results.append(result)
 
-            # Also iterate agents/ from warehouse when agents_paths is configured
+            # Also iterate agents/ from warehouse when agents_paths is configured.
+            # Partials are co-distributed alongside agents (PER-164), so they
+            # are intentionally NOT skipped here — delta must surface missing
+            # or stale partial symlinks just like it does for agent files.
             if self.agents_paths:
                 agents_dir = self.warehouse_path / "agents"
                 if agents_dir.is_dir():

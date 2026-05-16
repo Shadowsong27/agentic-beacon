@@ -965,3 +965,86 @@ def test_readme_filtered_from_warehouse_agent_catalog(
     assert "agents/README.md" not in agent_list, (
         f"README.md must be filtered from agent list; got: {agent_list}"
     )
+
+
+# ---------------------------------------------------------------------------
+# PER-164: agent partials co-distribution
+# ---------------------------------------------------------------------------
+
+
+def test_sync_with_agent_partials(project_dir: Path, warehouse: Path, monkeypatch):
+    """Warehouse with agents/_partials/ — partials are synced and wired but NOT adoptable.
+
+    Covers PER-164 Layer A (filter partials from agent listings) and
+    Layer B (co-distribute partials alongside declared agents).
+    """
+    # Plant a partial file and an agent that references it.
+    (warehouse / "agents" / "_partials").mkdir()
+    (warehouse / "agents" / "_partials" / "deep-review-checklist.md").write_text(
+        "## Deep Review Checklist\n- [ ] Item 1\n"
+    )
+    (warehouse / "agents" / "implementation-supervisor.md").write_text(
+        "---\nname: implementation-supervisor\n---\n"
+        "[`_partials/deep-review-checklist.md`](_partials/deep-review-checklist.md)\n"
+    )
+    manifest_path = warehouse / "agents" / "agents.yaml"
+    manifest = yaml.safe_load(manifest_path.read_text()) or {}
+    manifest["implementation-supervisor"] = {"skills": []}
+    manifest_path.write_text(yaml.safe_dump(manifest))
+    _git_add_commit(warehouse, "add partial and agent")
+
+    runner = CliRunner()
+    monkeypatch.chdir(project_dir)
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n"
+        "  contexts: []\n"
+        "  skills: []\n"
+        "  agents:\n"
+        "    - agents/implementation-supervisor.md\n"
+    )
+
+    r = runner.invoke(main, ["sync", "--skip-git-check"])
+    assert r.exit_code == 0, f"sync failed: {r.output}"
+
+    # Partial must appear under .agentic-beacon/artifacts/agents/_partials/
+    artifact_partial = (
+        project_dir
+        / ".agentic-beacon"
+        / "artifacts"
+        / "agents"
+        / "_partials"
+        / "deep-review-checklist.md"
+    )
+    assert artifact_partial.is_symlink(), (
+        f"Expected artifact partial symlink at {artifact_partial}"
+    )
+    assert artifact_partial.exists(), (
+        f"Artifact partial symlink is broken: {artifact_partial}"
+    )
+
+    # Partial must be wired into .claude/agents/_partials/
+    claude_partial = (
+        project_dir / ".claude" / "agents" / "_partials" / "deep-review-checklist.md"
+    )
+    assert claude_partial.is_symlink(), (
+        f"Expected .claude partial symlink at {claude_partial}"
+    )
+    assert claude_partial.exists(), (
+        f".claude partial symlink is broken: {claude_partial}"
+    )
+
+    # Partial must NOT be discoverable as an adoptable agent.
+    from beacon.domains.distribution.distributor import WarehouseDistributor
+
+    distributor = WarehouseDistributor(
+        warehouse_root=warehouse, target_root=project_dir
+    )
+    agent_list = distributor._list_agents(warehouse / "agents")
+    assert "agents/_partials/deep-review-checklist.md" not in agent_list, (
+        f"Partial must not appear in agent list; got: {agent_list}"
+    )
+    assert "agents/implementation-supervisor.md" in agent_list, (
+        f"Real agent must still be listed; got: {agent_list}"
+    )

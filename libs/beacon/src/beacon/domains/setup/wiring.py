@@ -462,6 +462,54 @@ def wire_agent_opencode(project_root: Path, artifact_file: Path) -> Path:
     return dest
 
 
+def _wire_partial(
+    project_root: Path,
+    partial_file: Path,
+    rel: Path,
+    tool: str,
+) -> Path:
+    """Create a symlink for a partial file under .<tool>/agents/<rel>.
+
+    Idempotent: if the symlink already points at the same target, it is left
+    unchanged.  A stale symlink pointing at a different target is replaced.
+    The parent directory is created if it does not exist.
+
+    Args:
+        project_root: Project root directory.
+        partial_file: Path to the partial artifact file (the symlink target).
+        rel: Relative path under agents/ (e.g. _partials/deep-review-checklist.md).
+        tool: "claudecode" or "opencode".
+
+    Returns:
+        Path to the created (or existing) symlink.
+    """
+    tool_dir = ".claude" if tool == "claudecode" else ".opencode"
+    dest = project_root / tool_dir / "agents" / rel
+    dest.parent.mkdir(parents=True, exist_ok=True)
+
+    if dest.is_symlink():
+        try:
+            if dest.resolve(strict=False) == partial_file.resolve(strict=False):
+                return dest
+        except OSError:
+            pass
+        dest.unlink()
+    elif dest.exists():
+        raise RegularFileConflictError(
+            conflicts=[
+                AgentWireConflict(
+                    dest=dest,
+                    agent_name=str(rel),
+                    tool=tool,
+                ),
+            ],
+        )
+
+    dest.symlink_to(partial_file)
+    logger.debug("Wired partial to {}/agents/: {}", tool_dir, rel)
+    return dest
+
+
 def wire_agents_atomically(
     project_root: Path,
     agent_artifact_files: list[Path],
@@ -473,6 +521,10 @@ def wire_agents_atomically(
     pre-wire state, then calls the tool-specific wire_agent_* helper. If any
     wire raises, restores ALL previously-wired destinations to their pre-wire
     state and re-raises the original exception.
+
+    When partial files exist under .agentic-beacon/artifacts/agents/_partials/,
+    they are also wired into each detected tool's .<tool>/agents/_partials/
+    directory (PER-164).
 
     Args:
         project_root: Root of the project (where .claude/ / .opencode/ live).
@@ -505,6 +557,15 @@ def wire_agents_atomically(
         operates at a tighter atomic boundary (single session commit) where
         any partial restore is itself a correctness concern worth raising.
     """
+    # Collect partial files from .agentic-beacon/artifacts/agents/_partials/
+    artifacts_agents_dir = project_root / ".agentic-beacon" / "artifacts" / "agents"
+    partial_files: list[Path] = []
+    partials_dir = artifacts_agents_dir / "_partials"
+    if partials_dir.is_dir():
+        for p in sorted(partials_dir.rglob("*")):
+            if p.is_file():
+                partial_files.append(p)
+
     # Pre-flight: collect ALL regular-file conflicts before touching anything.
     # Aborts with a structured error so the caller can present every blocked
     # destination in one pass rather than failing on the first one found.
@@ -534,6 +595,31 @@ def wire_agents_atomically(
                         tool="opencode",
                     )
                 )
+
+    # Also check partial destinations (PER-164)
+    for partial_file in partial_files:
+        rel = partial_file.relative_to(artifacts_agents_dir)
+        if "claudecode" in detected_tools:
+            cc_dest = project_root / ".claude" / "agents" / rel
+            if cc_dest.is_file() and not cc_dest.is_symlink():
+                pre_conflicts.append(
+                    AgentWireConflict(
+                        dest=cc_dest,
+                        agent_name=str(rel),
+                        tool="claudecode",
+                    )
+                )
+        if "opencode" in detected_tools:
+            oc_dest = project_root / ".opencode" / "agents" / rel
+            if oc_dest.is_file() and not oc_dest.is_symlink():
+                pre_conflicts.append(
+                    AgentWireConflict(
+                        dest=oc_dest,
+                        agent_name=str(rel),
+                        tool="opencode",
+                    )
+                )
+
     if pre_conflicts:
         raise RegularFileConflictError(conflicts=pre_conflicts)
 
@@ -581,6 +667,18 @@ def wire_agents_atomically(
                 oc_dest = project_root / ".opencode" / "agents" / leaf
                 snapshots.append((oc_dest, *snapshot_agent_path(oc_dest)))
                 wire_agent_opencode(project_root, artifact_file)
+
+        # Wire partials into each detected tool (PER-164)
+        for partial_file in partial_files:
+            rel = partial_file.relative_to(artifacts_agents_dir)
+            if "claudecode" in detected_tools:
+                cc_dest = project_root / ".claude" / "agents" / rel
+                snapshots.append((cc_dest, *snapshot_agent_path(cc_dest)))
+                _wire_partial(project_root, partial_file, rel, "claudecode")
+            if "opencode" in detected_tools:
+                oc_dest = project_root / ".opencode" / "agents" / rel
+                snapshots.append((oc_dest, *snapshot_agent_path(oc_dest)))
+                _wire_partial(project_root, partial_file, rel, "opencode")
     except Exception:
         _rollback()
         raise
