@@ -494,16 +494,25 @@ def test_main_success_path_writes_pending(mod, monkeypatch, tmp_path):
 
 def test_both_script_copies_byte_identical():
     # Arrange
+    canonical_path = _SKILLS_DIR / "_shared" / "scripts" / "append_pending.py"
     skill_path = _SKILLS_DIR / "record-skill" / "scripts" / "append_pending.py"
     knowledge_path = _SKILLS_DIR / "record-knowledge" / "scripts" / "append_pending.py"
 
-    # Act
     def _sha256(p: Path) -> str:
         return hashlib.sha256(p.read_bytes()).hexdigest()
 
-    # Assert
+    canonical_hash = _sha256(canonical_path)
+
+    # Assert both skill copies match each other (regression check)
     assert _sha256(skill_path) == _sha256(knowledge_path), (
         "record-skill and record-knowledge append_pending.py copies have diverged"
+    )
+    # Assert each skill copy matches the canonical source
+    assert _sha256(skill_path) == canonical_hash, (
+        "record-skill append_pending.py diverged from _shared/scripts/append_pending.py"
+    )
+    assert _sha256(knowledge_path) == canonical_hash, (
+        "record-knowledge append_pending.py diverged from _shared/scripts/append_pending.py"
     )
 
 
