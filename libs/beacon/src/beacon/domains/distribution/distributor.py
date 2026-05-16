@@ -9,6 +9,28 @@ from loguru import logger
 from beacon.core.file_filter import ARTIFACT_IGNORE_PATTERNS
 
 
+def is_partial_path(rel: Path | str) -> bool:
+    """Return True if any directory component after 'agents/' starts with '_'.
+
+    This matches the warehouse convention for shared agent partials
+    (e.g. ``agents/_partials/deep-review-checklist.md``).  Files under
+    any ``agents/_*/`` tree are treated as non-agent fragments.
+    """
+    path = Path(rel)
+    parts = path.parts
+
+    # Find the 'agents' prefix and inspect every directory after it.
+    try:
+        agents_idx = parts.index("agents")
+    except ValueError:
+        # No 'agents' segment — treat as partial if any directory starts with '_'.
+        return any(part.startswith("_") for part in parts[:-1])
+
+    # Every directory component strictly after 'agents/' that starts with '_'
+    # makes the path a partial.  The final element (filename) is ignored.
+    return any(part.startswith("_") for part in parts[agents_idx + 1 : -1])
+
+
 class WarehouseDistributor:
     """Handles distribution of warehouse content to project .opencode folder."""
 
@@ -338,6 +360,8 @@ class WarehouseDistributor:
         for file in sorted(agents_dir.rglob("*.md")):
             if not file.name.startswith(".") and file.name.upper() != "README.MD":
                 rel = file.relative_to(agents_dir.parent)
+                if is_partial_path(rel):
+                    continue
                 agents.append(str(rel))
 
         return sorted(agents)
