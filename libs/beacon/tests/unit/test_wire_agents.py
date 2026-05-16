@@ -904,8 +904,59 @@ class TestWireAgentsAtomicallyPartials:
         assert (project / ".claude" / "agents" / "spec-planner.md").is_symlink()
         assert not (project / ".claude" / "agents" / "_partials").exists()
 
-    def test_partial_rollback_on_agent_failure(self, tmp_path):
-        """If an agent wire fails, partials wired before the failure are rolled back."""
+    def test_partial_rolled_back_when_later_partial_wire_fails(
+        self, tmp_path, monkeypatch
+    ):
+        """Real rollback exercise: monkeypatch _wire_partial to raise on the second
+        invocation. The first partial AND the previously-wired agent must be
+        rolled back. (PER-164; addresses opencode-review round-2 finding that
+        the pre-flight conflict path was being checked instead of the in-flight
+        rollback path.)
+        """
+        from beacon.domains.setup import wiring as wiring_mod
+
+        project = tmp_path / "proj"
+        project.mkdir()
+        artifact = _make_artifact(tmp_path / "warehouse", "spec-planner.md")
+        _make_partial(project / ".agentic-beacon" / "artifacts", "first.md", "first")
+        _make_partial(project / ".agentic-beacon" / "artifacts", "second.md", "second")
+
+        # Wrap the real _wire_partial: succeed the first time, raise the second.
+        real_wire_partial = wiring_mod._wire_partial
+        calls = {"n": 0}
+
+        def flaky_wire_partial(*args, **kwargs):
+            calls["n"] += 1
+            if calls["n"] == 2:
+                raise BeaconSyncError("simulated mid-wire failure")
+            return real_wire_partial(*args, **kwargs)
+
+        monkeypatch.setattr(wiring_mod, "_wire_partial", flaky_wire_partial)
+
+        with pytest.raises(BeaconSyncError, match="simulated mid-wire failure"):
+            wire_agents_atomically(project, [artifact], {"claudecode"})
+
+        # Agent symlink must be rolled back …
+        dest_agent = project / ".claude" / "agents" / "spec-planner.md"
+        assert not dest_agent.is_symlink() and not dest_agent.exists()
+
+        # … the first partial (wired before the failure) must be rolled back …
+        first = project / ".claude" / "agents" / "_partials" / "first.md"
+        assert not first.is_symlink() and not first.exists()
+
+        # … and the second partial (whose wire raised) must not have been
+        # left behind either.
+        second = project / ".claude" / "agents" / "_partials" / "second.md"
+        assert not second.is_symlink() and not second.exists()
+
+        # Sanity: the flaky wrapper was actually invoked twice.
+        assert calls["n"] == 2
+
+    def test_preflight_blocks_when_regular_file_at_agent_dest(self, tmp_path):
+        """Companion test for the pre-flight path the original (vacuous) rollback
+        test was actually exercising: a regular file at an agent destination must
+        raise RegularFileConflictError BEFORE any symlink is written.
+        """
         project = tmp_path / "proj"
         project.mkdir()
 
@@ -916,20 +967,15 @@ class TestWireAgentsAtomicallyPartials:
             "deep-review-checklist.md",
         )
 
-        # Plant a regular file at agent-b's destination so wiring fails.
         blocker = project / ".claude" / "agents" / "agent-b.md"
         blocker.parent.mkdir(parents=True, exist_ok=True)
         blocker.write_text("user content")
 
-        with pytest.raises(BeaconSyncError):
+        with pytest.raises(RegularFileConflictError):
             wire_agents_atomically(project, [artifact_a, artifact_b], {"claudecode"})
 
-        # agent-a's symlink must be rolled back.
-        dest_a = project / ".claude" / "agents" / "agent-a.md"
-        assert not dest_a.is_symlink() and not dest_a.exists()
-
-        # The partial symlink must also be rolled back.
-        cc_partial = (
-            project / ".claude" / "agents" / "_partials" / "deep-review-checklist.md"
-        )
-        assert not cc_partial.is_symlink() and not cc_partial.exists()
+        # Pre-flight aborted before any wire: agent-a is untouched, partial is untouched,
+        # blocker file is preserved.
+        assert not (project / ".claude" / "agents" / "agent-a.md").exists()
+        assert not (project / ".claude" / "agents" / "_partials").exists()
+        assert blocker.read_text() == "user content"
