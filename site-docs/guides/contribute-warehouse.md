@@ -129,8 +129,14 @@ abc warehouse contribute -m "docs(cicd): add deploy-via-git lesson" \
     --paths knowledge/cicd/lessons/deploy-via-git.md
 ```
 
-When a single cohesive group covers all included files, `--paths` is omitted and
-`abc warehouse contribute` stages whatever is dirty in the working tree.
+**Always pass `--paths`** when the skill flow excluded any dirty file as
+*leave-for-later*. Omitting `--paths` causes `abc warehouse contribute` to
+stage every dirty tracked file in the working tree, which would sweep
+deferred files into the commit and break the skill's "leave-for-later files
+are never modified" contract. The only safe case for omitting `--paths` is
+when there is exactly one cohesive group AND no files were excluded from
+the contribution — in practice the skill always passes `--paths` to stay
+unambiguously safe.
 
 ---
 
