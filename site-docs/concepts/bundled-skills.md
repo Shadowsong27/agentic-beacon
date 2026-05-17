@@ -50,7 +50,7 @@ lint gate, intent triage, semantic dedup scan, cohesion split, and atomic push.
 4. Scans for semantic dedup in `knowledge/` files
 5. Checks cohesion and proposes a commit split if needed
 6. Drafts Conventional Commits messages via `draft_commit_message.py`
-7. Calls `abc warehouse contribute -m "<msg>"` per commit group (no `--push`)
+7. Calls `abc warehouse contribute -m "<msg>" --paths <file> [<file> ...]` per commit group (no `--push`); omits `--paths` when all included files form a single cohesive group
 8. Pushes all commits atomically via `push_warehouse.py`
 
 **When to invoke:** when you want to commit and push warehouse changes through a

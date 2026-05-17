@@ -36,7 +36,7 @@ The skill runs these steps in order:
 5. **Dedup scan** (knowledge/ files only) — scan sibling files for overlapping content
 6. **Cohesion check** — determine if the included files form one cohesive change or should be split
 7. **Draft commit message(s)** — call `draft_commit_message.py` to produce Conventional Commits messages
-8. **Commit each group** — call `abc warehouse contribute -m "<message>"` per group (no `--push`)
+8. **Commit each group** — call `abc warehouse contribute -m "<message>" --paths <file1> [<file2> ...]` per group (no `--push`)
 9. **Atomic push** — call `push_warehouse.py` exactly once after all commits land
 
 ---
@@ -119,7 +119,18 @@ knowledge/python/lessons/type-hints.md + knowledge/cicd/lessons/deploy-via-git.m
     Commit 2: CI deployment lesson
 ```
 
-You confirm the split (or adjust it) before any commit is made.
+You confirm the split (or adjust it) before any commit is made. Each group is then
+committed with its own `--paths` list, for example:
+
+```bash
+abc warehouse contribute -m "docs(python): add type hints lesson" \
+    --paths knowledge/python/lessons/type-hints.md
+abc warehouse contribute -m "docs(cicd): add deploy-via-git lesson" \
+    --paths knowledge/cicd/lessons/deploy-via-git.md
+```
+
+When a single cohesive group covers all included files, `--paths` is omitted and
+`abc warehouse contribute` stages whatever is dirty in the working tree.
 
 ---
 
@@ -242,7 +253,7 @@ The skill ships four PEP 723 helper scripts in its `scripts/` directory:
 | Script | Dependencies | Purpose |
 |---|---|---|
 | `resolve_warehouse.py` | stdlib only | Resolve warehouse path from `.agentic-beacon/config.toml` |
-| `summarize_changes.py` | `agentic-beacon` | Build structured JSON view of dirty tracked paths |
+| `summarize_changes.py` | `pyyaml>=6.0` | Build structured JSON view of dirty tracked paths |
 | `draft_commit_message.py` | stdlib only | Derive deterministic Conventional Commits message |
 | `push_warehouse.py` | stdlib only | Atomic push with recovery-command output on failure |
 

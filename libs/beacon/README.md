@@ -378,6 +378,8 @@ Invoke any bundled skill from an OpenCode or Claude Code session:
 
 ---
 
+## Warehouse Commands
+
 | Command | Description |
 |---------|-------------|
 | `abc warehouse init [NAME]` | Initialize a new warehouse |

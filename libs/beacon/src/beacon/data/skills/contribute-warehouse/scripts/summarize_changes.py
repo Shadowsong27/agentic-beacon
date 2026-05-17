@@ -1,8 +1,10 @@
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["agentic-beacon"]
+# dependencies = ["pyyaml>=6.0"]
 # ///
 """Summarize dirty tracked warehouse paths for the contribute-warehouse skill.
+
+# Self-contained script -- no beacon package required at runtime.
 
 Outputs a single JSON object on stdout:
   {"tracked_paths": [{"path": str, "git_status": str, "diff_stat": str, "last_commit_age_days": int|null}]}
@@ -24,18 +26,72 @@ warehouses do not contain this file; beacon.yaml lives in the project root.
 """
 
 import argparse
+import glob
 import json
 import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
+import yaml
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Inline tracked-paths helper (replaces beacon.domains.warehouse._tracked_paths)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _expand_pattern(warehouse_path: Path, pattern: str) -> list[str]:
+    """Expand a beacon.yaml pattern to concrete relative paths."""
+    if "*" in pattern or "?" in pattern:
+        matches = glob.glob(str(warehouse_path / pattern), recursive=True)
+        return [
+            str(Path(m).relative_to(warehouse_path))
+            for m in matches
+            if Path(m).is_file()
+            and ".git" not in Path(m).relative_to(warehouse_path).parts
+        ]
+
+    p = warehouse_path / pattern
+    if p.is_dir():
+        matches = glob.glob(str(p / "**" / "*"), recursive=True)
+        return [
+            str(Path(m).relative_to(warehouse_path))
+            for m in matches
+            if Path(m).is_file()
+            and ".git" not in Path(m).relative_to(warehouse_path).parts
+        ]
+
+    if p.is_file():
+        return [pattern]
+
+    return [pattern]
+
 
 def get_tracked_paths(warehouse: Path, beacon_yaml: Path) -> list[str]:
-    """Return beacon.yaml-tracked paths relative to warehouse root."""
-    from beacon.domains.warehouse._tracked_paths import get_tracked_paths as _gtp
+    """Return beacon.yaml-tracked paths relative to warehouse root.
 
-    return _gtp(warehouse, beacon_yaml)
+    Parses beacon.yaml with yaml.safe_load — no beacon package required.
+    Handles missing artifacts, missing skills/contexts sub-lists gracefully.
+    """
+    if not beacon_yaml.exists():
+        return []
+
+    raw = yaml.safe_load(beacon_yaml.read_text()) or {}
+    artifacts = raw.get("artifacts") or {}
+    skills_patterns: list[str] = artifacts.get("skills") or []
+    contexts_patterns: list[str] = artifacts.get("contexts") or []
+
+    paths: list[str] = []
+    for pattern in skills_patterns:
+        paths.extend(_expand_pattern(warehouse, pattern))
+    for pattern in contexts_patterns:
+        paths.extend(_expand_pattern(warehouse, pattern))
+    return paths
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Project-root detection
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 def _find_project_root(start: Path) -> Path | None:
@@ -49,6 +105,11 @@ def _find_project_root(start: Path) -> Path | None:
         if (path / ".agentic-beacon" / "config.toml").exists():
             return path
     return None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Git helpers
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 def _run_git(
@@ -73,16 +134,24 @@ def get_git_status(warehouse: Path, path: str) -> str:
 
 
 def get_diff_stat(warehouse: Path, path: str) -> str:
-    """Return one-line diff --stat summary for a path (empty if no diff)."""
+    """Return one-line diff --stat summary for a path (empty if no diff).
+
+    Falls back to --cached when the unstaged diff exits non-zero OR returns
+    empty stdout (the latter covers staged-only changes where the working tree
+    matches the index for that path).
+    """
     rc, stdout, _ = _run_git(warehouse, ["diff", "--stat", "--", path])
-    if rc != 0:
-        # Try staged diff
+    if rc != 0 or not stdout.strip():
+        # Either git failed, or unstaged diff is empty — try staged.
         rc2, stdout2, _ = _run_git(
             warehouse, ["diff", "--cached", "--stat", "--", path]
         )
         if rc2 != 0:
             return ""
-        stdout = stdout2
+        if stdout2.strip():
+            stdout = stdout2
+        elif not stdout.strip():
+            return ""
 
     # Extract the summary line (last non-empty line)
     lines = [line.strip() for line in stdout.strip().splitlines() if line.strip()]

@@ -427,3 +427,98 @@ class TestBeaconYamlDefault:
 
         result = mod._find_project_root(bare_dir)
         assert result is None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# M1: Staged-only diff_stat fallback
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestStagedOnlyDiffStat:
+    """Finding M1 fix: get_diff_stat falls back to --cached on empty unstaged stdout."""
+
+    def test_staged_only_modification_has_diff_stat(self, tmp_path):
+        """Staged (index-only) modification returns non-empty diff_stat."""
+        warehouse = _make_git_warehouse(tmp_path)
+        _write_beacon_yaml(warehouse, ["contexts/*.md"])
+
+        ctx_file = warehouse / "contexts" / "staged-mod.md"
+        ctx_file.write_text("# Original\n")
+        _initial_commit(warehouse, [ctx_file])
+
+        # Modify and stage — working tree then matches index again
+        ctx_file.write_text("# Original\n\nNew section.\n")
+        subprocess.run(
+            ["git", "-C", str(warehouse), "add", "contexts/staged-mod.md"],
+            check=True,
+            capture_output=True,
+        )
+
+        mod = _load_script()
+        diff_stat = mod.get_diff_stat(warehouse, "contexts/staged-mod.md")
+        assert diff_stat, (
+            f"Expected non-empty diff_stat for staged modification, got: {diff_stat!r}"
+        )
+        assert (
+            "changed" in diff_stat
+            or "insertion" in diff_stat
+            or "deletion" in diff_stat
+        )
+
+    def test_staged_only_new_file_has_diff_stat(self, tmp_path):
+        """Freshly added (status 'A') file returns non-empty diff_stat."""
+        warehouse = _make_git_warehouse(tmp_path)
+        _write_beacon_yaml(warehouse, ["contexts/*.md"])
+
+        # Initial commit with a placeholder so git history exists
+        placeholder = warehouse / "contexts" / ".keep"
+        placeholder.write_text("")
+        _initial_commit(warehouse, [placeholder])
+
+        # Stage a brand-new file (never committed)
+        new_file = warehouse / "contexts" / "brand-new.md"
+        new_file.write_text("# Brand new knowledge file.\n")
+        subprocess.run(
+            ["git", "-C", str(warehouse), "add", "contexts/brand-new.md"],
+            check=True,
+            capture_output=True,
+        )
+
+        mod = _load_script()
+        diff_stat = mod.get_diff_stat(warehouse, "contexts/brand-new.md")
+        assert diff_stat, (
+            f"Expected non-empty diff_stat for staged new file, got: {diff_stat!r}"
+        )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# M2: PEP 723 dependency regression guard
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestPep723Dependencies:
+    """Finding M2 fix: summarize_changes.py must declare pyyaml>=6.0, not agentic-beacon."""
+
+    def test_pep_723_header_uses_pyyaml_not_agentic_beacon(self):
+        """PEP 723 header declares pyyaml>=6.0 and does NOT list agentic-beacon."""
+        content = _SCRIPT_PATH.read_text()
+        # Extract the inline script block
+        assert 'dependencies = ["pyyaml>=6.0"]' in content, (
+            "PEP 723 header must declare pyyaml>=6.0"
+        )
+        assert (
+            "agentic-beacon"
+            not in content.split("# ///")[0] + content.split("# ///")[1]
+            if content.count("# ///") >= 2
+            else "agentic-beacon" not in content[: content.find('"""')]
+        ), "PEP 723 header must not list agentic-beacon"
+
+    def test_no_beacon_package_imports(self):
+        """Script must not import from beacon.* package."""
+        content = _SCRIPT_PATH.read_text()
+        import re
+
+        beacon_imports = re.findall(r"^(?:from|import) beacon", content, re.MULTILINE)
+        assert not beacon_imports, (
+            f"Script still imports from beacon package: {beacon_imports}"
+        )
