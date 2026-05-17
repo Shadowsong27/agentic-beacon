@@ -196,14 +196,32 @@ def _lint_skill_requires(warehouse_path: Path) -> list[LintFinding]:
 def _extract_path_from_manifest_error(message: str) -> str:
     """Try to extract an agent path from a manifest error message.
 
-    Returns 'agents/agents.yaml' if no specific agent path is found.
+    Recognised patterns (each returns an `agents/<name>.md`-shaped path so
+    findings get scoped to the agent file the message implicates):
+
+    - Explicit relative path: ``agents/<name>.md`` anywhere in the message.
+      Used by ``validate_agents_directory`` /
+      ``validate_agent_frontmatter_clean``.
+    - Agent name in quotes: ``Agent '<name>'`` (single or double).
+      Used by ``validate_declared_skills`` whose error format is
+      ``"Agent 'foo' declares skill 'bar' but ..."``.
+
+    Falls back to ``agents/agents.yaml`` only when neither pattern matches —
+    i.e. when the error is genuinely manifest-file-level (e.g. parse error)
+    or the format changed and this extractor no longer recognises it.
     """
     import re
 
-    # Match patterns like 'agents/foo.md' or 'Agent file agents/foo.md'
+    # Pattern 1: explicit agents/<name>.md mention
     match = re.search(r"agents/([^/\s]+\.md)", message)
     if match:
         return f"agents/{match.group(1)}"
+
+    # Pattern 2: Agent '<name>' or Agent "<name>" — used by validate_declared_skills.
+    match = re.search(r"""Agent\s+['"]([^'"]+)['"]""", message)
+    if match:
+        return f"agents/{match.group(1)}.md"
+
     return "agents/agents.yaml"
 
 

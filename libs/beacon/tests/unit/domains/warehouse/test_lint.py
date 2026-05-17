@@ -416,12 +416,53 @@ class TestLintAgentManifest:
         assert result[0].artifact_path == "agents/foo.md"
 
     def test_declared_skill_missing_produces_finding(self, tmp_path):
-        """TC6.4: agents.yaml declares missing skill → 1 finding."""
+        """TC6.4: agents.yaml declares missing skill → 1 finding scoped to agent file.
+
+        Spec scenario explicitly says the finding is scoped to agent `foo`,
+        not to agents/agents.yaml. Pre-fix-up commit 22c432e the finding
+        landed on agents/agents.yaml because _extract_path_from_manifest_error
+        didn't recognise `validate_declared_skills`'s "Agent 'foo' declares
+        skill ..." message format.
+        """
         wh = _build_clean_warehouse(tmp_path)
         _add_valid_agent(wh, "foo", skills=["missing-skill"])
         result = self._call(wh)
         assert len(result) == 1
         assert "missing-skill" in result[0].message
+        # Pin the scope explicitly per spec.
+        assert result[0].artifact_path == "agents/foo.md", (
+            f"Expected finding scoped to agents/foo.md per spec scenario, "
+            f"got scope: {result[0].artifact_path!r} with message: "
+            f"{result[0].message!r}"
+        )
+
+    def test_extract_path_recognises_quoted_agent_name(self):
+        """Regression for opencode-review PR144 round-3 #M2.
+
+        validate_declared_skills emits messages of the form
+            "Agent 'foo' declares skill 'bar' but ..."
+        _extract_path_from_manifest_error must map these to agents/foo.md, not
+        fall through to agents/agents.yaml.
+        """
+        from beacon.domains.warehouse.lint import _extract_path_from_manifest_error
+
+        # Single quotes (production format)
+        msg = "Agent 'foo' declares skill 'bar' but skills/bar/SKILL.md does not exist."
+        assert _extract_path_from_manifest_error(msg) == "agents/foo.md"
+
+        # Double quotes (defensive — in case the message format ever evolves)
+        msg2 = (
+            'Agent "foo" declares skill "bar" but skills/bar/SKILL.md does not exist.'
+        )
+        assert _extract_path_from_manifest_error(msg2) == "agents/foo.md"
+
+        # Explicit agents/<name>.md takes precedence when both patterns match
+        msg3 = "agents/baz.md disagrees with Agent 'foo' entry"
+        assert _extract_path_from_manifest_error(msg3) == "agents/baz.md"
+
+        # No recognised pattern → fall back to agents/agents.yaml
+        msg4 = "Top-level YAML structure is not a mapping"
+        assert _extract_path_from_manifest_error(msg4) == "agents/agents.yaml"
 
     def test_agent_with_requires_in_frontmatter_produces_finding(self, tmp_path):
         """TC6.5: agent frontmatter has requires: → 1 finding."""
