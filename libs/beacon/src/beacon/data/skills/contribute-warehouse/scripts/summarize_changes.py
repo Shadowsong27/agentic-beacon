@@ -1,0 +1,181 @@
+# /// script
+# requires-python = ">=3.11"
+# dependencies = ["agentic-beacon"]
+# ///
+"""Summarize dirty tracked warehouse paths for the contribute-warehouse skill.
+
+Outputs a single JSON object on stdout:
+  {"tracked_paths": [{"path": str, "git_status": str, "diff_stat": str, "last_commit_age_days": int|null}]}
+
+Only dirty (modified/added/untracked) tracked paths appear in the output.
+Clean paths are filtered out.
+
+Usage:
+    uv run summarize_changes.py --warehouse <path> [--beacon-yaml <path>]
+"""
+
+import argparse
+import json
+import subprocess
+import sys
+from datetime import UTC, datetime
+from pathlib import Path
+
+
+def get_tracked_paths(warehouse: Path, beacon_yaml: Path) -> list[str]:
+    """Return beacon.yaml-tracked paths relative to warehouse root."""
+    from beacon.domains.warehouse._tracked_paths import get_tracked_paths as _gtp
+
+    return _gtp(warehouse, beacon_yaml)
+
+
+def _run_git(
+    warehouse: Path, args: list[str], timeout: int = 30
+) -> tuple[int, str, str]:
+    """Run a git command inside warehouse, return (returncode, stdout, stderr)."""
+    result = subprocess.run(
+        ["git", "-C", str(warehouse)] + args,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+    return result.returncode, result.stdout, result.stderr
+
+
+def get_git_status(warehouse: Path, path: str) -> str:
+    """Return porcelain status code for a single tracked path (e.g. ' M', 'A ', '??')."""
+    rc, stdout, stderr = _run_git(warehouse, ["status", "--porcelain", "--", path])
+    if rc != 0:
+        raise RuntimeError(f"git status failed for {path!r}: {stderr.strip()}")
+    return stdout[:2] if stdout else ""
+
+
+def get_diff_stat(warehouse: Path, path: str) -> str:
+    """Return one-line diff --stat summary for a path (empty if no diff)."""
+    rc, stdout, _ = _run_git(warehouse, ["diff", "--stat", "--", path])
+    if rc != 0:
+        # Try staged diff
+        rc2, stdout2, _ = _run_git(
+            warehouse, ["diff", "--cached", "--stat", "--", path]
+        )
+        if rc2 != 0:
+            return ""
+        stdout = stdout2
+
+    # Extract the summary line (last non-empty line)
+    lines = [line.strip() for line in stdout.strip().splitlines() if line.strip()]
+    if not lines:
+        return ""
+    # The stat summary looks like "1 file changed, 2 insertions(+)"
+    return lines[-1]
+
+
+def get_last_commit_age_days(warehouse: Path, path: str) -> int | None:
+    """Return days since the file's last commit, or None if never committed."""
+    rc, stdout, _ = _run_git(warehouse, ["log", "-1", "--format=%cI", "--", path])
+    if rc != 0 or not stdout.strip():
+        return None
+
+    date_str = stdout.strip()
+    if not date_str:
+        return None
+
+    try:
+        commit_dt = datetime.fromisoformat(date_str)
+        # Ensure timezone-aware comparison
+        now = datetime.now(tz=UTC)
+        if commit_dt.tzinfo is None:
+            commit_dt = commit_dt.replace(tzinfo=UTC)
+        delta = now - commit_dt
+        return max(0, delta.days)
+    except ValueError:
+        return None
+
+
+def is_dirty(status_code: str) -> bool:
+    """Return True if the status code indicates a dirty (non-clean) file."""
+    if not status_code:
+        return False
+    # Porcelain codes: '??' = untracked, 'M ' or ' M' = modified, 'A ' = added, etc.
+    # A completely clean file returns an empty porcelain line.
+    stripped = status_code.strip()
+    return bool(stripped)
+
+
+def summarize(warehouse: Path, beacon_yaml: Path) -> dict:
+    """Build the summary dict of dirty tracked paths."""
+    if not beacon_yaml.exists():
+        return {"tracked_paths": []}
+
+    try:
+        tracked = get_tracked_paths(warehouse, beacon_yaml)
+    except Exception as e:
+        print(f"Error enumerating tracked paths: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    results = []
+    for path in sorted(tracked):
+        try:
+            status = get_git_status(warehouse, path)
+        except RuntimeError as e:
+            print(f"Warning: {e}", file=sys.stderr)
+            continue
+
+        if not is_dirty(status):
+            # Clean file — skip
+            continue
+
+        diff_stat = get_diff_stat(warehouse, path)
+        age = get_last_commit_age_days(warehouse, path)
+
+        results.append(
+            {
+                "path": path,
+                "git_status": status,
+                "diff_stat": diff_stat,
+                "last_commit_age_days": age,
+            }
+        )
+
+    return {"tracked_paths": results}
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Summarize dirty tracked warehouse paths as JSON."
+    )
+    parser.add_argument(
+        "--warehouse",
+        required=True,
+        help="Absolute path to the warehouse root.",
+    )
+    parser.add_argument(
+        "--beacon-yaml",
+        default=None,
+        help="Path to beacon.yaml (default: <warehouse>/.agentic-beacon/beacon.yaml).",
+    )
+    args = parser.parse_args()
+
+    warehouse = Path(args.warehouse)
+    if not warehouse.is_dir():
+        print(f"Error: warehouse path does not exist: {warehouse}", file=sys.stderr)
+        sys.exit(1)
+
+    beacon_yaml = (
+        Path(args.beacon_yaml)
+        if args.beacon_yaml
+        else warehouse / ".agentic-beacon" / "beacon.yaml"
+    )
+
+    try:
+        result = summarize(warehouse, beacon_yaml)
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    print(json.dumps(result, indent=2))
+    sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()

@@ -25,7 +25,20 @@ TEMPLATE_FILES: list[str] = [
     "skills/README.md",
     "skills/record-knowledge/SKILL.md",
     "skills/record-skill/SKILL.md",
+    "skills/contribute-warehouse/SKILL.md",
 ]
+
+# Canonical SKILL.md paths (relative to data/skills/) for all bundled skills.
+# This tuple is the authoritative manifest for distribution tests and any
+# code that needs to enumerate bundled skills by name.
+# The _install_bundled_skills() method uses directory iteration, so adding
+# a new skill directory is sufficient — this tuple mirrors that list for
+# explicit assertion in tests and documentation.
+_BUNDLED_SKILL_FILES: tuple[str, ...] = (
+    "skills/record-knowledge/SKILL.md",
+    "skills/record-skill/SKILL.md",
+    "skills/contribute-warehouse/SKILL.md",
+)
 
 
 class WarehouseInitializer:

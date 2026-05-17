@@ -2,11 +2,11 @@
 
 > This page covers skills shipped inside `abc` itself. For user-authored warehouse skills, see [Creating Skills](../guides/creating-skills.md).
 
-Agentic Beacon ships two skills inside the `abc` package. These **bundled skills** become available in a project after `abc sync` runs (always wires them), or after `abc adopt` (only when an adoption commit fires — see [When Wiring Happens](#when-wiring-happens) below) — no warehouse content required. Their purpose is to bootstrap content authoring: on a fresh project, before your warehouse has any skills, you can still invoke `/record-knowledge` and `/record-skill` to start building it.
+Agentic Beacon ships three skills inside the `abc` package. These **bundled skills** become available in a project after `abc sync` runs (always wires them), or after `abc adopt` (only when an adoption commit fires — see [When Wiring Happens](#when-wiring-happens) below) — no warehouse content required. Their purpose is to bootstrap content authoring: on a fresh project, before your warehouse has any skills, you can still invoke `/record-knowledge`, `/record-skill`, and `/contribute-warehouse` immediately.
 
 ---
 
-## The Two Bundled Skills
+## The Three Bundled Skills
 
 ### `record-knowledge`
 
@@ -34,6 +34,30 @@ Scaffolds a new skill in the warehouse's `skills/<name>/` directory and appends 
 4. You run `abc adopt` to wire the new skill into your project
 
 **When to invoke:** when you want to formalize a repeatable agent workflow and share it via the warehouse.
+
+---
+
+### `contribute-warehouse`
+
+Wraps `abc warehouse contribute` with a guided, conversational contribution flow:
+lint gate, intent triage, semantic dedup scan, cohesion split, and atomic push.
+
+**What it does:**
+
+1. Runs `abc warehouse lint` — aborts if the warehouse has any integrity errors
+2. Summarizes dirty tracked paths via `summarize_changes.py`
+3. Asks which files to include or leave for later
+4. Scans for semantic dedup in `knowledge/` files
+5. Checks cohesion and proposes a commit split if needed
+6. Drafts Conventional Commits messages via `draft_commit_message.py`
+7. Calls `abc warehouse contribute -m "<msg>"` per commit group (no `--push`)
+8. Pushes all commits atomically via `push_warehouse.py`
+
+**When to invoke:** when you want to commit and push warehouse changes through a
+safe, intent-aware flow — especially when multiple files are dirty or you want the
+lint gate enforced.
+
+For full documentation, see [Contribute Warehouse Skill](../guides/contribute-warehouse.md).
 
 ---
 
@@ -71,7 +95,7 @@ Two commands wire bundled skills:
 abc warehouse connect --path ~/my-org-warehouse
 abc setup          # auto-creates CLAUDE.md and opencode.json if missing
 abc adopt          # select warehouse artifacts; bundled skills wired here too
-# → "Wired bundled skills: record-knowledge, record-skill"
+# → "Wired bundled skills: record-knowledge, record-skill, contribute-warehouse"
 ```
 
 ---
@@ -101,8 +125,15 @@ my-warehouse/
 └── skills/
     ├── record-knowledge/
     │   └── SKILL.md
-    └── record-skill/
-        └── SKILL.md
+    ├── record-skill/
+    │   └── SKILL.md
+    └── contribute-warehouse/
+        ├── SKILL.md
+        └── scripts/
+            ├── resolve_warehouse.py
+            ├── summarize_changes.py
+            ├── draft_commit_message.py
+            └── push_warehouse.py
 ```
 
 These copies exist so teams have a visible, editable starting point. You can modify `<warehouse>/skills/record-knowledge/SKILL.md` to adjust the workflow for your organisation and commit that change into the warehouse.
