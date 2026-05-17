@@ -39,7 +39,12 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version-file: "libs/beacon/pyproject.toml"
+          # Pinned explicitly (not python-version-file) so the runner does not
+          # drift to a newer Python the moment one becomes the ubuntu-latest
+          # default (e.g. 3.14, which broke this PR's CI on 2026-05-17 via a
+          # transitive Click 8.4.0 error-format change). Local dev runs 3.12;
+          # match it. Bump deliberately when upgrading the project.
+          python-version: "3.12"
 
       - name: Install dependencies
         run: uv sync --group dev
@@ -81,7 +86,12 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version-file: "libs/beacon/pyproject.toml"
+          # Pinned explicitly (not python-version-file) so the runner does not
+          # drift to a newer Python the moment one becomes the ubuntu-latest
+          # default (e.g. 3.14, which broke this PR's CI on 2026-05-17 via a
+          # transitive Click 8.4.0 error-format change). Local dev runs 3.12;
+          # match it. Bump deliberately when upgrading the project.
+          python-version: "3.12"
 
       - name: Install dependencies
         run: uv sync --group dev

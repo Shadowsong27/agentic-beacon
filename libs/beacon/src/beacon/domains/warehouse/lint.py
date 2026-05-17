@@ -81,9 +81,16 @@ def lint_warehouse(warehouse_path: Path) -> LintReport:
 
 
 def _lint_structure(warehouse_path: Path) -> list[LintFinding]:
-    """Validate warehouse directory structure via WarehouseValidator."""
+    """Validate warehouse directory structure via WarehouseValidator.
+
+    Passes validate_manifest=False so WarehouseValidator runs only its
+    structural checks. The agent-manifest validators are invoked separately
+    by _lint_agent_manifest with per-defect, per-artifact-path findings —
+    running them here too would emit one combined <warehouse>-scoped finding
+    plus N per-defect findings for the same underlying issues.
+    """
     validator = WarehouseValidator()
-    result = validator.validate(warehouse_path)
+    result = validator.validate(warehouse_path, validate_manifest=False)
     if result.valid:
         return []
 
@@ -201,12 +208,24 @@ def _extract_path_from_manifest_error(message: str) -> str:
 
 
 def _lint_agent_manifest(warehouse_path: Path) -> list[LintFinding]:
-    """Validate agent manifest and run downstream manifest validators."""
+    """Validate agent manifest and run downstream manifest validators.
+
+    Each validator is run independently in its own try/except so a failure in
+    one does not suppress findings from the others. Notably,
+    validate_agent_frontmatter_clean does NOT need a parsed manifest — it only
+    inspects agents/*.md frontmatter — so it must still run even when
+    load_agent_manifest fails.
+    """
     findings = []
 
-    # Attempt to load the manifest; on failure, record findings and return early
+    # Track manifest parse outcome separately so we can short-circuit only the
+    # validators that actually need a parsed manifest (agents_directory +
+    # declared_skills), without suppressing frontmatter_clean.
+    manifest = None
+    manifest_parsed = False
     try:
         manifest = load_agent_manifest(warehouse_path)
+        manifest_parsed = True
     except AgentManifestError as exc:
         for line in str(exc).split("\n"):
             line = line.strip()
@@ -214,18 +233,24 @@ def _lint_agent_manifest(warehouse_path: Path) -> list[LintFinding]:
                 findings.append(
                     LintFinding(artifact_path="agents/agents.yaml", message=line)
                 )
-        return findings
 
-    # Manifest loaded (possibly None if agents.yaml absent) — run downstream validators
-    try:
-        validate_agents_directory(warehouse_path, manifest)
-    except AgentManifestError as exc:
-        for line in str(exc).split("\n"):
-            line = line.strip()
-            if line:
-                artifact_path = _extract_path_from_manifest_error(line)
-                findings.append(LintFinding(artifact_path=artifact_path, message=line))
+    # validate_agents_directory needs a parsed manifest — skip on parse failure.
+    if manifest_parsed:
+        try:
+            validate_agents_directory(warehouse_path, manifest)
+        except AgentManifestError as exc:
+            for line in str(exc).split("\n"):
+                line = line.strip()
+                if line:
+                    artifact_path = _extract_path_from_manifest_error(line)
+                    findings.append(
+                        LintFinding(artifact_path=artifact_path, message=line)
+                    )
 
+    # validate_agent_frontmatter_clean does NOT need a parsed manifest —
+    # always run it, even when load_agent_manifest failed. Otherwise an
+    # unparseable agents.yaml would mask agents with legacy `requires:` keys
+    # in their frontmatter.
     try:
         validate_agent_frontmatter_clean(warehouse_path)
     except AgentManifestError as exc:
@@ -235,7 +260,8 @@ def _lint_agent_manifest(warehouse_path: Path) -> list[LintFinding]:
                 artifact_path = _extract_path_from_manifest_error(line)
                 findings.append(LintFinding(artifact_path=artifact_path, message=line))
 
-    if manifest is not None:
+    # validate_declared_skills needs a parsed (non-None) manifest.
+    if manifest_parsed and manifest is not None:
         try:
             validate_declared_skills(warehouse_path, manifest)
         except AgentManifestError as exc:

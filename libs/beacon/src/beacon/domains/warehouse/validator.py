@@ -35,11 +35,21 @@ class WarehouseValidator:
         "README.txt",
     ]
 
-    def validate(self, path: str | Path) -> ValidationResult:
+    def validate(
+        self, path: str | Path, *, validate_manifest: bool = True
+    ) -> ValidationResult:
         """Validate a warehouse directory structure.
 
         Args:
             path: Path to the warehouse directory
+            validate_manifest: When True (default), also runs agent manifest
+                validators (load_agent_manifest, validate_agents_directory,
+                validate_agent_frontmatter_clean, validate_declared_skills) and
+                rolls any failures into the result. When False, runs only the
+                structural checks (required directories, README, project-vs-
+                warehouse detection). Callers that have their own dedicated
+                manifest-validation pass — notably `abc warehouse lint` —
+                should pass False to avoid duplicate findings.
 
         Returns:
             ValidationResult with validation status and any errors
@@ -106,22 +116,26 @@ class WarehouseValidator:
                 f"Missing README file (expected one of: {', '.join(self.OPTIONAL_FILES)})"
             )
 
-        # Agent manifest validation (only when agents/ has content)
-        agents_dir = warehouse_path / "agents"
-        if agents_dir.exists() and agents_dir.is_dir():
-            has_agent_files = any(
-                f.is_file() and f.suffix == ".md" and f.name != "README.md"
-                for f in agents_dir.iterdir()
-            )
-            if has_agent_files:
-                try:
-                    manifest = load_agent_manifest(warehouse_path)
-                    validate_agents_directory(warehouse_path, manifest)
-                    validate_agent_frontmatter_clean(warehouse_path)
-                    if manifest is not None:
-                        validate_declared_skills(warehouse_path, manifest)
-                except AgentManifestError as exc:
-                    errors.append(str(exc))
+        # Agent manifest validation (only when agents/ has content).
+        # Skipped when validate_manifest=False — callers like `abc warehouse
+        # lint` run their own per-defect manifest validation pass and would
+        # otherwise see duplicate findings (one combined here + N per-defect).
+        if validate_manifest:
+            agents_dir = warehouse_path / "agents"
+            if agents_dir.exists() and agents_dir.is_dir():
+                has_agent_files = any(
+                    f.is_file() and f.suffix == ".md" and f.name != "README.md"
+                    for f in agents_dir.iterdir()
+                )
+                if has_agent_files:
+                    try:
+                        manifest = load_agent_manifest(warehouse_path)
+                        validate_agents_directory(warehouse_path, manifest)
+                        validate_agent_frontmatter_clean(warehouse_path)
+                        if manifest is not None:
+                            validate_declared_skills(warehouse_path, manifest)
+                    except AgentManifestError as exc:
+                        errors.append(str(exc))
 
         return ValidationResult(valid=len(errors) == 0, errors=errors)
 

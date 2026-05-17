@@ -451,6 +451,98 @@ class TestLintAgentManifest:
         assert "agents/foo.md" in paths
         assert "agents/bar.md" in paths
 
+    def test_orchestrator_does_not_double_report_manifest_defects(self, tmp_path):
+        """Regression for opencode-review #PR144-M1.
+
+        WarehouseValidator.validate(...) used to run agent-manifest validators
+        too, so the orchestrator emitted both:
+          - one combined <warehouse>-scoped manifest-error finding (from
+            _lint_structure → WarehouseValidator), AND
+          - per-defect agents/<name>.md findings (from _lint_agent_manifest).
+        Fix: _lint_structure passes validate_manifest=False so only
+        _lint_agent_manifest reports manifest issues.
+        """
+        wh = _build_clean_warehouse(tmp_path)
+        # Add an agent file with no matching agents.yaml entry — pure manifest
+        # defect, no structural defect.
+        agent_file = wh / "agents" / "orphan.md"
+        agent_file.write_text(
+            "---\nname: orphan\ndescription: Orphan agent\n---\n# orphan\n"
+        )
+        # Ensure agents.yaml exists but is empty (so manifest parses cleanly,
+        # but the agent is missing from it).
+        (wh / "agents" / "agents.yaml").write_text("{}\n")
+
+        result = lint_warehouse(wh)
+
+        # The combined "Missing manifest entry" message must NOT appear scoped
+        # to <warehouse> — it must only appear per-defect scoped to agents/orphan.md.
+        warehouse_scoped_messages = [
+            f.message for f in result.findings if f.artifact_path == "<warehouse>"
+        ]
+        assert all("orphan" not in m for m in warehouse_scoped_messages), (
+            f"Expected no manifest-related findings scoped to <warehouse>, "
+            f"got: {warehouse_scoped_messages}"
+        )
+
+        # Per-defect finding must still be present, scoped to agents/orphan.md.
+        orphan_findings = [
+            f for f in result.findings if f.artifact_path == "agents/orphan.md"
+        ]
+        assert len(orphan_findings) >= 1, (
+            f"Expected at least one finding scoped to agents/orphan.md, "
+            f"got: {[(f.artifact_path, f.message) for f in result.findings]}"
+        )
+
+    def test_malformed_manifest_does_not_suppress_frontmatter_clean(self, tmp_path):
+        """Regression for opencode-review #PR144-M2.
+
+        When load_agent_manifest() raises (e.g. unparseable agents.yaml), the
+        previous implementation returned early from _lint_agent_manifest,
+        suppressing validate_agent_frontmatter_clean. Result: an agent file
+        with a legacy `requires:` frontmatter key was masked whenever the
+        manifest happened to also be broken.
+
+        Fix: validate_agent_frontmatter_clean does NOT need a parsed manifest
+        (it only inspects agents/*.md frontmatter) — it must always run.
+        """
+        wh = _build_clean_warehouse(tmp_path)
+        # Unparseable agents.yaml — triggers AgentManifestError on load.
+        (wh / "agents" / "agents.yaml").write_text(":::\n")
+        # Agent file with legacy `requires:` key (forbidden by
+        # validate_agent_frontmatter_clean).
+        (wh / "agents" / "legacy.md").write_text(
+            "---\n"
+            "name: legacy\n"
+            "description: Legacy agent\n"
+            "requires:\n"
+            "  skills: [some-skill]\n"
+            "---\n"
+            "# legacy\n"
+        )
+
+        result = self._call(wh)
+
+        # Manifest parse error must be present.
+        yaml_scoped = [f for f in result if f.artifact_path == "agents/agents.yaml"]
+        assert len(yaml_scoped) >= 1, (
+            "Expected manifest parse error scoped to agents/agents.yaml"
+        )
+
+        # AND the legacy-requires finding must ALSO be present — the parse
+        # failure must NOT have suppressed validate_agent_frontmatter_clean.
+        legacy_findings = [
+            f
+            for f in result
+            if "requires" in f.message.lower()
+            and "legacy" in (f.artifact_path + " " + f.message).lower()
+        ]
+        assert len(legacy_findings) >= 1, (
+            f"Expected validate_agent_frontmatter_clean to still run despite "
+            f"malformed agents.yaml. Findings: "
+            f"{[(f.artifact_path, f.message) for f in result]}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # Phase 7: Agent frontmatter (name + description) rule
@@ -850,3 +942,32 @@ class TestWarehouseLintCommand:
         runner = CliRunner()
         result = runner.invoke(main, ["warehouse", "lint", "--json", str(wh)])
         assert result.exit_code != 0
+
+    def test_missing_path_produces_lint_finding_not_click_usage_exit(self, tmp_path):
+        """Regression for opencode-review #PR144-L1.
+
+        click.Path(exists=True) used to make `abc warehouse lint <missing>`
+        fail with Click usage exit 2 instead of routing through lint_warehouse
+        + WarehouseValidator for the documented 'Path not found' finding.
+        Fix: drop exists=True so the lint module can emit a proper grouped
+        finding and exit 1 (the documented exit-code-on-finding contract).
+        """
+        from beacon.cli.main import main
+        from click.testing import CliRunner
+
+        runner = CliRunner()
+        missing_path = tmp_path / "does-not-exist"
+        result = runner.invoke(main, ["warehouse", "lint", str(missing_path)])
+
+        # Must NOT be Click's usage exit (2) — must be the documented lint
+        # exit-on-finding (1).
+        assert result.exit_code == 1, (
+            f"Expected exit_code 1 (lint finding emitted), got {result.exit_code}. "
+            f"Output: {result.output}"
+        )
+        # Must surface the structural finding through the normal lint output
+        # path (grouped, error: prefix) rather than Click's "Error: Invalid
+        # value for ..." usage message.
+        assert "Path not found" in result.output, (
+            f"Expected 'Path not found' in lint output, got: {result.output}"
+        )

@@ -566,7 +566,11 @@ def _print_lint_report(report: LintReport, _console: Console | None = None) -> N
 @warehouse.command(name="lint")
 @click.argument(
     "warehouse_path",
-    type=click.Path(path_type=Path, exists=True, file_okay=False),
+    # No exists=True / file_okay=False: lint_warehouse + WarehouseValidator
+    # already emit structured findings for missing / file-typed paths
+    # ("Path not found", "Path is not a directory"). Letting Click reject
+    # before lint runs would short-circuit the documented exit-1 finding flow.
+    type=click.Path(path_type=Path),
     required=False,
     default=None,
 )
