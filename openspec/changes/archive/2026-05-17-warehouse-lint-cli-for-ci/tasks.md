@@ -65,7 +65,7 @@ pytest tests/ -v --tb=short
 | Repo | Path | Branch | Role |
 |------|------|--------|------|
 | `agentic-beacon` | `~/Code/oss/agentic-beacon` | `warehouse-lint-cli-for-ci` | Code changes — ships the `abc warehouse lint` CLI command, lint orchestrator module, unit + integration tests, and docs. All tasks in phases 1–14 land here. |
-| `hl-knowledge-market` | `~/Code/knowledge/hl-knowledge-market` | `warehouse-lint-cli-for-ci` | Operational only — separate follow-up PR (phase 15) after agentic-beacon releases. Migrates agent frontmatter, fixes broken knowledge links, adds the lint workflow. No production code from this OpenSpec change lands here. |
+| `hl-knowledge-market` | `~/Code/knowledge/hl-knowledge-market` | `warehouse-lint-cli-for-ci` | Operational only — tracked separately in PER-182 (warehouse-side rollout). Migrates agent frontmatter, fixes broken knowledge links, adds the lint workflow. No production code from this OpenSpec change lands here. |
 | `hl-sandbox-pipelines` | `~/Code/homelab/common/hl-sandbox-pipelines` | `main` | Not involved — Beacon CLI work; no DAG or registra impact. |
 | `hl-sandbox-registra` | `~/Code/homelab/common/hl-sandbox-registra` | `main` | Not involved — Beacon CLI work; no DAG or registra impact. |
 <!-- opsx:repos-table:end -->
@@ -647,55 +647,16 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:14:end -->
 
 
-- [ ] 14.1 **[MANUAL]** After PR merges and release lands, run `/opsx-archive warehouse-lint-cli-for-ci` to move the change into `openspec/changes/archive/`.
+- [X] 14.1 **[MANUAL]** After PR merges and release lands, run `/opsx-archive warehouse-lint-cli-for-ci` to move the change into `openspec/changes/archive/`.
 <!-- opsx:tdd:14.1:begin -->
   - **Input**: /opsx-archive warehouse-lint-cli-for-ci
   - **Expected Output**: Skill moves the change directory under `openspec/changes/archive/<date>-warehouse-lint-cli-for-ci/`; `openspec list --json` no longer shows it as active.
   - **Validation**: `openspec list --json` does not include the change name in the active list; archived directory exists in the repo and is committed.
 <!-- opsx:tdd:14.1:end -->
 
-## 15. Cross-repo follow-up (tracked here, executed separately)
+## 15. Cross-repo follow-up
 
-<!-- opsx:phase-summary:15:begin -->
-**Goal**: Roll out the new lint command into the warehouse repo: migrate agent frontmatter to satisfy the new rule, fix the two known broken knowledge links, and wire the lint workflow into CI. This phase modifies `hl-knowledge-market`, not `agentic-beacon`.
-**Input**: Phase 14 complete; `agentic-beacon` released; user has push access to `hl-knowledge-market`.
-**Output**: Warehouse-side PR adding `name:` + `description:` to every `agents/*.md`, fixing the broken knowledge links, and adding `.github/workflows/lint.yml` pinned to the released `agentic-beacon` version. PR green and merged.
-**Validation**: The warehouse-side PR's lint workflow shows green on its own commit; running `uvx agentic-beacon==<pinned> warehouse lint .` locally on the warehouse exits 0; branch protection deferred (GitHub plan limitation).
-<!-- opsx:phase-summary:15:end -->
-
-
-> The tasks below modify `hl-knowledge-market`, not `agentic-beacon`. They are intentionally outside the spec-driven apply phase for this change, but documented here so the rollout is not forgotten.
-
-- [ ] 15.1 **[MANUAL]** In `hl-knowledge-market`, create branch `warehouse-lint-cli-for-ci`. Migrate every `agents/*.md` (except `README.md`) to add `name:` and `description:` YAML frontmatter.
-<!-- opsx:tdd:15.1:begin -->
-  - **Input**: cd ~/Code/knowledge/hl-knowledge-market && git checkout -b warehouse-lint-cli-for-ci; then edit every agent file's frontmatter.
-  - **Expected Output**: Every non-README `agents/*.md` carries `name:` and `description:` keys.
-  - **Validation**: Local `uvx agentic-beacon==<pinned> warehouse lint .` no longer reports any missing-`name` or missing-`description` finding.
-<!-- opsx:tdd:15.1:end -->
-- [ ] 15.2 **[MANUAL]** Fix the two known broken knowledge links surfaced by `abc warehouse lint .`.
-<!-- opsx:tdd:15.2:begin -->
-  - **Input**: Run lint locally to identify the two paths; either create the missing knowledge files or remove/correct the links.
-  - **Expected Output**: Lint no longer reports either broken-knowledge-link finding.
-  - **Validation**: Local lint run is clean for the knowledge-link rule; no new findings introduced elsewhere.
-<!-- opsx:tdd:15.2:end -->
-- [ ] 15.3 **[MANUAL]** Add `.github/workflows/lint.yml` running on `pull_request` and `push: main`, using `astral-sh/setup-uv@v5` + `uvx agentic-beacon==<pinned-version> warehouse lint .` on `ubuntu-latest`.
-<!-- opsx:tdd:15.3:begin -->
-  - **Input**: Write the workflow yaml; push the branch; observe the workflow run on the PR.
-  - **Expected Output**: Workflow runs on `pull_request` events for this branch; lint job uses ubuntu-latest, installs uv, runs `uvx agentic-beacon==<pinned> warehouse lint .`, exits 0.
-  - **Validation**: GitHub Actions UI shows the workflow green on the migration PR; rerunning the workflow against the previous (pre-migration) commit shows red — confirms the workflow has signal.
-<!-- opsx:tdd:15.3:end -->
-- [ ] 15.4 **[MANUAL]** Open PR; confirm the workflow runs and passes against the migrated tree.
-<!-- opsx:tdd:15.4:begin -->
-  - **Input**: gh pr create --base main --head warehouse-lint-cli-for-ci --title 'feat(ci): add warehouse lint workflow + frontmatter migration' --body '<see template>'
-  - **Expected Output**: PR URL returned; lint workflow green on the head commit.
-  - **Validation**: Manual review of the PR diff; CI green.
-<!-- opsx:tdd:15.4:end -->
-- [ ] 15.5 **[MANUAL]** Merge once green. Branch protection enforcement is deferred until the GitHub plan permits it on private personal repos.
-<!-- opsx:tdd:15.5:begin -->
-  - **Input**: Merge the warehouse PR via the GitHub UI.
-  - **Expected Output**: PR shown as merged; the lint workflow runs on `push: main` and is green.
-  - **Validation**: Manual confirmation in the GitHub UI; record the deferred branch-protection item in PER-114 or a follow-up ticket.
-<!-- opsx:tdd:15.5:end -->
+Moved to Linear: **[PER-182 — Roll out warehouse lint in hl-knowledge-market](https://linear.app/shadowsong-personal/issue/PER-182/roll-out-warehouse-lint-in-hl-knowledge-market)** (under the `harness-improvements` project). That ticket tracks the warehouse-side migration (agent frontmatter), the broken-knowledge-link fixes, and the lint CI workflow — all of which modify `hl-knowledge-market`, not `agentic-beacon`.
 
 <!-- opsx:metadata:begin -->
 ---
@@ -708,9 +669,9 @@ pytest tests/ -v --tb=short
 - TDD Workflow Header
 - Repositories & Branches table
 - Phase summaries (Goal/Input/Output/Validation)
-- Task-level TDD criteria on 61 task(s)
+- Task-level TDD criteria on 56 task(s)
 - 73 test case(s) across complex tasks
-- 9 task(s) flagged [MANUAL]
+- 4 task(s) flagged [MANUAL]
 
 **Status**: Ready for implementation via `/opsx-apply <name>`.
 <!-- opsx:metadata:end -->
