@@ -37,7 +37,8 @@ def adopt(*, dry_run: bool) -> None:
       in the TUI to toggle to a full view where adopted artifacts can be
       unchecked to unadopt them.
     - Pending TODO — entries in pending.yaml from authoring tools
-      (record-knowledge, record-skill, manual). Press ``y`` / ``n`` per item.
+      (record-knowledge, record-skill, contribute-warehouse, manual).
+      Press ``y`` / ``n`` per item.
     """
     project_root = find_project_root()
     beacon_dir = project_root / ".agentic-beacon"

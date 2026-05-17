@@ -79,13 +79,13 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:1:end -->
 
 
-- [ ] 1.1 **[MANUAL]** Confirm `warehouse-lint-cli-for-ci` (PER-114) has shipped — `abc warehouse lint <path>` exists in `main` and is published in the version of `agentic-beacon` we're targeting. If not, do not start implementation.
+- [x] 1.1 **[MANUAL]** Confirm `warehouse-lint-cli-for-ci` (PER-114) has shipped — handled by supervisor (commits `6721b00` and `817d60b` on `main`).
 <!-- opsx:tdd:1.1:begin -->
   - **Input**: abc --version && abc warehouse lint --help
   - **Expected Output**: Both commands exit 0; `abc warehouse lint --help` shows usage including a `[PATH]` positional argument.
   - **Validation**: Lint subcommand is registered in the installed agentic-beacon version. If exit non-zero or 'no such command' error, STOP — do not proceed with implementation.
 <!-- opsx:tdd:1.1:end -->
-- [ ] 1.2 Create a feature branch in the agentic-beacon repo: `git checkout -b ship-bundled-skill-contribute-warehouse`.
+- [x] 1.2 Create a feature branch in the agentic-beacon repo — handled by supervisor (branch `feat/per-175-bundled-contribute-warehouse` created off `main`).
 
 ## 2. Skill scaffolding
 
@@ -97,9 +97,9 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:2:end -->
 
 
-- [ ] 2.1 Create directory `libs/beacon/src/beacon/data/skills/contribute-warehouse/`.
-- [ ] 2.2 Create directory `libs/beacon/src/beacon/data/skills/contribute-warehouse/scripts/`.
-- [ ] 2.3 Write `libs/beacon/src/beacon/data/skills/contribute-warehouse/SKILL.md` with frontmatter (`name`, `description`, `license`, `compatibility: opencode`, `requires.contexts: []`) and a body that documents the slash-command invocation, the four helper scripts, and the conversational flow (lint gate → triage → dedup → cohesion → commit per group → atomic push). Mirror the structure of `record-skill/SKILL.md`.
+- [x] 2.1 Create directory `libs/beacon/src/beacon/data/skills/contribute-warehouse/`.
+- [x] 2.2 Create directory `libs/beacon/src/beacon/data/skills/contribute-warehouse/scripts/`.
+- [x] 2.3 Write `libs/beacon/src/beacon/data/skills/contribute-warehouse/SKILL.md` with frontmatter (`name`, `description`, `license`, `compatibility: opencode`, `requires.contexts: []`) and a body that documents the slash-command invocation, the four helper scripts, and the conversational flow (lint gate → triage → dedup → cohesion → commit per group → atomic push). Mirror the structure of `record-skill/SKILL.md`.
 <!-- opsx:tdd:2.3:begin -->
   - **Input**: Read `libs/beacon/src/beacon/data/skills/record-skill/SKILL.md` for structure; author SKILL.md with frontmatter and body sections (Purpose, When to Use, Invocation, Process steps 1-9 mirroring design.md flow, Examples, Checklist).
   - **Expected Output**: A SKILL.md file 200-300 lines long with valid YAML frontmatter and prose body documenting the full flow.
@@ -114,7 +114,7 @@ pytest tests/ -v --tb=short
     - TC7: Body documents `/contribute-warehouse` as the slash invocation
     - TC8: Body length is between 100 and 400 lines (lean per design risk-mitigation)
 <!-- opsx:tdd:2.3:end -->
-- [ ] 2.4 Verify the SKILL.md frontmatter parses cleanly via `parse_frontmatter` (the same function used by lint).
+- [x] 2.4 Verify the SKILL.md frontmatter parses cleanly via `parse_frontmatter` (the same function used by lint).
 <!-- opsx:tdd:2.4:begin -->
   - **Input**: uv run python -c "from beacon.core.frontmatter import parse_frontmatter; from pathlib import Path; print(parse_frontmatter(Path('libs/beacon/src/beacon/data/skills/contribute-warehouse/SKILL.md').read_text()))"
   - **Expected Output**: Prints a SkillFrontmatter object (or dict) with `name='contribute-warehouse'` and a non-empty `description`. Exits 0.
@@ -131,7 +131,7 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:3:end -->
 
 
-- [ ] 3.1 Copy `libs/beacon/src/beacon/data/skills/record-skill/scripts/resolve_warehouse.py` to `libs/beacon/src/beacon/data/skills/contribute-warehouse/scripts/resolve_warehouse.py`. (No new logic — established pattern.)
+- [x] 3.1 Copy `libs/beacon/src/beacon/data/skills/record-skill/scripts/resolve_warehouse.py` to `libs/beacon/src/beacon/data/skills/contribute-warehouse/scripts/resolve_warehouse.py`. (No new logic — established pattern.)
 - [ ] 3.2 **[MANUAL]** Smoke-run: `uv run libs/beacon/src/beacon/data/skills/contribute-warehouse/scripts/resolve_warehouse.py` from a connected project resolves correctly.
 <!-- opsx:tdd:3.2:begin -->
   - **Input**: cd <connected-project> && uv run <abs path>/scripts/resolve_warehouse.py
@@ -149,25 +149,25 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:4:end -->
 
 
-- [ ] 4.1 Implement `summarize_changes.py` with PEP 723 metadata (`requires-python = ">=3.11"`, dependencies on the local `agentic-beacon` package so it can import `beacon.domains.warehouse._tracked_paths.get_tracked_paths`).
+- [x] 4.1 Implement `summarize_changes.py` with PEP 723 metadata (`requires-python = ">=3.11"`, dependencies on the local `agentic-beacon` package so it can import `beacon.domains.warehouse._tracked_paths.get_tracked_paths`).
 <!-- opsx:tdd:4.1:begin -->
   - **Input**: Author the script's PEP 723 header block: `# /// script\n# requires-python = ">=3.11"\n# dependencies = ["agentic-beacon"]\n# ///`
   - **Expected Output**: Header parses correctly; `uv run scripts/summarize_changes.py --help` exits 0 and the import of `get_tracked_paths` succeeds inside the script.
   - **Validation**: PEP 723 header is structurally valid; `uv run` resolves the agentic-beacon dependency without error.
 <!-- opsx:tdd:4.1:end -->
-- [ ] 4.2 Accept `--warehouse <path>` and `--beacon-yaml <path>` flags (default the latter to `<warehouse>/.agentic-beacon/beacon.yaml`).
+- [x] 4.2 Accept `--warehouse <path>` and `--beacon-yaml <path>` flags (default the latter to `<warehouse>/.agentic-beacon/beacon.yaml`).
 <!-- opsx:tdd:4.2:begin -->
   - **Input**: uv run scripts/summarize_changes.py --warehouse /tmp/test-warehouse
   - **Expected Output**: Script accepts the flag and uses `/tmp/test-warehouse/.agentic-beacon/beacon.yaml` as the default beacon.yaml path. `--help` shows both flags.
   - **Validation**: argparse setup includes both flags; default for `--beacon-yaml` is computed from `--warehouse`; missing `--warehouse` produces a non-zero exit with a helpful message.
 <!-- opsx:tdd:4.2:end -->
-- [ ] 4.3 Call `get_tracked_paths()` to enumerate tracked paths.
+- [x] 4.3 Call `get_tracked_paths()` to enumerate tracked paths.
 <!-- opsx:tdd:4.3:begin -->
   - **Input**: From inside the script: `tracked = get_tracked_paths(Path(args.warehouse), Path(args.beacon_yaml))`
   - **Expected Output**: Returns a list of warehouse-relative path strings respecting the beacon.yaml `artifacts.skills` and `artifacts.contexts` patterns.
   - **Validation**: Returned paths exactly match what `abc warehouse contribute` would stage; no untracked/ignored files leak through.
 <!-- opsx:tdd:4.3:end -->
-- [ ] 4.4 For each tracked path, run `git -C <warehouse> status --porcelain -- <path>` and parse the porcelain code; run `git diff --stat -- <path>` and extract the one-line summary; run `git log -1 --format=%cI -- <path>` and compute days-since-last-commit (or `null` if never committed).
+- [x] 4.4 For each tracked path, run `git -C <warehouse> status --porcelain -- <path>` and parse the porcelain code; run `git diff --stat -- <path>` and extract the one-line summary; run `git log -1 --format=%cI -- <path>` and compute days-since-last-commit (or `null` if never committed).
 <!-- opsx:tdd:4.4:begin -->
   - **Input**: For each tracked_path, subprocess.run(["git", "-C", warehouse, "status", "--porcelain", "--", path]) plus the diff-stat and log-1 commands.
   - **Expected Output**: git_status is a 1-2 char porcelain code (e.g. ` M`, `A `, `??`, `MM`); diff_stat is a single-line summary like `1 file changed, 12 insertions(+), 3 deletions(-)`; last_commit_age_days is an integer (days between now and the ISO timestamp) or null.
@@ -182,7 +182,7 @@ pytest tests/ -v --tb=short
     - TC7: Subprocess failure (e.g. not a git repo) → script exits non-zero with informative error
     - TC8: Path containing spaces or unicode → handled correctly by the `--` separator pattern
 <!-- opsx:tdd:4.4:end -->
-- [ ] 4.5 Emit a single JSON object on stdout with shape `{"tracked_paths": [{"path": ..., "git_status": ..., "diff_stat": ..., "last_commit_age_days": ...}, ...]}`.
+- [x] 4.5 Emit a single JSON object on stdout with shape `{"tracked_paths": [{"path": ..., "git_status": ..., "diff_stat": ..., "last_commit_age_days": ...}, ...]}`.
 <!-- opsx:tdd:4.5:begin -->
   - **Input**: uv run scripts/summarize_changes.py --warehouse <fixture> | python -c 'import json,sys; print(json.load(sys.stdin))'
   - **Expected Output**: JSON parses without error; top-level key is `tracked_paths`; each entry has the four required fields with expected types.
@@ -194,7 +194,7 @@ pytest tests/ -v --tb=short
     - TC4: Output is valid JSON (`json.loads` succeeds)
     - TC5: No log output, no debug prints, no stderr leakage to stdout
 <!-- opsx:tdd:4.5:end -->
-- [ ] 4.6 Filter out clean (un-modified) paths — only dirty tracked paths appear in the output.
+- [x] 4.6 Filter out clean (un-modified) paths — only dirty tracked paths appear in the output.
 <!-- opsx:tdd:4.6:begin -->
   - **Input**: Fixture warehouse with 5 tracked paths total: 2 modified, 3 clean.
   - **Expected Output**: `tracked_paths` array has exactly 2 entries (the modified ones).
@@ -211,19 +211,19 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:5:end -->
 
 
-- [ ] 5.1 Implement `draft_commit_message.py` with PEP 723 metadata. No external dependencies needed (pure stdlib).
+- [x] 5.1 Implement `draft_commit_message.py` with PEP 723 metadata. No external dependencies needed (pure stdlib).
 <!-- opsx:tdd:5.1:begin -->
   - **Input**: PEP 723 header: `# /// script\n# requires-python = ">=3.11"\n# dependencies = []\n# ///`
   - **Expected Output**: `uv run scripts/draft_commit_message.py --help` exits 0 with no dependency resolution required.
   - **Validation**: Empty `dependencies = []` list confirmed; script imports only from stdlib (no `import beacon`, no `import yaml`, etc.).
 <!-- opsx:tdd:5.1:end -->
-- [ ] 5.2 Accept `--paths <p1> <p2> ...` and `--subject <text>` flags.
+- [x] 5.2 Accept `--paths <p1> <p2> ...` and `--subject <text>` flags.
 <!-- opsx:tdd:5.2:begin -->
   - **Input**: uv run scripts/draft_commit_message.py --paths a/b.md c/d.md --subject "add foo"
   - **Expected Output**: Both flags parse; `paths` is a list of 2; `subject` is `add foo`. `--help` shows both.
   - **Validation**: argparse `nargs='+'` for paths; `required=True` for both flags; missing either flag produces clear error and exit non-zero.
 <!-- opsx:tdd:5.2:end -->
-- [ ] 5.3 Implement deterministic scope derivation: Find the longest common path prefix across `paths`. If the prefix is exactly one of `contexts/`, `skills/`, `agents/`, `knowledge/<topic>/`: use that as the scope (e.g. `python-standards` for `knowledge/python-standards/...`). Otherwise fall back to the top-level dir.
+- [x] 5.3 Implement deterministic scope derivation: Find the longest common path prefix across `paths`. If the prefix is exactly one of `contexts/`, `skills/`, `agents/`, `knowledge/<topic>/`: use that as the scope (e.g. `python-standards` for `knowledge/python-standards/...`). Otherwise fall back to the top-level dir.
 <!-- opsx:tdd:5.3:begin -->
   - **Input**: Function `derive_scope(paths: list[str]) -> str`. Test inputs across the documented prefix table.
   - **Expected Output**: Returns the topic name for `knowledge/<topic>/...`; returns the top-level dir name otherwise; never returns an empty string.
@@ -241,7 +241,7 @@ pytest tests/ -v --tb=short
   - Find the longest common path prefix across `paths`.
   - If the prefix is exactly one of `contexts/`, `skills/`, `agents/`, `knowledge/<topic>/`: use that as the scope (e.g. `python-standards` for `knowledge/python-standards/...`).
   - Otherwise fall back to the top-level dir.
-- [ ] 5.4 Implement deterministic type prefix: All paths under `skills/` and the change adds new files → `feat`. Paths under `contexts/` or `knowledge/` → `docs`. Mixed or unclassifiable → `chore`. (Document the full mapping table inline in the script as a comment.)
+- [x] 5.4 Implement deterministic type prefix: All paths under `skills/` and the change adds new files → `feat`. Paths under `contexts/` or `knowledge/` → `docs`. Mixed or unclassifiable → `chore`. (Document the full mapping table inline in the script as a comment.)
 <!-- opsx:tdd:5.4:begin -->
   - **Input**: Function `derive_type(paths: list[str], git_statuses: list[str] | None = None) -> str`. (git_statuses optional — needed for the `feat` vs other distinction if relevant.)
   - **Expected Output**: Returns one of `feat`, `fix`, `docs`, `chore` per the documented table.
@@ -258,13 +258,13 @@ pytest tests/ -v --tb=short
   - Paths under `contexts/` or `knowledge/` → `docs`.
   - Mixed or unclassifiable → `chore`.
   - (Document the full mapping table inline in the script as a comment.)
-- [ ] 5.5 Print the formatted Conventional Commits message to stdout: `<type>(<scope>): <subject>`.
+- [x] 5.5 Print the formatted Conventional Commits message to stdout: `<type>(<scope>): <subject>`.
 <!-- opsx:tdd:5.5:begin -->
   - **Input**: uv run scripts/draft_commit_message.py --paths contexts/python-standards.md --subject "add loguru section"
   - **Expected Output**: Stdout: `docs(contexts): add loguru section\n` exactly. Exit 0.
   - **Validation**: Output matches Conventional Commits regex `^(feat|fix|docs|chore|refactor|test)(\([a-z0-9-]+\))?: .+$`. No trailing whitespace on the subject.
 <!-- opsx:tdd:5.5:end -->
-- [ ] 5.6 Verify same inputs produce same output (deterministic, no time/random sources).
+- [x] 5.6 Verify same inputs produce same output (deterministic, no time/random sources).
 <!-- opsx:tdd:5.6:begin -->
   - **Input**: Run the script 10 times in a loop with identical args.
   - **Expected Output**: All 10 invocations produce byte-identical stdout.
@@ -281,31 +281,31 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:6:end -->
 
 
-- [ ] 6.1 Implement `push_warehouse.py` with PEP 723 metadata (stdlib only).
+- [x] 6.1 Implement `push_warehouse.py` with PEP 723 metadata (stdlib only).
 <!-- opsx:tdd:6.1:begin -->
   - **Input**: PEP 723 header with `dependencies = []`; script imports only stdlib.
   - **Expected Output**: `uv run scripts/push_warehouse.py --help` exits 0 with no dependency resolution.
   - **Validation**: No third-party imports; subprocess module used for git invocation.
 <!-- opsx:tdd:6.1:end -->
-- [ ] 6.2 Accept `--warehouse <path>` flag.
+- [x] 6.2 Accept `--warehouse <path>` flag.
 <!-- opsx:tdd:6.2:begin -->
   - **Input**: uv run scripts/push_warehouse.py --warehouse /tmp/test-warehouse
   - **Expected Output**: Flag parses; required=True; missing flag → exit non-zero with usage message.
   - **Validation**: argparse setup verified; `--help` shows the flag.
 <!-- opsx:tdd:6.2:end -->
-- [ ] 6.3 Run `git -C <warehouse> rev-parse --abbrev-ref HEAD` to capture the current branch name.
+- [x] 6.3 Run `git -C <warehouse> rev-parse --abbrev-ref HEAD` to capture the current branch name.
 <!-- opsx:tdd:6.3:begin -->
   - **Input**: subprocess.run(["git", "-C", warehouse, "rev-parse", "--abbrev-ref", "HEAD"], capture_output=True, text=True)
   - **Expected Output**: Returns the current branch name (e.g. `main`, `feature/foo`); detached HEAD returns `HEAD`.
   - **Validation**: Branch name captured to a local variable for use in the recovery command if push fails. Subprocess timeout set.
 <!-- opsx:tdd:6.3:end -->
-- [ ] 6.4 Run `git -C <warehouse> push`. If exit 0, exit 0.
+- [x] 6.4 Run `git -C <warehouse> push`. If exit 0, exit 0.
 <!-- opsx:tdd:6.4:begin -->
   - **Input**: subprocess.run(["git", "-C", warehouse, "push"], capture_output=True, text=True)
   - **Expected Output**: On success (push completed): script exits 0 with no output to stderr (or quiet success message to stdout).
   - **Validation**: Successful push case: warehouse `git log origin/<branch>` includes the new commits.
 <!-- opsx:tdd:6.4:end -->
-- [ ] 6.5 If push fails: capture stderr, print a structured error to stderr, print the exact recovery command `git -C <warehouse> push origin <branch>` to stdout, and exit non-zero.
+- [x] 6.5 If push fails: capture stderr, print a structured error to stderr, print the exact recovery command `git -C <warehouse> push origin <branch>` to stdout, and exit non-zero.
 <!-- opsx:tdd:6.5:begin -->
   - **Input**: Simulate failure: warehouse with no remote configured, or with offline DNS. Run the script.
   - **Expected Output**: Stdout contains exactly `git -C <warehouse> push origin <branch>` (substituting real values). Stderr contains a structured error block including the original git stderr. Script exit code is non-zero.
@@ -317,7 +317,7 @@ pytest tests/ -v --tb=short
     - TC4: Push rejected (non-fast-forward) → script fails, error message mentions the rejection (no force-push attempt)
     - TC5: Successful push after recovery command is run manually → confirms the recovery command works
 <!-- opsx:tdd:6.5:end -->
-- [ ] 6.6 Never run `git reset`, `git push --force`, `git commit --amend`, or any other destructive op.
+- [x] 6.6 Never run `git reset`, `git push --force`, `git commit --amend`, or any other destructive op.
 <!-- opsx:tdd:6.6:begin -->
   - **Input**: grep -E '(reset|--force|--amend|push -f)' libs/beacon/src/beacon/data/skills/contribute-warehouse/scripts/push_warehouse.py
   - **Expected Output**: No matches.
@@ -334,13 +334,13 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:7:end -->
 
 
-- [ ] 7.1 Open `libs/beacon/src/beacon/domains/setup/initializer.py` and add `"skills/contribute-warehouse/SKILL.md"` to `_BUNDLED_SKILL_FILES`.
+- [x] 7.1 Open `libs/beacon/src/beacon/domains/setup/initializer.py` and add `"skills/contribute-warehouse/SKILL.md"` to `_BUNDLED_SKILL_FILES`.
 <!-- opsx:tdd:7.1:begin -->
   - **Input**: Modify `_BUNDLED_SKILL_FILES` tuple to include the new entry.
   - **Expected Output**: Tuple now contains 3 (or more) entries: `record-knowledge`, `record-skill`, `contribute-warehouse`.
   - **Validation**: Unit test in test_initializer.py asserts membership: `assert "skills/contribute-warehouse/SKILL.md" in _BUNDLED_SKILL_FILES`.
 <!-- opsx:tdd:7.1:end -->
-- [ ] 7.2 If `_BUNDLED_SKILL_FILES` is per-file (not per-directory), add entries for the four scripts as well; otherwise rely on the directory-copy logic that already handles `record-skill`'s scripts.
+- [x] 7.2 If `_BUNDLED_SKILL_FILES` is per-file (not per-directory), add entries for the four scripts as well; otherwise rely on the directory-copy logic that already handles `record-skill`'s scripts.
 <!-- opsx:tdd:7.2:begin -->
   - **Input**: Inspect `_install_bundled_skills` and `wire_bundled_skills_per_project` to determine whether they iterate per-file or per-directory.
   - **Expected Output**: Either: (a) directory-iteration confirmed, no further changes; OR (b) per-file mode, four script entries added.
@@ -363,9 +363,9 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:8:end -->
 
 
-- [ ] 8.1 Update `libs/beacon/src/beacon/cli/adoption.py` docstring listing of bundled skills to include `contribute-warehouse` alongside the existing two.
-- [ ] 8.2 Update `libs/beacon/README.md` bundled-skills section to list `contribute-warehouse` with a one-line description.
-- [ ] 8.3 Add a section or page to `site-docs/` documenting `/contribute-warehouse`: invocation, the lint pre-flight gate, intent triage, dedup scan, cohesion split, atomic push behaviour, airgap recovery. Include a short example transcript.
+- [x] 8.1 Update `libs/beacon/src/beacon/cli/adoption.py` docstring listing of bundled skills to include `contribute-warehouse` alongside the existing two.
+- [x] 8.2 Update `libs/beacon/README.md` bundled-skills section to list `contribute-warehouse` with a one-line description.
+- [x] 8.3 Add a section or page to `site-docs/` documenting `/contribute-warehouse`: invocation, the lint pre-flight gate, intent triage, dedup scan, cohesion split, atomic push behaviour, airgap recovery. Include a short example transcript.
 <!-- opsx:tdd:8.3:begin -->
   - **Input**: Author site-docs page; cross-link from existing bundled-skills index.
   - **Expected Output**: Page renders cleanly in `mkdocs serve` with no broken links; covers all six topic areas (invocation, lint gate, triage, dedup, cohesion, airgap).
@@ -382,7 +382,7 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:9:end -->
 
 
-- [ ] 9.1 Add `libs/beacon/tests/unit/data/skills/contribute_warehouse/test_summarize_changes.py` covering: tracked-path filtering against a fixture warehouse with mixed dirty/clean/untracked files; JSON output shape; age computation including the "never committed" case.
+- [x] 9.1 Add `libs/beacon/tests/unit/data/skills/contribute_warehouse/test_summarize_changes.py` covering: tracked-path filtering against a fixture warehouse with mixed dirty/clean/untracked files; JSON output shape; age computation including the "never committed" case.
 <!-- opsx:tdd:9.1:begin -->
   - **Input**: pytest libs/beacon/tests/unit/data/skills/contribute_warehouse/test_summarize_changes.py -v
   - **Expected Output**: All test cases pass; no skipped tests; covers the test_cases enumerated in Task 4.4 and 4.5.
@@ -397,7 +397,7 @@ pytest tests/ -v --tb=short
     - TC7: Output is deterministic across repeated runs (sorted by path)
     - TC8: Subprocess failure produces a clear error and non-zero exit
 <!-- opsx:tdd:9.1:end -->
-- [ ] 9.2 Add `libs/beacon/tests/unit/data/skills/contribute_warehouse/test_draft_commit_message.py` covering: scope derivation across the mapping table (contexts-only, knowledge-topic, skills-only, mixed); type-prefix derivation; deterministic output for identical inputs.
+- [x] 9.2 Add `libs/beacon/tests/unit/data/skills/contribute_warehouse/test_draft_commit_message.py` covering: scope derivation across the mapping table (contexts-only, knowledge-topic, skills-only, mixed); type-prefix derivation; deterministic output for identical inputs.
 <!-- opsx:tdd:9.2:begin -->
   - **Input**: pytest libs/beacon/tests/unit/data/skills/contribute_warehouse/test_draft_commit_message.py -v
   - **Expected Output**: All test cases pass; covers Task 5.3 and 5.4 test cases plus the 'same inputs → same output' invariant from 5.6.
@@ -413,7 +413,7 @@ pytest tests/ -v --tb=short
     - TC8: empty paths list → ValueError
     - TC9: 10 invocations with identical args produce byte-identical output
 <!-- opsx:tdd:9.2:end -->
-- [ ] 9.3 Extend the bundled-skill distribution test (or add a new one) that asserts `skills/contribute-warehouse/SKILL.md` is in `_BUNDLED_SKILL_FILES` and that the on-disk skill directory contains the four expected scripts.
+- [x] 9.3 Extend the bundled-skill distribution test (or add a new one) that asserts `skills/contribute-warehouse/SKILL.md` is in `_BUNDLED_SKILL_FILES` and that the on-disk skill directory contains the four expected scripts.
 <!-- opsx:tdd:9.3:begin -->
   - **Input**: pytest libs/beacon/tests/unit/domains/setup/test_initializer.py -v
   - **Expected Output**: Distribution test asserts membership of `skills/contribute-warehouse/SKILL.md` in `_BUNDLED_SKILL_FILES` and existence of the four script files on disk.
@@ -425,13 +425,13 @@ pytest tests/ -v --tb=short
     - TC4: All four scripts have the executable bit set (or are runnable via uv run)
     - TC5: Removing the manifest entry → test FAILS (negative test for catch-fidelity)
 <!-- opsx:tdd:9.3:end -->
-- [ ] 9.4 Add a SKILL.md frontmatter test that runs `parse_frontmatter` on the bundled `SKILL.md` and asserts `name == "contribute-warehouse"` plus a non-empty `description`.
+- [x] 9.4 Add a SKILL.md frontmatter test that runs `parse_frontmatter` on the bundled `SKILL.md` and asserts `name == "contribute-warehouse"` plus a non-empty `description`.
 <!-- opsx:tdd:9.4:begin -->
   - **Input**: pytest libs/beacon/tests/unit/data/skills/contribute_warehouse/test_skill_md.py::test_frontmatter -v
   - **Expected Output**: Test imports `parse_frontmatter`, reads the bundled SKILL.md, asserts `name == 'contribute-warehouse'` and `len(description) > 0`.
   - **Validation**: Test passes against the actual bundled SKILL.md; corrupting the frontmatter (e.g. removing the `name` field) → test FAILS.
 <!-- opsx:tdd:9.4:end -->
-- [ ] 9.5 Run full test suite: `pytest` (unit + integration). All green before continuing.
+- [x] 9.5 Run full test suite: `pytest` (unit + integration). All green before continuing.
 <!-- opsx:tdd:9.5:begin -->
   - **Input**: pytest
   - **Expected Output**: Exit code 0; summary line shows `N passed, 0 failed, 0 errors` (skipped is acceptable for offline integration tests if BEACON_OFFLINE=1).
