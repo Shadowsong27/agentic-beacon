@@ -522,3 +522,163 @@ class TestPep723Dependencies:
         assert not beacon_imports, (
             f"Script still imports from beacon package: {beacon_imports}"
         )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PER-183: get_tracked_paths must walk artifacts.agents (not just skills + contexts)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _write_beacon_yaml_full(
+    warehouse: Path,
+    *,
+    skills: list[str] | None = None,
+    contexts: list[str] | None = None,
+    agents: list[str] | None = None,
+) -> Path:
+    """Write a beacon.yaml that can declare any of the three artifact types.
+
+    Mirrors the shape of beacon.core.manifest.beacon.ArtifactsConfig.
+    """
+    ab_dir = warehouse / ".agentic-beacon"
+    ab_dir.mkdir(exist_ok=True)
+    beacon_yaml = ab_dir / "beacon.yaml"
+
+    def _section(name: str, items: list[str] | None) -> str:
+        if not items:
+            return f"  {name}: []\n"
+        lines = "\n".join(f"    - {p}" for p in items)
+        return f"  {name}:\n{lines}\n"
+
+    body = (
+        "version: 1\nartifacts:\n"
+        + _section("skills", skills)
+        + _section("contexts", contexts)
+        + _section("agents", agents)
+    )
+    beacon_yaml.write_text(body)
+    return beacon_yaml
+
+
+class TestPer183AgentsAreTracked:
+    """PER-183: agents artifact type must appear in get_tracked_paths output.
+
+    Regression for PR #146's third-dogfood test, which exposed that the inline
+    helper (faithful copy of beacon.domains.warehouse._tracked_paths.get_tracked_paths)
+    only walked artifacts.skills + artifacts.contexts, silently dropping
+    artifacts.agents — making /contribute-warehouse unusable for any agent
+    contribution.
+    """
+
+    def test_dirty_agent_in_beacon_yaml_appears_in_summary(self, tmp_path):
+        """Dirty file under agents/, declared in beacon.yaml.agents → appears in tracked_paths."""
+        warehouse = _make_git_warehouse(tmp_path)
+        # Create + commit so it exists as tracked-and-clean baseline
+        (warehouse / "agents").mkdir(exist_ok=True)
+        agent_file = warehouse / "agents" / "my-agent.md"
+        agent_file.write_text("---\nname: my-agent\n---\nbody v1\n")
+        _initial_commit(warehouse, [agent_file])
+
+        # beacon.yaml tracks the agent
+        beacon_yaml = _write_beacon_yaml_full(warehouse, agents=["agents/my-agent.md"])
+
+        # Make it dirty
+        agent_file.write_text("---\nname: my-agent\n---\nbody v2 modified\n")
+
+        mod = _load_script()
+        result = mod.summarize(warehouse, beacon_yaml)
+        paths = [e["path"] for e in result["tracked_paths"]]
+        assert "agents/my-agent.md" in paths, (
+            f"PER-183 regression: dirty agent should appear in tracked_paths. Got: {paths}"
+        )
+
+    def test_agents_dir_pattern_walks_recursively(self, tmp_path):
+        """Pattern `agents/` in beacon.yaml.agents picks up dirty files inside."""
+        warehouse = _make_git_warehouse(tmp_path)
+        (warehouse / "agents").mkdir(exist_ok=True)
+        a1 = warehouse / "agents" / "alpha.md"
+        a2 = warehouse / "agents" / "beta.md"
+        a1.write_text("---\nname: alpha\n---\nv1\n")
+        a2.write_text("---\nname: beta\n---\nv1\n")
+        _initial_commit(warehouse, [a1, a2])
+
+        # Pattern matches the directory
+        beacon_yaml = _write_beacon_yaml_full(warehouse, agents=["agents/"])
+
+        # Make alpha dirty, leave beta clean
+        a1.write_text("---\nname: alpha\n---\nv2\n")
+
+        mod = _load_script()
+        result = mod.summarize(warehouse, beacon_yaml)
+        paths = [e["path"] for e in result["tracked_paths"]]
+        assert "agents/alpha.md" in paths
+        assert "agents/beta.md" not in paths, "clean agent should be filtered out"
+
+    def test_all_three_artifact_types_walked_together(self, tmp_path):
+        """skills + contexts + agents all populated → each dirty file appears."""
+        warehouse = _make_git_warehouse(tmp_path)
+        (warehouse / "agents").mkdir(exist_ok=True)
+        (warehouse / "skills" / "s1").mkdir(parents=True, exist_ok=True)
+
+        ctx = warehouse / "contexts" / "c1.md"
+        skill = warehouse / "skills" / "s1" / "SKILL.md"
+        agent = warehouse / "agents" / "a1.md"
+        for f, body in [
+            (ctx, "ctx v1\n"),
+            (skill, "---\nname: s1\n---\nv1\n"),
+            (agent, "---\nname: a1\n---\nv1\n"),
+        ]:
+            f.write_text(body)
+        _initial_commit(warehouse, [ctx, skill, agent])
+
+        beacon_yaml = _write_beacon_yaml_full(
+            warehouse,
+            skills=["skills/s1/SKILL.md"],
+            contexts=["contexts/c1.md"],
+            agents=["agents/a1.md"],
+        )
+
+        # Dirty all three
+        ctx.write_text("ctx v2 modified\n")
+        skill.write_text("---\nname: s1\n---\nv2 modified\n")
+        agent.write_text("---\nname: a1\n---\nv2 modified\n")
+
+        mod = _load_script()
+        result = mod.summarize(warehouse, beacon_yaml)
+        paths = sorted(e["path"] for e in result["tracked_paths"])
+        assert paths == sorted(
+            ["contexts/c1.md", "skills/s1/SKILL.md", "agents/a1.md"]
+        ), f"all three artifact types should appear, got: {paths}"
+
+    def test_empty_agents_section_no_error(self, tmp_path):
+        """beacon.yaml with agents: [] is valid and walks the other two."""
+        warehouse = _make_git_warehouse(tmp_path)
+        ctx = warehouse / "contexts" / "c1.md"
+        ctx.write_text("v1\n")
+        _initial_commit(warehouse, [ctx])
+        beacon_yaml = _write_beacon_yaml_full(
+            warehouse,
+            contexts=["contexts/c1.md"],
+            agents=None,  # no agents key
+        )
+        ctx.write_text("v2 modified\n")
+        mod = _load_script()
+        result = mod.summarize(warehouse, beacon_yaml)
+        assert any(e["path"] == "contexts/c1.md" for e in result["tracked_paths"])
+
+    def test_missing_agents_key_treated_as_empty(self, tmp_path):
+        """If artifacts.agents key is missing entirely (older beacon.yaml), no crash."""
+        warehouse = _make_git_warehouse(tmp_path)
+        ctx = warehouse / "contexts" / "c1.md"
+        ctx.write_text("v1\n")
+        _initial_commit(warehouse, [ctx])
+        # Hand-write a minimal beacon.yaml WITHOUT the agents key
+        beacon_yaml = warehouse / ".agentic-beacon" / "beacon.yaml"
+        beacon_yaml.parent.mkdir(exist_ok=True)
+        beacon_yaml.write_text(
+            "version: 1\nartifacts:\n  skills: []\n  contexts:\n    - contexts/c1.md\n"
+        )
+        ctx.write_text("v2 modified\n")
+        mod = _load_script()
+        result = mod.summarize(warehouse, beacon_yaml)
+        assert any(e["path"] == "contexts/c1.md" for e in result["tracked_paths"])

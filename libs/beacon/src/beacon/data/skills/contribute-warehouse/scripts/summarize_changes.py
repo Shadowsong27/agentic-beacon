@@ -80,11 +80,18 @@ def get_tracked_paths(warehouse: Path, beacon_yaml: Path) -> list[str]:
     artifacts = raw.get("artifacts") or {}
     skills_patterns: list[str] = artifacts.get("skills") or []
     contexts_patterns: list[str] = artifacts.get("contexts") or []
+    agents_patterns: list[str] = artifacts.get("agents") or []
 
     paths: list[str] = []
+    # Walk all three artifact types: skills, contexts, agents.
+    # Matches beacon.core.manifest.beacon.ArtifactsConfig (extra=forbid).
+    # Knowledge files are intentionally NOT walked here — they auto-derive
+    # during abc sync / abc adopt from context+skill references.
     for pattern in skills_patterns:
         paths.extend(_expand_pattern(warehouse, pattern))
     for pattern in contexts_patterns:
+        paths.extend(_expand_pattern(warehouse, pattern))
+    for pattern in agents_patterns:
         paths.extend(_expand_pattern(warehouse, pattern))
     return paths
 
