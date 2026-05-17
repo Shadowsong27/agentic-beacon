@@ -85,7 +85,10 @@ Warehouse lint failed. Resolve the following issues before contributing:
 
 Suggested recovery:
   - Fix the failing files and re-run /contribute-warehouse
-  - Or run: git -C "$WAREHOUSE_ROOT" checkout -- <failing-file>  (to discard bad changes)
+  - Or move the failing edits to a separate branch and re-run on a clean tree
+  - As a last resort, you (the user) may discard the changes with
+    `git -C "$WAREHOUSE_ROOT" checkout -- <failing-file>` — the skill itself
+    will NEVER run this; destructive recovery stays with you
 ```
 
 Do NOT stash, do NOT skip lint, do NOT proceed on a lint failure.
