@@ -15,6 +15,7 @@ from beacon.domains.distribution.upgrader import WarehouseUpgrader
 from beacon.domains.setup.initializer import WarehouseInitializer
 from beacon.domains.warehouse.connector import connect_to_warehouse
 from beacon.domains.warehouse.contribute import contribute
+from beacon.domains.warehouse.lint import LintReport, lint_warehouse
 from beacon.domains.warehouse.status import status as warehouse_status
 
 console = Console()
@@ -530,3 +531,63 @@ def warehouse_template_upgrade(
     target = warehouse_path or Path.cwd()
     upgrader = WarehouseUpgrader(warehouse_path=target)
     upgrader.run(dry_run=dry_run, force=force, interactive=interactive)
+
+
+def _print_lint_report(report: LintReport, _console: Console | None = None) -> None:
+    """Print lint findings grouped by artifact path with Rich formatting.
+
+    Args:
+        report: The lint report to display.
+        _console: Optional Console instance (defaults to module-level console).
+    """
+    c = _console if _console is not None else console
+    if not report:
+        c.print("[green]✓ Lint passed.[/green]")
+        return
+
+    # Group findings by artifact path (preserve sorted order from LintReport)
+    from itertools import groupby
+
+    for artifact_path, group_iter in groupby(
+        report.findings, key=lambda f: f.artifact_path
+    ):
+        group = list(group_iter)
+        c.print(f"[bold]{artifact_path}[/bold]")
+        for finding in group:
+            c.print(f"  [red]error:[/red] {finding.message}")
+
+    # Summary line
+    n = len(report.findings)
+    # Count unique artifact paths
+    unique_paths = len({f.artifact_path for f in report.findings})
+    c.print(f"\n[red]Found {n} error(s) across {unique_paths} file(s).[/red]")
+
+
+@warehouse.command(name="lint")
+@click.argument(
+    "warehouse_path",
+    type=click.Path(path_type=Path, exists=True, file_okay=False),
+    required=False,
+    default=None,
+)
+def warehouse_lint(*, warehouse_path: Path | None) -> None:
+    """Validate a warehouse directory end-to-end.
+
+    Runs every Beacon-owned artifact validation rule against the warehouse at
+    WAREHOUSE_PATH (defaults to the current directory when omitted).
+
+    Validates: structure, skill frontmatter, skill context references,
+    agent manifest, agent frontmatter (name + description), and knowledge
+    link integrity.
+
+    Exits 0 when no errors found; exits 1 when any errors are found.
+
+    \b
+    Examples:
+        abc warehouse lint
+        abc warehouse lint /path/to/warehouse
+    """
+    target = warehouse_path or Path.cwd()
+    report = lint_warehouse(target)
+    _print_lint_report(report)
+    sys.exit(1 if report.findings else 0)

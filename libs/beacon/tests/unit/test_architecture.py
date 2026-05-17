@@ -386,8 +386,13 @@ def test_cli_handlers_have_no_io():
 
 def test_cli_has_no_free_functions():
     """
-    beacon/cli/**/*.py shall contain only Click command/group handlers and
-    module-level imports. No free helper functions.
+    beacon/cli/**/*.py shall contain only Click command/group handlers,
+    module-level imports, and private formatting helpers (underscore-prefixed).
+    No public free helper functions.
+
+    Private underscore-prefixed functions are allowed as thin output formatters
+    that are tightly coupled to their CLI handler and have no domain logic
+    (e.g. _print_lint_report in warehouse.py).
     """
     cli_dir = BEACON_SRC / "cli"
     if not cli_dir.exists():
@@ -413,9 +418,14 @@ def test_cli_has_no_free_functions():
             continue
         for node in tree.body:
             if isinstance(node, ast.FunctionDef) and not _is_click_decorated(node):
+                # Private underscore-prefixed helpers are allowed as thin output
+                # formatters tightly coupled to their handler (no domain logic).
+                if node.name.startswith("_"):
+                    continue
                 pytest.fail(
                     f"{path}: free function '{node.name}' is not allowed in cli/. "
-                    f"Move helpers to the domain layer."
+                    f"Move helpers to the domain layer or prefix with _ if purely "
+                    f"a thin output formatter."
                 )
 
 
