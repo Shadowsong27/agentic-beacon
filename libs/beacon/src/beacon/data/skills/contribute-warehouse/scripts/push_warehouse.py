@@ -22,6 +22,7 @@ Usage:
 """
 
 import argparse
+import shlex
 import subprocess
 import sys
 from pathlib import Path
@@ -80,7 +81,7 @@ def push(warehouse: Path) -> None:
     )
 
     # Recovery command to stdout (copy-pasteable)
-    print(f"git -C {warehouse} push origin {branch}")
+    print(f"git -C {shlex.quote(str(warehouse))} push origin {shlex.quote(branch)}")
     sys.exit(1)
 
 

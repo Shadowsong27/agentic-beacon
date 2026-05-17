@@ -385,7 +385,17 @@ def warehouse_list(*, artifact_type: str | None) -> None:
     is_flag=True,
     help="Push the commit to the remote after committing",
 )
-def warehouse_contribute(*, message: str, push: bool) -> None:
+@click.option(
+    "--paths",
+    "paths",
+    multiple=True,
+    type=str,
+    help=(
+        "Warehouse-relative path to commit (repeatable). When omitted, "
+        "commits all beacon.yaml-tracked dirty paths (current behavior)."
+    ),
+)
+def warehouse_contribute(*, message: str, push: bool, paths: tuple[str, ...]) -> None:
     """Commit changes in the warehouse working tree.
 
     Stages and commits files tracked by beacon.yaml that have uncommitted
@@ -394,12 +404,15 @@ def warehouse_contribute(*, message: str, push: bool) -> None:
     Example:
         abc warehouse contribute -m "Update python standards"
         abc warehouse contribute -m "Fix typo" --push
+        abc warehouse contribute -m "Update skill" --paths skills/foo/SKILL.md
+        abc warehouse contribute -m "Split commit" --paths a.md --paths b.md
     """
     try:
         result = contribute(
             project_root=Path.cwd(),
             message=message,
             push=push,
+            paths=tuple(paths) or None,
         )
     except ValueError as e:
         console.print(f"[red]Error:[/red] {e}")

@@ -342,3 +342,88 @@ class TestFilterCleanPaths:
         result = mod.summarize(warehouse, beacon_yaml)
         paths = {e["path"] for e in result["tracked_paths"]}
         assert "docs/README.md" not in paths
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Finding 2 fix-up: beacon.yaml default is project root, not warehouse
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestBeaconYamlDefault:
+    """Tests for Finding 2 fix: beacon.yaml resolution uses project root, not warehouse."""
+
+    def _make_project_with_beacon_yaml(
+        self, tmp_path: Path, patterns: list[str]
+    ) -> tuple[Path, Path]:
+        """Create a project directory with .agentic-beacon/beacon.yaml."""
+        project = tmp_path / "project"
+        project.mkdir()
+        ab_dir = project / ".agentic-beacon"
+        ab_dir.mkdir()
+        # config.toml so _find_project_root can detect it
+        (ab_dir / "config.toml").write_text('[warehouse]\nlocal_path = "/tmp/x"\n')
+        beacon_yaml = ab_dir / "beacon.yaml"
+        skills_section = "\n".join(f"    - {p}" for p in patterns)
+        beacon_yaml.write_text(
+            f"version: 1\nartifacts:\n  skills:\n{skills_section}\n  contexts: []\n"
+        )
+        return project, beacon_yaml
+
+    def test_summarize_default_beacon_yaml_uses_project_root(
+        self, tmp_path, monkeypatch
+    ):
+        """Default invocation finds beacon.yaml at project root, not warehouse."""
+        mod = _load_script()
+
+        wh = _make_git_warehouse(tmp_path)
+        project, project_beacon_yaml = self._make_project_with_beacon_yaml(
+            tmp_path, ["contexts/*.md"]
+        )
+
+        # Warehouse should NOT have a beacon.yaml in its .agentic-beacon/
+        warehouse_beacon = wh / ".agentic-beacon" / "beacon.yaml"
+        assert not warehouse_beacon.exists(), (
+            "Warehouse must not have beacon.yaml for this test"
+        )
+
+        # Auto-detection from project dir should find the project's beacon.yaml
+        monkeypatch.chdir(project)
+        detected_root = mod._find_project_root(project)
+        assert detected_root == project
+
+        resolved_beacon = detected_root / ".agentic-beacon" / "beacon.yaml"
+        assert resolved_beacon == project_beacon_yaml
+
+    def test_summarize_explicit_project_root_flag(self, tmp_path, monkeypatch):
+        """--project-root overrides auto-detection."""
+        mod = _load_script()
+
+        _make_git_warehouse(tmp_path)
+        project, project_beacon_yaml = self._make_project_with_beacon_yaml(
+            tmp_path, ["contexts/*.md"]
+        )
+
+        # Even if CWD is somewhere else, explicit project_root resolves correctly
+        other_dir = tmp_path / "other"
+        other_dir.mkdir()
+        monkeypatch.chdir(other_dir)
+
+        detected_root = mod._find_project_root(project)
+        assert detected_root == project
+        assert (
+            detected_root / ".agentic-beacon" / "beacon.yaml"
+        ) == project_beacon_yaml
+
+    def test_summarize_no_project_root_no_flag_returns_none(
+        self, tmp_path, monkeypatch
+    ):
+        """When neither detectable nor passed, _find_project_root returns None."""
+        mod = _load_script()
+
+        # Use a directory with no .agentic-beacon/config.toml in the whole tree
+        bare_dir = tmp_path / "bare"
+        bare_dir.mkdir()
+        monkeypatch.chdir(bare_dir)
+
+        result = mod._find_project_root(bare_dir)
+        assert result is None

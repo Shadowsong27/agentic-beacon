@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import importlib.util
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -313,3 +315,61 @@ class TestFullCombinations:
         mod = _load_script()
         with pytest.raises((ValueError, SystemExit)):
             mod.derive_scope([])
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Finding 3 fix-up: documented invocation with --git-statuses
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestDocumentedInvocationWithGitStatuses:
+    """Tests for Finding 3 fix: SKILL.md documented invocation passes --git-statuses."""
+
+    def test_documented_invocation_skills_modified_produces_fix(self):
+        """skills/-modifications with ' M' status → type=fix, not feat."""
+        mod = _load_script()
+        # ' M' is the two-char porcelain code for working-tree modified
+        result = mod.derive_type(
+            ["skills/foo/SKILL.md", "skills/bar/SKILL.md"],
+            git_statuses=[" M", " M"],
+        )
+        assert result == "fix"
+
+    def test_documented_invocation_skills_new_files_produce_feat(self):
+        """skills/-new-files with 'A ' status → type=feat."""
+        mod = _load_script()
+        # 'A ' is the two-char porcelain code for staged new file
+        result = mod.derive_type(
+            ["skills/foo/SKILL.md"],
+            git_statuses=["A "],
+        )
+        assert result == "feat"
+
+    def test_documented_invocation_subprocess_exactly_as_skill_md(self):
+        """Call the script subprocess with --paths and --git-statuses as SKILL.md shows."""
+        result = subprocess.run(
+            [
+                sys.executable,
+                str(_SCRIPT_PATH),
+                "--paths",
+                "skills/foo/SKILL.md",
+                "skills/bar/SKILL.md",
+                "--git-statuses",
+                " M",
+                "A ",
+                "--subject",
+                "fix bar invocation example",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0
+        output = result.stdout.strip()
+        # Mixed M and A statuses: has_new=True ('A ') → feat
+        assert CONVENTIONAL_COMMITS_RE.match(output), (
+            f"Not a valid CC message: {output!r}"
+        )
+        # The output type should be 'feat' (new file present) and scope 'skills'
+        assert output.startswith("feat(skills):"), (
+            f"Expected feat(skills): prefix, got: {output!r}"
+        )

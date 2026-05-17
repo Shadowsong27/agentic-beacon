@@ -98,6 +98,16 @@ Run the summarizer to build a structured view of what has changed:
 uv run ${SKILL_DIR}/scripts/summarize_changes.py --warehouse "$WAREHOUSE_ROOT"
 ```
 
+The script auto-detects the project root by walking up from CWD looking for
+`.agentic-beacon/config.toml`. If auto-detection fails (e.g. skill is run from
+an unrelated directory), pass the project root explicitly:
+
+```bash
+uv run ${SKILL_DIR}/scripts/summarize_changes.py \
+  --warehouse "$WAREHOUSE_ROOT" \
+  --project-root /path/to/project
+```
+
 Parse the JSON output. Each entry in `tracked_paths` contains:
 - `path` — warehouse-relative path
 - `git_status` — porcelain code (e.g. `M`, `A`, `??`)
@@ -169,29 +179,50 @@ The user may accept the proposed split or adjust the groupings.
 
 ### Step 7: Draft Commit Message(s)
 
-For each commit group, draft a Conventional Commits message by calling:
+For each commit group, extract the per-path `git_status` codes from the
+`summarize_changes.py` output, then call:
 
 ```bash
 uv run ${SKILL_DIR}/scripts/draft_commit_message.py \
   --paths <space-separated warehouse-relative paths in this group> \
+  --git-statuses <per-path status codes in the same order as --paths> \
   --subject "<LLM-drafted one-line subject>"
 ```
 
-The script derives the `<type>` and `<scope>` deterministically from the paths.
-You supply the `<subject>` based on the diff content and the user's intent.
+Example — two paths with known statuses:
+
+```bash
+uv run ${SKILL_DIR}/scripts/draft_commit_message.py \
+  --paths skills/foo/SKILL.md skills/bar/SKILL.md \
+  --git-statuses " M" "A " \
+  --subject "fix bar invocation example"
+```
+
+The `--git-statuses` argument takes one code per path (two-character porcelain
+format, e.g. `" M"` for working-tree modified, `"A "` for staged new file).
+Without `--git-statuses`, skills and agents paths default to `feat` regardless
+of whether they are new or modified — always pass the statuses when available.
+
+The script derives the `<type>` and `<scope>` deterministically from the paths
+and statuses. You supply the `<subject>` based on the diff content and the
+user's intent.
 
 Present the drafted message(s) to the user for confirmation or editing before
 proceeding.
 
 ### Step 8: Commit Each Group
 
-For each confirmed commit group (in order):
+For each confirmed commit group (in order), pass the group's paths explicitly
+using the `--paths` flag so only those files are committed:
 
 ```bash
-abc warehouse contribute -m "<type>(<scope>): <subject>"
+abc warehouse contribute -m "<type>(<scope>): <subject>" \
+  --paths <path1> --paths <path2> ...
 ```
 
 **Important:** Do NOT pass `--push` here. All commits land locally first.
+Using `--paths` ensures only the files in this group are staged and committed —
+files classified as leave-for-later remain untouched in the working tree.
 If `abc warehouse contribute` exits non-zero, surface the error and stop.
 
 ### Step 9: Atomic Push
@@ -250,7 +281,7 @@ Contribution summary:
 5. No `knowledge/` files → skips dedup scan
 6. Cohesion check: single file → one commit
 7. Drafts message: `docs(contexts): add loguru section to python standards`
-8. Calls `abc warehouse contribute -m "docs(contexts): add loguru section to python standards"`
+8. Calls `abc warehouse contribute -m "docs(contexts): add loguru section to python standards" --paths contexts/python-standards.md`
 9. Calls `push_warehouse.py` → push succeeds
 10. Reports: "Committed `a1b2c3d` — `docs(contexts): add loguru section`. Pushed."
 
@@ -269,7 +300,8 @@ Contribution summary:
 6. Cohesion check: python files are cohesive (group 1), CI lesson is independent (group 2)
 7. Proposes 2-commit split; user confirms
 8. Drafts `docs(python-standards): add type hints lesson` and `docs(cicd): add deploy-via-git lesson`
-9. Calls `abc warehouse contribute` twice
+9. Calls `abc warehouse contribute -m "docs(python-standards): add type hints lesson" --paths contexts/python-standards.md --paths knowledge/python/lessons/type-hints.md`
+   then `abc warehouse contribute -m "docs(cicd): add deploy-via-git lesson" --paths knowledge/cicd/lessons/deploy-via-git.md`
 10. Calls `push_warehouse.py` once → success
 11. Reports: "Committed 2 changes. Pushed."
 
@@ -311,8 +343,8 @@ Contribution summary:
 - [ ] Triage dirty files with the user (include / leave-for-later)
 - [ ] Dedup scan for `knowledge/` files — flag overlaps before proceeding
 - [ ] Cohesion check — propose split if multiple independent changes
-- [ ] Draft commit message(s) via `draft_commit_message.py` — confirm with user
-- [ ] Call `abc warehouse contribute -m "<msg>"` per group — NO `--push` flag
+- [ ] Draft commit message(s) via `draft_commit_message.py` (pass `--git-statuses`) — confirm with user
+- [ ] Call `abc warehouse contribute -m "<msg>" --paths <p1> --paths <p2> ...` per group — NO `--push` flag
 - [ ] Call `push_warehouse.py --warehouse <path>` exactly once
 - [ ] Report committed SHAs, push status, and any left-for-later files
 

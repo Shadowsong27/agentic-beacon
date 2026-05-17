@@ -12,6 +12,15 @@ Clean paths are filtered out.
 
 Usage:
     uv run summarize_changes.py --warehouse <path> [--beacon-yaml <path>]
+    uv run summarize_changes.py --warehouse <path> [--project-root <path>]
+
+beacon.yaml resolution order:
+  1. --beacon-yaml (explicit path) takes highest precedence.
+  2. --project-root / auto-detected project root → <project_root>/.agentic-beacon/beacon.yaml.
+  3. If neither is discoverable, exits non-zero with a clear message.
+
+NOTE: The default does NOT fall back to <warehouse>/.agentic-beacon/beacon.yaml —
+warehouses do not contain this file; beacon.yaml lives in the project root.
 """
 
 import argparse
@@ -27,6 +36,19 @@ def get_tracked_paths(warehouse: Path, beacon_yaml: Path) -> list[str]:
     from beacon.domains.warehouse._tracked_paths import get_tracked_paths as _gtp
 
     return _gtp(warehouse, beacon_yaml)
+
+
+def _find_project_root(start: Path) -> Path | None:
+    """Walk up from *start* looking for .agentic-beacon/config.toml.
+
+    Returns the directory containing .agentic-beacon/config.toml, or None if
+    not found before reaching the filesystem root.
+    """
+    current = start.resolve()
+    for path in [current, *current.parents]:
+        if (path / ".agentic-beacon" / "config.toml").exists():
+            return path
+    return None
 
 
 def _run_git(
@@ -152,7 +174,18 @@ def main() -> None:
     parser.add_argument(
         "--beacon-yaml",
         default=None,
-        help="Path to beacon.yaml (default: <warehouse>/.agentic-beacon/beacon.yaml).",
+        help=(
+            "Explicit path to beacon.yaml. When provided, takes precedence over "
+            "--project-root and auto-detection."
+        ),
+    )
+    parser.add_argument(
+        "--project-root",
+        default=None,
+        help=(
+            "Path to the project root (the directory containing .agentic-beacon/). "
+            "When omitted, auto-detected by walking up from the current directory."
+        ),
     )
     args = parser.parse_args()
 
@@ -161,11 +194,25 @@ def main() -> None:
         print(f"Error: warehouse path does not exist: {warehouse}", file=sys.stderr)
         sys.exit(1)
 
-    beacon_yaml = (
-        Path(args.beacon_yaml)
-        if args.beacon_yaml
-        else warehouse / ".agentic-beacon" / "beacon.yaml"
-    )
+    # Resolve beacon.yaml path
+    if args.beacon_yaml:
+        beacon_yaml = Path(args.beacon_yaml)
+    else:
+        if args.project_root:
+            project_root = Path(args.project_root)
+        else:
+            project_root = _find_project_root(Path.cwd())
+
+        if project_root is None:
+            print(
+                "Error: could not auto-detect a project root "
+                "(.agentic-beacon/config.toml not found in current directory or any parent). "
+                "Pass --project-root <path> or --beacon-yaml <path> explicitly.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+        beacon_yaml = project_root / ".agentic-beacon" / "beacon.yaml"
 
     try:
         result = summarize(warehouse, beacon_yaml)
