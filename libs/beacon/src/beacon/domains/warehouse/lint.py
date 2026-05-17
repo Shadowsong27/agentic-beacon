@@ -245,12 +245,15 @@ def _lint_agent_manifest(warehouse_path: Path) -> list[LintFinding]:
         manifest = load_agent_manifest(warehouse_path)
         manifest_parsed = True
     except AgentManifestError as exc:
-        for line in str(exc).split("\n"):
-            line = line.strip()
-            if line:
-                findings.append(
-                    LintFinding(artifact_path="agents/agents.yaml", message=line)
-                )
+        # load_agent_manifest formats failures as "<error>\nSee <migration-url>
+        # for ..." — the newline is a continuation, NOT a per-defect separator.
+        # Splitting it would inflate the finding count (one defect becomes N
+        # findings). Preserve the full message as a single finding. This
+        # differs from the validate_* helpers below where '\n' DOES separate
+        # per-defect lines and the split-and-fan-out treatment is correct.
+        findings.append(
+            LintFinding(artifact_path="agents/agents.yaml", message=str(exc).strip())
+        )
 
     # validate_agents_directory needs a parsed manifest — skip on parse failure.
     if manifest_parsed:

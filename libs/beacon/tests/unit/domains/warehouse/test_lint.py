@@ -392,15 +392,33 @@ class TestLintAgentManifest:
         assert result == []
 
     def test_unparseable_yaml_produces_finding_on_agents_yaml(self, tmp_path):
-        """TC2/6.7: agents.yaml has YAML syntax error → finding scoped to agents/agents.yaml."""
+        """TC2/6.7: agents.yaml has YAML syntax error → ONE finding scoped to agents/agents.yaml.
+
+        Regression for opencode-review PR144 round-4 #M1: load_agent_manifest
+        formats parse failures as a multi-line message
+        ("<error>\\n...continuation lines...\\nSee <migration-url> ...").
+        These newlines are continuation lines, NOT per-defect separators, so
+        the lint rule must emit a single finding for one underlying defect —
+        not split each line into its own finding and inflate the summary count.
+        """
         wh = _build_clean_warehouse(tmp_path)
         (wh / "agents" / "agents.yaml").write_text(":::")
         (wh / "agents" / "foo.md").write_text(
             "---\nname: foo\ndescription: test\n---\n"
         )
         result = self._call(wh)
-        assert len(result) >= 1
-        assert all(f.artifact_path == "agents/agents.yaml" for f in result)
+        # Exactly ONE finding (not >= 1) — pins the regression fix.
+        assert len(result) == 1, (
+            f"Expected exactly 1 finding for one underlying defect, got "
+            f"{len(result)}: {[(f.artifact_path, f.message[:60]) for f in result]}"
+        )
+        assert result[0].artifact_path == "agents/agents.yaml"
+        # Migration-doc continuation line must be inside the single finding's
+        # message (proving we preserved the full multi-line context).
+        assert "migration" in result[0].message.lower(), (
+            f"Expected migration-doc continuation line preserved in the single "
+            f"finding's message, got: {result[0].message!r}"
+        )
 
     def test_agent_file_missing_from_manifest(self, tmp_path):
         """TC6.3: agents/foo.md exists, agents.yaml has no foo: key → 1 finding."""
