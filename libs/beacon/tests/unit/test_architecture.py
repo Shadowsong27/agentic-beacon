@@ -387,8 +387,26 @@ def test_cli_handlers_have_no_io():
 def test_cli_has_no_free_functions():
     """
     beacon/cli/**/*.py shall contain only Click command/group handlers and
-    module-level imports. No free helper functions.
+    module-level imports. No free helper functions, public or private,
+    unless explicitly whitelisted below.
+
+    The whitelist is a deliberate narrow escape hatch for thin output
+    formatters that are tightly coupled to their CLI handler and have no
+    domain logic — currently `_print_lint_report` in `warehouse.py`,
+    required by design §7 of the warehouse-lint-cli-for-ci OpenSpec change.
+    Any new whitelist entry must come with (a) a comment justifying why the
+    helper cannot live in the domain layer, and (b) the corresponding
+    OpenSpec change reference. Untracked underscore-prefixed helpers should
+    still fail — this rule exists to keep `cli/` thin.
     """
+    # path-basename -> set of whitelisted free-function names in that file.
+    CLI_PRIVATE_HELPER_WHITELIST: dict[str, set[str]] = {
+        # warehouse.py: _print_lint_report is a Rich-Console formatter tightly
+        # coupled to warehouse_lint. Lives here per design §7 of OpenSpec
+        # change warehouse-lint-cli-for-ci.
+        "warehouse.py": {"_print_lint_report"},
+    }
+
     cli_dir = BEACON_SRC / "cli"
     if not cli_dir.exists():
         pytest.skip("cli/ directory does not exist yet")
@@ -411,11 +429,19 @@ def test_cli_has_no_free_functions():
         tree = _parse_file(path)
         if tree is None:
             continue
+        whitelist = CLI_PRIVATE_HELPER_WHITELIST.get(path.name, set())
         for node in tree.body:
             if isinstance(node, ast.FunctionDef) and not _is_click_decorated(node):
+                if node.name in whitelist:
+                    continue
                 pytest.fail(
                     f"{path}: free function '{node.name}' is not allowed in cli/. "
-                    f"Move helpers to the domain layer."
+                    f"Move helpers to the domain layer. If the helper is a thin "
+                    f"output formatter that genuinely cannot live in the domain "
+                    f"layer, add an explicit entry to "
+                    f"CLI_PRIVATE_HELPER_WHITELIST in this test, with a comment "
+                    f"justifying the exception and referencing the relevant "
+                    f"OpenSpec change."
                 )
 
 

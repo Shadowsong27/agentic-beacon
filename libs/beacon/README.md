@@ -358,6 +358,35 @@ agentic setup --warehouse /path/to/warehouse
 echo ".opencode/" >> .gitignore
 ```
 
+## Warehouse Commands
+
+| Command | Description |
+|---------|-------------|
+| `abc warehouse init [NAME]` | Initialize a new warehouse |
+| `abc warehouse connect --path PATH` | Connect a project to a warehouse |
+| `abc warehouse list [TYPE]` | List available warehouse artifacts |
+| `abc warehouse contribute -m MSG` | Commit warehouse working-tree changes |
+| `abc warehouse status` | Show warehouse working-tree status |
+| `abc warehouse template-upgrade` | Upgrade warehouse template files |
+| `abc warehouse lint [PATH]` | Validate a warehouse end-to-end (for CI) |
+
+### `abc warehouse lint`
+
+Validates a warehouse directory against every Beacon artifact contract:
+structure, skill frontmatter, skill context references, agent manifest, agent
+frontmatter (`name` + `description`), and knowledge link integrity. Designed
+as the single entry-point for warehouse-side CI.
+
+```bash
+# Lint the current directory (inside a warehouse clone)
+abc warehouse lint
+
+# Lint a specific path
+abc warehouse lint ~/my-org-warehouse
+```
+
+Exit 0 when clean; exit 1 on any finding.
+
 ## License
 
 MIT
