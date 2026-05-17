@@ -11,8 +11,6 @@ artifacts:
   - skills/delegate-to-cc/
   - skills/file-linear-followup/
   agents:
-  - agents/personal-blog-writer.md
   - agents/spec-planner.md
   - agents/implementation-supervisor.md
   - agents/diligent-supervisor.md
-  - agents/spec-reviewer.md
