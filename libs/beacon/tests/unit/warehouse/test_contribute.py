@@ -81,6 +81,62 @@ def contrib_project(tmp_path, contrib_warehouse, monkeypatch):
     return project, contrib_warehouse
 
 
+@pytest.fixture
+def contrib_project_multi(tmp_path, monkeypatch):
+    """Create a project connected to a warehouse with 3 tracked files (a, b, c)."""
+    wh = tmp_path / "warehouse"
+    wh.mkdir()
+    env = _git_env()
+    subprocess.run(["git", "init"], cwd=wh, env=env, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "--allow-empty", "-m", "init"],
+        cwd=wh,
+        env=env,
+        check=True,
+        capture_output=True,
+    )
+
+    project = tmp_path / "project"
+    project.mkdir()
+    beacon_dir = project / ".agentic-beacon"
+    beacon_dir.mkdir()
+
+    config = beacon_dir / "config.toml"
+    config.write_text(f'[warehouse]\nlocal_path = "{wh}"\n')
+
+    beacon_yaml = beacon_dir / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n"
+        "  contexts:\n"
+        "    - contexts/a.md\n"
+        "    - contexts/b.md\n"
+        "    - contexts/c.md\n"
+        "  skills: []\n\n"
+    )
+
+    # Create and commit all three files
+    (wh / "contexts").mkdir()
+    for name in ("a.md", "b.md", "c.md"):
+        (wh / "contexts" / name).write_text(f"# {name}\n")
+    subprocess.run(
+        ["git", "add", "."],
+        cwd=wh,
+        env=env,
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "commit", "-m", "Add a/b/c"],
+        cwd=wh,
+        env=env,
+        check=True,
+        capture_output=True,
+    )
+
+    monkeypatch.chdir(project)
+    return project, wh
+
+
 class TestContribute:
     """TCs from task 4.1."""
 
@@ -254,3 +310,140 @@ class TestContribute:
             check=True,
         )
         assert "unrelated.md" in staged_files.stdout
+
+
+class TestContributePaths:
+    """Tests for the --paths scoping feature (Finding 1 fix-up)."""
+
+    def test_contribute_subset_commits_only_specified_paths(
+        self, contrib_project_multi
+    ):
+        """Given 3 dirty tracked files A/B/C and paths=(A,), only A gets committed."""
+        project, wh = contrib_project_multi
+        env = _git_env()
+
+        # Dirty all three files
+        for name in ("a.md", "b.md", "c.md"):
+            (wh / "contexts" / name).write_text(f"# {name} modified\n")
+
+        result = contribute(
+            project, message="commit only a", push=False, paths=("contexts/a.md",)
+        )
+        assert result.status == "committed"
+        assert result.committed_sha
+
+        # Only a.md should appear in HEAD
+        committed_files = subprocess.run(
+            ["git", "show", "--name-only", "--format=", "HEAD"],
+            cwd=wh,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert "contexts/a.md" in committed_files.stdout
+        assert "contexts/b.md" not in committed_files.stdout
+        assert "contexts/c.md" not in committed_files.stdout
+
+        # B and C still dirty
+        status = subprocess.run(
+            ["git", "status", "--porcelain", "--", "contexts/b.md", "contexts/c.md"],
+            cwd=wh,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert "b.md" in status.stdout
+        assert "c.md" in status.stdout
+
+    def test_contribute_paths_validates_membership(self, contrib_project_multi):
+        """paths=(D,) where D is not tracked raises ValueError mentioning D."""
+        project, wh = contrib_project_multi
+        with pytest.raises(ValueError) as exc_info:
+            contribute(
+                project,
+                message="should fail",
+                push=False,
+                paths=("contexts/d.md",),
+            )
+        assert "contexts/d.md" in str(exc_info.value)
+
+    def test_contribute_paths_empty_tuple_raises(self, contrib_project_multi):
+        """paths=() raises ValueError with a clear message."""
+        project, wh = contrib_project_multi
+        with pytest.raises(ValueError) as exc_info:
+            contribute(project, message="should fail", push=False, paths=())
+        assert "empty" in str(exc_info.value).lower()
+
+    def test_contribute_paths_none_preserves_existing_behavior(
+        self, contrib_project_multi
+    ):
+        """paths=None commits all dirty tracked paths (existing behavior)."""
+        project, wh = contrib_project_multi
+        env = _git_env()
+
+        # Dirty all three
+        for name in ("a.md", "b.md", "c.md"):
+            (wh / "contexts" / name).write_text(f"# {name} all modified\n")
+
+        result = contribute(project, message="commit all", push=False, paths=None)
+        assert result.status == "committed"
+
+        committed_files = subprocess.run(
+            ["git", "show", "--name-only", "--format=", "HEAD"],
+            cwd=wh,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert "contexts/a.md" in committed_files.stdout
+        assert "contexts/b.md" in committed_files.stdout
+        assert "contexts/c.md" in committed_files.stdout
+
+    def test_contribute_paths_sequential_groups_leave_others_dirty(
+        self, contrib_project_multi
+    ):
+        """Simulate multi-commit split: A then B; C remains dirty after both."""
+        project, wh = contrib_project_multi
+        env = _git_env()
+
+        # Dirty all three
+        for name in ("a.md", "b.md", "c.md"):
+            (wh / "contexts" / name).write_text(f"# {name} for split\n")
+
+        # First commit: only A
+        r1 = contribute(
+            project, message="commit a", push=False, paths=("contexts/a.md",)
+        )
+        assert r1.status == "committed"
+
+        # Second commit: only B
+        r2 = contribute(
+            project, message="commit b", push=False, paths=("contexts/b.md",)
+        )
+        assert r2.status == "committed"
+
+        # C still dirty
+        status = subprocess.run(
+            ["git", "status", "--porcelain", "--", "contexts/c.md"],
+            cwd=wh,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert "c.md" in status.stdout
+
+        # Verify two separate commits were made
+        log = subprocess.run(
+            ["git", "log", "-2", "--format=%s"],
+            cwd=wh,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert "commit b" in log.stdout
+        assert "commit a" in log.stdout

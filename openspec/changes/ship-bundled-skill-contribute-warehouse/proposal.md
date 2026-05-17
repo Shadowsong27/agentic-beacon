@@ -23,6 +23,8 @@ Out of scope (filed as follow-ups):
 - Cross-warehouse orphan-link detection at contribute time → covered by future PER-114 work (orphan detection explicitly deferred there)
 - Knowledge-base placement validation at contribute time → stays with the `record-knowledge` skill at write time
 
+**Note:** A `--paths` flag was added to `abc warehouse contribute` during implementation. This was originally listed as out of scope but proved necessary to enable the SKILL.md's per-group commit promises (leave-for-later files and multi-commit cohesion splits). The flag scopes commits within the beacon.yaml-tracked set without bypassing any existing contracts.
+
 ## Capabilities
 
 ### New Capabilities

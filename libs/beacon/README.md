@@ -358,6 +358,26 @@ agentic setup --warehouse /path/to/warehouse
 echo ".opencode/" >> .gitignore
 ```
 
+## Bundled Skills
+
+Three skills are shipped inside the `abc` package and available immediately after connecting a warehouse:
+
+| Skill | Description |
+|---|---|
+| `record-knowledge` | Capture decisions, lessons, and facts into the warehouse knowledge base |
+| `record-skill` | Scaffold new Beacon skills with LLM-driven content generation and pending-based wiring |
+| `contribute-warehouse` | Guided contribution flow: lint gate, intent triage, dedup scan, cohesion split, and atomic push |
+
+Invoke any bundled skill from an OpenCode or Claude Code session:
+
+```
+/record-knowledge
+/record-skill
+/contribute-warehouse
+```
+
+---
+
 ## Warehouse Commands
 
 | Command | Description |

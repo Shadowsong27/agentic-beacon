@@ -40,6 +40,7 @@ def contribute(
     *,
     message: str,
     push: bool = False,
+    paths: tuple[str, ...] | None = None,
 ) -> ContributeResult:
     """Contribute local changes to the warehouse.
 
@@ -50,6 +51,12 @@ def contribute(
         project_root: Path to the project root.
         message: Commit message (must be non-empty).
         push: Whether to push after committing.
+        paths: Optional tuple of warehouse-relative paths to restrict the commit
+            to. When None (the default), all beacon.yaml-tracked dirty paths are
+            committed (existing behaviour). When provided, every path must be a
+            member of the beacon.yaml-tracked set; paths outside that set raise
+            ValueError. An empty tuple is rejected — omit the argument to commit
+            all tracked paths.
 
     Returns:
         ContributeResult indicating the outcome.
@@ -57,27 +64,45 @@ def contribute(
     if not message or not message.strip():
         raise ValueError("Commit message cannot be empty")
 
+    if paths is not None and len(paths) == 0:
+        raise ValueError(
+            "--paths must not be empty when provided; omit the flag to commit all tracked paths"
+        )
+
     warehouse_path, _ = ensure_sync_ready(project_root)
 
     beacon_yaml = project_root / ".agentic-beacon" / "beacon.yaml"
     tracked_paths = get_tracked_paths(warehouse_path, beacon_yaml)
 
-    if not tracked_paths:
+    if paths is not None:
+        tracked_set = set(tracked_paths)
+        untracked = [p for p in paths if p not in tracked_set]
+        if untracked:
+            raise ValueError(
+                f"The following paths are not tracked by beacon.yaml and cannot be committed: "
+                f"{', '.join(repr(p) for p in untracked)}"
+            )
+        # Use the caller-supplied paths (preserving their order), scoped within tracked_paths
+        commit_paths = list(paths)
+    else:
+        commit_paths = tracked_paths
+
+    if not commit_paths:
         return ContributeResult(status="no_changes")
 
-    # Check git status for tracked paths
+    # Check git status for the paths we intend to commit
     status_result = _run_git(
-        warehouse_path, ["status", "--porcelain", "--", *tracked_paths]
+        warehouse_path, ["status", "--porcelain", "--", *commit_paths]
     )
     if not status_result.stdout.strip():
         return ContributeResult(status="no_changes")
 
-    # Stage tracked paths
-    _run_git(warehouse_path, ["add", "--", *tracked_paths])
+    # Stage the paths we intend to commit
+    _run_git(warehouse_path, ["add", "--", *commit_paths])
 
     # Commit
     commit_result = _run_git(
-        warehouse_path, ["commit", "-m", message, "--", *tracked_paths]
+        warehouse_path, ["commit", "-m", message, "--", *commit_paths]
     )
     if commit_result.returncode != 0:
         logger.error("Git commit failed: {}", commit_result.stderr)

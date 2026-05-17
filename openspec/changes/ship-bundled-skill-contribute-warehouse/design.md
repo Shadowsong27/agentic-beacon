@@ -23,7 +23,7 @@ The CLI side is already mature: `domains/warehouse/contribute.py` resolves the w
 
 * No `abc-` prefix on the new skill's name (deferred to PER-178; the new skill follows the existing un-prefixed convention to keep this change focused).
 * No vectorized dedup index (deferred to PER-179; v1 uses an LLM-driven scan scoped to sibling files in `knowledge/<topic>/<kind>/`).
-* No new CLI commands or flags. The skill consumes existing surfaces (`abc warehouse contribute`, `abc warehouse lint`) without modifying them.
+* ~~No new CLI commands or flags. The skill consumes existing surfaces (`abc warehouse contribute`, `abc warehouse lint`) without modifying them.~~ **Updated during implementation:** a `--paths` flag was added to `abc warehouse contribute` to enable per-group commits (the SKILL.md's leave-for-later and multi-commit split promises require the ability to scope a single commit to a subset of tracked files). Decision 1 ("skill orchestrates contribute, does not drive git plumbing directly") still holds — the orchestration surface was extended rather than bypassed. The `--paths` flag validates that every supplied path is a member of the beacon.yaml-tracked set, preserving the existing "only tracked paths get committed" contract.
 * No path-scoped lint, no stash-based lint workaround. Strict gate against the full working tree.
 * No branch creation or branch-strategy logic. The skill commits to whatever branch the warehouse is on.
 * No knowledge-base placement validation. That stays in `record-knowledge` at write time.

@@ -126,6 +126,21 @@ The skill SHALL invoke `abc warehouse contribute -m "<msg>"` *without* the `--pu
 - **AND** the N commits remain in the local warehouse branch ready to push later
 - **AND** the skill exits cleanly (non-zero) without amending, resetting, or force-pushing
 
+### Requirement: CLI dependency — `abc warehouse contribute` supports per-path scoping
+The `abc warehouse contribute` CLI SHALL accept a repeatable `--paths` option that restricts the staged-and-committed set to the specified warehouse-relative paths. Every path supplied via `--paths` MUST be a member of the beacon.yaml-tracked set; paths outside that set SHALL cause the command to exit non-zero with a clear error message naming the offending path(s). Omitting `--paths` preserves the existing behaviour (commit all dirty tracked paths).
+
+The skill relies on this flag to deliver its leave-for-later and multi-commit split promises: without per-path scoping, a multi-group contribution would incorrectly commit all dirty files in every `abc warehouse contribute` call.
+
+#### Scenario: `--paths` restricts commit to specified tracked paths
+- **WHEN** `abc warehouse contribute -m "msg" --paths contexts/a.md` is called while `contexts/a.md` and `contexts/b.md` are both dirty and tracked
+- **THEN** only `contexts/a.md` appears in the resulting commit
+- **AND** `contexts/b.md` remains dirty in the warehouse working tree
+
+#### Scenario: `--paths` rejects paths outside beacon.yaml-tracked set
+- **WHEN** `abc warehouse contribute -m "msg" --paths untracked/file.md` is called and `untracked/file.md` is not in the beacon.yaml-tracked set
+- **THEN** the command exits non-zero
+- **AND** the error message names `untracked/file.md` as the offending path
+
 ### Requirement: Skill is documented in user-facing docs
 The system SHALL document the `contribute-warehouse` skill in `libs/beacon/README.md` and in `site-docs/`, alongside the existing `record-knowledge` and `record-skill` entries. Documentation SHALL describe the slash-command invocation, the lint-gate behaviour, the airgap-safe push contract, and a brief mention of the helper scripts.
 
