@@ -151,8 +151,13 @@ def test_setup_manual_flag_is_removed(valid_warehouse, temp_dir, monkeypatch):
 
     result = runner.invoke(main, ["setup", "--manual"])
 
+    # Click's "no such option" wording changed between 8.3.x ("No such option:
+    # --foo") and 8.4.x ("No such option '--foo'."). Assert exit_code rejects
+    # the flag and the flag name appears somewhere in the output — both Click
+    # versions name the unknown option in the error.
     assert result.exit_code != 0
-    assert "No such option: --manual" in result.output
+    assert "--manual" in result.output
+    assert "no such option" in result.output.lower()
 
 
 def test_setup_agent_assisted_flag_is_removed(valid_warehouse, temp_dir, monkeypatch):
@@ -160,5 +165,7 @@ def test_setup_agent_assisted_flag_is_removed(valid_warehouse, temp_dir, monkeyp
 
     result = runner.invoke(main, ["setup", "--agent-assisted"])
 
+    # See test_setup_manual_flag_is_removed for the Click version tolerance rationale.
     assert result.exit_code != 0
-    assert "No such option: --agent-assisted" in result.output
+    assert "--agent-assisted" in result.output
+    assert "no such option" in result.output.lower()

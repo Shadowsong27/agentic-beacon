@@ -27,6 +27,20 @@ jobs:
   unit-tests:
     name: Unit Tests
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Pin the matrix explicitly (don't read python-version-file) so the
+        # runner doesn't silently drift to a newer Python the moment one
+        # becomes the ubuntu-latest default — 3.14 became default on
+        # 2026-05-17 and silently pulled in Click 8.4.0, which changed the
+        # 'no such option' error format and broke pre-existing tests.
+        #
+        # Matrix matches the package's declared support range
+        # (`requires-python = ">=3.12"` in libs/beacon/pyproject.toml).
+        # Bump deliberately when adding 3.14+ support (the Click format
+        # incompatibility plus other 3.14 stdlib changes need a sweep first).
+        python-version: ["3.12", "3.13"]
 
     steps:
       - uses: actions/checkout@v4
@@ -39,7 +53,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version-file: "libs/beacon/pyproject.toml"
+          python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
         run: uv sync --group dev
@@ -58,7 +72,7 @@ jobs:
       - name: Publish summary
         if: always()
         run: |
-          echo "## Unit Tests" >> $GITHUB_STEP_SUMMARY
+          echo "## Unit Tests (Python ${{ matrix.python-version }})" >> $GITHUB_STEP_SUMMARY
           echo "**Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
 
   # ------------------------------------------------------------------
@@ -81,7 +95,14 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version-file: "libs/beacon/pyproject.toml"
+          # E2E intentionally single-version (not matrix): the e2e suite is
+          # pure subprocess / filesystem orchestration, so matrixing it across
+          # the full declared support range would mostly re-exercise checks
+          # the unit matrix already covers, while doubling spin-up cost (uv
+          # cache, fresh resolves). Pin matches the lower bound of the unit
+          # test matrix so the e2e environment is at least as old as one
+          # unit-tested variant.
+          python-version: "3.12"
 
       - name: Install dependencies
         run: uv sync --group dev

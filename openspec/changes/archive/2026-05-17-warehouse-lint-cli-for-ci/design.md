@@ -121,7 +121,12 @@ This relies on a stable convention: the raising validators format multi-defect m
 @warehouse.command(name="lint")
 @click.argument(
     "warehouse_path",
-    type=click.Path(path_type=Path, exists=True, file_okay=False),
+    # No exists=True / file_okay=False: lint_warehouse + WarehouseValidator
+    # already emit structured findings for missing or file-typed paths
+    # ("Path not found", "Path is not a directory"). Letting Click reject
+    # before lint runs would short-circuit the documented exit-1 finding
+    # flow. (Updated after opencode-review PR #144 round-3 finding L1.)
+    type=click.Path(path_type=Path),
     required=False,
     default=None,
 )

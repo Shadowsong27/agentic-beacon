@@ -65,7 +65,7 @@ pytest tests/ -v --tb=short
 | Repo | Path | Branch | Role |
 |------|------|--------|------|
 | `agentic-beacon` | `~/Code/oss/agentic-beacon` | `warehouse-lint-cli-for-ci` | Code changes — ships the `abc warehouse lint` CLI command, lint orchestrator module, unit + integration tests, and docs. All tasks in phases 1–14 land here. |
-| `hl-knowledge-market` | `~/Code/knowledge/hl-knowledge-market` | `warehouse-lint-cli-for-ci` | Operational only — separate follow-up PR (phase 15) after agentic-beacon releases. Migrates agent frontmatter, fixes broken knowledge links, adds the lint workflow. No production code from this OpenSpec change lands here. |
+| `hl-knowledge-market` | `~/Code/knowledge/hl-knowledge-market` | `warehouse-lint-cli-for-ci` | Operational only — tracked separately in PER-182 (warehouse-side rollout). Migrates agent frontmatter, fixes broken knowledge links, adds the lint workflow. No production code from this OpenSpec change lands here. |
 | `hl-sandbox-pipelines` | `~/Code/homelab/common/hl-sandbox-pipelines` | `main` | Not involved — Beacon CLI work; no DAG or registra impact. |
 | `hl-sandbox-registra` | `~/Code/homelab/common/hl-sandbox-registra` | `main` | Not involved — Beacon CLI work; no DAG or registra impact. |
 <!-- opsx:repos-table:end -->
@@ -80,15 +80,15 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:1:end -->
 
 
-- [ ] 1.1 Create branch `warehouse-lint-cli-for-ci` off `main` in `agentic-beacon`.
+- [x] 1.1 Create branch `warehouse-lint-cli-for-ci` off `main` in `agentic-beacon`.
 <!-- opsx:tdd:1.1:begin -->
   - **Input**: cd ~/Code/oss/agentic-beacon && git fetch origin && git checkout -b warehouse-lint-cli-for-ci origin/main
   - **Expected Output**: Switched to a new branch 'warehouse-lint-cli-for-ci'
   - **Validation**: `git rev-parse --abbrev-ref HEAD` returns `warehouse-lint-cli-for-ci`; `git log -1 --format=%H` matches `origin/main`.
 <!-- opsx:tdd:1.1:end -->
-- [ ] 1.2 Create empty module `libs/beacon/src/beacon/domains/warehouse/lint.py` with module docstring referencing this change name.
-- [ ] 1.3 Create empty test files `libs/beacon/tests/unit/domains/warehouse/test_lint.py` and `libs/beacon/tests/integration/domains/warehouse/test_lint_cli.py`.
-- [ ] 1.4 Verify `uv sync --group dev` and `pytest libs/beacon/tests/unit` still pass on the fresh branch (baseline check before any edits).
+- [x] 1.2 Create empty module `libs/beacon/src/beacon/domains/warehouse/lint.py` with module docstring referencing this change name.
+- [x] 1.3 Create empty test files `libs/beacon/tests/unit/domains/warehouse/test_lint.py` and `libs/beacon/tests/integration/domains/warehouse/test_lint_cli.py`.
+- [x] 1.4 Verify `uv sync --group dev` and `pytest libs/beacon/tests/unit` still pass on the fresh branch (baseline check before any edits).
 <!-- opsx:tdd:1.4:begin -->
   - **Input**: cd ~/Code/oss/agentic-beacon && uv sync --group dev && pytest libs/beacon/tests/unit
   - **Expected Output**: uv sync resolves; pytest reports `passed` with `0 failed`
@@ -105,8 +105,8 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:2:end -->
 
 
-- [ ] 2.1 Define `LintFinding` (frozen dataclass: `artifact_path: str`, `message: str`).
-- [ ] 2.2 Define `LintReport` (frozen dataclass: `findings: tuple[LintFinding, ...]`, with `__bool__` returning `bool(findings)` so callers can write `if report:`).
+- [x] 2.1 Define `LintFinding` (frozen dataclass: `artifact_path: str`, `message: str`).
+- [x] 2.2 Define `LintReport` (frozen dataclass: `findings: tuple[LintFinding, ...]`, with `__bool__` returning `bool(findings)` so callers can write `if report:`).
 <!-- opsx:tdd:2.2:begin -->
   - **Input**: Construct `LintReport(findings=())` and `LintReport(findings=(LintFinding('p','m'),))` in a unit test; assert truthiness.
   - **Expected Output**: Empty report → `bool(report) is False`; non-empty report → `bool(report) is True`.
@@ -116,7 +116,7 @@ pytest tests/ -v --tb=short
     - TC2: one finding → bool(report) is True
     - TC3: attempt to mutate findings → raises FrozenInstanceError
 <!-- opsx:tdd:2.2:end -->
-- [ ] 2.3 Define `lint_warehouse(warehouse_path: Path) -> LintReport` that calls each private rule helper (declared but unimplemented as `return []`), concatenates findings in the fixed order documented in `design.md` §2, and returns `LintReport`.
+- [x] 2.3 Define `lint_warehouse(warehouse_path: Path) -> LintReport` that calls each private rule helper (declared but unimplemented as `return []`), concatenates findings in the fixed order documented in `design.md` §2, and returns `LintReport`.
 <!-- opsx:tdd:2.3:begin -->
   - **Input**: Six `_lint_*` stubs declared in `lint.py` each returning `[]`; call `lint_warehouse(tmp_path)`.
   - **Expected Output**: Returns `LintReport(findings=())`; helpers are invoked in the design.md §2 order (structure → skill_frontmatter → skill_requires → agent_manifest → agent_frontmatter → knowledge_links).
@@ -126,8 +126,8 @@ pytest tests/ -v --tb=short
     - TC2: each helper returns a single sentinel finding → result preserves declared order (1→2→3→4→5→6)
     - TC3: warehouse_path is a relative path → orchestrator resolves to absolute before invoking helpers
 <!-- opsx:tdd:2.3:end -->
-- [ ] 2.4 Resolve `warehouse_path` via `Path(warehouse_path).expanduser().resolve()` at the top of `lint_warehouse` so every rule helper receives an absolute path.
-- [ ] 2.5 Write a smoke unit test asserting `lint_warehouse` against an empty `tmp_path` returns a `LintReport` whose findings include the expected structural-error count (proves the wiring works before any rule has logic).
+- [x] 2.4 Resolve `warehouse_path` via `Path(warehouse_path).expanduser().resolve()` at the top of `lint_warehouse` so every rule helper receives an absolute path.
+- [x] 2.5 Write a smoke unit test asserting `lint_warehouse` against an empty `tmp_path` returns a `LintReport` whose findings include the expected structural-error count (proves the wiring works before any rule has logic).
 <!-- opsx:tdd:2.5:begin -->
   - **Input**: pytest libs/beacon/tests/unit/domains/warehouse/test_lint.py::test_smoke_empty_dir
   - **Expected Output**: Test passes; assertion `len(report.findings) > 0` holds (empty dir trips structure preflight).
@@ -144,7 +144,7 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:3:end -->
 
 
-- [ ] 3.1 Implement `_lint_structure(warehouse_path)`: call `WarehouseValidator().validate(warehouse_path)`, convert each error string into a `LintFinding` scoped to the path the error names; fall back to `"<warehouse>"` for warehouse-level errors that name no specific path (e.g. "Missing required directory: docs/").
+- [x] 3.1 Implement `_lint_structure(warehouse_path)`: call `WarehouseValidator().validate(warehouse_path)`, convert each error string into a `LintFinding` scoped to the path the error names; fall back to `"<warehouse>"` for warehouse-level errors that name no specific path (e.g. "Missing required directory: docs/").
 <!-- opsx:tdd:3.1:begin -->
   - **Input**: Fixture warehouse missing `docs/`; call `_lint_structure(fixture)`.
   - **Expected Output**: Returns `[LintFinding(artifact_path='<warehouse>', message='Missing required directory: docs/')]`.
@@ -157,19 +157,19 @@ pytest tests/ -v --tb=short
     - TC5: target is a project (.agentic-beacon/artifacts/ present) → 1 finding mentioning 'project directory'
     - TC6: target is a file, not a directory → 1 finding mentioning 'not a directory'
 <!-- opsx:tdd:3.1:end -->
-- [ ] 3.2 Unit test: fixture warehouse missing `docs/` but with everything else valid → one finding scoped to `"<warehouse>"` mentioning `docs/`.
+- [x] 3.2 Unit test: fixture warehouse missing `docs/` but with everything else valid → one finding scoped to `"<warehouse>"` mentioning `docs/`.
 <!-- opsx:tdd:3.2:begin -->
   - **Input**: Build a tmp_path warehouse with `agents/`, `contexts/`, `skills/`, `README.md` but no `docs/`. Call `_lint_structure`.
   - **Expected Output**: len(result) == 1; result[0].artifact_path == '<warehouse>'; 'docs/' in result[0].message.
   - **Validation**: Test passes in isolation and as part of the full suite.
 <!-- opsx:tdd:3.2:end -->
-- [ ] 3.3 Unit test: target path that does not exist → one finding mentioning "Path not found".
+- [x] 3.3 Unit test: target path that does not exist → one finding mentioning "Path not found".
 <!-- opsx:tdd:3.3:begin -->
   - **Input**: Call `_lint_structure(tmp_path / 'does-not-exist')`.
   - **Expected Output**: len(result) == 1; 'Path not found' in result[0].message.
   - **Validation**: Test passes; no exception raised — error is converted to a finding.
 <!-- opsx:tdd:3.3:end -->
-- [ ] 3.4 Unit test: target path is a project (contains `.agentic-beacon/artifacts/`) → one finding mentioning "appears to be a project directory".
+- [x] 3.4 Unit test: target path is a project (contains `.agentic-beacon/artifacts/`) → one finding mentioning "appears to be a project directory".
 <!-- opsx:tdd:3.4:begin -->
   - **Input**: Build a tmp_path that contains `.agentic-beacon/artifacts/`. Call `_lint_structure`.
   - **Expected Output**: len(result) == 1; 'project directory' in result[0].message.
@@ -186,7 +186,7 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:4:end -->
 
 
-- [ ] 4.1 Implement `_lint_skill_frontmatter(warehouse_path)`: iterate `skills/*/SKILL.md`, call `parse_frontmatter(path)`; on `result.success == False`, emit a finding using `result.message`; on success, attempt `SkillFrontmatter(**result.data)` and emit a finding per `ValidationError` (one finding per validation error, message includes the field path + reason).
+- [x] 4.1 Implement `_lint_skill_frontmatter(warehouse_path)`: iterate `skills/*/SKILL.md`, call `parse_frontmatter(path)`; on `result.success == False`, emit a finding using `result.message`; on success, attempt `SkillFrontmatter(**result.data)` and emit a finding per `ValidationError` (one finding per validation error, message includes the field path + reason).
 <!-- opsx:tdd:4.1:begin -->
   - **Input**: Fixture warehouse with one valid skill, one missing-frontmatter skill, one skill with malformed YAML. Call `_lint_skill_frontmatter(fixture)`.
   - **Expected Output**: Two findings, scoped to the two defective skills; the valid skill produces none.
@@ -201,25 +201,25 @@ pytest tests/ -v --tb=short
     - TC7: skill where frontmatter parses to a non-dict (e.g. a YAML list) → 1 finding mentioning 'invalid-frontmatter'
     - TC8: two skills each with a different defect → 2 findings, one per skill, ordering stable
 <!-- opsx:tdd:4.1:end -->
-- [ ] 4.2 Unit test: skill with no `---` frontmatter block → finding matches the exact regression message `"File has no YAML frontmatter (must start with ---)"`, scoped to `skills/delegate-to-cc/SKILL.md` (use the PER-114 regression name in the fixture).
+- [x] 4.2 Unit test: skill with no `---` frontmatter block → finding matches the exact regression message `"File has no YAML frontmatter (must start with ---)"`, scoped to `skills/delegate-to-cc/SKILL.md` (use the PER-114 regression name in the fixture).
 <!-- opsx:tdd:4.2:begin -->
   - **Input**: Build fixture with `skills/delegate-to-cc/SKILL.md` containing only body text, no frontmatter. Call `_lint_skill_frontmatter`.
   - **Expected Output**: Exactly one finding: artifact_path=='skills/delegate-to-cc/SKILL.md', message=='File has no YAML frontmatter (must start with ---)'.
   - **Validation**: Equality assertion on the message string (verbatim from `parse_frontmatter`); test name calls out PER-114 regression.
 <!-- opsx:tdd:4.2:end -->
-- [ ] 4.3 Unit test: skill with malformed YAML inside the frontmatter block → finding mentions YAML parse error.
+- [x] 4.3 Unit test: skill with malformed YAML inside the frontmatter block → finding mentions YAML parse error.
 <!-- opsx:tdd:4.3:begin -->
   - **Input**: Fixture with `skills/bad-yaml/SKILL.md` containing `---\n  : invalid\n---\nbody`. Call `_lint_skill_frontmatter`.
   - **Expected Output**: len == 1; 'YAML parse error' in finding.message.
   - **Validation**: Substring match on message; finding scoped to the defective skill path.
 <!-- opsx:tdd:4.3:end -->
-- [ ] 4.4 Unit test: skill with `requires: {skills: [...]}` → finding mentions "Skill-to-skill dependencies are not supported".
+- [x] 4.4 Unit test: skill with `requires: {skills: [...]}` → finding mentions "Skill-to-skill dependencies are not supported".
 <!-- opsx:tdd:4.4:begin -->
   - **Input**: Fixture skill with frontmatter `requires: {skills: [other], contexts: [foo]}`. Call `_lint_skill_frontmatter`.
   - **Expected Output**: len == 1; 'Skill-to-skill dependencies are not supported' in finding.message.
   - **Validation**: Pins the `SkillRequires.reject_skills_key` enforcement path.
 <!-- opsx:tdd:4.4:end -->
-- [ ] 4.5 Unit test: skill with valid `requires.contexts` → no finding from this rule.
+- [x] 4.5 Unit test: skill with valid `requires.contexts` → no finding from this rule.
 <!-- opsx:tdd:4.5:begin -->
   - **Input**: Fixture skill with valid frontmatter `requires: {contexts: [some-ctx]}` and matching `contexts/some-ctx.md`. Call `_lint_skill_frontmatter`.
   - **Expected Output**: result == [].
@@ -236,7 +236,7 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:5:end -->
 
 
-- [ ] 5.1 Implement `_lint_skill_requires(warehouse_path)`: re-parse each `skills/*/SKILL.md` frontmatter (skip files whose frontmatter is invalid — those are reported by rule 4); for each name in `requires.contexts`, emit a finding if `contexts/<name>.md` does not exist.
+- [x] 5.1 Implement `_lint_skill_requires(warehouse_path)`: re-parse each `skills/*/SKILL.md` frontmatter (skip files whose frontmatter is invalid — those are reported by rule 4); for each name in `requires.contexts`, emit a finding if `contexts/<name>.md` does not exist.
 <!-- opsx:tdd:5.1:begin -->
   - **Input**: Fixture: skill `foo` declares `requires.contexts: [missing-ctx]`, no `contexts/missing-ctx.md`. Call `_lint_skill_requires`.
   - **Expected Output**: One finding scoped to `skills/foo/SKILL.md` mentioning `missing-ctx`.
@@ -249,19 +249,19 @@ pytest tests/ -v --tb=short
     - TC5: skill with empty `requires.contexts: []` → no finding
     - TC6: skill references a context whose file exists but is a directory, not a file → 1 finding (treat as missing)
 <!-- opsx:tdd:5.1:end -->
-- [ ] 5.2 Unit test: skill `foo` declares `requires.contexts: [missing-ctx]`, no `contexts/missing-ctx.md` → one finding scoped to `skills/foo/SKILL.md` naming `missing-ctx`.
+- [x] 5.2 Unit test: skill `foo` declares `requires.contexts: [missing-ctx]`, no `contexts/missing-ctx.md` → one finding scoped to `skills/foo/SKILL.md` naming `missing-ctx`.
 <!-- opsx:tdd:5.2:begin -->
   - **Input**: Build fixture as described. Call `_lint_skill_requires`.
   - **Expected Output**: len == 1; finding.artifact_path == 'skills/foo/SKILL.md'; 'missing-ctx' in finding.message.
   - **Validation**: Substring + path equality.
 <!-- opsx:tdd:5.2:end -->
-- [ ] 5.3 Unit test: skill `foo` declares two missing contexts → two findings, both scoped to `skills/foo/SKILL.md`.
+- [x] 5.3 Unit test: skill `foo` declares two missing contexts → two findings, both scoped to `skills/foo/SKILL.md`.
 <!-- opsx:tdd:5.3:begin -->
   - **Input**: Skill `foo` with `requires.contexts: [a, b]`, neither file exists. Call rule.
   - **Expected Output**: len == 2; both findings have artifact_path == 'skills/foo/SKILL.md'; each names one of `a`, `b`.
   - **Validation**: Pins the per-item fan-out semantics.
 <!-- opsx:tdd:5.3:end -->
-- [ ] 5.4 Unit test: skill with no `requires.contexts` items → no finding from this rule.
+- [x] 5.4 Unit test: skill with no `requires.contexts` items → no finding from this rule.
 <!-- opsx:tdd:5.4:begin -->
   - **Input**: Skill with frontmatter `requires: {contexts: []}`. Call rule.
   - **Expected Output**: result == [].
@@ -278,7 +278,7 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:6:end -->
 
 
-- [ ] 6.1 Implement `_lint_agent_manifest(warehouse_path)`: call `load_agent_manifest`; on `AgentManifestError`, emit one finding scoped to `agents/agents.yaml` per `\n`-split line of the exception message, and return early (downstream manifest-dependent checks need a parsed manifest).
+- [x] 6.1 Implement `_lint_agent_manifest(warehouse_path)`: call `load_agent_manifest`; on `AgentManifestError`, emit one finding scoped to `agents/agents.yaml` per `\n`-split line of the exception message, and return early (downstream manifest-dependent checks need a parsed manifest).
 <!-- opsx:tdd:6.1:begin -->
   - **Input**: Fixture with `agents/agents.yaml` containing `: : :` (unparseable). Call `_lint_agent_manifest`.
   - **Expected Output**: All findings scoped to `agents/agents.yaml`; no downstream-validator-shaped errors (early return triggered).
@@ -290,7 +290,7 @@ pytest tests/ -v --tb=short
     - TC4: agents.yaml has `contexts:` at agent-entry level (forbidden) → 1 finding mentioning schema validation
     - TC5: agents.yaml does not exist → no finding (file is optional)
 <!-- opsx:tdd:6.1:end -->
-- [ ] 6.2 Same helper, on successful manifest load: call `validate_agents_directory`, `validate_agent_frontmatter_clean`, `validate_declared_skills` in turn; for each, catch `AgentManifestError`, split message on `\n`, and emit one finding per line scoped to the artifact path the message names (parse the message; if no path is recoverable, scope to `agents/agents.yaml`).
+- [x] 6.2 Same helper, on successful manifest load: call `validate_agents_directory`, `validate_agent_frontmatter_clean`, `validate_declared_skills` in turn; for each, catch `AgentManifestError`, split message on `\n`, and emit one finding per line scoped to the artifact path the message names (parse the message; if no path is recoverable, scope to `agents/agents.yaml`).
 <!-- opsx:tdd:6.2:begin -->
   - **Input**: Fixture where manifest parses cleanly but every downstream validator finds defects (agent missing from manifest, agent with `requires:`, declared skill missing).
   - **Expected Output**: Findings from all three downstream validators present; each scoped to the path the error names (`agents/<name>.md` or `agents/agents.yaml` when ambiguous).
@@ -303,31 +303,31 @@ pytest tests/ -v --tb=short
     - TC5: AgentManifestError whose message contains no recoverable path → finding falls back to agents/agents.yaml scope
     - TC6: clean manifest + clean agents → no finding
 <!-- opsx:tdd:6.2:end -->
-- [ ] 6.3 Unit test: `agents/foo.md` exists, `agents.yaml` has no `foo:` key → one finding mentioning the missing manifest entry, scoped to `agents/foo.md`.
+- [x] 6.3 Unit test: `agents/foo.md` exists, `agents.yaml` has no `foo:` key → one finding mentioning the missing manifest entry, scoped to `agents/foo.md`.
 <!-- opsx:tdd:6.3:begin -->
   - **Input**: Build fixture with `agents/foo.md` (valid frontmatter) and `agents.yaml` empty mapping `{}`. Call `_lint_agent_manifest`.
   - **Expected Output**: len == 1; finding.artifact_path == 'agents/foo.md'; message mentions 'no entry in agents/agents.yaml'.
   - **Validation**: Pins the `validate_agents_directory` integration.
 <!-- opsx:tdd:6.3:end -->
-- [ ] 6.4 Unit test: `agents.yaml` declares agent `foo` with `skills: [missing-skill]` → one finding mentioning the missing skill, scoped to `agents/foo.md`.
+- [x] 6.4 Unit test: `agents.yaml` declares agent `foo` with `skills: [missing-skill]` → one finding mentioning the missing skill, scoped to `agents/foo.md`.
 <!-- opsx:tdd:6.4:begin -->
   - **Input**: Fixture with `agents/foo.md` + `agents.yaml: {foo: {skills: [missing-skill]}}` and no `skills/missing-skill/`. Call rule.
   - **Expected Output**: len == 1; 'missing-skill' in message; scope is `agents/foo.md`.
   - **Validation**: Pins the `validate_declared_skills` integration.
 <!-- opsx:tdd:6.4:end -->
-- [ ] 6.5 Unit test: `agents/foo.md` carries `requires: {skills: [...]}` in frontmatter → one finding mentioning the legacy `requires:` key, scoped to `agents/foo.md`.
+- [x] 6.5 Unit test: `agents/foo.md` carries `requires: {skills: [...]}` in frontmatter → one finding mentioning the legacy `requires:` key, scoped to `agents/foo.md`.
 <!-- opsx:tdd:6.5:begin -->
   - **Input**: Fixture with `agents/foo.md` whose frontmatter still has `requires:` block + matching agents.yaml entry. Call rule.
   - **Expected Output**: len == 1; 'requires:' in message; scope is `agents/foo.md`.
   - **Validation**: Pins the `validate_agent_frontmatter_clean` integration.
 <!-- opsx:tdd:6.5:end -->
-- [ ] 6.6 Unit test (multi-defect): fixture with two agents missing from `agents.yaml` → two findings (one per agent), not one combined finding — pins the `\n`-split convention.
+- [x] 6.6 Unit test (multi-defect): fixture with two agents missing from `agents.yaml` → two findings (one per agent), not one combined finding — pins the `\n`-split convention.
 <!-- opsx:tdd:6.6:begin -->
   - **Input**: Fixture with `agents/foo.md` + `agents/bar.md` and empty agents.yaml. Call rule.
   - **Expected Output**: len == 2; one finding scoped to `agents/foo.md`, one to `agents/bar.md`.
   - **Validation**: Critical regression test: protects the `\n`-split contract design.md decision §6 depends on.
 <!-- opsx:tdd:6.6:end -->
-- [ ] 6.7 Unit test: `agents/agents.yaml` is unparseable YAML → one finding scoped to `agents/agents.yaml`, downstream manifest checks skipped (no spurious findings).
+- [x] 6.7 Unit test: `agents/agents.yaml` is unparseable YAML → one finding scoped to `agents/agents.yaml`, downstream manifest checks skipped (no spurious findings).
 <!-- opsx:tdd:6.7:begin -->
   - **Input**: Fixture with `agents.yaml` content `:::` (unparseable) plus valid `agents/foo.md`. Call rule.
   - **Expected Output**: len == 1; scope is `agents/agents.yaml`; no findings against `agents/foo.md`.
@@ -344,7 +344,7 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:7:end -->
 
 
-- [ ] 7.1 Implement `_lint_agent_frontmatter(warehouse_path)`: iterate every `agents/*.md` excluding `README.md`; call `parse_frontmatter`; if frontmatter is missing or malformed, emit one finding using the message from `FrontmatterResult`; on success, emit a finding for each of `name` and `description` that is absent from the parsed dict.
+- [x] 7.1 Implement `_lint_agent_frontmatter(warehouse_path)`: iterate every `agents/*.md` excluding `README.md`; call `parse_frontmatter`; if frontmatter is missing or malformed, emit one finding using the message from `FrontmatterResult`; on success, emit a finding for each of `name` and `description` that is absent from the parsed dict.
 <!-- opsx:tdd:7.1:begin -->
   - **Input**: Fixture with one agent missing `name`, one missing `description`, one with both, one with no frontmatter, plus `agents/README.md` with no frontmatter. Call `_lint_agent_frontmatter`.
   - **Expected Output**: Three findings total: missing-name, missing-description, missing-frontmatter. README produces none. The both-keys agent produces none.
@@ -358,31 +358,31 @@ pytest tests/ -v --tb=short
     - TC6: agents/README.md with no frontmatter → no finding (excluded by name)
     - TC7: agent file with `name:` value not a string (e.g. integer) → no finding from this rule (only key presence checked; type enforcement deferred)
 <!-- opsx:tdd:7.1:end -->
-- [ ] 7.2 Unit test: `agents/foo.md` with `{description: "..."}` only → finding "missing required key `name`", scoped to `agents/foo.md`.
+- [x] 7.2 Unit test: `agents/foo.md` with `{description: "..."}` only → finding "missing required key `name`", scoped to `agents/foo.md`.
 <!-- opsx:tdd:7.2:begin -->
   - **Input**: Build agent with frontmatter that has `description:` only. Call rule.
   - **Expected Output**: len == 1; '`name`' in finding.message; scope is `agents/foo.md`.
   - **Validation**: Substring match on the required-key wording.
 <!-- opsx:tdd:7.2:end -->
-- [ ] 7.3 Unit test: `agents/foo.md` with `{name: foo}` only → finding "missing required key `description`".
+- [x] 7.3 Unit test: `agents/foo.md` with `{name: foo}` only → finding "missing required key `description`".
 <!-- opsx:tdd:7.3:begin -->
   - **Input**: Build agent with frontmatter that has `name:` only. Call rule.
   - **Expected Output**: len == 1; '`description`' in finding.message.
   - **Validation**: Substring match.
 <!-- opsx:tdd:7.3:end -->
-- [ ] 7.4 Unit test: `agents/foo.md` with both keys → no finding from this rule.
+- [x] 7.4 Unit test: `agents/foo.md` with both keys → no finding from this rule.
 <!-- opsx:tdd:7.4:begin -->
   - **Input**: Build agent with `{name: foo, description: '...'}`. Call rule.
   - **Expected Output**: result == [].
   - **Validation**: Happy path.
 <!-- opsx:tdd:7.4:end -->
-- [ ] 7.5 Unit test: `agents/README.md` with no frontmatter → no finding (README is excluded).
+- [x] 7.5 Unit test: `agents/README.md` with no frontmatter → no finding (README is excluded).
 <!-- opsx:tdd:7.5:begin -->
   - **Input**: Fixture with only `agents/README.md` (no frontmatter). Call rule.
   - **Expected Output**: result == [].
   - **Validation**: README exclusion is observed by name; pins the iteration filter.
 <!-- opsx:tdd:7.5:end -->
-- [ ] 7.6 Unit test: `agents/foo.md` with no frontmatter block → exactly one finding (the missing-frontmatter error), NOT one each for `name` and `description` (avoid noise when frontmatter is wholly absent).
+- [x] 7.6 Unit test: `agents/foo.md` with no frontmatter block → exactly one finding (the missing-frontmatter error), NOT one each for `name` and `description` (avoid noise when frontmatter is wholly absent).
 <!-- opsx:tdd:7.6:begin -->
   - **Input**: Build agent with only body text, no `---`. Call rule.
   - **Expected Output**: len == 1; message mentions 'no YAML frontmatter'; NO additional findings for missing `name` or `description`.
@@ -399,7 +399,7 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:8:end -->
 
 
-- [ ] 8.1 Implement `_lint_knowledge_links(warehouse_path)`: iterate `contexts/*.md` and `skills/*/SKILL.md`; for each, read content, call `extract_markdown_links`, normalise each target, call `resolve_link` against the warehouse root, classify with `classify_knowledge_ref`, and emit a finding when the resolved path does not exist on disk.
+- [x] 8.1 Implement `_lint_knowledge_links(warehouse_path)`: iterate `contexts/*.md` and `skills/*/SKILL.md`; for each, read content, call `extract_markdown_links`, normalise each target, call `resolve_link` against the warehouse root, classify with `classify_knowledge_ref`, and emit a finding when the resolved path does not exist on disk.
 <!-- opsx:tdd:8.1:begin -->
   - **Input**: Fixture with `contexts/foo.md` containing `[X](../knowledge/foo/bar.md)` but no `knowledge/foo/bar.md` on disk. Call `_lint_knowledge_links`.
   - **Expected Output**: One finding scoped to `contexts/foo.md` whose message names the broken knowledge target.
@@ -415,37 +415,37 @@ pytest tests/ -v --tb=short
     - TC8: context with reference-style link [X][ref] resolving to a knowledge path → finding (or not, per scanner semantics — pin behaviour)
     - TC9: file unreadable due to permission error → handled gracefully (no crash; either skipped or produces a single 'unreadable' finding)
 <!-- opsx:tdd:8.1:end -->
-- [ ] 8.2 The finding message MUST name the broken target (e.g. `"broken knowledge link: ../knowledge/foo/bar.md → knowledge/foo/bar.md (file not found)"`).
+- [x] 8.2 The finding message MUST name the broken target (e.g. `"broken knowledge link: ../knowledge/foo/bar.md → knowledge/foo/bar.md (file not found)"`).
 <!-- opsx:tdd:8.2:begin -->
   - **Input**: Fixture from 8.1 TC2. Inspect the emitted finding's message string.
   - **Expected Output**: Message contains both the raw link text (`../knowledge/foo/bar.md`) and the resolved warehouse-relative path (`knowledge/foo/bar.md`), plus a 'file not found' marker.
   - **Validation**: Substring assertions on all three components.
 <!-- opsx:tdd:8.2:end -->
-- [ ] 8.3 Unit test: `contexts/foo.md` contains `[X](../knowledge/foo/bar.md)`, no target file → one finding scoped to `contexts/foo.md`.
+- [x] 8.3 Unit test: `contexts/foo.md` contains `[X](../knowledge/foo/bar.md)`, no target file → one finding scoped to `contexts/foo.md`.
 <!-- opsx:tdd:8.3:begin -->
   - **Input**: Build fixture as described. Call rule.
   - **Expected Output**: len == 1; artifact_path == 'contexts/foo.md'.
   - **Validation**: Path scope assertion.
 <!-- opsx:tdd:8.3:end -->
-- [ ] 8.4 Unit test: `skills/foo/SKILL.md` contains `[X](../../knowledge/foo/bar.md)`, no target file → one finding scoped to `skills/foo/SKILL.md`.
+- [x] 8.4 Unit test: `skills/foo/SKILL.md` contains `[X](../../knowledge/foo/bar.md)`, no target file → one finding scoped to `skills/foo/SKILL.md`.
 <!-- opsx:tdd:8.4:begin -->
   - **Input**: Build fixture as described. Call rule.
   - **Expected Output**: len == 1; artifact_path == 'skills/foo/SKILL.md'.
   - **Validation**: Path scope assertion; pins skill-side scanning.
 <!-- opsx:tdd:8.4:end -->
-- [ ] 8.5 Unit test: `contexts/foo.md` contains an absolute URL link `[X](https://example.com)` → no finding (absolute URLs are out of scope).
+- [x] 8.5 Unit test: `contexts/foo.md` contains an absolute URL link `[X](https://example.com)` → no finding (absolute URLs are out of scope).
 <!-- opsx:tdd:8.5:begin -->
   - **Input**: Build fixture with only an https link. Call rule.
   - **Expected Output**: result == [].
   - **Validation**: Pins the `is_absolute_url` early-return path.
 <!-- opsx:tdd:8.5:end -->
-- [ ] 8.6 Unit test: `contexts/foo.md` contains a link to a non-knowledge path (`[X](./other.md)`) → no finding (only knowledge-classified targets are checked).
+- [x] 8.6 Unit test: `contexts/foo.md` contains a link to a non-knowledge path (`[X](./other.md)`) → no finding (only knowledge-classified targets are checked).
 <!-- opsx:tdd:8.6:begin -->
   - **Input**: Build fixture with relative link to a non-knowledge path. Call rule.
   - **Expected Output**: result == [].
   - **Validation**: Pins the `classify_knowledge_ref` filter.
 <!-- opsx:tdd:8.6:end -->
-- [ ] 8.7 Regression test: confirm `scan_file_for_knowledge` was NOT modified (import the function, call it on the same broken-link fixture, assert it returns a set and does not raise — pins the "primitive unchanged" invariant).
+- [x] 8.7 Regression test: confirm `scan_file_for_knowledge` was NOT modified (import the function, call it on the same broken-link fixture, assert it returns a set and does not raise — pins the "primitive unchanged" invariant).
 <!-- opsx:tdd:8.7:begin -->
   - **Input**: Import `scan_file_for_knowledge` from `beacon.core.scanner.scanner`. Call it against the fixture from 8.3.
   - **Expected Output**: Returns a `set[str]` (not a list, not None); broken target IS in the returned set; no exception raised.
@@ -466,13 +466,13 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:9:end -->
 
 
-- [ ] 9.1 Build a fixture warehouse with one defect from each of rules 3–8 (e.g. missing `docs/`, one skill with no frontmatter, one skill with a missing context, one agent missing from `agents.yaml`, one agent missing `name`, one context with a broken knowledge link).
+- [x] 9.1 Build a fixture warehouse with one defect from each of rules 3–8 (e.g. missing `docs/`, one skill with no frontmatter, one skill with a missing context, one agent missing from `agents.yaml`, one agent missing `name`, one context with a broken knowledge link).
 <!-- opsx:tdd:9.1:begin -->
   - **Input**: Create a `tmp_path`-rooted fixture builder helper. Construct the six-defect fixture.
   - **Expected Output**: Fixture has the expected directory layout (everything but `docs/`), the six intentional defects, and is otherwise valid.
   - **Validation**: Helper is reusable from both the orchestrator integration test and (optionally) future tests; smoke-call each rule helper individually and confirm exactly the intended defect appears.
 <!-- opsx:tdd:9.1:end -->
-- [ ] 9.2 Unit test: `lint_warehouse(fixture)` returns a `LintReport` containing exactly the expected count of findings, every category represented, findings sorted by `(artifact_path, message)` so iteration order is stable across platforms.
+- [x] 9.2 Unit test: `lint_warehouse(fixture)` returns a `LintReport` containing exactly the expected count of findings, every category represented, findings sorted by `(artifact_path, message)` so iteration order is stable across platforms.
 <!-- opsx:tdd:9.2:begin -->
   - **Input**: Call `lint_warehouse(fixture_from_9_1)`.
   - **Expected Output**: Findings count matches the sum across all helpers; every rule category is represented; `[f.artifact_path for f in findings]` is non-decreasing.
@@ -495,13 +495,13 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:10:end -->
 
 
-- [ ] 10.1 Add `warehouse_lint` Click handler under `@warehouse.command(name="lint")` in `libs/beacon/src/beacon/cli/warehouse.py`, mirroring the `warehouse_template_upgrade` argument signature (optional positional `warehouse_path` → defaults to `Path.cwd()`).
+- [x] 10.1 Add `warehouse_lint` Click handler under `@warehouse.command(name="lint")` in `libs/beacon/src/beacon/cli/warehouse.py`, mirroring the `warehouse_template_upgrade` argument signature (optional positional `warehouse_path` → defaults to `Path.cwd()`).
 <!-- opsx:tdd:10.1:begin -->
   - **Input**: Run `abc warehouse lint --help` after the handler is added.
   - **Expected Output**: Help text shows the optional `WAREHOUSE_PATH` positional and no other flags; exit code 0.
   - **Validation**: `click.testing.CliRunner().invoke(warehouse, ['lint', '--help'])` returns exit code 0 and the expected option list.
 <!-- opsx:tdd:10.1:end -->
-- [ ] 10.2 Implement `_print_lint_report(report: LintReport, console: Console)` in the same file: print `[green]✓ Lint passed.[/green]` when `report` is empty; otherwise group findings by `artifact_path`, print `[bold]{path}[/bold]` then one `  [red]error:[/red] {message}` per finding under it, with a final summary line `[red]Found {N} error(s) across {M} file(s).[/red]`.
+- [x] 10.2 Implement `_print_lint_report(report: LintReport, console: Console)` in the same file: print `[green]✓ Lint passed.[/green]` when `report` is empty; otherwise group findings by `artifact_path`, print `[bold]{path}[/bold]` then one `  [red]error:[/red] {message}` per finding under it, with a final summary line `[red]Found {N} error(s) across {M} file(s).[/red]`.
 <!-- opsx:tdd:10.2:begin -->
   - **Input**: Construct a `LintReport` with three findings across two paths; pass a Rich `Console(record=True)`; call `_print_lint_report`.
   - **Expected Output**: Recorded output contains both path headers, three `error:` lines under them grouped correctly, and a summary line `Found 3 error(s) across 2 file(s).`.
@@ -514,7 +514,7 @@ pytest tests/ -v --tb=short
     - TC5: groups appear in lexicographically sorted order regardless of insertion order
     - TC6: within a group, findings appear sorted by message
 <!-- opsx:tdd:10.2:end -->
-- [ ] 10.3 Handler exits via `sys.exit(1 if report.findings else 0)`. No `--json` flag.
+- [x] 10.3 Handler exits via `sys.exit(1 if report.findings else 0)`. No `--json` flag.
 <!-- opsx:tdd:10.3:begin -->
   - **Input**: Invoke `warehouse_lint` via `CliRunner` against a clean fixture and against a defective fixture.
   - **Expected Output**: Clean → exit_code == 0; defective → exit_code == 1. Passing `--json` → exit_code != 0 with Click's 'no such option' error.
@@ -524,19 +524,19 @@ pytest tests/ -v --tb=short
     - TC2: defective fixture → exit_code 1
     - TC3: invoking with --json → exit_code 2 (Click's unknown-option exit)
 <!-- opsx:tdd:10.3:end -->
-- [ ] 10.4 Confirm `libs/beacon/tests/unit/test_architecture.py` still passes (CLI thinness invariant — the handler must contain no logic, just parse → call `lint_warehouse` → call `_print_lint_report` → `sys.exit`).
+- [x] 10.4 Confirm `libs/beacon/tests/unit/test_architecture.py` still passes (CLI thinness invariant — the handler must contain no logic, just parse → call `lint_warehouse` → call `_print_lint_report` → `sys.exit`).
 <!-- opsx:tdd:10.4:begin -->
   - **Input**: pytest libs/beacon/tests/unit/test_architecture.py
   - **Expected Output**: All architecture tests pass; CLI thinness rule does not flag `warehouse_lint`.
   - **Validation**: Exit code 0; if it fails, refactor logic out of the handler before proceeding.
 <!-- opsx:tdd:10.4:end -->
-- [ ] 10.5 Unit test: invoke `warehouse_lint` via Click's `CliRunner` against a clean fixture, assert exit 0 and "Lint passed" in stdout.
+- [x] 10.5 Unit test: invoke `warehouse_lint` via Click's `CliRunner` against a clean fixture, assert exit 0 and "Lint passed" in stdout.
 <!-- opsx:tdd:10.5:begin -->
   - **Input**: CliRunner().invoke(warehouse, ['lint', str(clean_fixture)]).
   - **Expected Output**: result.exit_code == 0; 'Lint passed' in result.output.
   - **Validation**: Two assertions.
 <!-- opsx:tdd:10.5:end -->
-- [ ] 10.6 Unit test: invoke via `CliRunner` against a defective fixture, assert exit 1 and grouped output structure.
+- [x] 10.6 Unit test: invoke via `CliRunner` against a defective fixture, assert exit 1 and grouped output structure.
 <!-- opsx:tdd:10.6:begin -->
   - **Input**: CliRunner().invoke(warehouse, ['lint', str(defective_fixture)]).
   - **Expected Output**: result.exit_code == 1; output contains the expected path headers and `error:` lines; the summary line is present.
@@ -553,13 +553,13 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:11:end -->
 
 
-- [ ] 11.1 In `libs/beacon/tests/integration/domains/warehouse/test_lint_cli.py`, build a fixture warehouse with at least three defects spanning at least two artifacts.
+- [x] 11.1 In `libs/beacon/tests/integration/domains/warehouse/test_lint_cli.py`, build a fixture warehouse with at least three defects spanning at least two artifacts.
 <!-- opsx:tdd:11.1:begin -->
   - **Input**: Create a tmp_path warehouse builder helper that places three defects across at least two files (e.g. one missing-frontmatter skill, one broken-knowledge-link context, one agent missing `name`).
   - **Expected Output**: Fixture exists on disk under tmp_path with the expected layout and defects.
   - **Validation**: Smoke-assert directory contents before subprocess invocation.
 <!-- opsx:tdd:11.1:end -->
-- [ ] 11.2 Invoke `abc warehouse lint <fixture-path>` via subprocess (use the project's `uv run` pattern from existing integration tests). Assert exit code 1, assert stdout contains each defect's `error:` line and each affected artifact's group header.
+- [x] 11.2 Invoke `abc warehouse lint <fixture-path>` via subprocess (use the project's `uv run` pattern from existing integration tests). Assert exit code 1, assert stdout contains each defect's `error:` line and each affected artifact's group header.
 <!-- opsx:tdd:11.2:begin -->
   - **Input**: subprocess.run(['uv', 'run', '--', 'abc', 'warehouse', 'lint', str(fixture)], capture_output=True, text=True).
   - **Expected Output**: returncode == 1; stdout contains every defect's `error:` line and every affected path's group header.
@@ -569,13 +569,13 @@ pytest tests/ -v --tb=short
     - TC2: stdout group ordering is alphabetical by path
     - TC3: stdout summary line shows correct N and M counts
 <!-- opsx:tdd:11.2:end -->
-- [ ] 11.3 Invoke `abc warehouse lint <clean-fixture-path>` via subprocess. Assert exit code 0 and "Lint passed" in stdout.
+- [x] 11.3 Invoke `abc warehouse lint <clean-fixture-path>` via subprocess. Assert exit code 0 and "Lint passed" in stdout.
 <!-- opsx:tdd:11.3:begin -->
   - **Input**: subprocess.run on a clean fixture.
   - **Expected Output**: returncode == 0; 'Lint passed' in stdout.
   - **Validation**: Two assertions.
 <!-- opsx:tdd:11.3:end -->
-- [ ] 11.4 Mark both tests with `@pytest.mark.integration` and verify they are skipped when `BEACON_OFFLINE=1` is set (if they shell out via `uv run --no-project`).
+- [x] 11.4 Mark both tests with `@pytest.mark.integration` and verify they are skipped when `BEACON_OFFLINE=1` is set (if they shell out via `uv run --no-project`).
 <!-- opsx:tdd:11.4:begin -->
   - **Input**: BEACON_OFFLINE=1 pytest -m integration libs/beacon/tests/integration/domains/warehouse/test_lint_cli.py -v
   - **Expected Output**: Both tests reported as 'skipped'; pytest exit code 0.
@@ -592,9 +592,9 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:12:end -->
 
 
-- [ ] 12.1 Add `abc warehouse lint [PATH]` to the warehouse command list in `libs/beacon/README.md` with one example.
-- [ ] 12.2 Add a `warehouse lint` reference page under the `site-docs/` warehouse CLI section, including: synopsis, behaviour (the seven rule groups), exit codes, an example invocation, and a note that the strict knowledge-link rule is lint-only (`abc sync` is unchanged).
-- [ ] 12.3 Cross-link the new page from any existing site-docs landing page that lists warehouse commands.
+- [x] 12.1 Add `abc warehouse lint [PATH]` to the warehouse command list in `libs/beacon/README.md` with one example.
+- [x] 12.2 Add a `warehouse lint` reference page under the `site-docs/` warehouse CLI section, including: synopsis, behaviour (the seven rule groups), exit codes, an example invocation, and a note that the strict knowledge-link rule is lint-only (`abc sync` is unchanged).
+- [x] 12.3 Cross-link the new page from any existing site-docs landing page that lists warehouse commands.
 
 ## 13. Validation and release prep
 
@@ -606,7 +606,7 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:13:end -->
 
 
-- [ ] 13.1 Run `pytest` (full suite) from the repo root; all tests pass.
+- [x] 13.1 Run `pytest` (full suite) from the repo root; all tests pass.
 <!-- opsx:tdd:13.1:begin -->
   - **Input**: cd ~/Code/oss/agentic-beacon && pytest
   - **Expected Output**: All tests pass; exit code 0; no skipped tests caused by failure (integration tests may skip if `BEACON_OFFLINE=1`).
@@ -618,7 +618,7 @@ pytest tests/ -v --tb=short
   - **Expected Output**: Exit code 1; output reports the two known broken knowledge links and every agent file missing `name`/`description`.
   - **Validation**: Manual inspection of the output against the known-defect list; document the count in the PR description.
 <!-- opsx:tdd:13.2:end -->
-- [ ] 13.3 Run `abc warehouse lint` against the warehouse template (`libs/beacon/src/beacon/data/skills/...` parent — wherever the bundled template warehouse lives) and confirm exit 0; a freshly-`init`-ed warehouse must be lint-clean.
+- [x] 13.3 Run `abc warehouse lint` against the warehouse template (`libs/beacon/src/beacon/data/skills/...` parent — wherever the bundled template warehouse lives) and confirm exit 0; a freshly-`init`-ed warehouse must be lint-clean.
 <!-- opsx:tdd:13.3:begin -->
   - **Input**: mktemp -d /tmp/wh-XXXX; cd $_; abc warehouse init test-wh; abc warehouse lint test-wh
   - **Expected Output**: Exit code 0; 'Lint passed' in stdout.
@@ -647,55 +647,16 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:14:end -->
 
 
-- [ ] 14.1 **[MANUAL]** After PR merges and release lands, run `/opsx-archive warehouse-lint-cli-for-ci` to move the change into `openspec/changes/archive/`.
+- [X] 14.1 **[MANUAL]** After PR merges and release lands, run `/opsx-archive warehouse-lint-cli-for-ci` to move the change into `openspec/changes/archive/`.
 <!-- opsx:tdd:14.1:begin -->
   - **Input**: /opsx-archive warehouse-lint-cli-for-ci
   - **Expected Output**: Skill moves the change directory under `openspec/changes/archive/<date>-warehouse-lint-cli-for-ci/`; `openspec list --json` no longer shows it as active.
   - **Validation**: `openspec list --json` does not include the change name in the active list; archived directory exists in the repo and is committed.
 <!-- opsx:tdd:14.1:end -->
 
-## 15. Cross-repo follow-up (tracked here, executed separately)
+## 15. Cross-repo follow-up
 
-<!-- opsx:phase-summary:15:begin -->
-**Goal**: Roll out the new lint command into the warehouse repo: migrate agent frontmatter to satisfy the new rule, fix the two known broken knowledge links, and wire the lint workflow into CI. This phase modifies `hl-knowledge-market`, not `agentic-beacon`.
-**Input**: Phase 14 complete; `agentic-beacon` released; user has push access to `hl-knowledge-market`.
-**Output**: Warehouse-side PR adding `name:` + `description:` to every `agents/*.md`, fixing the broken knowledge links, and adding `.github/workflows/lint.yml` pinned to the released `agentic-beacon` version. PR green and merged.
-**Validation**: The warehouse-side PR's lint workflow shows green on its own commit; running `uvx agentic-beacon==<pinned> warehouse lint .` locally on the warehouse exits 0; branch protection deferred (GitHub plan limitation).
-<!-- opsx:phase-summary:15:end -->
-
-
-> The tasks below modify `hl-knowledge-market`, not `agentic-beacon`. They are intentionally outside the spec-driven apply phase for this change, but documented here so the rollout is not forgotten.
-
-- [ ] 15.1 **[MANUAL]** In `hl-knowledge-market`, create branch `warehouse-lint-cli-for-ci`. Migrate every `agents/*.md` (except `README.md`) to add `name:` and `description:` YAML frontmatter.
-<!-- opsx:tdd:15.1:begin -->
-  - **Input**: cd ~/Code/knowledge/hl-knowledge-market && git checkout -b warehouse-lint-cli-for-ci; then edit every agent file's frontmatter.
-  - **Expected Output**: Every non-README `agents/*.md` carries `name:` and `description:` keys.
-  - **Validation**: Local `uvx agentic-beacon==<pinned> warehouse lint .` no longer reports any missing-`name` or missing-`description` finding.
-<!-- opsx:tdd:15.1:end -->
-- [ ] 15.2 **[MANUAL]** Fix the two known broken knowledge links surfaced by `abc warehouse lint .`.
-<!-- opsx:tdd:15.2:begin -->
-  - **Input**: Run lint locally to identify the two paths; either create the missing knowledge files or remove/correct the links.
-  - **Expected Output**: Lint no longer reports either broken-knowledge-link finding.
-  - **Validation**: Local lint run is clean for the knowledge-link rule; no new findings introduced elsewhere.
-<!-- opsx:tdd:15.2:end -->
-- [ ] 15.3 **[MANUAL]** Add `.github/workflows/lint.yml` running on `pull_request` and `push: main`, using `astral-sh/setup-uv@v5` + `uvx agentic-beacon==<pinned-version> warehouse lint .` on `ubuntu-latest`.
-<!-- opsx:tdd:15.3:begin -->
-  - **Input**: Write the workflow yaml; push the branch; observe the workflow run on the PR.
-  - **Expected Output**: Workflow runs on `pull_request` events for this branch; lint job uses ubuntu-latest, installs uv, runs `uvx agentic-beacon==<pinned> warehouse lint .`, exits 0.
-  - **Validation**: GitHub Actions UI shows the workflow green on the migration PR; rerunning the workflow against the previous (pre-migration) commit shows red — confirms the workflow has signal.
-<!-- opsx:tdd:15.3:end -->
-- [ ] 15.4 **[MANUAL]** Open PR; confirm the workflow runs and passes against the migrated tree.
-<!-- opsx:tdd:15.4:begin -->
-  - **Input**: gh pr create --base main --head warehouse-lint-cli-for-ci --title 'feat(ci): add warehouse lint workflow + frontmatter migration' --body '<see template>'
-  - **Expected Output**: PR URL returned; lint workflow green on the head commit.
-  - **Validation**: Manual review of the PR diff; CI green.
-<!-- opsx:tdd:15.4:end -->
-- [ ] 15.5 **[MANUAL]** Merge once green. Branch protection enforcement is deferred until the GitHub plan permits it on private personal repos.
-<!-- opsx:tdd:15.5:begin -->
-  - **Input**: Merge the warehouse PR via the GitHub UI.
-  - **Expected Output**: PR shown as merged; the lint workflow runs on `push: main` and is green.
-  - **Validation**: Manual confirmation in the GitHub UI; record the deferred branch-protection item in PER-114 or a follow-up ticket.
-<!-- opsx:tdd:15.5:end -->
+Moved to Linear: **[PER-182 — Roll out warehouse lint in hl-knowledge-market](https://linear.app/shadowsong-personal/issue/PER-182/roll-out-warehouse-lint-in-hl-knowledge-market)** (under the `harness-improvements` project). That ticket tracks the warehouse-side migration (agent frontmatter), the broken-knowledge-link fixes, and the lint CI workflow — all of which modify `hl-knowledge-market`, not `agentic-beacon`.
 
 <!-- opsx:metadata:begin -->
 ---
@@ -708,9 +669,9 @@ pytest tests/ -v --tb=short
 - TDD Workflow Header
 - Repositories & Branches table
 - Phase summaries (Goal/Input/Output/Validation)
-- Task-level TDD criteria on 61 task(s)
+- Task-level TDD criteria on 56 task(s)
 - 73 test case(s) across complex tasks
-- 9 task(s) flagged [MANUAL]
+- 4 task(s) flagged [MANUAL]
 
 **Status**: Ready for implementation via `/opsx-apply <name>`.
 <!-- opsx:metadata:end -->

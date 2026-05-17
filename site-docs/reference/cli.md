@@ -139,6 +139,51 @@ abc warehouse template-upgrade [WAREHOUSE_PATH] [OPTIONS]
 
 ---
 
+### `abc warehouse lint`
+
+Validate a warehouse directory end-to-end. Runs every Beacon-owned artifact
+validation rule against the warehouse at `WAREHOUSE_PATH` (defaults to the
+current working directory when omitted).
+
+```bash
+abc warehouse lint [WAREHOUSE_PATH]
+```
+
+| Option | Description |
+|--------|-------------|
+| `WAREHOUSE_PATH` | Path to warehouse directory (defaults to current directory) |
+
+**Validation rules:**
+
+1. **Structure preflight** — required directories (`agents/`, `contexts/`, `skills/`, `docs/`) and README exist.
+2. **Skill frontmatter** — every `skills/*/SKILL.md` has a valid YAML frontmatter block that satisfies `SkillFrontmatter` (no `requires.skills` key; correct schema).
+3. **Skill context references** — every context name in `requires.contexts` exists as `contexts/<name>.md`.
+4. **Agent manifest** — `agents.yaml` is valid YAML; every `agents/*.md` file has a matching entry and vice versa; no legacy `requires:` keys in agent frontmatter; every declared skill exists under `skills/`.
+5. **Agent frontmatter** — every `agents/*.md` (excluding `README.md`) has both a `name:` and `description:` YAML frontmatter key.
+6. **Knowledge link integrity** — every inline Markdown link in `contexts/*.md` and `skills/*/SKILL.md` that resolves to a `knowledge/…/*.md` path exists on disk. This rule is **lint-only**: `abc sync` retains its current warning-only behaviour for broken knowledge links.
+
+**Exit codes:**
+
+- `0` — No errors found; output contains `✓ Lint passed.`
+- `1` — One or more errors found; output is grouped by artifact path with `error:` prefixes.
+
+**Example:**
+
+```bash
+# Lint the current directory (warehouse clone)
+abc warehouse lint
+
+# Lint a specific path
+abc warehouse lint ~/my-org-warehouse
+```
+
+> **Note:** `abc warehouse lint` is designed for warehouse-side CI. A freshly
+> `abc warehouse init`-ed warehouse passes lint with exit code 0. The
+> cross-repo CI workflow (`.github/workflows/lint.yml` in the warehouse repo)
+> runs `uvx agentic-beacon==<pinned> warehouse lint .`.
+
+---
+
 ## Project Setup
 
 ### `abc setup`
