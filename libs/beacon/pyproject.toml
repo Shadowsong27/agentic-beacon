@@ -3,7 +3,14 @@ name = "agentic-beacon"
 version = "3.3.0"
 description = "Agentic Beacon CLI - Distribute knowledge contexts and skills for AI-assisted development teams"
 readme = "README.md"
-requires-python = ">=3.12"
+# Upper bound excludes 3.14 deliberately: a transitive Click 8.4.0
+# stdlib-driven change in Click's "no such option" error format (released
+# on 2026-05-17 alongside Python 3.14 becoming the ubuntu-latest default)
+# is incompatible with the test assertions in this codebase. CI matrix in
+# .github/workflows/ci.yml tests {3.12, 3.13} — pyproject metadata now
+# matches what is actually tested. Bump deliberately when the 3.14
+# compatibility sweep lands.
+requires-python = ">=3.12,<3.14"
 license = { text = "MIT" }
 authors = [
     { name = "Agentic Beacon Contributors" }

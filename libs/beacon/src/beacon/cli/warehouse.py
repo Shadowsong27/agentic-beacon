@@ -536,10 +536,18 @@ def warehouse_template_upgrade(
 def _print_lint_report(report: LintReport, _console: Console | None = None) -> None:
     """Print lint findings grouped by artifact path with Rich formatting.
 
+    `artifact_path` and `finding.message` originate from warehouse files and
+    link text — anything containing `[`, `]`, or text that looks like Rich
+    markup would otherwise be interpreted by Rich's console parser. Both are
+    routed through `rich.markup.escape()` before interpolation so a hostile
+    or accidentally-formatted message cannot spoof or corrupt CI output.
+
     Args:
         report: The lint report to display.
         _console: Optional Console instance (defaults to module-level console).
     """
+    from rich.markup import escape
+
     c = _console if _console is not None else console
     if not report:
         c.print("[green]✓ Lint passed.[/green]")
@@ -552,9 +560,9 @@ def _print_lint_report(report: LintReport, _console: Console | None = None) -> N
         report.findings, key=lambda f: f.artifact_path
     ):
         group = list(group_iter)
-        c.print(f"[bold]{artifact_path}[/bold]")
+        c.print(f"[bold]{escape(artifact_path)}[/bold]")
         for finding in group:
-            c.print(f"  [red]error:[/red] {finding.message}")
+            c.print(f"  [red]error:[/red] {escape(finding.message)}")
 
     # Summary line
     n = len(report.findings)

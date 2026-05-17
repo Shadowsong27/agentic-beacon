@@ -958,6 +958,48 @@ class TestPrintLintReport:
         skills_pos = output.index("skills/bar/SKILL.md")
         assert agents_pos < skills_pos
 
+    def test_rich_markup_in_finding_is_escaped(self):
+        """Regression for opencode-review PR144 round-5 #L1.
+
+        artifact_path and finding.message come from warehouse files and link
+        text. Rich would otherwise interpret '[' / ']' as markup tags and
+        either swallow the bracket entirely (when it looks like a valid tag)
+        or render coloured output the user did not author.
+
+        Pin: a message containing a string that looks like Rich markup must
+        appear in the rendered output as a literal bracket-containing string,
+        not be interpreted as a Rich style.
+        """
+        report = LintReport(
+            findings=(
+                # Square brackets that Rich would happily parse as markup
+                # ("[red]" is a real tag; "[broken" looks like an unclosed
+                # tag and historically was silently dropped by Rich).
+                LintFinding(
+                    "skills/[red]bad-skill/SKILL.md",
+                    "frontmatter contains literal [broken tag and a [link]",
+                ),
+            )
+        )
+        c = self._make_console()
+        output = self._call(report, c)
+        # Both square-bracketed strings must appear verbatim in the rendered
+        # output (escape() converts "[" to "\\[" in markup-syntax, but the
+        # visible text rendered to the console is still "[...]").
+        assert "[red]bad-skill" in output, (
+            f"Expected literal '[red]bad-skill' in escaped output, got: {output!r}"
+        )
+        assert "[broken tag" in output, (
+            f"Expected literal '[broken tag' in escaped output, got: {output!r}"
+        )
+        assert "[link]" in output, (
+            f"Expected literal '[link]' in escaped output, got: {output!r}"
+        )
+        # Sanity: the rendering should still treat the OUTER markup
+        # (the [bold] / [red] from the formatter itself) — confirm the
+        # "error:" prefix is present (proves we didn't break the formatter).
+        assert "error:" in output
+
 
 class TestWarehouseLintCommand:
     """TC10.3, 10.5, 10.6: warehouse_lint Click handler."""
