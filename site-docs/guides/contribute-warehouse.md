@@ -36,7 +36,7 @@ The skill runs these steps in order:
 5. **Dedup scan** (knowledge/ files only) — scan sibling files for overlapping content
 6. **Cohesion check** — determine if the included files form one cohesive change or should be split
 7. **Draft commit message(s)** — call `draft_commit_message.py` to produce Conventional Commits messages
-8. **Commit each group** — call `abc warehouse contribute -m "<message>" --paths <file1> [<file2> ...]` per group (no `--push`)
+8. **Commit each group** — call `abc warehouse contribute -m "<message>" --paths <file1> --paths <file2> ...` per group (no `--push`). `--paths` is a repeatable Click option: pass it once per file, not once with a space-separated list.
 9. **Atomic push** — call `push_warehouse.py` exactly once after all commits land
 
 ---
