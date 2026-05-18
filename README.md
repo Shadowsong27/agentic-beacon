@@ -126,8 +126,6 @@ Everything is a per-file **symlink** into the warehouse clone — one physical f
 
 **Frontmatter dependencies.** Skills declare `requires:` in YAML frontmatter; agents declare dependencies in `agents/agents.yaml`. `abc sync` validates all declared dependencies are adopted and errors early if any are missing.
 
-> **Read:** [Decision — No Project-Local Artifact Overrides](https://shadowsong27.github.io/agentic-beacon/concepts/design-decisions/) for the full design rationale.
-
 > **Platform support:** macOS and Linux only.
 
 ## Artifact Types
@@ -160,18 +158,13 @@ Everything is a per-file **symlink** into the warehouse clone — one physical f
 
 ### Concepts
 - **[How It Works](https://shadowsong27.github.io/agentic-beacon/concepts/how-it-works/)** — Warehouse + beacon mental model and sync flow
-- **[Philosophy](https://shadowsong27.github.io/agentic-beacon/concepts/philosophy/)** — Why this exists, why markdown not RAG, why lightweight
+- **[Philosophy](https://shadowsong27.github.io/agentic-beacon/design/philosophy/)** — Why this exists, why markdown not RAG, why lightweight (Design)
 - **[Artifact Types](https://shadowsong27.github.io/agentic-beacon/concepts/artifact-types/)** — Scope and tool-specificity axes; how they drive command design
-- **[Specs vs. Artifacts](https://shadowsong27.github.io/agentic-beacon/concepts/specs-vs-artifacts/)** — What belongs in a warehouse vs. a project
-- **[Design Decisions](https://shadowsong27.github.io/agentic-beacon/concepts/design-decisions/)** — Architectural choices and their rationale
 
 ### Guides
 - **[Quick Start](https://shadowsong27.github.io/agentic-beacon/quickstart/)** — Onboarding walkthrough
 - **[Warehouse Creation](https://shadowsong27.github.io/agentic-beacon/guides/warehouse-creation/)** — Creating and structuring a warehouse
 - **[Contributing Back](https://shadowsong27.github.io/agentic-beacon/guides/contributing-back/)** — Commit agent improvements back to the warehouse
-- **[Spec-Driven Development](https://shadowsong27.github.io/agentic-beacon/guides/spec-driven-development/)** — Structured approach to feature planning
-- **[Team Collaboration](https://shadowsong27.github.io/agentic-beacon/guides/team-collaboration/)** — Multi-team workflows
-- **[Advanced Patterns](https://shadowsong27.github.io/agentic-beacon/guides/advanced-patterns/)** — Glob patterns, dry-run, warehouse commands, migration
 
 ### Reference
 - **[beacon.yaml](https://shadowsong27.github.io/agentic-beacon/reference/beacon-yaml/)** — Full configuration schema

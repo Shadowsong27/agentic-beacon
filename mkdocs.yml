@@ -79,45 +79,26 @@ nav:
   - Quick Start: quickstart.md
   - Concepts:
     - How It Works: concepts/how-it-works.md
-    - Philosophy: concepts/philosophy.md
-    - What Is a Skill: concepts/what-is-a-skill.md
     - Bundled Skills: concepts/bundled-skills.md
     - Pending & Adoption: concepts/pending-and-adoption.md
     - Artifact Types: concepts/artifact-types.md
-    - Specs vs. Artifacts: concepts/specs-vs-artifacts.md
-    - Design Decisions: concepts/design-decisions.md
   - Guides:
     - Creating a Warehouse: guides/warehouse-creation.md
-    - Connecting a Project: guides/connecting-projects.md
-    - Interactive Adoption: guides/interactive-adoption.md
-    - Syncing Artifacts: guides/syncing.md
+    - Adopting Artifacts: guides/adopting-artifacts.md
     - Day-to-Day Workflow: guides/day-to-day-workflow.md
-    - Spec-Driven Development: guides/spec-driven-development.md
-    - Contributing Back: guides/contributing-back.md
-    - Contribute Warehouse Skill: guides/contribute-warehouse.md
-    - Creating Skills: guides/creating-skills.md
+    - Contributing Back:
+      - Overview: guides/contributing-back.md
+      - Creating Skills: guides/creating-skills.md
+      - Creating Knowledge and Contexts: guides/creating-knowledge-and-contexts.md
+      - Creating an Agent: guides/creating-agents.md
     - Warehouse Lint:
       - GitHub Actions CI: guides/warehouse-lint/github-actions.md
       - Pre-commit Hook: guides/warehouse-lint/pre-commit.md
-    - Team Collaboration: guides/team-collaboration.md
-    - Advanced Patterns: guides/advanced-patterns.md
-  - Tutorials:
-    - Your First Contribution: tutorials/first-contribution.md
+  - Design:
+    - Philosophy: design/philosophy.md
+    - Skills: design/skills.md
   - Reference:
     - beacon.yaml: reference/beacon-yaml.md
     - CLI Reference: reference/cli.md
+    - contribute-warehouse Skill: reference/contribute-warehouse.md
   - Troubleshooting: troubleshooting.md
-  - Contributing:
-    - Overview: contributing/index.md
-    - Commands: contributing/commands.md
-    - Project Layout: contributing/project-layout.md
-    - Architecture: contributing/architecture.md
-    - Configuration: contributing/configuration.md
-    - Local Development: contributing/local-development.md
-    - Code Style: contributing/code-style.md
-    - Design Patterns: contributing/design-patterns.md
-    - Testing: contributing/testing.md
-    - Contribution Workflow: contributing/contribution-workflow.md
-    - Documentation: contributing/documentation.md
-    - Gotchas: contributing/gotchas.md
-    - Open Questions: contributing/open-questions.md

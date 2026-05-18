@@ -54,7 +54,7 @@ No extra setup needed — everything is in place after `abc sync`.
 ### Example: agent improves a knowledge file mid-session
 
 You ask the agent to document a new error handling pattern. It writes the explanation
-directly into `artifacts/contexts/knowledge/error-handling.md`. Because that file
+directly into `artifacts/knowledge/python/error-handling.md`. Because that file
 is a symlink into your warehouse clone, the warehouse working tree is updated immediately.
 
 No copy step needed — the improvement is already in the warehouse.
@@ -134,17 +134,14 @@ Leave `skills/code-review/SKILL.md` unstaged if you're not ready to share that c
 
 ### Discard a change you don't want to keep
 
+A common case: you ran `abc warehouse status` and find two modified files, but only one is the change you intended. The other is a stray edit from earlier in the session — perhaps the agent retitled a skill in passing. Discard it from the warehouse clone:
+
 ```bash
 cd ~/team-warehouse
 git checkout -- skills/code-review/SKILL.md
 ```
 
-The symlink reflects the restored file immediately in your project.
-
----
-
-!!! tip "Want a full walkthrough?"
-    **[Tutorial: Your First Contribution](../tutorials/first-contribution.md)** — step-by-step from morning sync to pushing an improvement back to the warehouse.
+The symlink reflects the restored file immediately in your project — no further sync needed.
 
 ---
 
@@ -157,25 +154,7 @@ abc doctor      # full validation; --fix to auto-resolve stale paths
 
 ---
 
-## Quick Reference
-
-| Situation | Command |
-|-----------|---------|
-| Pull warehouse updates | `cd ~/warehouse && git pull && cd project && abc sync` |
-| Discover new artifacts | `abc adopt` |
-| Review warehouse changes | `abc warehouse status` |
-| Review a specific file diff | `abc warehouse status <path>` |
-| Contribute all changes | `abc warehouse contribute -m "message"` |
-| Contribute and push | `abc warehouse contribute -m "message" --push` |
-| Contribute selectively | `cd ~/warehouse && git add <file> && git commit` |
-| Discard a change | `cd ~/warehouse && git checkout -- <file>` |
-| Check project health | `abc status` |
-| Diagnose issues | `abc doctor` |
-
----
-
 ## Next Steps
 
 - **[Contributing Back](contributing-back.md)** — contribution workflow in depth
-- **[Advanced Patterns](advanced-patterns.md)** — glob patterns and advanced configuration
-- **[Team Collaboration](team-collaboration.md)** — coordinating across a team
+- **[CLI Reference](../reference/cli.md)** — every flag for `sync`, `warehouse status`, `warehouse contribute`

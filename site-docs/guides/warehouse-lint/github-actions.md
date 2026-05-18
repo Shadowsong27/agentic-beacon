@@ -77,7 +77,7 @@ That's it. The workflow:
 
 ### Why `uv tool install agentic-beacon` instead of `pip install`
 
-Per the project's [Python standards](../../concepts/how-it-works.md) and AGENTS.md, `uv` is the canonical Python toolchain. `uv tool install` creates an isolated environment for the CLI and exposes `abc` on `PATH` — same shape as `pipx install`, but inside the `uv` ecosystem the runner is already set up for.
+`uv tool install` creates an isolated environment for the CLI and exposes `abc` on `PATH` — same shape as `pipx install`, but `uv` is the toolchain Beacon itself uses for development and CI.
 
 ### Why no version pin in `uv tool install agentic-beacon`
 
