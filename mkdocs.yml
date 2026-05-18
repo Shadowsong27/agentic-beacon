@@ -91,6 +91,9 @@ nav:
     - Contributing Back: guides/contributing-back.md
     - Contribute Warehouse Skill: guides/contribute-warehouse.md
     - Creating Skills: guides/creating-skills.md
+    - Warehouse Lint:
+      - GitHub Actions CI: guides/warehouse-lint/github-actions.md
+      - Pre-commit Hook: guides/warehouse-lint/pre-commit.md
     - Team Collaboration: guides/team-collaboration.md
     - Advanced Patterns: guides/advanced-patterns.md
   - Tutorials:
