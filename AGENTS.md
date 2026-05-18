@@ -99,7 +99,7 @@ Each in `libs/beacon/src/beacon/domains/<name>/`:
 The locally-cloned warehouse is the **single write entrypoint** for every harness artifact on a machine. Projects reference it via per-file symlinks under `.agentic-beacon/artifacts/`.
 
 - `abc sync` creates symlinks, not copies. One logical artifact = one physical file per machine.
-- `abc warehouse contribute` is the primary way to push warehouse working-tree changes back upstream.
+- The `/contribute-warehouse` bundled skill is the primary way to push warehouse working-tree changes back upstream — it lints, dedup-scans, splits cohesive commits, and atomically pushes. The raw `abc warehouse contribute` CLI is the lower-level primitive the skill wraps (and is currently unreliable on personal mac — see PER-159).
 - Authoring skills (`record-knowledge`, `record-skill`) write directly to the warehouse. Project-wired artifacts (contexts, skills, agents) are appended to `.agentic-beacon/pending.yaml`; wiring into `beacon.yaml` happens later via `abc adopt`. Knowledge files are auto-derived during sync/adopt and are not tracked in `pending.yaml`.
 - Cross-project visibility of harness edits on a single machine is **intended**: editing a skill through Project A's symlink edits the warehouse working tree; Project B sees the change immediately.
 - Platform: macOS / Linux only. Windows is rejected.
