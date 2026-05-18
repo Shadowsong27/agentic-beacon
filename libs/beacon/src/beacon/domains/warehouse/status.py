@@ -36,6 +36,7 @@ class StatusResult:
     behind: int | None = None
     has_upstream: bool = True
     diff: str | None = None
+    dirty_outside_scope_count: int = 0
 
 
 def _run_git(
@@ -134,5 +135,19 @@ def status(
             code = line[:2].strip()
             file_path = line[3:]
             result.modifications.append(StatusEntry(path=file_path, status=code))
+
+    # Compute out-of-scope dirty count when filtering is active
+    if path is None and not all_paths:
+        full_status = _run_git(warehouse_path, ["status", "--porcelain"])
+        if full_status.returncode == 0:
+            total_lines = len(
+                [ln for ln in full_status.stdout.splitlines() if ln.strip()]
+            )
+            filtered_lines = len(
+                [ln for ln in status_result.stdout.splitlines() if ln.strip()]
+            )
+            result.dirty_outside_scope_count = max(0, total_lines - filtered_lines)
+        else:
+            result.dirty_outside_scope_count = 0
 
     return result
