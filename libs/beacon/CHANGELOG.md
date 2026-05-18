@@ -1,5 +1,21 @@
 # Changelog
 
+## [3.4.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v3.3.0...agentic-beacon@v3.4.0) (2026-05-17)
+
+
+### Features
+
+* **beacon:** canonicalize shared bundled-skill scripts under _shared/ ([#139](https://github.com/Shadowsong27/agentic-beacon/issues/139)) ([3259e41](https://github.com/Shadowsong27/agentic-beacon/commit/3259e415ee953c08fdb67369a01497feb45cf037))
+* **beacon:** offline-aware skipif for bundled-skill integration tests ([#141](https://github.com/Shadowsong27/agentic-beacon/issues/141)) ([2b41d46](https://github.com/Shadowsong27/agentic-beacon/commit/2b41d46e2828c6026c11fa3dced06d3219d4aa59))
+* **skills:** add contribute-warehouse bundled skill ([#146](https://github.com/Shadowsong27/agentic-beacon/issues/146)) ([552aded](https://github.com/Shadowsong27/agentic-beacon/commit/552aded2b084e43e7b2ae6ced0f4ac4801730256))
+* **warehouse:** add abc warehouse lint command ([#144](https://github.com/Shadowsong27/agentic-beacon/issues/144)) ([817d60b](https://github.com/Shadowsong27/agentic-beacon/commit/817d60bbe58578856ae1503fbdab5e4ccd466349))
+
+
+### Bug Fixes
+
+* **distribution:** skip _partials/ in agent listings and co-distribute alongside wired agents ([#143](https://github.com/Shadowsong27/agentic-beacon/issues/143)) ([23e967d](https://github.com/Shadowsong27/agentic-beacon/commit/23e967dcd912dbd78d02bf435710c1dd09935f39))
+* **warehouse:** include artifacts.agents in get_tracked_paths (PER-183) ([#147](https://github.com/Shadowsong27/agentic-beacon/issues/147)) ([c992725](https://github.com/Shadowsong27/agentic-beacon/commit/c99272594c9378a96b36f8c4f425dfe0550839ab))
+
 ## [3.3.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v3.2.0...agentic-beacon@v3.3.0) (2026-05-13)
 
 
