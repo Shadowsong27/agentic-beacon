@@ -58,21 +58,23 @@ The goal is to solve the DRY problem for agentic knowledge without creating a ne
 
 ## Two-Tier Information Model
 
-A direct consequence of staying file-based is that agents need a way to scan boot context fast and pull deeper detail only when relevant. Beacon's structure formalises this as two tiers:
+A direct consequence of staying file-based is that the warehouse needs to be cheap to load at session start without sacrificing organisational depth. Beacon's structure addresses this with two related artifact types, and an optimisation pattern that connects them:
 
-- **Tier 1 — Contexts** (boot context, loaded on session start): lightweight, scannable, contains summaries and pointers — *what does the agent need to know exists?*
-- **Tier 2 — Knowledge** (deep context, loaded on demand): detailed explanations, rationale, examples — *what are the full details when needed?*
+- **Contexts** are the boot-time payload — the agent loads them on session start. A context is, in effect, a curated collection of knowledge: it can hold short rules and patterns inline AND point at deeper material elsewhere.
+- **Knowledge files** are atomic units — one decision, one lesson, one fact, in its own file. They can be referenced from one or more contexts (or from other knowledge files), and they exist as standalone files so the same knowledge can be composed into multiple contexts and so it can be left out of the boot-time payload when it's not needed every session.
 
-Pointers between the two come in two flavours:
+Within a context, two link styles signal how the linked content should be treated:
 
-- **Proactive pointers** (written as `**Read:**`) — agent must internalise immediately because the rule affects every file they touch.
-- **Reactive pointers** (written as `**See:**`) — agent loads only when encountering the specific problem (troubleshooting, edge cases).
+- **Proactive pointers** (`**Read:**`) — the linked content matters often enough that the agent should load it immediately when starting work in this area.
+- **Reactive pointers** (`**See:**`) — the linked content is troubleshooting, edge-case detail, or reference material; the agent only loads it when the specific situation arises.
 
-This separation is what keeps boot context cheap to load while preserving access to organisational depth. The taxonomy inside `knowledge/` — `decisions/`, `lessons/`, `facts/` — is enforced by `abc warehouse lint`; see [Artifact Types](artifact-types.md) for the operational rules.
+The progressive-disclosure pattern that emerges from these pointer styles is an **optimisation**, not the definition of either artifact. Not all knowledge is hidden at session start; some of it lives inline in a context because the rule applies every session and is short enough that hiding it would just force an extra link-follow. The extraction decision — *should this be inline content in the context, or its own knowledge file?* — is a judgement call, covered in the [Creating Knowledge and Contexts](../guides/creating-knowledge-and-contexts.md) guide.
+
+The taxonomy inside `knowledge/` — `decisions/`, `lessons/`, `facts/` — is enforced by `abc warehouse lint`; see [Artifact Types](../concepts/artifact-types.md) for the operational rules.
 
 ---
 
 ## Next
 
-- [How It Works](how-it-works.md) — the mechanics that follow from these choices
-- [Artifact Types](artifact-types.md) — the four types and how each is wired
+- [How It Works](../concepts/how-it-works.md) — the mechanics that follow from these choices
+- [Artifact Types](../concepts/artifact-types.md) — the four types and how each is wired

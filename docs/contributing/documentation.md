@@ -6,14 +6,19 @@ How project documentation is organized and maintained.
 
 ## Documentation Sources
 
-| Location | Purpose |
-|---|---|
-| `CONTRIBUTING.md` | Thin entry point at the repo root — environment setup + pointer to this site |
-| `site-docs/` | MkDocs source — user-facing docs and contributor guides, published to GitHub Pages |
-| `site-docs/contributing/` | Contributor guides (this directory) |
-| `docs/archive/` | Frozen historical design and migration notes (not published) |
-| `AGENTS.md` | Project context for AI coding agents (authoritative project reference) |
-| `CLAUDE.md` | AI agent bootstrap file — imports `AGENTS.md` and context files |
+| Location | Purpose | Audience |
+|---|---|---|
+| `CONTRIBUTING.md` | Environment setup; GitHub-rendered entry point | Humans |
+| `site-docs/` | MkDocs source — user-facing docs published to GitHub Pages | Humans (Beacon users) |
+| `docs/contributing/` | Deep reference for the `abc` codebase (this directory) | Mostly agents |
+| `docs/archive/` | Frozen historical design and migration notes (not published) | Humans on a hunt |
+| `AGENTS.md` | High-level project context, auto-loaded on session start | Agents |
+| `CLAUDE.md` | Bootstrap file that imports `AGENTS.md` and context files | Agents (Claude Code) |
+
+The split exists because the value of each document is very different:
+
+- `site-docs/` is for **users** of Agentic Beacon — installing `abc`, creating a warehouse, adopting artifacts. It needs to be polished and to have a small, navigable nav.
+- `docs/contributing/` is reference material an **agent** reads when modifying the `abc` codebase — architecture, code style, design patterns, gotchas. Surfacing it on the public site would clutter the nav for users who never need it.
 
 ---
 
@@ -37,7 +42,7 @@ The site is deployed automatically to GitHub Pages on every push to `main` via
 
 ### Adding a page
 
-1. Create a `.md` file under `site-docs/` (use the existing folder structure: `concepts/`, `guides/`, `tutorials/`, `reference/`, `contributing/`).
+1. Create a `.md` file under `site-docs/` (use the existing folder structure: `concepts/`, `guides/`, `tutorials/`, `reference/`, `design/`).
 2. Add the page to the `nav:` section in `mkdocs.yml`.
 3. Verify it renders cleanly with `mkdocs build --strict`.
 
@@ -47,7 +52,7 @@ The site is deployed automatically to GitHub Pages on every push to `main` via
 
 Historical design notes and migration records live under `docs/archive/`. They are not part of the published site. See `docs/archive/README.md` for the index and current-equivalent links.
 
-Do not add new design docs there — write conceptual content in `site-docs/concepts/` instead.
+Do not add new design docs there — write conceptual content in `site-docs/concepts/` or `site-docs/design/` instead.
 
 ---
 
@@ -55,7 +60,7 @@ Do not add new design docs there — write conceptual content in `site-docs/conc
 
 Documentation updates are part of every code change. The pre-PR checklist includes:
 
-- Update `site-docs/contributing/` if you change architecture, CLI patterns, or configuration semantics.
+- Update `docs/contributing/` if you change architecture, CLI patterns, or configuration semantics.
 - Update `site-docs/` (concepts/guides/reference) if you change user-facing commands, output format, or config files.
 - Update `AGENTS.md` if the project overview, five domains, Python standards, or common patterns change.
 

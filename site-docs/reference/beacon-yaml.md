@@ -226,21 +226,6 @@ The `.gitignore` entries are added automatically when you run `abc warehouse con
 
 ---
 
-## Related Commands
+## See Also
 
-```bash
-# Create beacon.yaml
-abc setup
-
-# Populate it interactively
-abc adopt
-
-# Apply the configuration
-abc sync
-
-# Preview warehouse working tree changes
-abc warehouse status
-
-# Check what's configured and synced
-abc status
-```
+- **[CLI Reference](cli.md)** — every command that reads or writes `beacon.yaml`

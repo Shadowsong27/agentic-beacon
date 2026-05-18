@@ -8,7 +8,7 @@ How to contribute a change — from branch to merged PR.
 
 1. Check [open issues](https://github.com/Shadowsong27/agentic-beacon/issues) for context.
 2. For non-trivial changes, open or comment on an issue first to align on approach.
-3. Make sure your environment is set up: see [CONTRIBUTING.md](https://github.com/Shadowsong27/agentic-beacon/blob/main/CONTRIBUTING.md) in the repo root.
+3. Make sure your environment is set up: see [CONTRIBUTING.md](../../CONTRIBUTING.md).
 
 ---
 

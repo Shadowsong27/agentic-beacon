@@ -48,16 +48,6 @@ You should see a version number printed (e.g. `3.x.y`).
 uv tool upgrade agentic-beacon
 ```
 
-## What Gets Installed
-
-Installing `agentic-beacon` puts a single command on your PATH:
-
-| Command | Description |
-|---------|-------------|
-| `abc` | The Agentic Beacon CLI — the only command you need |
-
-All subcommands (`abc sync`, `abc warehouse init`, etc.) are available under `abc`.
-
 ## Next Steps
 
 → **[Quick Start](quickstart.md)** — set up a warehouse and connect your first project in minutes.

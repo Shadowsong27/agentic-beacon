@@ -1,8 +1,6 @@
 # Contributing to Agentic Beacon
 
-Welcome — this file is the entry point for new contributors. It covers everything you need to go from a fresh clone to running tests locally. The deeper guides (architecture, code style, testing strategy, design patterns, gotchas, etc.) live on the documentation site:
-
-📚 **<https://shadowsong27.github.io/agentic-beacon/contributing/>**
+Welcome — this file is the entry point for new contributors. It covers everything you need to go from a fresh clone to running tests locally. The deeper reference material (architecture, code style, testing strategy, design patterns, gotchas, etc.) is in `docs/contributing/` and is primarily there so AI coding agents working in the repo have something to grep. Human contributors generally won't need to read them end-to-end.
 
 ---
 
@@ -97,19 +95,19 @@ These are rarely needed in normal development.
 
 ## Where to Go Next
 
-The rest of the contributor reference is on the documentation site. Bookmark the [Contributing section](https://shadowsong27.github.io/agentic-beacon/contributing/) and dip in by topic:
+The deep reference lives in `docs/contributing/`. These files are primarily written for AI coding agents working in the repo — the most efficient way to use them is to point your agent at the directory ("read `docs/contributing/`") and let it pick what's relevant.
 
-- [Commands](https://shadowsong27.github.io/agentic-beacon/contributing/commands/) — build, run, test, and lint commands
-- [Project Layout](https://shadowsong27.github.io/agentic-beacon/contributing/project-layout/) — annotated directory tree
-- [Architecture](https://shadowsong27.github.io/agentic-beacon/contributing/architecture/) — four-layer design, five domains, data flows
-- [Configuration](https://shadowsong27.github.io/agentic-beacon/contributing/configuration/) — settings, workspace config, manifest models
-- [Local Development](https://shadowsong27.github.io/agentic-beacon/contributing/local-development/) — dev loop, debugging, running subsets
-- [Code Style](https://shadowsong27.github.io/agentic-beacon/contributing/code-style/) — naming, imports, formatting rules
-- [Design Patterns](https://shadowsong27.github.io/agentic-beacon/contributing/design-patterns/) — recurring patterns and when to use them
-- [Testing](https://shadowsong27.github.io/agentic-beacon/contributing/testing/) — test layout, unit vs integration, fixtures
-- [Contribution Workflow](https://shadowsong27.github.io/agentic-beacon/contributing/contribution-workflow/) — branches, PRs, CI gates, release process
-- [Documentation](https://shadowsong27.github.io/agentic-beacon/contributing/documentation/) — how docs are built and published
-- [Gotchas](https://shadowsong27.github.io/agentic-beacon/contributing/gotchas/) — known traps and sharp corners
-- [Open Questions](https://shadowsong27.github.io/agentic-beacon/contributing/open-questions/) — unresolved items
-
-If the live site is ever unreachable, the same content is in `site-docs/contributing/` in this repo.
+| File | Covers |
+|---|---|
+| [`commands.md`](docs/contributing/commands.md) | Build, run, test, and lint commands |
+| [`project-layout.md`](docs/contributing/project-layout.md) | Annotated directory tree |
+| [`architecture.md`](docs/contributing/architecture.md) | Four-layer design, five domains, data flows |
+| [`configuration.md`](docs/contributing/configuration.md) | Settings, workspace config, manifest models |
+| [`local-development.md`](docs/contributing/local-development.md) | Dev loop, debugging, running subsets |
+| [`code-style.md`](docs/contributing/code-style.md) | Naming, imports, formatting rules |
+| [`design-patterns.md`](docs/contributing/design-patterns.md) | Recurring patterns and when to use them |
+| [`testing.md`](docs/contributing/testing.md) | Test layout, unit vs integration, fixtures |
+| [`contribution-workflow.md`](docs/contributing/contribution-workflow.md) | Branches, PRs, CI gates, release process |
+| [`documentation.md`](docs/contributing/documentation.md) | How docs are built and published |
+| [`gotchas.md`](docs/contributing/gotchas.md) | Known traps and sharp corners |
+| [`open-questions.md`](docs/contributing/open-questions.md) | Unresolved items |
