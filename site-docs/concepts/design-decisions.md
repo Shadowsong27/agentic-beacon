@@ -1,13 +1,18 @@
-# Decision: No Project-Local Artifact Overrides
+# Design Decisions
 
-**Date:** 2026-03-14
+This page records architectural decisions that shape how Agentic Beacon behaves. Each entry captures a decision, the reasoning behind it, and any historical context worth preserving. New decisions are appended over time.
+
+---
+
+## No Project-Local Artifact Overrides
+
 **Status:** Accepted (updated 2026-05-03 to reflect the symlink-based sync model)
 
-## Decision
+### Decision
 
 Agentic Beacon does not support project-local overrides of warehouse artifacts. There is no `overrides/` directory, no `abc override` command, and no mechanism to maintain a diverged version of a warehouse artifact within a project.
 
-## Why
+### Why
 
 Project-local overrides promote divergence. If an artifact needs to be different for a project, that difference is almost always worth sharing with the whole team — which means it belongs in the warehouse, not hidden in a project directory.
 
@@ -21,10 +26,10 @@ The right workflow when a local change is discovered:
 
 This keeps the warehouse as the single source of truth and ensures improvements discovered in one project benefit all projects.
 
-## Genuine per-project variation
+### Genuine per-project variation
 
 When a team genuinely needs different harness behavior for different projects, the correct response is to **author distinct artifacts** (e.g. `skills/code-review-python/` vs `skills/code-review-ts/`) and select between them via each project's `beacon.yaml`. The artifact system supports arbitrary naming; there is no need to duplicate the same-named file with different content.
 
-## Historical note
+### Historical note
 
 Earlier versions of this document described the sync-time `--preserve` flag as "a narrow escape hatch for avoiding accidental overwrites during an active editing session." Under the symlink-based sync model, `abc sync` does not overwrite files (it creates or repairs symlinks pointing at the warehouse), and the preserve flag was removed from `abc sync`.

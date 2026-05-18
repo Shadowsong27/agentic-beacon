@@ -1,22 +1,20 @@
-# Understanding Agent Skills
+# What Is a Skill?
 
-A conceptual framework for thinking about what agent skills are and how to categorize them.
-
-**Last Updated:** 2026-03-10
+A conceptual primer on agent skills — what they are, how to think about them, and where they sit in Agentic Beacon.
 
 ---
 
-## What Is an Agent Skill?
+## A Skill Is an Abstraction of a Capability
 
-The best way to view an agent skill is as an **abstraction of a capability** — a modular unit of work the agent knows how to perform. Define a skill by the **outcome it enables**, not by how it is implemented under the hood.
+The best way to view an agent skill is as **an abstraction of a capability** — a modular unit of work the agent knows how to perform. Define a skill by the **outcome it enables**, not by how it is implemented under the hood.
 
 ---
 
-## The Spectrum of Agent Skills
+## The Spectrum of Skills
 
-Agent skills exist on a spectrum from purely cognitive to purely mechanical.
+Skills exist on a spectrum from purely cognitive to purely mechanical.
 
-### Cognitive Skills
+### Cognitive skills
 
 A set of instructions, a reasoning framework, or a persona injected into the agent's context. The agent doesn't execute code — it changes *how it thinks*.
 
@@ -24,7 +22,7 @@ A set of instructions, a reasoning framework, or a persona injected into the age
 
 The skill gives the agent a repeatable, reliable way to perform a specific intellectual task.
 
-### Action Skills
+### Action skills
 
 A deterministic tool the agent can invoke to interact with the outside world — a function call, an API integration, a CLI command.
 
@@ -32,7 +30,7 @@ A deterministic tool the agent can invoke to interact with the outside world —
 
 The skill extends the agent's reach beyond its training data into external systems.
 
-### Workflow Skills
+### Workflow skills
 
 A multi-step, orchestrated process combining cognitive and action skills — involving loops, conditional logic, multiple prompts, and multiple tools.
 
@@ -40,7 +38,7 @@ A multi-step, orchestrated process combining cognitive and action skills — inv
 
 ---
 
-## The "Everything Is a Prompt" Insight
+## Everything Is a Prompt
 
 Under the hood, even function calls are just prompts. When you give an LLM access to a `search_web` tool, you're not giving it code — you're injecting a prompt that says: *"You have access to a tool called search_web. To use it, output JSON formatted like this..."*
 
@@ -51,7 +49,7 @@ The LLM's only interface with the world is text in and text out. The line betwee
 
 ---
 
-## Practical Implications
+## Where Skills Fit in Agentic Beacon
 
 Think of a skill as a **black-box interface**: it takes an input, does some agentic work, and returns an output. When designing your skill library, don't limit yourself to just one type:
 
@@ -67,5 +65,5 @@ In Agentic Beacon, `SKILL.md`-based skills are primarily **cognitive and workflo
 
 ## Further Reading
 
-- [Creating Skills](../guides/creating-skills.md) — How to write and distribute skills in Agentic Beacon
-- [Agentic Warehouse Design](./agentic-warehouse-design.md) — Where skills fit in the overall architecture
+- [Bundled Skills](bundled-skills.md) — the three skills shipped inside `abc` itself
+- [Creating Skills](../guides/creating-skills.md) — how to write and distribute warehouse skills
