@@ -57,7 +57,7 @@ lint gate, intent triage, semantic dedup scan, cohesion split, and atomic push.
 safe, intent-aware flow — especially when multiple files are dirty or you want the
 lint gate enforced.
 
-For full documentation, see [Contribute Warehouse Skill](../guides/contribute-warehouse.md).
+For full documentation, see [`contribute-warehouse` Skill Reference](../reference/contribute-warehouse.md).
 
 ---
 
@@ -89,7 +89,7 @@ Claude Code discovers skills directly from `.claude/skills/` — there's no equi
 Two commands wire bundled skills:
 
 - **`abc sync`** — wires bundled skills as part of its normal artifact-sync flow.
-- **`abc adopt`** — also wires bundled skills after its commit step (added in PER-151). This means the standard first-run sequence `connect → setup → adopt` leaves bundled skills fully available without a separate `abc sync`. Note: `abc adopt` only triggers bundled wiring when at least one entry is accepted in the TUI (reject-only or defer-only commits do not fire post-sync wiring). If you open `abc adopt` and exit without accepting anything, run `abc sync` to wire bundled skills.
+- **`abc adopt`** — also wires bundled skills after its commit step. This means the standard first-run sequence `connect → setup → adopt` leaves bundled skills fully available without a separate `abc sync`. Note: `abc adopt` only triggers bundled wiring when at least one entry is accepted in the TUI (reject-only or defer-only commits do not fire post-sync wiring). If you open `abc adopt` and exit without accepting anything, run `abc sync` to wire bundled skills.
 
 ```bash
 abc warehouse connect --path ~/my-org-warehouse
@@ -112,39 +112,11 @@ abc adopt          # select warehouse artifacts; bundled skills wired here too
 
 Warehouse skills are distributed to teammates via `abc sync`. Bundled skills follow the developer — wherever `abc` is installed, those two skills are available.
 
-> **Note:** `abc warehouse init` copies each bundled skill into the new warehouse's `skills/` directory as a starting-point template. This means a freshly initialised warehouse will contain `skills/record-knowledge/` and `skills/record-skill/` entries that look like ordinary warehouse skills — but the canonical version used for project wiring is always the one inside the `abc` package. See [Bundled Skills in the Warehouse Template](#bundled-skills-in-the-warehouse-template) below.
+> **Note:** `abc warehouse init` copies each bundled skill into the new warehouse's `skills/` directory as a starting-point template — but the canonical version used for project wiring is always the one inside the `abc` package. Customising the warehouse copy will not shadow the bundled version. To distribute a custom variant, treat it as a new warehouse skill with a different name.
 
 ---
 
-## Bundled Skills in the Warehouse Template
-
-When you run `abc warehouse init`, the initializer copies each bundled skill from the `abc` package into the new warehouse's `skills/` directory (via `_install_bundled_skills`). This produces real files — not symlinks — at paths like:
-
-```
-my-warehouse/
-└── skills/
-    ├── record-knowledge/
-    │   └── SKILL.md
-    ├── record-skill/
-    │   └── SKILL.md
-    └── contribute-warehouse/
-        ├── SKILL.md
-        └── scripts/
-            ├── resolve_warehouse.py
-            ├── summarize_changes.py
-            ├── draft_commit_message.py
-            └── push_warehouse.py
-```
-
-These copies exist so teams have a visible, editable starting point. You can modify `<warehouse>/skills/record-knowledge/SKILL.md` to adjust the workflow for your organisation and commit that change into the warehouse.
-
-However, **the copies are not automatically used for project wiring**. When `abc sync` or `abc adopt` wires bundled skills into a project, it always reads from the `abc` package source — the warehouse copy is informational unless you explicitly adopt it as a regular warehouse skill via `beacon.yaml`. There is currently no automatic override mechanism that promotes a customised warehouse copy back into the wiring pipeline.
-
-In practice this means: a fresh warehouse visually contains bundled skills alongside other warehouse content, but teams that want to distribute a customised variant should treat it as a new warehouse skill (with a different name) rather than expecting the warehouse copy to shadow the bundled version.
-
----
-
-## Self-Contained Scripts (PER-150)
+## Self-Contained Scripts
 
 The `scripts/append_pending.py` script inside each bundled skill has **no dependency on the `beacon` package**. It declares `pyyaml>=6.0` in a PEP 723 inline header and inlines all the YAML read-merge-write logic it needs.
 
@@ -152,53 +124,8 @@ This means the `record-* → pending.yaml → abc adopt` loop works for any `abc
 
 ---
 
-## Full Walkthrough: `record-skill`
-
-This walkthrough assumes you have already run `abc warehouse connect`, `abc setup`, and `abc adopt` at least once.
-
-```bash
-# 1. In your project, invoke the bundled skill
-#    (inside a Claude Code or OpenCode session)
-/record-skill
-
-# Agent prompts you:
-#   Skill name?      → python-type-hints
-#   Description?     → Enforce Python type annotation standards in new code.
-#   Initial steps?   → (you describe the workflow)
-
-# Agent writes the warehouse file:
-#   <warehouse>/skills/python-type-hints/SKILL.md
-
-# Agent appends to project:
-#   .agentic-beacon/pending.yaml
-
-# 2. Back in your shell — notice the pending alert:
-abc warehouse status
-# → "⚠ 1 pending artifacts. Run 'abc adopt' to wire them."
-
-# 3. Review and accept the pending entry
-abc adopt
-# TUI opens, shows "python-type-hints" as a pending skill entry
-# Press Space to select, Enter to confirm
-# → Confirm screen shows: "+ skills/python-type-hints/ → beacon.yaml"
-# → Press Enter to commit
-
-# 4. The skill is now wired:
-#   .agentic-beacon/beacon.yaml updated
-#   .claude/skills/python-type-hints/SKILL.md   (symlink)
-#   .opencode/skills/python-type-hints/SKILL.md (symlink)
-#   .agentic-beacon/pending.yaml cleared
-
-# 5. Invoke the new skill immediately:
-/python-type-hints
-```
-
-For the storage model behind step 2 and 3 (`pending.yaml` lifecycle, confirm screen, atomic rollback), see [Pending & Adoption](pending-and-adoption.md).
-
----
-
 ## Next Steps
 
-- **[Pending & Adoption](pending-and-adoption.md)** — the full `pending.yaml` lifecycle
+- **[Pending & Adoption](pending-and-adoption.md)** — the full `pending.yaml` lifecycle, with a `record-skill` walkthrough
 - **[Creating Skills](../guides/creating-skills.md)** — authoring warehouse skills manually
-- **[Interactive Adoption](../guides/interactive-adoption.md)** — the `abc adopt` TUI in depth
+- **[Adopting Artifacts](../guides/adopting-artifacts.md)** — the `abc adopt` TUI in depth

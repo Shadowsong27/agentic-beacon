@@ -12,7 +12,7 @@ The system SHALL require every warehouse that contains at least one `agents/*.md
 
 #### Scenario: Warehouse with agents missing agents.yaml
 - **WHEN** a warehouse contains `agents/spec-planner.md` but no `agents/agents.yaml`
-- **THEN** `abc warehouse status` and `abc sync` both fail with an error identifying the missing file and linking to `docs/migrations/artifact-dependencies-frontmatter.md`
+- **THEN** `abc warehouse status` and `abc sync` both fail with an error identifying the missing file and linking to `docs/archive/migrations/artifact-dependencies-frontmatter.md`
 
 #### Scenario: Empty agents directory
 - **WHEN** a warehouse contains an `agents/` directory with only `README.md` (or is empty)

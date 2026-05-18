@@ -96,7 +96,7 @@ knowledge/python/lessons/type-hints.md may duplicate:
 ```
 
 The dedup scan in v1 is LLM-driven, scoped to the local directory. Cross-warehouse
-vectorized search is planned for PER-179.
+vectorized search is on the roadmap.
 
 ---
 
@@ -267,6 +267,6 @@ The skill ships four PEP 723 helper scripts in its `scripts/` directory:
 
 ## Related
 
-- [Contributing Back](contributing-back.md) — manual `abc warehouse contribute` workflow
+- [Contributing Back](../guides/contributing-back.md) — manual `abc warehouse contribute` workflow
 - [Bundled Skills](../concepts/bundled-skills.md) — how bundled skills work
-- [Creating Skills](creating-skills.md) — authoring warehouse skills manually
+- [Creating Skills](../guides/creating-skills.md) — authoring warehouse skills manually

@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from beacon.core.dependencies.frontmatter import parse_frontmatter
 from beacon.core.exceptions import AgentManifestError
 
-MIGRATION_DOC_URL = "docs/migrations/artifact-dependencies-frontmatter.md"
+MIGRATION_DOC_URL = "docs/archive/migrations/artifact-dependencies-frontmatter.md"
 
 
 class AgentEntry(BaseModel):

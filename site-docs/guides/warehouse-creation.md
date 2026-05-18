@@ -208,6 +208,6 @@ git push --tags
 
 ## Next Steps
 
-- **[Team Collaboration](team-collaboration.md)** — share your warehouse across the team
+- **[Quick Start](../quickstart.md)** — connect a project to this warehouse and adopt your first artifacts
 - **[Creating Skills](creating-skills.md)** — write effective skill definitions
-- **[Connecting a Project](connecting-projects.md)** — connect a project to this warehouse
+- **[Contributing Back](contributing-back.md)** — push warehouse changes upstream once your team is using it

@@ -89,6 +89,7 @@ abc warehouse contribute -m MESSAGE [OPTIONS]
 |--------|-------------|
 | `-m, --message TEXT` | Commit message (required) |
 | `--push` | Push the commit to the remote after committing |
+| `--paths TEXT` | Warehouse-relative path to commit (repeatable). When omitted, commits all `beacon.yaml`-tracked dirty paths. |
 
 Stages and commits files tracked by `beacon.yaml` that have uncommitted changes in the warehouse clone.
 
@@ -96,6 +97,8 @@ Stages and commits files tracked by `beacon.yaml` that have uncommitted changes 
 ```bash
 abc warehouse contribute -m "Update python standards"
 abc warehouse contribute -m "Fix typo" --push
+abc warehouse contribute -m "Update skill" --paths skills/foo/SKILL.md
+abc warehouse contribute -m "Split commit" --paths a.md --paths b.md
 ```
 
 ---
@@ -246,6 +249,7 @@ abc sync [OPTIONS]
 | `--skip-git-check` | Skip warehouse git state validation |
 | `--contribute-local` | Non-interactive: contribute all modified local files to warehouse |
 | `--discard-local` | Non-interactive: discard all modified local files and replace with symlinks |
+| `--yes` | Auto-accept adding missing agent-required skills to `beacon.yaml` |
 
 **What sync does per artifact type:**
 

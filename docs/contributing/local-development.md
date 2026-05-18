@@ -2,8 +2,6 @@
 
 This file covers the day-to-day development loop for Agentic Beacon — how to iterate on changes, debug issues, and test specific parts of the system.
 
-← [Back to CONTRIBUTING.md](../../CONTRIBUTING.md)
-
 ---
 
 ## Inner Dev Loop

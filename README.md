@@ -126,8 +126,6 @@ Everything is a per-file **symlink** into the warehouse clone — one physical f
 
 **Frontmatter dependencies.** Skills declare `requires:` in YAML frontmatter; agents declare dependencies in `agents/agents.yaml`. `abc sync` validates all declared dependencies are adopted and errors early if any are missing.
 
-> **Read:** [Decision — Single Warehouse Write Entrypoint](docs/no-project-overrides.md) for the full design rationale.
-
 > **Platform support:** macOS and Linux only.
 
 ## Artifact Types
@@ -142,7 +140,7 @@ Everything is a per-file **symlink** into the warehouse clone — one physical f
 - **Skills** — reusable workflows wired as slash commands into each tool's live directories.
 - **Agents** — sub-agent definitions declared per-project in `beacon.yaml` and symlinked into project-local `.claude/agents/` and `.opencode/agents/`; edits flow back to the warehouse through the symlink.
 
-> See **[Artifact Type Matrix](./docs/artifact-type-matrix.md)** for the full design rationale.
+> See **[Artifact Types](https://shadowsong27.github.io/agentic-beacon/concepts/artifact-types/)** for the full design rationale.
 
 ## When to Use Agentic Beacon
 
@@ -158,21 +156,19 @@ Everything is a per-file **symlink** into the warehouse clone — one physical f
 
 📚 **Full documentation site:** [shadowsong27.github.io/agentic-beacon](https://shadowsong27.github.io/agentic-beacon/)
 
-### Conceptual Design (docs/)
-- **[Artifact Type Matrix](./docs/artifact-type-matrix.md)** — Scope and tool-specificity axes; how they drive command design
-- **[Agentic Warehouse Design](./docs/agentic-warehouse-design.md)** — High-level design and architecture
-- **[Boot Context Design](./docs/boot-context-design/)** — AGENTS.md architecture and patterns
-- **[Spec-Driven Development](./docs/spec-driven-development.md)** — Structured approach to feature planning
-- **[Migration: Artifact Dependencies via Frontmatter](./docs/migrations/artifact-dependencies-frontmatter.md)** — Migrate warehouses to auto-derived knowledge and `requires:` frontmatter
+### Concepts
+- **[How It Works](https://shadowsong27.github.io/agentic-beacon/concepts/how-it-works/)** — Warehouse + beacon mental model and sync flow
+- **[Philosophy](https://shadowsong27.github.io/agentic-beacon/design/philosophy/)** — Why this exists, why markdown not RAG, why lightweight (Design)
+- **[Artifact Types](https://shadowsong27.github.io/agentic-beacon/concepts/artifact-types/)** — Scope and tool-specificity axes; how they drive command design
 
-### Practical Guides (guides/)
-- **[Getting Started](./guides/getting-started.md)** — Full onboarding walkthrough
-- **[Warehouse Creation](./guides/warehouse-creation.md)** — Creating and structuring a warehouse
-- **[Contributing Back](./guides/warehouse-contribution-guide.md)** — Commit agent improvements back to the warehouse
-- **[beacon.yaml Reference](./guides/beacon-yaml-reference.md)** — Full configuration schema
-- **[Team Collaboration](./guides/team-collaboration.md)** — Multi-team workflows
-- **[Advanced Patterns](./guides/advanced-patterns.md)** — Glob patterns, dry-run, warehouse commands, migration
-- **[CLI Reference](./docs/cli-reference.md)** — Full command reference
+### Guides
+- **[Quick Start](https://shadowsong27.github.io/agentic-beacon/quickstart/)** — Onboarding walkthrough
+- **[Warehouse Creation](https://shadowsong27.github.io/agentic-beacon/guides/warehouse-creation/)** — Creating and structuring a warehouse
+- **[Contributing Back](https://shadowsong27.github.io/agentic-beacon/guides/contributing-back/)** — Commit agent improvements back to the warehouse
+
+### Reference
+- **[beacon.yaml](https://shadowsong27.github.io/agentic-beacon/reference/beacon-yaml/)** — Full configuration schema
+- **[CLI Reference](https://shadowsong27.github.io/agentic-beacon/reference/cli/)** — Full command reference
 
 ### Examples (examples/)
 - **[Beacon Configs](./examples/beacon-configs/)** — Example `beacon.yaml` configurations for common project setups

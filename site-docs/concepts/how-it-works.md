@@ -145,7 +145,7 @@ Knowledge files are **not** declared — `abc sync` auto-derives them by scannin
 3. **Wire** — installs skills and agents into your detected AI tools (Claude Code, OpenCode), and appends adopted contexts to your tool's config file (`CLAUDE.md`, `opencode.json`). Beacon is idempotent and non-destructive: re-running never duplicates entries, and only its own references are added or removed.
 4. **Prune** — removes symlinks and config references for artifacts no longer declared.
 
-For the full pipeline, flags, and edge cases, see the [Syncing guide](../guides/syncing.md). For per-type details (what wiring each artifact gets), see [Artifact Types](artifact-types.md).
+For the full pipeline, flags, and edge cases, see the [Adopting Artifacts guide](../guides/adopting-artifacts.md). For per-type details (what wiring each artifact gets), see [Artifact Types](artifact-types.md).
 
 ---
 
@@ -163,7 +163,7 @@ This is what makes the contribution loop tight: there is no copy step, so the ag
 
 ## The Contribution Loop
 
-The workflow is bidirectional, and most edits happen inside an agent session. The agent either edits symlinked warehouse files directly, or uses one of the [bundled authoring skills](bundled-skills.md) (`record-knowledge`, `record-skill`) — these write to the warehouse and append a wiring entry to `pending.yaml`. `abc adopt` then promotes pending entries into `beacon.yaml`, and `abc sync` refreshes symlinks so the new artifact is immediately usable. To push the warehouse changes upstream, invoke the [`/contribute-warehouse`](../guides/contribute-warehouse.md) bundled skill — it lints, scans for duplicates, splits the changes into cohesive commits, and atomically pushes once.
+The workflow is bidirectional, and most edits happen inside an agent session. The agent either edits symlinked warehouse files directly, or uses one of the [bundled authoring skills](bundled-skills.md) (`record-knowledge`, `record-skill`) — these write to the warehouse and append a wiring entry to `pending.yaml`. `abc adopt` then promotes pending entries into `beacon.yaml`, and `abc sync` refreshes symlinks so the new artifact is immediately usable. To push the warehouse changes upstream, invoke the [`/contribute-warehouse`](../reference/contribute-warehouse.md) bundled skill — it lints, scans for duplicates, splits the changes into cohesive commits, and atomically pushes once.
 
 <div markdown="0">
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 340" style="max-width: 720px; width: 100%; height: auto; display: block; margin: 1.5em auto;" role="img" aria-labelledby="diag-loop-title diag-loop-desc">

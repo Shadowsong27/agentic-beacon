@@ -1,110 +1,100 @@
 # Contributing Back to the Warehouse
 
-Agentic Beacon uses a **symlink model**: `abc sync` creates symlinks from `.agentic-beacon/artifacts/` into your warehouse clone. When an agent session improves an artifact, those changes are already in the warehouse working tree — use `abc warehouse contribute` to commit and share them.
+Contributing back has two phases:
+
+1. **Author the artifact** — create or improve a skill, knowledge file, context, or agent in the warehouse working tree.
+2. **Commit and push** — share it with teammates via the bundled `/contribute-warehouse` skill (or the lower-level CLI).
+
+This page covers the commit-and-push half. The sub-pages cover authoring each artifact type:
+
+- [Creating Skills](creating-skills.md) — via `/record-skill` or by asking an agent to write one
+- [Creating Knowledge and Contexts](creating-knowledge-and-contexts.md) — via `/record-knowledge` or direct edit
+- [Creating an Agent](creating-agents.md) — direct edit (no bundled skill)
+
+> Agentic Beacon uses a **symlink model**: `abc sync` creates symlinks from `.agentic-beacon/artifacts/` into your warehouse clone. When you author or improve an artifact through any of the paths above, the change is already in the warehouse working tree — you just need to commit and push it.
 
 ---
 
-## The Workflow
+## The Recommended Path: `/contribute-warehouse`
 
-### 1. Review what changed
-
-```bash
-abc warehouse status
-```
-
-Shows modifications to warehouse files tracked by `beacon.yaml`:
+From an OpenCode or Claude Code session inside a connected project:
 
 ```
-Modified files:
-  modified  knowledge/python/type-hints.md
-  modified  skills/code-review/SKILL.md
+/contribute-warehouse
 ```
 
-Inspect a specific file:
+The skill walks you through the contribution interactively:
 
-```bash
-abc warehouse status knowledge/python/type-hints.md
-```
+1. **Resolves the warehouse** from `.agentic-beacon/config.toml`.
+2. **Runs `abc warehouse lint`** as a hard gate — aborts if the warehouse has any integrity errors.
+3. **Summarises dirty paths** and asks you which to include and which to leave for later.
+4. **Scans `knowledge/` files for semantic duplicates** so you don't ship the same lesson twice under different names.
+5. **Splits the included files into cohesive commits** with drafted Conventional Commits messages.
+6. **Pushes all commits atomically** at the end — one push, all-or-nothing.
 
-Shows a line-by-line diff.
+This is the path you should reach for almost every time. It catches problems the raw CLI doesn't, and it produces a tidy commit history without you having to think about it.
 
-### 2. Commit changes
-
-Commit all modified files with a message:
-
-```bash
-abc warehouse contribute -m "Improve type hints guide with Python 3.12+ patterns"
-```
-
-Push the commit immediately:
-
-```bash
-abc warehouse contribute -m "Fix typo in error handling guide" --push
-```
-
-### 3. What happens automatically
-
-`abc warehouse contribute`:
-
-1. Stages all files tracked by `beacon.yaml` that have uncommitted changes
-2. Creates a commit with your message
-3. If `--push` is used, pushes the commit to the remote
-
-If there are no changes to commit, it prints a message and exits cleanly.
-
-### 4. Teammates pick it up
-
-Once your changes are in the warehouse:
-
-```bash
-cd ~/team-warehouse && git pull
-cd my-project && abc sync
-```
+> For the full design and flag reference, see [`contribute-warehouse` Skill Reference](../reference/contribute-warehouse.md).
 
 ---
 
-## Manual Git Workflow
+## The Lower-Level Primitive: `abc warehouse contribute`
 
-Since artifacts are symlinks into the warehouse clone, you can also use plain git commands:
+The raw `abc warehouse contribute` CLI is what the skill wraps. You can use it directly for one-off commits that don't need the full guided flow:
 
 ```bash
-# In the warehouse clone
+abc warehouse status                                    # review dirty files
+abc warehouse contribute -m "<message>" --paths <file>  # commit specific files
+abc warehouse contribute -m "<message>" --push          # commit + push in one step
+```
+
+The `--paths` option is repeatable — pass it once per file. Omitting it stages every dirty tracked file in the warehouse, which is rarely what you want when you've been editing across several artifacts.
+
+> **Heads up:** raw `abc warehouse contribute` is currently less reliable than the bundled skill in some environments. If it misbehaves, reach for `/contribute-warehouse` instead.
+
+---
+
+## Manual Git, If You Prefer
+
+Because artifacts are symlinks into the warehouse clone, the warehouse working tree is always up to date. You can also just use plain git:
+
+```bash
 cd ~/team-warehouse
 git add knowledge/python/type-hints.md
 git commit -m "docs: improve type hints guide"
 git push
 ```
 
-The warehouse working tree is always up to date because symlinks write directly to it.
+This bypasses the lint gate and the cohesion split — fine for trivial edits, but for anything substantive, prefer the bundled skill.
 
 ---
 
-## How the Symlink Model Changes Things
+## Teammates Pick It Up
 
-| Old copy-based model (removed) | Current symlink model |
-|---|---|
-| Artifacts copied to `.agentic-beacon/artifacts/` | Artifacts are symlinks into the warehouse |
-| `abc delta` compared copies against warehouse | `abc warehouse status` shows warehouse working tree changes |
-| `abc contribute` copied files back to warehouse | `abc warehouse contribute` commits changes already in the warehouse |
-| Local edits were isolated per project | Local edits go directly to the warehouse clone |
+Once the commit is on the remote, teammates pull and resync:
 
-Editing a symlinked artifact file IS editing the warehouse working tree. The edit is visible to all projects that use the same artifact on the same machine.
+```bash
+cd ~/team-warehouse && git pull
+cd my-project && abc sync
+```
+
+Their existing symlinks pick up the new content immediately; `abc sync` only needs to run if `beacon.yaml` references new paths or if symlinks have drifted.
 
 ---
 
 ## Contribution Checklist
 
-Before committing to the warehouse:
+Whichever path you use, before you push:
 
-- [ ] Tested the artifact in a real project — agent actually used it correctly
-- [ ] Content is generic — no project-specific paths, credentials, or names
-- [ ] No broken references or links
-- [ ] Commit message describes **why** the change helps, not just what changed
+- [ ] Tested the artifact in a real session — the agent actually used it correctly.
+- [ ] Content is generic — no project-specific paths, credentials, or names.
+- [ ] No broken references or links.
+- [ ] Commit message describes **why** the change helps, not just what changed.
 
 ---
 
-## Next Steps
+## See Also
 
-- **[Day-to-Day Workflow](day-to-day-workflow.md)** — how contributing fits into the loop
-- **[Creating Skills](creating-skills.md)** — writing effective skill definitions before contributing
-- **[Command Reference](../reference/cli.md)** — full `abc warehouse contribute` options
+- [`contribute-warehouse` Skill Reference](../reference/contribute-warehouse.md) — full flow, flags, and design notes
+- [Day-to-Day Workflow](day-to-day-workflow.md) — how contributing fits into the broader loop
+- [CLI Reference](../reference/cli.md) — every `abc warehouse contribute` option

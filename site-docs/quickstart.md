@@ -94,21 +94,6 @@ Done. Your agent now has the team's contexts, knowledge, and skills loaded.
 
 ---
 
-## Day-to-Day Workflow
-
-Once set up, the recurring loop is:
-
-```
-1. git pull (in warehouse)      — fetch teammates' updates
-   abc sync                     — re-sync symlinks after manual beacon.yaml edits or global artifact installs
-2. code with agent              — agent uses synced contexts, knowledge, and skills
-3. abc warehouse status         — see what has changed in the warehouse working tree
-4. abc warehouse contribute     — commit improvements back to the warehouse
-5. repeat
-```
-
----
-
 ## What Gets Committed to Git
 
 ```
@@ -123,7 +108,6 @@ Teammates run `abc warehouse connect` + `abc sync` to get the same artifacts on 
 
 ## Next Steps
 
-- **[Concepts: How It Works](concepts/how-it-works.md)** — understand the warehouse model
-- **[Creating a Warehouse](guides/warehouse-creation.md)** — full warehouse setup walkthrough
-- **[beacon.yaml Reference](reference/beacon-yaml.md)** — configure exactly which artifacts you need
-- **[Interactive Adoption](guides/interactive-adoption.md)** — the `abc adopt` TUI in depth
+- **[How It Works](concepts/how-it-works.md)** — the warehouse + symlink model in depth
+- **[Day-to-Day Workflow](guides/day-to-day-workflow.md)** — the recurring sync / status / contribute loop
+- **[Adopting Artifacts](guides/adopting-artifacts.md)** — the `abc adopt` TUI and declarative `beacon.yaml` flow

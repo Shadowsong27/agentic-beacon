@@ -416,7 +416,7 @@ def test_e2e_missing_skill_context_shows_migration_url(
     assert "missing-context" in output.lower(), (
         f"Expected missing context name in output: {output}"
     )
-    assert "docs/migrations/artifact-dependencies-frontmatter.md" in output, (
+    assert "docs/archive/migrations/artifact-dependencies-frontmatter.md" in output, (
         f"Expected migration doc URL in output: {output}"
     )
 

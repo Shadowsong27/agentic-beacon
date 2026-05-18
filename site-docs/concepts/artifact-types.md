@@ -17,7 +17,7 @@ The bottom-left cell (global + tool-agnostic) is intentionally empty: a globally
 
 Beacon also touches one set of files that are **not artifacts**: the agent config files (`opencode.json`, `CLAUDE.md`). These hold no shared content and are not synced from the warehouse — they are per-project files that the AI tool reads at session start.
 
-Beacon manages them via **agent config wiring**: it bootstraps them on first setup and keeps the synced context references inside them current on every sync — idempotently and without touching user-authored entries. This is the "wire" step of [the sync flow](how-it-works.md#the-sync-flow); see the [Syncing guide](../guides/syncing.md) for per-tool detail.
+Beacon manages them via **agent config wiring**: it bootstraps them on first setup and keeps the synced context references inside them current on every sync — idempotently and without touching user-authored entries. This is the "wire" step of [the sync flow](how-it-works.md#the-sync-flow); see the [Adopting Artifacts guide](../guides/adopting-artifacts.md) for per-tool detail.
 
 Agent config files are listed here for completeness, not because they fit the matrix — they sit underneath it as the runtime surface that artifacts get wired into.
 
@@ -132,45 +132,7 @@ agents:
 
 ---
 
-## How the Matrix Shapes Command Behavior
+## See Also
 
-### `abc sync`
-
-Applies different logic per type:
-
-| Artifact | Sync behavior |
-|---|---|
-| Contexts | Symlink to `.agentic-beacon/artifacts/contexts/`; wire into agent config |
-| Skills | Symlink to artifacts; install into each detected tool's live directories |
-| Knowledge | Auto-derived from markdown links; symlink to `.agentic-beacon/artifacts/knowledge/` |
-| Agents | Symlink to `.agentic-beacon/artifacts/agents/`; wire into project-local `.claude/agents/` and `.opencode/agents/` |
-
-### `abc warehouse status`
-
-Shows modifications to warehouse files tracked by resolved artifacts. With symlinks, editing an artifact directly modifies the warehouse working tree:
-
-```bash
-abc warehouse status                                   # summary of modified files
-abc warehouse status knowledge/python/type-hints.md    # diff for a single file
-```
-
-### `abc warehouse contribute`
-
-Commits changes in the warehouse working tree. Since symlinks write directly to the warehouse, you edit an artifact, then commit:
-
-```bash
-abc warehouse contribute -m "Update type hints guide with Python 3.12+ patterns"
-```
-
----
-
-## Summary
-
-Knowing an artifact's type tells you exactly:
-
-- Where it lives after sync
-- How it's declared (or auto-derived)
-- How it's wired or installed
-- Which commands manage it
-
-The two-axis model keeps the framework internally consistent: the behavior follows directly from position in the matrix.
+- **[Adopting Artifacts](../guides/adopting-artifacts.md)** — how each artifact type flows through the sync pipeline
+- **[CLI Reference](../reference/cli.md)** — per-type behaviour for `abc sync`, `abc warehouse status`, `abc warehouse contribute`

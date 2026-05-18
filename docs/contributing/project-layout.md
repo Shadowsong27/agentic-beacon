@@ -2,8 +2,6 @@
 
 This file describes the directory structure of the Agentic Beacon repository and explains the organizing principles that govern where code lives.
 
-← [Back to CONTRIBUTING.md](../../CONTRIBUTING.md)
-
 ---
 
 ## Top-level Structure

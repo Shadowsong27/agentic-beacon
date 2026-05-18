@@ -66,7 +66,7 @@ from beacon.domains.warehouse.git_health import (
 from beacon.domains.warehouse.preconditions import ensure_sync_ready
 from beacon.utils.git import find_project_root
 
-MIGRATION_DOC_URL = "docs/migrations/artifact-dependencies-frontmatter.md"
+MIGRATION_DOC_URL = "docs/archive/migrations/artifact-dependencies-frontmatter.md"
 
 # Per-tool entries written into agent-folder .gitignore files during sync.
 # Covers Beacon-owned subdirs (skills/, command/) plus tool-runtime byproducts

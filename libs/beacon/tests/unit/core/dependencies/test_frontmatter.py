@@ -100,7 +100,7 @@ class TestSkillFrontmatter:
             )
         assert "skill" in str(exc_info.value).lower()
         assert (
-            "docs/migrations/artifact-dependencies-frontmatter.md"
+            "docs/archive/migrations/artifact-dependencies-frontmatter.md"
             in str(exc_info.value).lower()
         )
 

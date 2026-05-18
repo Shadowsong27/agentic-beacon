@@ -173,5 +173,5 @@ For details on how bundled skills are wired into your project after `abc adopt`,
 ## Next Steps
 
 - **[Bundled Skills](bundled-skills.md)** — the `record-*` skills that write to `pending.yaml`
-- **[Interactive Adoption](../guides/interactive-adoption.md)** — full `abc adopt` TUI reference
+- **[Adopting Artifacts](../guides/adopting-artifacts.md)** — full `abc adopt` TUI reference
 - **[beacon.yaml Reference](../reference/beacon-yaml.md)** — structure of the committed artifact config
