@@ -27,7 +27,7 @@ class SkillRequires(BaseModel):
             msg = (
                 "Skill-to-skill dependencies are not supported. "
                 "Remove 'skills' from the requires block. See "
-                "docs/migrations/artifact-dependencies-frontmatter.md"
+                "docs/archive/migrations/artifact-dependencies-frontmatter.md"
             )
             raise ValueError(msg)
         return data

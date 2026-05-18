@@ -8,7 +8,7 @@ A skill is a packaged capability — a modular unit of work defined by the **out
 
 In Agentic Beacon, skills are distributed as a directory containing a `SKILL.md` entry point plus optional supporting files. The agent reads `SKILL.md` and follows its instructions when invoked.
 
-> For a deeper conceptual breakdown — cognitive vs. action vs. workflow skills, and why "everything is a prompt" — see [Understanding Agent Skills](../docs/understanding-agent-skills.md).
+> For a deeper conceptual breakdown — cognitive vs. action vs. workflow skills, and why "everything is a prompt" — see [What Is a Skill?](https://shadowsong27.github.io/agentic-beacon/concepts/what-is-a-skill/).
 
 ## Directory Structure
 

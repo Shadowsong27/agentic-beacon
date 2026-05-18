@@ -20,7 +20,7 @@ from beacon.core.exceptions import ValidationError
 from beacon.core.manifest.beacon import BeaconManifest
 from beacon.core.scanner.scanner import scan_file_for_knowledge
 
-MIGRATION_DOC_URL = "docs/migrations/artifact-dependencies-frontmatter.md"
+MIGRATION_DOC_URL = "docs/archive/migrations/artifact-dependencies-frontmatter.md"
 
 
 @dataclass(frozen=True)

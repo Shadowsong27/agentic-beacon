@@ -28,7 +28,7 @@ ignore:
     - "openspec-*"        # fnmatch glob patterns
 ```
 
-> **Note:** `artifacts.knowledge` was removed in a recent version. Knowledge is now auto-derived from markdown links inside adopted contexts and skills. See [Migration: Artifact Dependencies via Frontmatter](../docs/migrations/artifact-dependencies-frontmatter.md) for details.
+> **Note:** `artifacts.knowledge` was removed in a recent version. Knowledge is now auto-derived from markdown links inside adopted contexts and skills. See [Migration: Artifact Dependencies via Frontmatter](../docs/archive/migrations/artifact-dependencies-frontmatter.md) for details.
 
 > **Note:** Agents are machine-level global artifacts installed into `~/.config/opencode/agents/` and `~/.claude/agents/` via `abc install agents/<name>.md` or `abc adopt`. They are not tracked in `beacon.yaml` (which contains only contexts and skills). `abc sync` does not install all warehouse agents and does not consume agent `requires`. PER-109 adds persistent selected-global-agent state so `abc sync` can install the user's selected set of global agents.
 

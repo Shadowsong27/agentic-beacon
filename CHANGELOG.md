@@ -22,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Pending artifact alert on every `abc` subcommand.** When `.agentic-beacon/pending.yaml` is non-empty, every `abc` invocation prints a one-line stderr notice: `⚠ N pending artifacts. Run 'abc adopt' to wire them.` Exit code is unaffected.
 
 - **Removed `artifacts.knowledge` from `beacon.yaml`.** Knowledge is now auto-derived from markdown links inside adopted contexts and skills. On first sync after upgrade, any existing `artifacts.knowledge` list is silently dropped and a single INFO log is emitted. To keep a knowledge file available, ensure it is referenced by a markdown link from an adopted context or skill.
-- **Agent dependencies moved from frontmatter to `agents/agents.yaml`.** `requires:` blocks in agent frontmatter are no longer supported. Agent skill dependencies must be declared in `agents/agents.yaml` instead. `abc sync` and `abc warehouse status` will hard-error if agent files contain `requires:` frontmatter or if `agents/agents.yaml` is missing/malformed. See [Migration Guide: Artifact Dependencies via Frontmatter](./docs/migrations/artifact-dependencies-frontmatter.md) for upgrade instructions.
+- **Agent dependencies moved from frontmatter to `agents/agents.yaml`.** `requires:` blocks in agent frontmatter are no longer supported. Agent skill dependencies must be declared in `agents/agents.yaml` instead. `abc sync` and `abc warehouse status` will hard-error if agent files contain `requires:` frontmatter or if `agents/agents.yaml` is missing/malformed. See [Migration Guide: Artifact Dependencies via Frontmatter](./docs/archive/migrations/artifact-dependencies-frontmatter.md) for upgrade instructions.
 
 ### Added
 
@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Migration
 
-- See [Migration Guide: Artifact Dependencies via Frontmatter](./docs/migrations/artifact-dependencies-frontmatter.md) for step-by-step instructions on adding `requires:` frontmatter to existing warehouses.
+- See [Migration Guide: Artifact Dependencies via Frontmatter](./docs/archive/migrations/artifact-dependencies-frontmatter.md) for step-by-step instructions on adding `requires:` frontmatter to existing warehouses.
 
 ### Breaking Changes (PER-113 — unify-agent-distribution)
 

@@ -60,11 +60,11 @@ If a required skill declared by an agent in `agents.yaml` does NOT exist in the 
 - **THEN** `abc sync` exits non-zero with an error naming `spec-planner`, the missing skill `ghost-skill`, and linking to the migration document — regardless of TTY mode
 
 ### Requirement: Migration document exists and is referenced
-The system SHALL ship a migration document at `docs/migrations/artifact-dependencies-frontmatter.md` in the agentic-beacon repository. Every error message raised by the sync flow due to missing or malformed `requires:` frontmatter on skills SHALL include a URL pointing to this document.
+The system SHALL ship a migration document at `docs/archive/migrations/artifact-dependencies-frontmatter.md` in the agentic-beacon repository. Every error message raised by the sync flow due to missing or malformed `requires:` frontmatter on skills SHALL include a URL pointing to this document.
 
 #### Scenario: Error message links to migration doc
 - **WHEN** `abc sync` fails due to a missing `requires:` block on a skill
-- **THEN** the error message includes the string "docs/migrations/artifact-dependencies-frontmatter.md"
+- **THEN** the error message includes the string "docs/archive/migrations/artifact-dependencies-frontmatter.md"
 
 ### Requirement: Contexts have no frontmatter dependencies
 The system SHALL NOT inspect context files for a `requires:` block. Context files have no sibling-tier dependencies: they reach knowledge via markdown links in the body and do not depend on other contexts or skills.

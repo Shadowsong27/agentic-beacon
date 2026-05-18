@@ -181,7 +181,7 @@ artifacts:
     - contexts/global.md
 ```
 
-> **Note:** Knowledge files are no longer declared in `beacon.yaml`. They are auto-derived from markdown links inside your adopted contexts and skills. See [Migration: Artifact Dependencies via Frontmatter](../docs/migrations/artifact-dependencies-frontmatter.md) for details.
+> **Note:** Knowledge files are no longer declared in `beacon.yaml`. They are auto-derived from markdown links inside your adopted contexts and skills. See [Migration: Artifact Dependencies via Frontmatter](../docs/archive/migrations/artifact-dependencies-frontmatter.md) for details.
 
 Paths are relative to the warehouse root. Glob patterns are supported. See [beacon.yaml Reference](./beacon-yaml-reference.md) for the full schema.
 
