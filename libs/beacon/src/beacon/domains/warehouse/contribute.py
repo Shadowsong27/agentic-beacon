@@ -21,6 +21,7 @@ class ContributeResult:
     status: str  # "committed", "no_changes", "push_failed"
     committed_sha: str | None = None
     message: str | None = None
+    dirty_outside_scope_count: int = 0
 
 
 def _run_git(
@@ -33,6 +34,21 @@ def _run_git(
         text=True,
         timeout=timeout,
     )
+
+
+def _count_dirty_outside_scope(warehouse_path: Path, tracked: list[str]) -> int:
+    """Return number of dirty files outside the tracked set."""
+    full = _run_git(warehouse_path, ["status", "--porcelain"])
+    if full.returncode != 0:
+        return 0
+    total_lines = len([ln for ln in full.stdout.splitlines() if ln.strip()])
+    filtered = _run_git(warehouse_path, ["status", "--porcelain", "--", *tracked])
+    filtered_lines = (
+        len([ln for ln in filtered.stdout.splitlines() if ln.strip()])
+        if filtered.returncode == 0
+        else 0
+    )
+    return max(0, total_lines - filtered_lines)
 
 
 def contribute(
@@ -88,14 +104,24 @@ def contribute(
         commit_paths = tracked_paths
 
     if not commit_paths:
-        return ContributeResult(status="no_changes")
+        count = (
+            _count_dirty_outside_scope(warehouse_path, tracked_paths)
+            if paths is None
+            else 0
+        )
+        return ContributeResult(status="no_changes", dirty_outside_scope_count=count)
 
     # Check git status for the paths we intend to commit
     status_result = _run_git(
         warehouse_path, ["status", "--porcelain", "--", *commit_paths]
     )
     if not status_result.stdout.strip():
-        return ContributeResult(status="no_changes")
+        count = (
+            _count_dirty_outside_scope(warehouse_path, tracked_paths)
+            if paths is None
+            else 0
+        )
+        return ContributeResult(status="no_changes", dirty_outside_scope_count=count)
 
     # Stage the paths we intend to commit
     _run_git(warehouse_path, ["add", "--", *commit_paths])
