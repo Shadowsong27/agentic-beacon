@@ -107,3 +107,17 @@ nav:
     - beacon.yaml: reference/beacon-yaml.md
     - CLI Reference: reference/cli.md
   - Troubleshooting: troubleshooting.md
+  - Contributing:
+    - Overview: contributing/index.md
+    - Commands: contributing/commands.md
+    - Project Layout: contributing/project-layout.md
+    - Architecture: contributing/architecture.md
+    - Configuration: contributing/configuration.md
+    - Local Development: contributing/local-development.md
+    - Code Style: contributing/code-style.md
+    - Design Patterns: contributing/design-patterns.md
+    - Testing: contributing/testing.md
+    - Contribution Workflow: contributing/contribution-workflow.md
+    - Documentation: contributing/documentation.md
+    - Gotchas: contributing/gotchas.md
+    - Open Questions: contributing/open-questions.md

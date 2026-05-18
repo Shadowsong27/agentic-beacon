@@ -2,8 +2,6 @@
 
 This file is the reference for all commands you will need while developing Agentic Beacon — from running tests to building the package to verifying the CLI.
 
-← [Back to CONTRIBUTING.md](../../CONTRIBUTING.md)
-
 ---
 
 ## Development Commands

@@ -2,8 +2,6 @@
 
 This file documents how Agentic Beacon is configured at runtime — environment variables, workspace config files, and the manifest models that drive behavior.
 
-← [Back to CONTRIBUTING.md](../../CONTRIBUTING.md)
-
 ---
 
 ## Configuration Sources

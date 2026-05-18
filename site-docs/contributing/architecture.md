@@ -2,8 +2,6 @@
 
 This file describes the overall design of Agentic Beacon: the four-layer architecture, the five domain modules, key data flows, and the major design decisions that shape the codebase.
 
-← [Back to CONTRIBUTING.md](../../CONTRIBUTING.md)
-
 ---
 
 ## Overview
