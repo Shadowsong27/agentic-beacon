@@ -17,7 +17,7 @@ The bottom-left cell (global + tool-agnostic) is intentionally empty: a globally
 
 Beacon also touches one set of files that are **not artifacts**: the agent config files (`opencode.json`, `CLAUDE.md`). These hold no shared content and are not synced from the warehouse — they are per-project files that the AI tool reads at session start.
 
-Beacon manages them via **agent config wiring**: it bootstraps them on first setup and keeps the synced context references inside them current on every sync. This is described in [How It Works → Agent Config Wiring](how-it-works.md#agent-config-wiring).
+Beacon manages them via **agent config wiring**: it bootstraps them on first setup and keeps the synced context references inside them current on every sync — idempotently and without touching user-authored entries. This is the "wire" step of [the sync flow](how-it-works.md#the-sync-flow); see the [Syncing guide](../guides/syncing.md) for per-tool detail.
 
 Agent config files are listed here for completeness, not because they fit the matrix — they sit underneath it as the runtime surface that artifacts get wired into.
 

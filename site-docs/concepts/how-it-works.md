@@ -1,17 +1,82 @@
 # How It Works
 
-Agentic Beacon is built around two components — the **warehouse** and the **beacon** — and a simple model for distributing agent artifacts.
+Agentic Beacon is built around two components — the **warehouse** and the **beacon** — plus a small set of commands that move artifacts between them.
 
-## The npm Analogy
+## Mental Model
 
-| npm concept | Agentic Beacon equivalent |
-|-------------|--------------------------|
-| npm registry | **Warehouse** — your central repository of shared artifacts |
-| `package.json` | **`beacon.yaml`** — your project's artifact dependencies |
-| `node_modules/` | **`.agentic-beacon/artifacts/`** — local symlink tree |
-| `npm install` | **`abc sync`** — resolve, sync, and wire all artifacts |
+Agentic Beacon has two halves: a **warehouse** (a shared git repo of artifacts) and a **beacon** (per-project config that declares which artifacts this project needs). `abc sync` reads the project's declaration, follows the dependency graph through the warehouse, and creates per-file symlinks under `.agentic-beacon/artifacts/` pointing into the warehouse clone.
 
-Like npm, the warehouse is separate from the projects that consume it. Projects declare what they need; the tool resolves dependencies, creates symlinks, and wires artifacts. The artifacts directory is gitignored — regenerated from source on demand.
+<div markdown="0">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 400" style="max-width: 720px; width: 100%; height: auto; display: block; margin: 1.5em auto;" role="img" aria-labelledby="diag-arch-title diag-arch-desc">
+  <title id="diag-arch-title">Warehouse and beacon architecture</title>
+  <desc id="diag-arch-desc">A warehouse holding contexts, skills, knowledge, and agents directories on the left, with abc sync arrows pointing right into two project boxes. Each project contains a .agentic-beacon/ subdirectory holding beacon.yaml, config.toml, pending.yaml, .last-adopt, and an artifacts/ subdirectory of symlinks back into the warehouse.</desc>
+  <style>
+    .box-fill { fill: currentColor; fill-opacity: 0.04; }
+    .box-stroke { fill: none; stroke: currentColor; stroke-opacity: 0.4; stroke-width: 1.5; }
+    .t-title { font: 600 14px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: currentColor; }
+    .t-sub { font: 12px -apple-system, sans-serif; fill: currentColor; fill-opacity: 0.65; }
+    .t-item { font: 12px ui-monospace, "SF Mono", Menlo, monospace; fill: currentColor; fill-opacity: 0.85; }
+    .t-item-sub { font: 11px ui-monospace, "SF Mono", Menlo, monospace; fill: currentColor; fill-opacity: 0.7; }
+    .t-arr-label { font: 11px -apple-system, sans-serif; fill: currentColor; fill-opacity: 0.7; }
+    .arr { stroke: currentColor; stroke-opacity: 0.55; stroke-width: 1.5; fill: none; }
+  </style>
+  <defs>
+    <marker id="arr-head" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <path d="M0,0 L9,3 L0,6 z" fill="currentColor" fill-opacity="0.55"/>
+    </marker>
+  </defs>
+
+  <!-- Warehouse -->
+  <rect class="box-fill" x="40" y="100" width="240" height="200" rx="8"/>
+  <rect class="box-stroke" x="40" y="100" width="240" height="200" rx="8"/>
+  <text class="t-title" x="160" y="130" text-anchor="middle">Warehouse</text>
+  <text class="t-sub" x="160" y="148" text-anchor="middle">shared git repo</text>
+  <text class="t-item" x="62" y="188">contexts/</text>
+  <text class="t-item" x="62" y="212">skills/</text>
+  <text class="t-item" x="62" y="236">knowledge/</text>
+  <text class="t-item" x="62" y="260">agents/</text>
+
+  <!-- Project A -->
+  <rect class="box-fill" x="460" y="30" width="240" height="170" rx="8"/>
+  <rect class="box-stroke" x="460" y="30" width="240" height="170" rx="8"/>
+  <text class="t-title" x="580" y="55" text-anchor="middle">Project A</text>
+  <text class="t-item" x="478" y="80">.agentic-beacon/</text>
+  <text class="t-item-sub" x="490" y="100">├─ beacon.yaml</text>
+  <text class="t-item-sub" x="490" y="118">├─ config.toml</text>
+  <text class="t-item-sub" x="490" y="136">├─ pending.yaml</text>
+  <text class="t-item-sub" x="490" y="154">├─ .last-adopt</text>
+  <text class="t-item-sub" x="490" y="172">└─ artifacts/</text>
+  <text class="t-sub" x="540" y="190" font-style="italic">↳ symlinks into warehouse</text>
+
+  <!-- Project B -->
+  <rect class="box-fill" x="460" y="230" width="240" height="170" rx="8"/>
+  <rect class="box-stroke" x="460" y="230" width="240" height="170" rx="8"/>
+  <text class="t-title" x="580" y="255" text-anchor="middle">Project B</text>
+  <text class="t-item" x="478" y="280">.agentic-beacon/</text>
+  <text class="t-item-sub" x="490" y="300">├─ beacon.yaml</text>
+  <text class="t-item-sub" x="490" y="318">├─ config.toml</text>
+  <text class="t-item-sub" x="490" y="336">├─ pending.yaml</text>
+  <text class="t-item-sub" x="490" y="354">├─ .last-adopt</text>
+  <text class="t-item-sub" x="490" y="372">└─ artifacts/</text>
+  <text class="t-sub" x="540" y="390" font-style="italic">↳ symlinks into warehouse</text>
+
+  <!-- Arrows: warehouse -> project (action: abc sync) -->
+  <path class="arr" d="M 280 170 C 360 170, 380 115, 460 115" marker-end="url(#arr-head)"/>
+  <text class="t-arr-label" x="370" y="125" text-anchor="middle">abc sync</text>
+
+  <path class="arr" d="M 280 235 C 360 235, 380 315, 460 315" marker-end="url(#arr-head)"/>
+  <text class="t-arr-label" x="370" y="280" text-anchor="middle">abc sync</text>
+</svg>
+</div>
+
+| Concept | What it is |
+|---|---|
+| **Warehouse** | Shared git repo of contexts, skills, knowledge, and agents |
+| **`beacon.yaml`** | Per-project file declaring the artifacts this project needs |
+| **`.agentic-beacon/artifacts/`** | Per-project symlink tree into the warehouse — gitignored, regenerated by `abc sync` |
+| **`abc sync`** | Resolves the declared artifacts, follows their dependencies, creates the symlinks |
+
+The warehouse is the single source of truth on a machine. Symlinks (not copies) mean every consuming project sees the same content with no drift.
 
 ---
 
@@ -28,9 +93,14 @@ my-org-warehouse/
 └── docs/           # warehouse documentation
 ```
 
-The internal structure of each directory is **entirely yours to define**. No naming conventions are enforced — organize artifacts in whatever way makes sense for your team.
+The four top-level directories are part of Beacon's schema — `abc warehouse init` creates them and `abc warehouse lint` enforces a minimal shape inside each:
 
-The warehouse lives on a git host (GitHub, GitLab, Bitbucket, etc.) and is shared across your team. Team members clone it locally.
+- **`contexts/`** — fully free-form. Use any subdirectory layout you like.
+- **`skills/`** — each skill lives at `skills/<name>/SKILL.md` with required YAML frontmatter (`name`, `description`).
+- **`knowledge/`** — leaf directories must be one of three taxonomies: `decisions/`, `lessons/`, `facts/`. The path shape is `knowledge/[<topic>/]<type>/<name>.md`; the optional topic prefix (e.g. `python-standards/`, `infrastructure/`) is yours to design.
+- **`agents/`** — entries registered in `agents/agents.yaml`; each agent `.md` has required frontmatter.
+
+Within those rules you have full freedom over topic grouping, subdirectory depth, and naming. The warehouse lives on any git host (GitHub, GitLab, Bitbucket); team members clone it locally.
 
 ---
 
@@ -41,83 +111,41 @@ Each project that consumes warehouse artifacts has a `.agentic-beacon/` director
 ```
 my-project/
 └── .agentic-beacon/
-    ├── beacon.yaml       ← committed to git: declares which contexts, skills, and agents this project needs
+    ├── beacon.yaml       ← committed: declares which artifacts this project needs
     ├── config.toml       ← gitignored: local warehouse path
-    ├── pending.yaml      ← gitignored: artifacts authored but not yet wired (managed by abc adopt)
-    ├── .last-adopt       ← gitignored: timestamp of last successful abc adopt commit
+    ├── pending.yaml      ← gitignored: artifacts authored but not yet wired
+    ├── .last-adopt       ← gitignored: timestamp of last abc adopt commit
     └── artifacts/        ← gitignored: symlink tree into warehouse
 ```
 
-`beacon.yaml` declares three types of artifacts:
+`beacon.yaml` declares three artifact types — contexts, skills, agents:
 
 ```yaml
 artifacts:
-  skills:
-    - skills/code-review/
-    - skills/generate-tests/
-
   contexts:
     - contexts/global.md
-    - contexts/teams/backend/AGENTS.md
-
+  skills:
+    - skills/code-review/
   agents:
     - agents/spec-planner.md
 ```
 
-`config.toml` stores the local path to the warehouse (e.g. `~/my-org-warehouse`). It is gitignored because warehouse paths vary per machine.
+Knowledge files are **not** declared — `abc sync` auto-derives them by scanning your adopted contexts and skills for markdown links into `knowledge/`.
 
-`pending.yaml` records project-wired artifacts (contexts, skills, agents) written to the warehouse by authoring skills that have not yet been wired into `beacon.yaml`. Knowledge files are auto-derived during sync/adopt and are not tracked here. It is absent or `pending: []` when nothing is pending. Use `abc adopt` to accept, reject, or defer each entry. The file is gitignored — it represents per-developer working state. See [Pending & Adoption](pending-and-adoption.md) for the full lifecycle.
-
-`.last-adopt` is a single-line ISO-8601 UTC timestamp recording when `abc adopt` last committed successfully. It enables `abc adopt` to detect hand-edited warehouse files (files modified after `.last-adopt` but not tracked in `pending.yaml`). The file is gitignored.
+`pending.yaml` and `.last-adopt` are working-state files managed by `abc adopt` — see [Pending & Adoption](pending-and-adoption.md) for the full lifecycle.
 
 ---
 
-## What `abc sync` Does
+## The Sync Flow
 
-`abc sync` runs a multi-phase pipeline:
+`abc sync` does four things in one pass:
 
-1. **Read `beacon.yaml`** — loads the declared contexts, skills, and agents
-2. **Resolve dependencies** — reads `requires:` frontmatter from each skill's `SKILL.md` and agent dependencies from `agents/agents.yaml` to compute the full set of required artifacts
-3. **Auto-derive knowledge** — scans every adopted context and skill for markdown links to `knowledge/` paths and adds them to the sync set
-4. **Create symlinks** — creates per-file symlinks under `.agentic-beacon/artifacts/` pointing into the warehouse clone
-5. **Wire artifacts** — adds context references to `CLAUDE.md` or `opencode.json`, installs skills into tool directories, wires agents into project-local `.claude/agents/` and `.opencode/agents/`
-6. **Prune orphans** — removes symlinks for artifacts no longer referenced
+1. **Resolve** — reads `beacon.yaml`, follows skill `requires:` frontmatter and agent declarations, then walks markdown links from contexts and skills into `knowledge/` to auto-derive every transitive dependency.
+2. **Symlink** — creates per-file symlinks under `.agentic-beacon/artifacts/` pointing into the warehouse clone.
+3. **Wire** — installs skills and agents into your detected AI tools (Claude Code, OpenCode), and appends adopted contexts to your tool's config file (`CLAUDE.md`, `opencode.json`). Beacon is idempotent and non-destructive: re-running never duplicates entries, and only its own references are added or removed.
+4. **Prune** — removes symlinks and config references for artifacts no longer declared.
 
-| Artifact type | How it's configured | What sync does |
-|---|---|---|
-| **Contexts** | Declared in `beacon.yaml` | Symlinks + wiring into agent config |
-| **Skills** | Declared in `beacon.yaml` | Symlinks + install into tool directories |
-| **Knowledge** | Auto-derived from markdown links in contexts/skills | Symlinks only (referenced from contexts) |
-| **Agents** | Declared in `beacon.yaml` | Symlinks + wire into project-local tool directories |
-
----
-
-## Frontmatter Dependencies
-
-Skills declare their context dependencies in YAML frontmatter. Every skill's `SKILL.md` must include:
-
-```yaml
----
-requires:
-  contexts:
-    - global.md
-    - teams/backend/AGENTS.md
----
-```
-
-Missing or malformed frontmatter on any adopted skill causes `abc sync` to fail with a hard error. This ensures all required contexts are present before the agent starts.
-
----
-
-## Knowledge Auto-Derivation
-
-Knowledge files are NOT declared in `beacon.yaml`. When a context or skill contains a markdown link to a `knowledge/` path:
-
-```markdown
-See the [Python type hints guide](knowledge/python/type-hints.md) for details.
-```
-
-The dependency resolver finds that reference and adds it to the sync set automatically. No manual configuration needed.
+For the full pipeline, flags, and edge cases, see the [Syncing guide](../guides/syncing.md). For per-type details (what wiring each artifact gets), see [Artifact Types](artifact-types.md).
 
 ---
 
@@ -126,74 +154,72 @@ The dependency resolver finds that reference and adds it to the sync set automat
 `abc sync` creates **symlinks**, not copies. `.agentic-beacon/artifacts/` is a tree of symlinks pointing into the warehouse clone. This means:
 
 - **One physical file per machine.** No duplicate copies to drift out of sync.
-- **Edits go directly to the warehouse.** Editing a symlinked file edits the warehouse working tree.
+- **Edits go directly to the warehouse.** Editing a symlinked file edits the warehouse working tree — no separate "push my changes back" step before contributing.
 - **Cross-project visibility.** If two projects share the same artifact, editing it in Project A makes the change visible in Project B immediately.
 
----
-
-## Agent Config Wiring
-
-Beacon does not just distribute warehouse content — it also owns the **agent config files** that wire that content into the agent's runtime.
-
-Agent config files are the per-project files your AI tool reads at session start:
-
-| Tool | Agent config file |
-|------|-------------------|
-| OpenCode | `opencode.json` (project root) |
-| Claude Code | `CLAUDE.md` (project root or `.claude/CLAUDE.md`) |
-
-Two stages of wiring happen automatically:
-
-1. **Bootstrap on setup.** `abc setup` and `abc warehouse init` create a minimal `opencode.json` (with `$schema` + empty `instructions`) and an empty `CLAUDE.md` if either is missing. If they already exist, beacon never overwrites them.
-2. **Reference wiring on sync.** Every `abc sync` updates the agent config files so the synced contexts are loaded by the agent on next start:
-   - In `opencode.json`, the relative path of each adopted context is added to the `instructions` array.
-   - In `CLAUDE.md`, an `@.agentic-beacon/artifacts/contexts/<name>.md` reference is appended for each adopted context.
-3. **Pruning on unsync.** When a context is removed from `beacon.yaml`, beacon also removes its reference from `opencode.json` and `CLAUDE.md` — so the config never points at a stale or missing file.
-
-Guarantees:
-
-- **Idempotent.** Running `abc sync` repeatedly never duplicates entries.
-- **Non-destructive.** Beacon only adds/removes its own references; user-authored entries in `opencode.json` and `CLAUDE.md` are preserved.
-- **Tool-detected.** Wiring is performed only for tools whose config files are present. Beacon will not silently install a config for a tool you do not use.
-
----
-
-## Tool Detection
-
-`abc sync` auto-detects which AI tools are installed and wires artifacts accordingly:
-
-| Tool | Context wiring | Skill install |
-|------|---------------|---------------|
-| **Claude Code** | Appends `@path` references to `CLAUDE.md` | Symlinks to `.claude/skills/<name>/` and `.claude/commands/<name>.md` |
-| **OpenCode** | Adds file references to `opencode.json` | Symlinks to `.opencode/skills/<name>/` and `.opencode/command/<name>.md` |
-
-If both tools are detected, artifacts are installed for both simultaneously.
+This is what makes the contribution loop tight: there is no copy step, so the agent's edit *is* the warehouse edit.
 
 ---
 
 ## The Contribution Loop
 
-The workflow is bidirectional. With symlinks, editing an artifact directly modifies the warehouse working tree. To share improvements:
+The workflow is bidirectional, and most edits happen inside an agent session. The agent either edits symlinked warehouse files directly, or uses one of the [bundled authoring skills](bundled-skills.md) (`record-knowledge`, `record-skill`) — these write to the warehouse and append a wiring entry to `pending.yaml`. `abc adopt` then promotes pending entries into `beacon.yaml`, and `abc sync` refreshes symlinks so the new artifact is immediately usable. To push the warehouse changes upstream, invoke the [`/contribute-warehouse`](../guides/contribute-warehouse.md) bundled skill — it lints, scans for duplicates, splits the changes into cohesive commits, and atomically pushes once.
 
-```
-1. abc sync                     ← sync from warehouse (creates symlinks)
-2. code with agent              ← agent uses synced artifacts, may improve them
-3. abc warehouse status         ← review what changed in the warehouse working tree
-4. abc warehouse contribute -m "msg"  ← commit changes and push back
-5. teammates sync               ← everyone benefits
-```
+<div markdown="0">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 340" style="max-width: 720px; width: 100%; height: auto; display: block; margin: 1.5em auto;" role="img" aria-labelledby="diag-loop-title diag-loop-desc">
+  <title id="diag-loop-title">Contribution loop</title>
+  <desc id="diag-loop-desc">Four-node cycle: agent edits and authors via symlinks and bundled skills; abc adopt and abc sync wire and refresh the project; the contribute-warehouse skill pushes upstream; teammates abc sync and abc adopt pull and wire on their side, restarting the cycle.</desc>
+  <style>
+    .n-fill { fill: currentColor; fill-opacity: 0.04; }
+    .n-stroke { fill: none; stroke: currentColor; stroke-opacity: 0.4; stroke-width: 1.5; }
+    .n-text { font: 600 13px -apple-system, sans-serif; fill: currentColor; }
+    .n-sub { font: 11px ui-monospace, monospace; fill: currentColor; fill-opacity: 0.7; }
+    .n-arr { stroke: currentColor; stroke-opacity: 0.55; stroke-width: 1.5; fill: none; }
+  </style>
+  <defs>
+    <marker id="loop-arr" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <path d="M0,0 L9,3 L0,6 z" fill="currentColor" fill-opacity="0.55"/>
+    </marker>
+  </defs>
 
----
+  <!-- TL: Agent edits & authors -->
+  <rect class="n-fill" x="50" y="40" width="240" height="100" rx="50"/>
+  <rect class="n-stroke" x="50" y="40" width="240" height="100" rx="50"/>
+  <text class="n-text" x="170" y="72" text-anchor="middle">agent edits &amp; authors</text>
+  <text class="n-sub" x="170" y="93" text-anchor="middle">direct symlink edits</text>
+  <text class="n-sub" x="170" y="108" text-anchor="middle">or /record-knowledge,</text>
+  <text class="n-sub" x="170" y="123" text-anchor="middle">/record-skill</text>
 
-## Git Safety Checks
+  <!-- TR: adopt + sync -->
+  <rect class="n-fill" x="430" y="40" width="240" height="100" rx="50"/>
+  <rect class="n-stroke" x="430" y="40" width="240" height="100" rx="50"/>
+  <text class="n-text" x="550" y="78" text-anchor="middle">abc adopt → abc sync</text>
+  <text class="n-sub" x="550" y="99" text-anchor="middle">wire pending entries,</text>
+  <text class="n-sub" x="550" y="114" text-anchor="middle">refresh symlinks</text>
 
-Before running `abc sync`, Agentic Beacon checks that:
+  <!-- BR: contribute via bundled skill -->
+  <rect class="n-fill" x="430" y="210" width="240" height="100" rx="50"/>
+  <rect class="n-stroke" x="430" y="210" width="240" height="100" rx="50"/>
+  <text class="n-text" x="550" y="248" text-anchor="middle">/contribute-warehouse</text>
+  <text class="n-sub" x="550" y="269" text-anchor="middle">lint → cohesive commits</text>
+  <text class="n-sub" x="550" y="284" text-anchor="middle">→ atomic push</text>
 
-- The warehouse has no uncommitted changes
-- The local branch is not behind its remote
-- The warehouse is on `main` (not a feature branch)
+  <!-- BL: teammates sync + adopt -->
+  <rect class="n-fill" x="50" y="210" width="240" height="100" rx="50"/>
+  <rect class="n-stroke" x="50" y="210" width="240" height="100" rx="50"/>
+  <text class="n-text" x="170" y="248" text-anchor="middle">teammates</text>
+  <text class="n-sub" x="170" y="269" text-anchor="middle">abc sync (pull warehouse)</text>
+  <text class="n-sub" x="170" y="284" text-anchor="middle">+ abc adopt (their pendings)</text>
 
-These checks can be bypassed with `--skip-git-check` if needed. The main-branch check is configurable via `abc warehouse connect --main-branch <name>`.
+  <!-- arrows (clockwise cycle) -->
+  <line class="n-arr" x1="290" y1="90" x2="430" y2="90" marker-end="url(#loop-arr)"/>
+  <line class="n-arr" x1="550" y1="140" x2="550" y2="210" marker-end="url(#loop-arr)"/>
+  <line class="n-arr" x1="430" y1="260" x2="290" y2="260" marker-end="url(#loop-arr)"/>
+  <line class="n-arr" x1="170" y1="210" x2="170" y2="140" marker-end="url(#loop-arr)"/>
+</svg>
+</div>
+
+`abc adopt` and `abc sync` both run on each side of the loop — `abc adopt` to wire your own pending entries (from authoring skills you ran), `abc sync` to refresh symlinks against the current warehouse HEAD.
 
 ---
 
