@@ -447,3 +447,34 @@ class TestContributePaths:
         )
         assert "commit b" in log.stdout
         assert "commit a" in log.stdout
+
+
+class TestDirtyOutsideScope:
+    """Tests for PER-159: out-of-scope dirty file count in contribute."""
+
+    def test_no_changes_with_outside_scope_dirty_returns_count(self, contrib_project):
+        """Dirty file outside beacon.yaml -> no_changes with count >= 1."""
+        project, wh = contrib_project
+        (wh / "untracked.md").write_text("# Untracked\nmodified\n")
+
+        result = contribute(project, message="x", push=False)
+        assert result.status == "no_changes"
+        assert result.dirty_outside_scope_count >= 1
+
+    def test_no_changes_with_clean_tree_returns_zero_count(self, contrib_project):
+        """Clean warehouse -> dirty_outside_scope_count == 0."""
+        project, wh = contrib_project
+        result = contribute(project, message="x", push=False)
+        assert result.status == "no_changes"
+        assert result.dirty_outside_scope_count == 0
+
+    def test_commit_path_does_not_compute_outside_scope(self, contrib_project_multi):
+        """Committed result has dirty_outside_scope_count == 0."""
+        project, wh = contrib_project_multi
+
+        # Dirty a tracked file
+        (wh / "contexts" / "a.md").write_text("# a modified\n")
+
+        result = contribute(project, message="commit a", push=False)
+        assert result.status == "committed"
+        assert result.dirty_outside_scope_count == 0

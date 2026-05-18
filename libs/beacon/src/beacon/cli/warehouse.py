@@ -423,7 +423,15 @@ def warehouse_contribute(*, message: str, push: bool, paths: tuple[str, ...]) ->
         sys.exit(1)
 
     if result.status == "no_changes":
-        console.print("[yellow]No uncommitted changes to contribute.[/yellow]")
+        if result.dirty_outside_scope_count > 0:
+            console.print(
+                f"[yellow]Note: {result.dirty_outside_scope_count} dirty file(s) in warehouse outside this project's beacon.yaml scope.[/yellow]"
+            )
+            console.print(
+                "[yellow]Run 'abc warehouse status --all' to see them, or contribute from a project that tracks them.[/yellow]"
+            )
+        else:
+            console.print("[yellow]No uncommitted changes to contribute.[/yellow]")
         return
 
     if result.status == "committed":
@@ -478,7 +486,15 @@ def warehouse_status_cmd(*, path: str | None, all_paths: bool) -> None:
         return
 
     if not result.modifications:
-        console.print("[green]✓ Working tree is clean.[/green]")
+        if result.dirty_outside_scope_count > 0:
+            console.print(
+                f"[yellow]Note: {result.dirty_outside_scope_count} dirty file(s) in warehouse outside this project's beacon.yaml scope.[/yellow]"
+            )
+            console.print(
+                "[yellow]Run 'abc warehouse status --all' to see them, or contribute from a project that tracks them.[/yellow]"
+            )
+        else:
+            console.print("[green]✓ Working tree is clean.[/green]")
     else:
         console.print("[bold]Modified files:[/bold]")
         for entry in result.modifications:

@@ -243,3 +243,43 @@ class TestStatus:
         with pytest.raises(ValueError) as exc_info:
             status(project, path="untracked.md")
         assert "not tracked" in str(exc_info.value).lower()
+
+
+class TestDirtyOutsideScope:
+    """Tests for PER-159: out-of-scope dirty file count."""
+
+    def test_dirty_outside_scope_only_yields_count(self, status_project):
+        """Modify a git-tracked file not in beacon.yaml -> count > 0."""
+        project, wh = status_project
+        (wh / "untracked.md").write_text("# Untracked\nmodified\n")
+
+        result = status(project)
+        assert result.modifications == []
+        assert result.dirty_outside_scope_count >= 1
+
+    def test_clean_warehouse_yields_zero_count(self, status_project):
+        """Clean warehouse -> dirty_outside_scope_count == 0."""
+        project, wh = status_project
+        result = status(project)
+        assert result.dirty_outside_scope_count == 0
+
+    def test_dirty_tracked_present_yields_zero_count(self, status_project):
+        """In-scope dirty files present -> out-of-scope count == 0."""
+        project, wh = status_project
+        (wh / "contexts" / "test.md").write_text("# Test\nmodified\n")
+
+        result = status(project)
+        assert len(result.modifications) >= 1
+        assert result.dirty_outside_scope_count == 0
+
+    def test_all_paths_does_not_compute_outside_scope(self, status_project):
+        """--all mode skips out-of-scope computation."""
+        project, wh = status_project
+        (wh / "contexts" / "test.md").write_text("# Test\nmodified\n")
+        (wh / "untracked.md").write_text("# Untracked\nmodified\n")
+
+        result = status(project, all_paths=True)
+        paths = [m.path for m in result.modifications]
+        assert "contexts/test.md" in paths
+        assert "untracked.md" in paths
+        assert result.dirty_outside_scope_count == 0
