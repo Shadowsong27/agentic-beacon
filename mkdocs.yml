@@ -79,10 +79,12 @@ nav:
   - Quick Start: quickstart.md
   - Concepts:
     - How It Works: concepts/how-it-works.md
+    - Philosophy: concepts/philosophy.md
     - What Is a Skill: concepts/what-is-a-skill.md
     - Bundled Skills: concepts/bundled-skills.md
     - Pending & Adoption: concepts/pending-and-adoption.md
     - Artifact Types: concepts/artifact-types.md
+    - Specs vs. Artifacts: concepts/specs-vs-artifacts.md
     - Design Decisions: concepts/design-decisions.md
   - Guides:
     - Creating a Warehouse: guides/warehouse-creation.md
@@ -90,6 +92,7 @@ nav:
     - Interactive Adoption: guides/interactive-adoption.md
     - Syncing Artifacts: guides/syncing.md
     - Day-to-Day Workflow: guides/day-to-day-workflow.md
+    - Spec-Driven Development: guides/spec-driven-development.md
     - Contributing Back: guides/contributing-back.md
     - Contribute Warehouse Skill: guides/contribute-warehouse.md
     - Creating Skills: guides/creating-skills.md
