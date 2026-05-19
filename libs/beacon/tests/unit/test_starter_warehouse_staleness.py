@@ -25,7 +25,7 @@ from pathlib import Path
 # Update this dict whenever the starter warehouse is re-generated.
 STARTER_WAREHOUSE_PINNED_TEMPLATE_HASHES: dict[str, str] = {
     ".gitignore": "8feef5396350636e6d01b504c84ad4295d9f2bf300a1b4893850e72694b86b0a",
-    "agents/README.md": "2f942a6895e0c2fb8b867eac90e8f788dba4427efcbcb855e8b96db656f2983e",
+    "agents/README.md": "0ca30d3ac4247550b94a26f68fe17d93126fcf949edbeb7d5c1cf47686243b3e",
     "agents/agents.yaml": "9f03ec77cf08ad3296d640d70a65038e0cdf46a3335e887f6ee130ce314077e2",
     "README.md": "4614df66a7b6d3ef486a661f055e4073ca8c50258bd85e6e9b23e8e9513b956b",
     "contexts/README.md": "90dfeb30f5844e16596302291d9f9770e2f714a35733d525ab7fe913be49912b",
