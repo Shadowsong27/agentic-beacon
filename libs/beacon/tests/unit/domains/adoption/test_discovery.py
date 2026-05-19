@@ -190,3 +190,91 @@ def test_discover_adoptable_includes_agents(tmp_path):
     paths = {c.path for c in candidates}
 
     assert "agents/code-reviewer.md" in paths
+
+
+# ─────────────────────────────────────────────────────────────
+# discover_pending deduplication (read-side tolerance)
+# ─────────────────────────────────────────────────────────────
+
+
+def test_discover_pending_collapses_duplicate_entries_keeps_earliest_created_at(
+    tmp_path,
+):
+    project = _make_project(tmp_path)
+    entries = [
+        PendingEntry(
+            path="contexts/cicd-flow.md",
+            type="context",  # type: ignore[arg-type]
+            action="modified",
+            source="record-knowledge",
+            created_at=datetime(2026, 5, 7, 13, 30, 30, tzinfo=UTC),
+        ),
+        PendingEntry(
+            path="contexts/cicd-flow.md",
+            type="context",  # type: ignore[arg-type]
+            action="modified",
+            source="record-knowledge",
+            created_at=datetime(2026, 5, 7, 15, 37, 7, tzinfo=UTC),
+        ),
+    ]
+    _write_pending(project, entries)
+
+    result = discover_pending(project)
+
+    assert len(result) == 1
+    assert result[0].path == "contexts/cicd-flow.md"
+    assert result[0].created_at == datetime(2026, 5, 7, 13, 30, 30, tzinfo=UTC)
+
+
+def test_discover_pending_preserves_distinct_source_entries(tmp_path):
+    project = _make_project(tmp_path)
+    entries = [
+        PendingEntry(
+            path="contexts/cicd-flow.md",
+            type="context",  # type: ignore[arg-type]
+            action="modified",
+            source="record-knowledge",
+            created_at=datetime(2026, 5, 7, 13, 30, 30, tzinfo=UTC),
+        ),
+        PendingEntry(
+            path="contexts/cicd-flow.md",
+            type="context",  # type: ignore[arg-type]
+            action="modified",
+            source="manual-edit",
+            created_at=datetime(2026, 5, 7, 15, 37, 7, tzinfo=UTC),
+        ),
+    ]
+    _write_pending(project, entries)
+
+    result = discover_pending(project)
+
+    assert len(result) == 2
+    sources = {e.source for e in result}
+    assert sources == {"record-knowledge", "manual-edit"}
+
+
+def test_discover_pending_preserves_distinct_action_entries(tmp_path):
+    project = _make_project(tmp_path)
+    entries = [
+        PendingEntry(
+            path="skills/foo/",
+            type="skill",  # type: ignore[arg-type]
+            action="created",
+            source="record-skill",
+            created_at=datetime(2026, 5, 7, 13, 30, 30, tzinfo=UTC),
+        ),
+        PendingEntry(
+            path="skills/foo/",
+            type="skill",  # type: ignore[arg-type]
+            action="modified",
+            source="record-skill",
+            created_at=datetime(2026, 5, 7, 15, 37, 7, tzinfo=UTC),
+        ),
+    ]
+    _write_pending(project, entries)
+
+    result = discover_pending(project)
+
+    assert len(result) == 2
+    actions = {e.action for e in result}
+    assert actions == {"created", "modified"}
