@@ -38,6 +38,33 @@ def detect_agent_targets(project_root: Path) -> list[str]:
 
     For agent wiring per project-agent-wiring spec: gate on directory existence,
     NOT on tool config files (which is what detect_agents() checks).
+
+    **Design note — gating signal choice (PER-123, closed).**
+
+    A directory-existence gate is intentionally lenient: ``.claude/`` and
+    ``.opencode/`` can be created by ``abc sync`` for non-agent artifacts
+    (skill/context wiring), so this function may return a tool key for a
+    machine where the tool binary is not actually installed. The resulting
+    over-wiring produces extra symlinks under ``.claude/agents/`` /
+    ``.opencode/agents/`` — both directories are gitignored, so the cost is
+    bounded to wasted bytes.
+
+    Tighter alternatives were considered and rejected:
+
+    - ``shutil.which("claude")`` / ``shutil.which("opencode")`` introduces
+      PATH-dependent variance: the same warehouse + project produces
+      different wiring outcomes on different developer laptops. That kind
+      of machine-local divergence is harder to debug than the current
+      harmless over-wiring.
+    - Marker-file checks (``CLAUDE.md`` / ``opencode.json``) would create
+      an asymmetric ordering dependency where agent wiring requires the
+      tool to have run at least once first. That breaks fresh-clone-then-
+      ``abc sync`` flows.
+
+    Net: spec-aligned over-wiring is acceptable. If a stronger signal is
+    needed in the future, the OpenSpec scenarios in
+    ``openspec/specs/project-agent-wiring/`` must be updated alongside the
+    implementation.
     """
     targets = []
     if (project_root / ".claude").is_dir():

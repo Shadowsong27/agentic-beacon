@@ -121,6 +121,35 @@ Both directories are gitignored — they're per-machine state. The shared source
 
 ---
 
+## Sharing Fragments Between Agents — `agents/_partials/`
+
+When several agents share a long checklist, decision table, or boilerplate block, you can extract it into a fragment under `agents/_partials/` and reference it from each agent's markdown via a relative link. Beacon understands this convention and co-distributes partials automatically.
+
+```
+agents/
+├── agents.yaml
+├── code-reviewer.md
+├── spec-planner.md
+└── _partials/
+    └── deep-review-checklist.md     ← shared between code-reviewer and spec-planner
+```
+
+Inside an agent file:
+
+```markdown
+For the full per-file checklist, see [`_partials/deep-review-checklist.md`](_partials/deep-review-checklist.md).
+```
+
+**Convention rules:**
+
+- Files under `agents/_partials/` are **fragments, not agents.** They are excluded from `abc warehouse list agents`, do not need entries in `agents.yaml`, and are not validated by `abc warehouse lint` as agents.
+- When any agent is declared in a project's `beacon.yaml`, every file under `agents/_partials/` is **co-distributed** alongside it. Partials appear as symlinks under `.claude/agents/_partials/` and `.opencode/agents/_partials/`, so relative markdown links inside the agent file resolve at tool runtime.
+- The filter is **scoped to `_partials/` specifically.** Other leading-underscore directories (e.g. `agents/_internal/`, `agents/_drafts/`) are **not** treated as partials and will trigger lint errors. Use the name `_partials/` exactly.
+
+> **Why one shared name?** Broadening the filter without also broadening co-distribution would hide files from agent listings while silently failing to ship them. Keeping the convention narrow keeps the warehouse predictable.
+
+---
+
 ## Two Authoring Paths
 
 Just like skills, you can take either path:

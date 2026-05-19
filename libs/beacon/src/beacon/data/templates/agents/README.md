@@ -57,8 +57,28 @@ Example:
 agents/
 ├── README.md
 ├── agents.yaml          # Agent dependency manifest
-└── agent-name.md        # Agent definition with frontmatter
+├── agent-name.md        # Agent definition with frontmatter
+└── _partials/           # (Optional) shared fragments — see below
+    └── shared-fragment.md
 ```
+
+## Shared Fragments (`agents/_partials/`)
+
+Files under `agents/_partials/` are **fragments, not agents.** They let
+multiple agents reference a shared checklist or boilerplate block via a
+relative markdown link (e.g. `[checklist](_partials/deep-review.md)`).
+
+Conventions:
+
+- Partials are **not** registered in `agents.yaml` and are skipped by
+  `abc warehouse list agents` and `abc warehouse lint` agent checks.
+- Whenever any agent is declared in a project's `beacon.yaml`, every file
+  under `agents/_partials/` is **co-distributed** alongside it so relative
+  links inside agent files resolve at tool runtime
+  (`.claude/agents/_partials/` and `.opencode/agents/_partials/`).
+- The filter recognises **`_partials/` only.** Other leading-underscore
+  directories (`_internal/`, `_drafts/`) are treated as agents and will
+  fail lint.
 
 ## Wiring Agents
 
