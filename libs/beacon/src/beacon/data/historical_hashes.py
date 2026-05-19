@@ -34,6 +34,8 @@ KNOWN_TEMPLATE_HASHES: dict[str, list[str]] = {
         "6f05be87226b2892c20d1a75bee24b682590506ee22dbdc2c911f959ff625590",
         # PER-113 — unify-agent-distribution: agents are now fully project-scoped
         "2f942a6895e0c2fb8b867eac90e8f788dba4427efcbcb855e8b96db656f2983e",
+        # docs(agents): document _partials convention + record detect_agent_targets gating
+        "0ca30d3ac4247550b94a26f68fe17d93126fcf949edbeb7d5c1cf47686243b3e",
     ],
     "agents/agents.yaml": [
         # v3.x — move-agent-requires-to-warehouse-manifest

@@ -353,10 +353,21 @@ def discover_pending(project_root: Path) -> list[PendingEntry]:
     The pending TODO is a flat list — each entry came from a specific authoring
     source (record-knowledge, record-skill, manual edit) and is resolved
     independently as accept (adopt + remove) or reject (remove only).
+
+    Collapses duplicate (path, type, action, source) tuples, keeping the
+    earliest created_at. This defends against pre-existing duplicates in
+    warehouses that were created before the write-side dedupe fix.
     """
     pending_path = project_root / ".agentic-beacon" / "pending.yaml"
     manifest = PendingManifest.from_yaml(pending_path)
-    return list(manifest.pending)
+
+    seen: dict[tuple[str, str, str, str], PendingEntry] = {}
+    for entry in manifest.pending:
+        key = (entry.path, entry.type, entry.action, entry.source)
+        if key not in seen or entry.created_at < seen[key].created_at:
+            seen[key] = entry
+
+    return list(seen.values())
 
 
 # ─────────────────────────────────────────────────────────────

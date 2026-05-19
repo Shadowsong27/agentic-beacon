@@ -170,6 +170,20 @@ def append_pending_entry(
                 validated = [_validate_entry(e, i) for i, e in enumerate(raw_entries)]
                 entries = [_canonicalize_entry(e) for e in validated]
 
+    existing = next(
+        (
+            e
+            for e in entries
+            if e.get("path") == path
+            and e.get("type") == type_
+            and e.get("action") == action
+            and e.get("source") == source
+        ),
+        None,
+    )
+    if existing is not None:
+        return
+
     created_at_str = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     new_entry = {
         "path": path,
