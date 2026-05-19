@@ -8,8 +8,10 @@ Outputs: <type>(<scope>): <subject>
 
 Mapping table (documented inline):
   Type prefix rules:
-    - All paths under skills/  AND at least one new file (status A) → feat
-    - All paths under skills/  AND only modifications (status M)     → fix
+    - All paths under skills/  AND at least one new file (status
+      first or second column is A, ?, R, or C)                       → feat
+    - All paths under skills/  AND only modifications (status M, D,
+      or space in both columns)                                      → fix
     - All paths under contexts/ or knowledge/                        → docs
     - All paths under agents/  AND new file                          → feat
     - All paths under agents/  AND modification                      → fix
@@ -118,8 +120,9 @@ def derive_type(paths: list[str], git_statuses: list[str] | None = None) -> str:
 
     Args:
         paths: List of warehouse-relative path strings.
-        git_statuses: Optional list of single-char git status codes per path.
-            Use 'A' for new/added files, 'M' for modifications, '?' for untracked.
+    git_statuses: Optional list of two-character git porcelain status
+        codes per path (index column + worktree column).  A file is
+        treated as "new" when either column is A, ?, R, or C.
 
     Returns:
         One of: 'feat', 'fix', 'docs', 'chore', 'refactor', 'test'.
@@ -143,10 +146,13 @@ def derive_type(paths: list[str], git_statuses: list[str] | None = None) -> str:
         return "docs"
 
     if top in ("skills", "agents"):
-        # Check statuses to distinguish feat vs fix
+        # Check statuses to distinguish feat vs fix.
+        # Porcelain is two chars: index column + worktree column.
+        # Treat as "new" when either column is A, ?, R, or C.
         if git_statuses:
-            statuses_clean = [s.strip() for s in git_statuses]
-            has_new = any(s in ("A", "A ", " A", "??") for s in statuses_clean)
+            has_new = any(
+                any(ch in "A?RC" for ch in status[:2]) for status in git_statuses
+            )
         else:
             # Without status information, assume new files (feat)
             has_new = True
