@@ -203,6 +203,34 @@ class TestPathReferences:
         issues = _check_path_references(tmp_path, manifest)
         assert issues == []
 
+    def test_glob_entry_matches_referenced_path(self, tmp_path):
+        (tmp_path / ".agentic-beacon" / "artifacts" / "contexts").mkdir(parents=True)
+        (tmp_path / ".agentic-beacon" / "artifacts" / "contexts" / "foo.md").write_text(
+            "# Foo"
+        )
+        (tmp_path / "CLAUDE.md").write_text(
+            "@.agentic-beacon/artifacts/contexts/foo.md\n"
+        )
+        manifest = _make_manifest(contexts=["contexts/*.md"])
+        issues = _check_path_references(tmp_path, manifest)
+        assert issues == []
+
+    def test_glob_entry_does_not_match_other_directory(self, tmp_path):
+        (tmp_path / ".agentic-beacon" / "artifacts" / "skills" / "foo").mkdir(
+            parents=True
+        )
+        (
+            tmp_path / ".agentic-beacon" / "artifacts" / "skills" / "foo" / "SKILL.md"
+        ).write_text("# Skill")
+        (tmp_path / "CLAUDE.md").write_text(
+            "@.agentic-beacon/artifacts/skills/foo/SKILL.md\n"
+        )
+        manifest = _make_manifest(contexts=["contexts/*.md"])
+        issues = _check_path_references(tmp_path, manifest)
+        assert len(issues) == 1
+        assert "Unmanaged reference" in issues[0].message
+        assert issues[0].severity == "warn"
+
 
 # ---------------------------------------------------------------------------
 # Stale globs
@@ -248,6 +276,19 @@ class TestStaleGlobs:
         manifest = _make_manifest(skills=["skills/code-*/"])
         issues = _check_stale_globs(warehouse, manifest)
         assert len(issues) == 1
+        assert "skills" in issues[0].message
+
+    def test_stale_glob_directory_only_matches_is_flagged(self, tmp_path):
+        warehouse = tmp_path / "warehouse"
+        warehouse.mkdir()
+        # Create directories matching the glob but no files inside
+        (warehouse / "skills" / "code-review").mkdir(parents=True)
+        (warehouse / "skills" / "code-lint").mkdir(parents=True)
+
+        manifest = _make_manifest(skills=["skills/code-*/"])
+        issues = _check_stale_globs(warehouse, manifest)
+        assert len(issues) == 1
+        assert "Stale glob" in issues[0].message
         assert "skills" in issues[0].message
 
     def test_no_manifest_returns_empty(self, tmp_path):
