@@ -9,6 +9,7 @@ Implements checks that need a project root (not a warehouse root):
 
 from __future__ import annotations
 
+import fnmatch
 import json
 import re
 import sys
@@ -16,6 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from beacon.core.manifest.beacon import BeaconManifest
+from beacon.domains.distribution.sync_engine import SyncEngine
 
 
 @dataclass(frozen=True)
@@ -250,6 +252,16 @@ def _classify_reference(
             severity="error",
         )
 
+    # If the reference doesn't appear to target a warehouse artifact, treat it
+    # as a project-local file: report only "missing" if it doesn't exist,
+    # never "unmanaged."
+    looks_like_artifact = (
+        raw_path.startswith(".agentic-beacon/artifacts/")
+        or (project_root / ".agentic-beacon" / "artifacts" / raw_path).exists()
+    )
+    if not looks_like_artifact:
+        return None
+
     # Path exists locally — check if it's wired in beacon.yaml
     if beacon_manifest is not None:
         wired = _is_wired_in_beacon(raw_path, beacon_manifest)
@@ -286,6 +298,11 @@ def _is_wired_in_beacon(raw_path: str, beacon_manifest: BeaconManifest) -> bool:
             # Directory entry: path is under the entry
             if norm_stripped.startswith(entry_stripped + "/"):
                 return True
+            # Glob entry: match using fnmatch
+            if _is_glob_pattern(entry_stripped) and fnmatch.fnmatchcase(
+                norm_stripped, entry_stripped
+            ):
+                return True
 
     return False
 
@@ -309,15 +326,14 @@ def _check_stale_globs(
         ("agents", beacon_manifest.artifacts.agents),
     ]
 
+    engine = SyncEngine(warehouse_path=warehouse_path, artifacts_path=Path())
+
     for artifact_type, entries in all_entries:
         for entry in entries:
             if not _is_glob_pattern(entry):
                 continue
-            matches = list(warehouse_path.glob(entry))
-            # Filter out .git and non-file entries for files; keep dirs for skill dirs
-            file_matches = [m for m in matches if m.is_file()]
-            dir_matches = [m for m in matches if m.is_dir()]
-            if not file_matches and not dir_matches:
+            matches = engine.expand_glob(entry)
+            if not matches:
                 issues.append(
                     DoctorIssue(
                         message=f"Stale glob in beacon.yaml ({artifact_type})",
