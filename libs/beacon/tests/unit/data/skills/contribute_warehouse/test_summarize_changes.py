@@ -596,6 +596,94 @@ class TestPer186DeletedTrackedFiles:
         mod = _load_script()
         assert mod.is_dirty("D ") is True
 
+    def test_staged_deletion_glob_match_appears(self, tmp_path):
+        """Tracked file matching glob pattern, git-rm staged → appears with D status."""
+        warehouse = _make_git_warehouse(tmp_path)
+        beacon_yaml = _write_beacon_yaml(warehouse, ["contexts/*.md"])
+
+        ctx_file = warehouse / "contexts" / "to-delete.md"
+        ctx_file.write_text("# To delete\n")
+        _initial_commit(warehouse, [ctx_file])
+
+        # Stage the deletion
+        subprocess.run(
+            ["git", "-C", str(warehouse), "rm", "contexts/to-delete.md"],
+            check=True,
+            capture_output=True,
+        )
+
+        mod = _load_script()
+        result = mod.summarize(warehouse, beacon_yaml)
+        paths = [e["path"] for e in result["tracked_paths"]]
+        assert "contexts/to-delete.md" in paths, (
+            f"PER-186 round 2: staged-deleted tracked file should appear. Got: {paths}"
+        )
+
+        entry = next(
+            e for e in result["tracked_paths"] if e["path"] == "contexts/to-delete.md"
+        )
+        assert "D" in entry["git_status"], (
+            f"Expected deletion status, got: {entry['git_status']!r}"
+        )
+
+    def test_directory_pattern_deletion_appears(self, tmp_path):
+        """Directory pattern (no glob), file deleted unstaged → appears in summary."""
+        warehouse = _make_git_warehouse(tmp_path)
+        beacon_yaml = _write_beacon_yaml_full(warehouse, contexts=["contexts/"])
+
+        ctx_file = warehouse / "contexts" / "nested.md"
+        ctx_file.write_text("# Nested\n")
+        _initial_commit(warehouse, [ctx_file])
+
+        # Delete the file (unstaged)
+        ctx_file.unlink()
+
+        mod = _load_script()
+        result = mod.summarize(warehouse, beacon_yaml)
+        paths = [e["path"] for e in result["tracked_paths"]]
+        assert "contexts/nested.md" in paths, (
+            f"PER-186 round 2: deleted file under directory pattern should appear. Got: {paths}"
+        )
+
+        entry = next(
+            e for e in result["tracked_paths"] if e["path"] == "contexts/nested.md"
+        )
+        assert "D" in entry["git_status"], (
+            f"Expected deletion status, got: {entry['git_status']!r}"
+        )
+
+    def test_directory_pattern_staged_deletion_appears(self, tmp_path):
+        """Directory pattern (no glob), file git-rm staged → appears in summary."""
+        warehouse = _make_git_warehouse(tmp_path)
+        beacon_yaml = _write_beacon_yaml_full(warehouse, contexts=["contexts/"])
+
+        ctx_file = warehouse / "contexts" / "staged-delete.md"
+        ctx_file.write_text("# Staged delete\n")
+        _initial_commit(warehouse, [ctx_file])
+
+        # Stage the deletion
+        subprocess.run(
+            ["git", "-C", str(warehouse), "rm", "contexts/staged-delete.md"],
+            check=True,
+            capture_output=True,
+        )
+
+        mod = _load_script()
+        result = mod.summarize(warehouse, beacon_yaml)
+        paths = [e["path"] for e in result["tracked_paths"]]
+        assert "contexts/staged-delete.md" in paths, (
+            f"PER-186 round 2: staged-deleted file under directory pattern should appear. Got: {paths}"
+        )
+
+        entry = next(
+            e
+            for e in result["tracked_paths"]
+            if e["path"] == "contexts/staged-delete.md"
+        )
+        assert "D" in entry["git_status"], (
+            f"Expected deletion status, got: {entry['git_status']!r}"
+        )
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # PER-183: get_tracked_paths must walk artifacts.agents (not just skills + contexts)
