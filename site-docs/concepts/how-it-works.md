@@ -102,6 +102,17 @@ The four top-level directories are part of Beacon's schema — `abc warehouse in
 
 Within those rules you have full freedom over topic grouping, subdirectory depth, and naming. The warehouse lives on any git host (GitHub, GitLab, Bitbucket); team members clone it locally.
 
+### Two sides, two health checks
+
+Warehouse health and project health are separate questions, and Beacon has a dedicated command for each:
+
+| Question | Command | Run from |
+|---|---|---|
+| Is this warehouse internally consistent? (frontmatter valid, manifests parse, skill→context refs resolve, knowledge links land) | [`abc warehouse lint`](../reference/cli.md#abc-warehouse-lint) | Warehouse repo — locally or in the warehouse's CI. |
+| Is *this project's* slice of the warehouse wired up correctly? (`beacon.yaml` parses, configured artifacts exist in the connected warehouse, project-side symlinks resolve) | [`abc doctor`](../reference/cli.md#abc-doctor) | Project root — a directory containing `.agentic-beacon/`. |
+
+The two commands look superficially similar but answer different questions. Lint can't see your project's `beacon.yaml`; doctor can't inspect every artifact's frontmatter across the warehouse. Together they bracket the integrity boundary between the shared warehouse and each consuming project.
+
 ---
 
 ## The Beacon

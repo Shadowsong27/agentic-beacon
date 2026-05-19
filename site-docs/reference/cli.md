@@ -144,6 +144,13 @@ abc warehouse template-upgrade [WAREHOUSE_PATH] [OPTIONS]
 
 ### `abc warehouse lint`
 
+> **Scope: warehouse-side.** Validates a warehouse's *internal* consistency —
+> frontmatter, manifests, and cross-references between artifacts inside one
+> warehouse. Run it from the warehouse repo (locally or in CI). For
+> *project-side* wiring health — does this project's `.agentic-beacon/`
+> resolve correctly into the connected warehouse? — use
+> [`abc doctor`](#abc-doctor) instead.
+
 Validate a warehouse directory end-to-end. Runs every Beacon-owned artifact
 validation rule against the warehouse at `WAREHOUSE_PATH` (defaults to the
 current working directory when omitted).
@@ -282,7 +289,13 @@ Displays the connected warehouse path, configured contexts/skills (with ✓/✗ 
 
 ### `abc doctor`
 
-Validate project health: warehouse connection, `beacon.yaml` validity, missing artifacts.
+> **Scope: project-side.** Validates that *this project's* beacon configuration
+> resolves correctly into the connected warehouse. Run it from a project root
+> (a directory containing `.agentic-beacon/`). For *warehouse-side* health —
+> frontmatter, manifests, and internal cross-references inside a warehouse —
+> use [`abc warehouse lint`](#abc-warehouse-lint) instead.
+
+Diagnose the health of the current project's beacon configuration.
 
 ```bash
 abc doctor [OPTIONS]
@@ -290,7 +303,25 @@ abc doctor [OPTIONS]
 
 | Option | Description |
 |--------|-------------|
-| `--fix` | Auto-migrate stale paths to the current schema |
+| `--fix` | Auto-migrate stale paths to the current schema (reserved for future repair flows). |
+
+**Checks today:**
+
+1. **Project root** — `.agentic-beacon/` directory present.
+2. **Warehouse connection** — `config.toml` exists and `warehouse.local_path` resolves to a real directory.
+3. **Manifest validity** — `beacon.yaml` parses as YAML and matches the `BeaconManifest` schema.
+4. **Skill resolution** — every entry in `artifacts.skills` maps to an existing `<warehouse>/skills/<name>/` directory.
+5. **Context resolution** — every entry in `artifacts.contexts` maps to an existing `<warehouse>/contexts/<name>.md`.
+
+**When to run:**
+
+- After cloning a project that uses Agentic Beacon for the first time.
+- After pulling warehouse changes that may have renamed or moved files referenced from your `beacon.yaml`.
+- Before reporting an `abc sync` failure — doctor often pinpoints the root cause faster.
+
+> **Note:** `abc doctor` currently prints findings to stdout and exits zero
+> regardless of issue count. Programmatic exit-code behaviour (`--strict`,
+> `--json`) is planned in a follow-up so the command can gate CI runs.
 
 ---
 
