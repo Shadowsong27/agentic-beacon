@@ -1,9 +1,20 @@
 """Internal helpers for expanding beacon.yaml tracked paths."""
 
 import glob
+import subprocess
 from pathlib import Path
 
 from beacon.core.manifest.beacon import BeaconManifest
+
+
+def _run_git(warehouse_path: Path, args: list[str]) -> tuple[int, str, str]:
+    """Run a git command inside warehouse, return (returncode, stdout, stderr)."""
+    result = subprocess.run(
+        ["git", "-C", str(warehouse_path)] + args,
+        capture_output=True,
+        text=True,
+    )
+    return result.returncode, result.stdout, result.stderr
 
 
 def get_tracked_paths(warehouse_path: Path, beacon_yaml: Path) -> list[str]:
@@ -33,13 +44,22 @@ def get_tracked_paths(warehouse_path: Path, beacon_yaml: Path) -> list[str]:
 def _expand_pattern(warehouse_path: Path, pattern: str) -> list[str]:
     """Expand a beacon.yaml pattern to concrete relative paths."""
     if "*" in pattern or "?" in pattern:
+        # Glob finds existing files (including untracked)
         matches = glob.glob(str(warehouse_path / pattern), recursive=True)
-        return [
+        paths = {
             str(Path(m).relative_to(warehouse_path))
             for m in matches
             if Path(m).is_file()
             and ".git" not in Path(m).relative_to(warehouse_path).parts
-        ]
+        }
+        # Supplement with tracked deleted files (git ls-files lists tracked
+        # paths regardless of working-tree existence)
+        rc, stdout, _ = _run_git(warehouse_path, ["ls-files", "--", pattern])
+        if rc == 0:
+            for line in stdout.strip().splitlines():
+                if line and ".git" not in Path(line).parts:
+                    paths.add(line)
+        return sorted(paths)
 
     p = warehouse_path / pattern
     if p.is_dir():

@@ -43,13 +43,22 @@ import yaml
 def _expand_pattern(warehouse_path: Path, pattern: str) -> list[str]:
     """Expand a beacon.yaml pattern to concrete relative paths."""
     if "*" in pattern or "?" in pattern:
+        # Glob finds existing files (including untracked)
         matches = glob.glob(str(warehouse_path / pattern), recursive=True)
-        return [
+        paths = {
             str(Path(m).relative_to(warehouse_path))
             for m in matches
             if Path(m).is_file()
             and ".git" not in Path(m).relative_to(warehouse_path).parts
-        ]
+        }
+        # Supplement with tracked deleted files (git ls-files lists tracked
+        # paths regardless of working-tree existence)
+        rc, stdout, _ = _run_git(warehouse_path, ["ls-files", "--", pattern])
+        if rc == 0:
+            for line in stdout.strip().splitlines():
+                if line and ".git" not in Path(line).parts:
+                    paths.add(line)
+        return sorted(paths)
 
     p = warehouse_path / pattern
     if p.is_dir():
