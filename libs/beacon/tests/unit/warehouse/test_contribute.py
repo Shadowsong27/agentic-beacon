@@ -448,6 +448,80 @@ class TestContributePaths:
         assert "commit b" in log.stdout
         assert "commit a" in log.stdout
 
+    def test_contribute_paths_leading_dot_slash(self, contrib_project_multi):
+        """Leading './' is normalized away before membership check."""
+        project, wh = contrib_project_multi
+        env = _git_env()
+
+        (wh / "contexts" / "a.md").write_text("# a modified\n")
+
+        result = contribute(
+            project,
+            message="commit with ./prefix",
+            push=False,
+            paths=("./contexts/a.md",),
+        )
+        assert result.status == "committed"
+
+        committed_files = subprocess.run(
+            ["git", "show", "--name-only", "--format=", "HEAD"],
+            cwd=wh,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert "contexts/a.md" in committed_files.stdout
+
+    def test_contribute_paths_double_slash(self, contrib_project_multi):
+        """Redundant '//' separators are collapsed."""
+        project, wh = contrib_project_multi
+        env = _git_env()
+
+        (wh / "contexts" / "a.md").write_text("# a modified\n")
+
+        result = contribute(
+            project,
+            message="commit with double slash",
+            push=False,
+            paths=("contexts//a.md",),
+        )
+        assert result.status == "committed"
+
+        committed_files = subprocess.run(
+            ["git", "show", "--name-only", "--format=", "HEAD"],
+            cwd=wh,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert "contexts/a.md" in committed_files.stdout
+
+    def test_contribute_paths_absolute_rejected(self, contrib_project_multi):
+        """Absolute paths raise ValueError."""
+        project, wh = contrib_project_multi
+        with pytest.raises(ValueError) as exc_info:
+            contribute(
+                project,
+                message="should fail",
+                push=False,
+                paths=("/absolute/path.md",),
+            )
+        assert "absolute" in str(exc_info.value).lower()
+
+    def test_contribute_paths_dotdot_rejected(self, contrib_project_multi):
+        """Paths with '..' raise ValueError."""
+        project, wh = contrib_project_multi
+        with pytest.raises(ValueError) as exc_info:
+            contribute(
+                project,
+                message="should fail",
+                push=False,
+                paths=("../outside.md",),
+            )
+        assert "parent-directory" in str(exc_info.value).lower()
+
 
 class TestDirtyOutsideScope:
     """Tests for PER-159: out-of-scope dirty file count in contribute."""

@@ -4,6 +4,7 @@ Encapsulates git add + git commit inside the warehouse clone,
 driven by a project's .agentic-beacon/config.toml and beacon.yaml.
 """
 
+import os
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -34,6 +35,27 @@ def _run_git(
         text=True,
         timeout=timeout,
     )
+
+
+def _normalize_path(path: str) -> str:
+    """Normalize a user-supplied warehouse-relative path for membership checking.
+
+    * Converts to POSIX-style forward slashes.
+    * Removes leading './' segments.
+    * Collapses redundant separators (e.g. 'skills//foo' -> 'skills/foo').
+    * Rejects absolute paths and parent-directory traversal.
+    """
+    p = Path(path)
+    if p.is_absolute():
+        raise ValueError(f"Absolute paths are not allowed: {path!r}")
+    parts = p.parts
+    if ".." in parts:
+        raise ValueError(f"Parent-directory traversal is not allowed: {path!r}")
+    # normpath removes './' and collapses redundant separators
+    normalized = os.path.normpath(path)
+    # Ensure POSIX-style forward slashes for cross-platform consistency
+    normalized = normalized.replace(os.sep, "/")
+    return normalized
 
 
 def _count_dirty_outside_scope(warehouse_path: Path, tracked: list[str]) -> int:
@@ -91,15 +113,16 @@ def contribute(
     tracked_paths = get_tracked_paths(warehouse_path, beacon_yaml)
 
     if paths is not None:
+        normalized_paths = [_normalize_path(p) for p in paths]
         tracked_set = set(tracked_paths)
-        untracked = [p for p in paths if p not in tracked_set]
+        untracked = [p for p in normalized_paths if p not in tracked_set]
         if untracked:
             raise ValueError(
                 f"The following paths are not tracked by beacon.yaml and cannot be committed: "
                 f"{', '.join(repr(p) for p in untracked)}"
             )
         # Use the caller-supplied paths (preserving their order), scoped within tracked_paths
-        commit_paths = list(paths)
+        commit_paths = normalized_paths
     else:
         commit_paths = tracked_paths
 
