@@ -47,6 +47,23 @@ def _write_beacon_yaml(
     return beacon_yaml
 
 
+def _init_git(warehouse: Path) -> None:
+    """Initialize a git repo in warehouse and configure user."""
+    import subprocess
+
+    subprocess.run(["git", "init", str(warehouse)], check=True, capture_output=True)
+    subprocess.run(
+        ["git", "-C", str(warehouse), "config", "user.email", "test@test.com"],
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(warehouse), "config", "user.name", "Test"],
+        check=True,
+        capture_output=True,
+    )
+
+
 class TestGetTrackedPathsArtifactsCoverage:
     """PER-183: walking artifacts.skills + contexts + agents — all three."""
 
@@ -122,3 +139,67 @@ class TestGetTrackedPathsArtifactsCoverage:
         wh.mkdir()
         result = get_tracked_paths(wh, wh / "no-such-beacon.yaml")
         assert result == []
+
+
+class TestPer186DeletedTrackedFiles:
+    """PER-186: deleted-but-tracked files must be included in expansion."""
+
+    def test_deleted_glob_match_included(self, tmp_path):
+        """Tracked file matching glob pattern, then deleted → still included."""
+        import subprocess
+
+        wh = tmp_path / "warehouse"
+        (wh / "contexts").mkdir(parents=True)
+        ctx_file = wh / "contexts" / "deleted.md"
+        ctx_file.write_text("# Deleted\n")
+
+        _init_git(wh)
+        subprocess.run(
+            ["git", "-C", str(wh), "add", "contexts/deleted.md"],
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(wh), "commit", "-m", "initial"],
+            check=True,
+            capture_output=True,
+        )
+
+        # Delete the file
+        ctx_file.unlink()
+
+        beacon_yaml = _write_beacon_yaml(wh, contexts=["contexts/*.md"])
+        result = get_tracked_paths(wh, beacon_yaml)
+        assert "contexts/deleted.md" in result, (
+            f"PER-186: deleted tracked file should be included. Got: {result}"
+        )
+
+    def test_deleted_explicit_path_included(self, tmp_path):
+        """Tracked explicit path, then deleted → still included."""
+        import subprocess
+
+        wh = tmp_path / "warehouse"
+        (wh / "contexts").mkdir(parents=True)
+        ctx_file = wh / "contexts" / "explicit.md"
+        ctx_file.write_text("# Explicit\n")
+
+        _init_git(wh)
+        subprocess.run(
+            ["git", "-C", str(wh), "add", "contexts/explicit.md"],
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(wh), "commit", "-m", "initial"],
+            check=True,
+            capture_output=True,
+        )
+
+        # Delete the file
+        ctx_file.unlink()
+
+        beacon_yaml = _write_beacon_yaml(wh, contexts=["contexts/explicit.md"])
+        result = get_tracked_paths(wh, beacon_yaml)
+        assert "contexts/explicit.md" in result, (
+            f"PER-186: deleted explicit path should be included. Got: {result}"
+        )
