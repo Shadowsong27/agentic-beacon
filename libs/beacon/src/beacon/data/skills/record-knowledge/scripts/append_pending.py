@@ -129,6 +129,32 @@ def _validate_entry(entry: dict, index: int) -> dict:
     return entry
 
 
+def _find_matching_entry(
+    entries: list[dict],
+    path: str,
+    type_: str,
+    action: str,
+    source: str,
+) -> dict | None:
+    """Return the first entry matching (path, type, action, source), else None.
+
+    Two pending entries are the "same" item when this 4-tuple matches.
+    `created_at` is deliberately excluded so re-running a source against the
+    same target is idempotent (the earlier timestamp stays canonical).
+    """
+    return next(
+        (
+            e
+            for e in entries
+            if e.get("path") == path
+            and e.get("type") == type_
+            and e.get("action") == action
+            and e.get("source") == source
+        ),
+        None,
+    )
+
+
 def append_pending_entry(
     project_root: Path,
     path: str,
@@ -169,6 +195,10 @@ def append_pending_entry(
             else:
                 validated = [_validate_entry(e, i) for i, e in enumerate(raw_entries)]
                 entries = [_canonicalize_entry(e) for e in validated]
+
+    if _find_matching_entry(entries, path, type_, action, source) is not None:
+        # Idempotent — an entry with the same identity is already pending.
+        return
 
     created_at_str = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     new_entry = {

@@ -978,3 +978,68 @@ def test_find_project_root_returns_none_when_no_config(mod, tmp_path):
 
     # Assert
     assert result is None
+
+
+# ----
+# 18. Duplicate (path, type, action, source) is idempotent — only 1 entry
+# ----
+
+
+def test_duplicate_entry_is_idempotent(mod, tmp_path):
+    # Arrange
+    root = _make_project(tmp_path)
+    pending_path = root / ".agentic-beacon" / "pending.yaml"
+
+    # Act — call twice with identical args
+    mod.append_pending_entry(
+        root, "contexts/cicd-flow.md", "context", "modified", "record-knowledge"
+    )
+    mod.append_pending_entry(
+        root, "contexts/cicd-flow.md", "context", "modified", "record-knowledge"
+    )
+
+    # Assert
+    data = yaml.safe_load(pending_path.read_text())
+    assert len(data["pending"]) == 1
+    assert data["pending"][0]["path"] == "contexts/cicd-flow.md"
+
+
+# ----
+# 19. Same path with different source/action keeps both entries
+# ----
+
+
+def test_same_path_different_source_keeps_both(mod, tmp_path):
+    # Arrange
+    root = _make_project(tmp_path)
+    pending_path = root / ".agentic-beacon" / "pending.yaml"
+
+    # Act
+    mod.append_pending_entry(
+        root, "contexts/cicd-flow.md", "context", "modified", "record-knowledge"
+    )
+    mod.append_pending_entry(
+        root, "contexts/cicd-flow.md", "context", "modified", "manual-edit"
+    )
+
+    # Assert
+    data = yaml.safe_load(pending_path.read_text())
+    assert len(data["pending"]) == 2
+    sources = {e["source"] for e in data["pending"]}
+    assert sources == {"record-knowledge", "manual-edit"}
+
+
+def test_same_path_different_action_keeps_both(mod, tmp_path):
+    # Arrange
+    root = _make_project(tmp_path)
+    pending_path = root / ".agentic-beacon" / "pending.yaml"
+
+    # Act
+    mod.append_pending_entry(root, "skills/foo/", "skill", "created", "record-skill")
+    mod.append_pending_entry(root, "skills/foo/", "skill", "modified", "record-skill")
+
+    # Assert
+    data = yaml.safe_load(pending_path.read_text())
+    assert len(data["pending"]) == 2
+    actions = {e["action"] for e in data["pending"]}
+    assert actions == {"created", "modified"}
