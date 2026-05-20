@@ -12,6 +12,7 @@ from loguru import logger
 
 from beacon.domains.warehouse._tracked_paths import get_tracked_paths
 from beacon.domains.warehouse.preconditions import ensure_sync_ready
+from beacon.utils.paths import normalize_relative_path
 
 
 @dataclass
@@ -91,15 +92,16 @@ def contribute(
     tracked_paths = get_tracked_paths(warehouse_path, beacon_yaml)
 
     if paths is not None:
+        normalized_paths = [normalize_relative_path(p) for p in paths]
         tracked_set = set(tracked_paths)
-        untracked = [p for p in paths if p not in tracked_set]
+        untracked = [p for p in normalized_paths if p not in tracked_set]
         if untracked:
             raise ValueError(
                 f"The following paths are not tracked by beacon.yaml and cannot be committed: "
                 f"{', '.join(repr(p) for p in untracked)}"
             )
         # Use the caller-supplied paths (preserving their order), scoped within tracked_paths
-        commit_paths = list(paths)
+        commit_paths = normalized_paths
     else:
         commit_paths = tracked_paths
 
