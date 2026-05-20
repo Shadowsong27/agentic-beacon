@@ -231,6 +231,35 @@ class TestPathReferences:
         assert "Unmanaged reference" in issues[0].message
         assert issues[0].severity == "warn"
 
+    def test_project_local_existing_reference_not_warned(self, tmp_path):
+        (tmp_path / "AGENTS.md").write_text("# Agents")
+        (tmp_path / "CLAUDE.md").write_text("@AGENTS.md\n")
+        manifest = _make_manifest()
+        issues = _check_path_references(tmp_path, manifest)
+        assert issues == []
+
+    def test_project_local_missing_reference_is_warned(self, tmp_path):
+        (tmp_path / "CLAUDE.md").write_text("@docs/missing.md\n")
+        manifest = _make_manifest()
+        issues = _check_path_references(tmp_path, manifest)
+        assert len(issues) == 1
+        assert "Broken reference" in issues[0].message
+        assert issues[0].severity == "error"
+
+    def test_artifact_reference_unmanaged_still_warned(self, tmp_path):
+        (tmp_path / ".agentic-beacon" / "artifacts" / "contexts").mkdir(parents=True)
+        (tmp_path / ".agentic-beacon" / "artifacts" / "contexts" / "foo.md").write_text(
+            "# Foo"
+        )
+        (tmp_path / "CLAUDE.md").write_text(
+            "@.agentic-beacon/artifacts/contexts/foo.md\n"
+        )
+        manifest = _make_manifest(contexts=[])
+        issues = _check_path_references(tmp_path, manifest)
+        assert len(issues) == 1
+        assert "Unmanaged reference" in issues[0].message
+        assert issues[0].severity == "warn"
+
 
 # ---------------------------------------------------------------------------
 # Stale globs

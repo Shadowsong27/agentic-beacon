@@ -252,6 +252,16 @@ def _classify_reference(
             severity="error",
         )
 
+    # If the reference doesn't appear to target a warehouse artifact, treat it
+    # as a project-local file: report only "missing" if it doesn't exist,
+    # never "unmanaged."
+    looks_like_artifact = (
+        raw_path.startswith(".agentic-beacon/artifacts/")
+        or (project_root / ".agentic-beacon" / "artifacts" / raw_path).exists()
+    )
+    if not looks_like_artifact:
+        return None
+
     # Path exists locally — check if it's wired in beacon.yaml
     if beacon_manifest is not None:
         wired = _is_wired_in_beacon(raw_path, beacon_manifest)
