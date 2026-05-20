@@ -7,6 +7,7 @@ from rich.console import Console
 
 from beacon.core.manifest.beacon import BeaconManifest
 from beacon.core.manifest.workspace import WorkspaceConfig
+from beacon.domains.setup.diagnostics import run_project_health_checks
 from beacon.utils.display import print_doctor_summary
 from beacon.utils.git import find_project_root
 
@@ -139,5 +140,15 @@ def doctor(*, fix: bool) -> None:
             _ok(
                 f"Context entries: all {len(context_entries)} context(s) exist in warehouse"
             )
+
+    # Project-side checks (PER-193)
+    project_issues = run_project_health_checks(
+        project_root, warehouse_path, beacon_settings
+    )
+    for issue in project_issues:
+        if issue.severity == "warn":
+            _warn(issue.message, issue.detail)
+        else:
+            _err(issue.message, issue.detail)
 
     print_doctor_summary(issues, fixes_applied)

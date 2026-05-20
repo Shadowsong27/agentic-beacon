@@ -1,5 +1,7 @@
 """Tests for abc doctor command."""
 
+import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -13,6 +15,7 @@ def _setup_project(
     monkeypatch,
     *,
     beacon_yaml_content: str = "artifacts:\n  contexts: []\n  skills: []\n  knowledge: []\n",
+    init_git: bool = True,
 ) -> tuple[Path, Path]:
     """Create a connected project and return (project_dir, warehouse_dir)."""
     project = tmp_path / "project"
@@ -24,6 +27,13 @@ def _setup_project(
     (warehouse / "contexts").mkdir()
     (warehouse / "skills").mkdir()
     (warehouse / "knowledge").mkdir()
+
+    if init_git:
+        subprocess.run(
+            ["git", "init", str(warehouse)],
+            capture_output=True,
+            check=False,
+        )
 
     beacon_dir = project / ".agentic-beacon"
     beacon_dir.mkdir()
@@ -231,6 +241,53 @@ class TestDoctorMissingArtifacts:
         result = runner.invoke(main, ["doctor"])
         assert result.exit_code == 0
         assert "missing" in result.output.lower() or "✗" in result.output
+
+
+class TestDoctorProjectSideChecks:
+    def test_catches_multiple_broken_links(self, tmp_path, monkeypatch):
+        """Seed a project with multiple broken links; doctor catches each."""
+        project, warehouse = _setup_project(tmp_path, monkeypatch, init_git=False)
+
+        # 1. Dangling symlink
+        artifacts = project / ".agentic-beacon" / "artifacts"
+        dangling = artifacts / "contexts" / "dangling.md"
+        dangling.parent.mkdir(parents=True)
+        dangling.symlink_to(warehouse / "contexts" / "dangling.md")
+
+        # 2. Symlink outside warehouse
+        outside = tmp_path / "outside.md"
+        outside.write_text("x")
+        bad_link = artifacts / "contexts" / "outside.md"
+        bad_link.symlink_to(outside)
+
+        # 3. Regular file where symlink should be
+        regular = artifacts / "skills" / "regular-skill" / "SKILL.md"
+        regular.parent.mkdir(parents=True)
+        regular.write_text("regular file")
+
+        # 4. Broken @path reference in CLAUDE.md
+        (project / "CLAUDE.md").write_text("@nonexistent.md\n")
+
+        # 5. Broken @path reference in opencode.json
+        data = {"instructions": [".agentic-beacon/artifacts/contexts/ghost.md"]}
+        (project / "opencode.json").write_text(json.dumps(data))
+
+        # 6. Stale glob in beacon.yaml
+        (project / ".agentic-beacon" / "beacon.yaml").write_text(
+            "artifacts:\n  contexts:\n    - contexts/*.md\n  skills: []\n  agents: []\n"
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["doctor"])
+        assert result.exit_code == 0
+
+        output = result.output
+        assert "Dangling symlink" in output
+        assert "outside warehouse" in output
+        assert "Regular file where symlink should be" in output
+        assert "Broken reference" in output
+        assert "Stale glob" in output
+        assert "not a git working tree" in output
 
 
 class TestDoctorNoProject:
