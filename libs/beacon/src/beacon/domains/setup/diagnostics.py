@@ -231,11 +231,11 @@ def _classify_reference(
 ) -> DoctorIssue | None:
     """Classify a single @path/reference and return an Issue or None."""
 
-    # Flag absolute paths that point into the warehouse
+    # Absolute paths in project-committed config are not portable across machines.
     if raw_path.startswith("/"):
         return DoctorIssue(
-            message=f"Warehouse-only absolute path in {Path(source_file).name}",
-            detail=f"{raw_path} will break for other teammates",
+            message=f"Non-portable absolute path in {Path(source_file).name}",
+            detail=f"{raw_path} is an absolute path and will break for other teammates",
             severity="error",
         )
 

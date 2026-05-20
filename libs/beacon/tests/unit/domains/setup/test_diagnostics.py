@@ -157,14 +157,14 @@ class TestPathReferences:
         issues = _check_path_references(tmp_path, manifest)
         assert issues == []
 
-    def test_claude_md_warehouse_absolute_path_flagged(self, tmp_path):
+    def test_claude_md_absolute_path_flagged_as_non_portable(self, tmp_path):
         (tmp_path / "CLAUDE.md").write_text(
             "@/Users/someone/warehouse/contexts/team.md\n"
         )
         manifest = _make_manifest()
         issues = _check_path_references(tmp_path, manifest)
         assert len(issues) == 1
-        assert "Warehouse-only absolute path" in issues[0].message
+        assert "Non-portable absolute path" in issues[0].message
         assert issues[0].severity == "error"
 
     def test_opencode_json_broken_reference(self, tmp_path):
