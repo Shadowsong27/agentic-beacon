@@ -322,6 +322,64 @@ class TestFullCombinations:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+class TestCompoundPorcelainStatusCodes:
+    """PER-185: compound two-char git status codes (AM, AD, MM, RM, etc.)."""
+
+    def test_am_added_then_modified_is_feat(self):
+        """AM (added in index, modified in worktree) → feat."""
+        mod = _load_script()
+        result = mod.derive_type(
+            ["skills/foo/SKILL.md"],
+            git_statuses=["AM"],
+        )
+        assert result == "feat"
+
+    def test_ad_added_then_deleted_is_feat(self):
+        """AD (added in index, deleted in worktree) → feat."""
+        mod = _load_script()
+        result = mod.derive_type(
+            ["skills/foo/SKILL.md"],
+            git_statuses=["AD"],
+        )
+        assert result == "feat"
+
+    def test_mm_modified_both_columns_is_fix(self):
+        """MM (modified in index and worktree) → fix."""
+        mod = _load_script()
+        result = mod.derive_type(
+            ["skills/foo/SKILL.md"],
+            git_statuses=["MM"],
+        )
+        assert result == "fix"
+
+    def test_rm_renamed_then_modified_is_feat(self):
+        """RM (renamed in index, modified in worktree) → feat."""
+        mod = _load_script()
+        result = mod.derive_type(
+            ["skills/foo/SKILL.md"],
+            git_statuses=["RM"],
+        )
+        assert result == "feat"
+
+    def test_worktree_deleted_is_fix(self):
+        """' D' (deleted in worktree) → fix."""
+        mod = _load_script()
+        result = mod.derive_type(
+            ["skills/foo/SKILL.md"],
+            git_statuses=[" D"],
+        )
+        assert result == "fix"
+
+    def test_index_deleted_is_fix(self):
+        """'D ' (deleted in index) → fix."""
+        mod = _load_script()
+        result = mod.derive_type(
+            ["skills/foo/SKILL.md"],
+            git_statuses=["D "],
+        )
+        assert result == "fix"
+
+
 class TestDocumentedInvocationWithGitStatuses:
     """Tests for Finding 3 fix: SKILL.md documented invocation passes --git-statuses."""
 
