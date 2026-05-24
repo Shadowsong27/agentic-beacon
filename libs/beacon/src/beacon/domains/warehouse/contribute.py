@@ -1,7 +1,10 @@
 """Warehouse contribute domain logic.
 
-Encapsulates git add + git commit inside the warehouse clone,
-driven by a project's .agentic-beacon/config.toml and beacon.yaml.
+Encapsulates git add + git commit inside the warehouse clone. By default
+(PER-203), accepts any dirty path in the warehouse working tree — the
+invariant is "is this a real dirty warehouse path?", not "is this in the
+invoking project's beacon.yaml?". Pass ``only_tracked=True`` to restore the
+legacy beacon.yaml-filtered behavior.
 """
 
 import subprocess
@@ -52,28 +55,86 @@ def _count_dirty_outside_scope(warehouse_path: Path, tracked: list[str]) -> int:
     return max(0, total_lines - filtered_lines)
 
 
+def _all_dirty_paths(warehouse_path: Path) -> list[str]:
+    """Return every dirty path in the warehouse working tree.
+
+    Parses ``git status --porcelain`` directly. Handles renames by emitting the
+    destination path. Skips entries under ``.git/``.
+
+    ``--untracked-files=all`` is required so that a brand-new directory (e.g.
+    ``skills/never-adopted/``) expands to its constituent files rather than
+    appearing as a single directory entry.
+    """
+    full = _run_git(warehouse_path, ["status", "--porcelain", "--untracked-files=all"])
+    if full.returncode != 0:
+        return []
+    paths: list[str] = []
+    for line in full.stdout.splitlines():
+        if len(line) < 4:
+            continue
+        rest = line[3:]
+        if " -> " in rest:
+            path = rest.split(" -> ", 1)[1]
+        else:
+            path = rest
+        if path.startswith('"') and path.endswith('"'):
+            try:
+                path = path[1:-1].encode("utf-8").decode("unicode_escape")
+            except UnicodeDecodeError:
+                pass
+        if ".git" in Path(path).parts:
+            continue
+        paths.append(path)
+    return paths
+
+
+def _validate_dirty(warehouse_path: Path, candidate_paths: list[str]) -> None:
+    """Raise ValueError if any candidate path has no porcelain status.
+
+    A path is acceptable when ``git status --porcelain -- <path>`` returns a
+    non-empty line. This covers modified (M), added (A), untracked (??),
+    deleted (D), renamed (R), and copied (C) — i.e. anything dirty in the
+    warehouse working tree.
+    """
+    not_dirty: list[str] = []
+    for p in candidate_paths:
+        status = _run_git(warehouse_path, ["status", "--porcelain", "--", p])
+        if status.returncode != 0 or not status.stdout.strip():
+            not_dirty.append(p)
+    if not_dirty:
+        raise ValueError(
+            "The following paths are not dirty in the warehouse working tree "
+            "(no uncommitted change) and cannot be committed: "
+            f"{', '.join(repr(p) for p in not_dirty)}"
+        )
+
+
 def contribute(
     project_root: Path,
     *,
     message: str,
     push: bool = False,
     paths: tuple[str, ...] | None = None,
+    only_tracked: bool = False,
 ) -> ContributeResult:
     """Contribute local changes to the warehouse.
 
-    Stages and commits files tracked by beacon.yaml that have uncommitted
-    changes in the warehouse working tree.
+    Stages and commits dirty paths in the warehouse working tree.
 
     Args:
-        project_root: Path to the project root.
+        project_root: Path to the project root (used to resolve the connected
+            warehouse via ``.agentic-beacon/config.toml``).
         message: Commit message (must be non-empty).
         push: Whether to push after committing.
         paths: Optional tuple of warehouse-relative paths to restrict the commit
-            to. When None (the default), all beacon.yaml-tracked dirty paths are
-            committed (existing behaviour). When provided, every path must be a
-            member of the beacon.yaml-tracked set; paths outside that set raise
-            ValueError. An empty tuple is rejected — omit the argument to commit
-            all tracked paths.
+            to. When None (the default), every dirty path in the warehouse
+            working tree is committed.
+        only_tracked: When True, restore the legacy project-scoped invariant —
+            commits are restricted to paths declared in the invoking project's
+            ``beacon.yaml`` and out-of-scope paths in ``paths`` raise
+            ValueError. When False (the default, PER-203), any dirty warehouse
+            path is acceptable, including brand-new artifacts and cross-project
+            knowledge that no ``beacon.yaml`` lists.
 
     Returns:
         ContributeResult indicating the outcome.
@@ -83,47 +144,64 @@ def contribute(
 
     if paths is not None and len(paths) == 0:
         raise ValueError(
-            "--paths must not be empty when provided; omit the flag to commit all tracked paths"
+            "--paths must not be empty when provided; omit the flag to commit all dirty paths"
         )
 
     warehouse_path, _ = ensure_sync_ready(project_root)
 
-    beacon_yaml = project_root / ".agentic-beacon" / "beacon.yaml"
-    tracked_paths = get_tracked_paths(warehouse_path, beacon_yaml)
+    if only_tracked:
+        beacon_yaml = project_root / ".agentic-beacon" / "beacon.yaml"
+        tracked_paths = get_tracked_paths(warehouse_path, beacon_yaml)
 
-    if paths is not None:
-        normalized_paths = [normalize_relative_path(p) for p in paths]
-        tracked_set = set(tracked_paths)
-        untracked = [p for p in normalized_paths if p not in tracked_set]
-        if untracked:
-            raise ValueError(
-                f"The following paths are not tracked by beacon.yaml and cannot be committed: "
-                f"{', '.join(repr(p) for p in untracked)}"
+        if paths is not None:
+            normalized_paths = [normalize_relative_path(p) for p in paths]
+            tracked_set = set(tracked_paths)
+            untracked = [p for p in normalized_paths if p not in tracked_set]
+            if untracked:
+                raise ValueError(
+                    "The following paths are not tracked by beacon.yaml and cannot be committed: "
+                    f"{', '.join(repr(p) for p in untracked)}"
+                )
+            commit_paths = normalized_paths
+        else:
+            commit_paths = tracked_paths
+
+        if not commit_paths:
+            count = (
+                _count_dirty_outside_scope(warehouse_path, tracked_paths)
+                if paths is None
+                else 0
             )
-        # Use the caller-supplied paths (preserving their order), scoped within tracked_paths
-        commit_paths = normalized_paths
+            return ContributeResult(
+                status="no_changes", dirty_outside_scope_count=count
+            )
     else:
-        commit_paths = tracked_paths
+        # PER-203 default: warehouse-scoped — accept any dirty warehouse path.
+        if paths is not None:
+            normalized_paths = [normalize_relative_path(p) for p in paths]
+            _validate_dirty(warehouse_path, normalized_paths)
+            commit_paths = normalized_paths
+        else:
+            commit_paths = _all_dirty_paths(warehouse_path)
 
-    if not commit_paths:
-        count = (
-            _count_dirty_outside_scope(warehouse_path, tracked_paths)
-            if paths is None
-            else 0
-        )
-        return ContributeResult(status="no_changes", dirty_outside_scope_count=count)
+        if not commit_paths:
+            return ContributeResult(status="no_changes")
 
     # Check git status for the paths we intend to commit
     status_result = _run_git(
         warehouse_path, ["status", "--porcelain", "--", *commit_paths]
     )
     if not status_result.stdout.strip():
-        count = (
-            _count_dirty_outside_scope(warehouse_path, tracked_paths)
-            if paths is None
-            else 0
-        )
-        return ContributeResult(status="no_changes", dirty_outside_scope_count=count)
+        if only_tracked:
+            count = (
+                _count_dirty_outside_scope(warehouse_path, tracked_paths)
+                if paths is None
+                else 0
+            )
+            return ContributeResult(
+                status="no_changes", dirty_outside_scope_count=count
+            )
+        return ContributeResult(status="no_changes")
 
     # Stage the paths we intend to commit
     _run_git(warehouse_path, ["add", "--", *commit_paths])

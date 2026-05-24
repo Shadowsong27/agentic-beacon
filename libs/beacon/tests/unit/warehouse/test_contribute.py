@@ -251,13 +251,20 @@ class TestContribute:
             or "failed" in str(exc_info.value).lower()
         )
 
-    def test_untracked_files_not_staged(self, contrib_project):
-        """TC5: Commit succeeds but edits only non-beacon.yaml paths -> NOT staged."""
+    def test_untracked_files_not_staged_with_only_tracked(self, contrib_project):
+        """only_tracked=True: edits only non-beacon.yaml paths -> NOT staged.
+
+        Under the PER-203 default, an untracked dirty file IS committable
+        (covered by TestWarehouseScopedDefault). This test pins down the
+        legacy project-filter behavior, which now lives behind --only-tracked.
+        """
         project, wh = contrib_project
         # Create a file not in beacon.yaml
         (wh / "untracked.md").write_text("# Untracked\n")
 
-        result = contribute(project, message="Should be no changes", push=False)
+        result = contribute(
+            project, message="Should be no changes", push=False, only_tracked=True
+        )
         assert result.status == "no_changes"
 
         # untracked.md should not be committed
@@ -272,8 +279,15 @@ class TestContribute:
         )
         assert "untracked.md" not in log.stdout
 
-    def test_pre_staged_unrelated_file_not_committed(self, contrib_project):
-        """Pre-staged unrelated changes are left staged, not included in commit."""
+    def test_pre_staged_unrelated_file_not_committed_with_only_tracked(
+        self, contrib_project
+    ):
+        """only_tracked=True: pre-staged unrelated changes left staged, not committed.
+
+        Under the PER-203 default, a dirty unrelated file IS committed (the
+        skill caller is expected to use --paths for fine-grained control).
+        This test pins down the legacy behavior under --only-tracked.
+        """
         project, wh = contrib_project
         env = _git_env()
 
@@ -287,7 +301,9 @@ class TestContribute:
             capture_output=True,
         )
 
-        result = contribute(project, message="Commit tracked only", push=False)
+        result = contribute(
+            project, message="Commit tracked only", push=False, only_tracked=True
+        )
 
         assert result.status == "committed"
         committed_files = subprocess.run(
@@ -357,9 +373,26 @@ class TestContributePaths:
         assert "b.md" in status.stdout
         assert "c.md" in status.stdout
 
-    def test_contribute_paths_validates_membership(self, contrib_project_multi):
-        """paths=(D,) where D is not tracked raises ValueError mentioning D."""
+    def test_contribute_paths_validates_membership_with_only_tracked(
+        self, contrib_project_multi
+    ):
+        """only_tracked=True: paths=(D,) not in beacon.yaml raises ValueError mentioning D."""
         project, wh = contrib_project_multi
+        with pytest.raises(ValueError) as exc_info:
+            contribute(
+                project,
+                message="should fail",
+                push=False,
+                paths=("contexts/d.md",),
+                only_tracked=True,
+            )
+        assert "contexts/d.md" in str(exc_info.value)
+        assert "not tracked by beacon.yaml" in str(exc_info.value)
+
+    def test_contribute_paths_to_nondirty_file_rejected(self, contrib_project_multi):
+        """Default: paths=(D,) where D is not dirty in warehouse → ValueError."""
+        project, wh = contrib_project_multi
+        # contexts/d.md doesn't exist at all, so it has no porcelain status
         with pytest.raises(ValueError) as exc_info:
             contribute(
                 project,
@@ -368,6 +401,7 @@ class TestContributePaths:
                 paths=("contexts/d.md",),
             )
         assert "contexts/d.md" in str(exc_info.value)
+        assert "not dirty" in str(exc_info.value)
 
     def test_contribute_paths_empty_tuple_raises(self, contrib_project_multi):
         """paths=() raises ValueError with a clear message."""
@@ -526,12 +560,18 @@ class TestContributePaths:
 class TestDirtyOutsideScope:
     """Tests for PER-159: out-of-scope dirty file count in contribute."""
 
-    def test_no_changes_with_outside_scope_dirty_returns_count(self, contrib_project):
-        """Dirty file outside beacon.yaml -> no_changes with count >= 1."""
+    def test_no_changes_with_outside_scope_dirty_returns_count_only_tracked(
+        self, contrib_project
+    ):
+        """only_tracked=True: dirty file outside beacon.yaml -> no_changes with count >= 1.
+
+        Under the PER-203 default, the untracked file would be committed, so
+        this signal only makes sense in the legacy project-scoped mode.
+        """
         project, wh = contrib_project
         (wh / "untracked.md").write_text("# Untracked\nmodified\n")
 
-        result = contribute(project, message="x", push=False)
+        result = contribute(project, message="x", push=False, only_tracked=True)
         assert result.status == "no_changes"
         assert result.dirty_outside_scope_count >= 1
 
@@ -552,3 +592,192 @@ class TestDirtyOutsideScope:
         result = contribute(project, message="commit a", push=False)
         assert result.status == "committed"
         assert result.dirty_outside_scope_count == 0
+
+
+class TestPer203WarehouseScopedDefault:
+    """PER-203: default is warehouse-scoped — any dirty warehouse path is committable.
+
+    The legacy beacon.yaml filter survives behind only_tracked=True.
+    """
+
+    def test_brand_new_skill_path_commits_without_beacon_yaml_entry(
+        self, contrib_project
+    ):
+        """A new skill folder not in beacon.yaml is committable via --paths under default."""
+        project, wh = contrib_project
+        env = _git_env()
+
+        skill_dir = wh / "skills" / "brand-new"
+        skill_dir.mkdir(parents=True)
+        skill_file = skill_dir / "SKILL.md"
+        skill_file.write_text("---\nname: brand-new\n---\nbody\n")
+
+        result = contribute(
+            project,
+            message="feat(skills): add brand-new skill",
+            push=False,
+            paths=("skills/brand-new/SKILL.md",),
+        )
+        assert result.status == "committed"
+        assert result.committed_sha
+
+        committed_files = subprocess.run(
+            ["git", "show", "--name-only", "--format=", "HEAD"],
+            cwd=wh,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert "skills/brand-new/SKILL.md" in committed_files.stdout
+
+    def test_cross_project_knowledge_commits_without_beacon_yaml_entry(
+        self, contrib_project
+    ):
+        """A knowledge file not in beacon.yaml is committable under default."""
+        project, wh = contrib_project
+        env = _git_env()
+
+        knowledge_dir = wh / "knowledge" / "infrastructure"
+        knowledge_dir.mkdir(parents=True)
+        knowledge_file = knowledge_dir / "router-config.md"
+        knowledge_file.write_text("# Router config\n")
+
+        result = contribute(
+            project,
+            message="docs(knowledge): add router config",
+            push=False,
+            paths=("knowledge/infrastructure/router-config.md",),
+        )
+        assert result.status == "committed"
+
+        committed_files = subprocess.run(
+            ["git", "show", "--name-only", "--format=", "HEAD"],
+            cwd=wh,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert "knowledge/infrastructure/router-config.md" in committed_files.stdout
+
+    def test_default_paths_none_commits_all_dirty(self, contrib_project):
+        """Default (paths=None, only_tracked=False) commits ALL dirty paths.
+
+        Includes paths not in beacon.yaml — that's the whole point of PER-203.
+        """
+        project, wh = contrib_project
+        env = _git_env()
+
+        # Dirty an in-beacon.yaml file + an out-of-beacon.yaml file
+        (wh / "contexts" / "test.md").write_text("# Test modified\n")
+        (wh / "scratch.md").write_text("# scratch\n")
+
+        result = contribute(project, message="commit everything", push=False)
+        assert result.status == "committed"
+
+        committed_files = subprocess.run(
+            ["git", "show", "--name-only", "--format=", "HEAD"],
+            cwd=wh,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert "contexts/test.md" in committed_files.stdout
+        assert "scratch.md" in committed_files.stdout
+
+    def test_only_tracked_preserves_legacy_filter(self, contrib_project):
+        """only_tracked=True: out-of-beacon.yaml dirty file is NOT committed."""
+        project, wh = contrib_project
+        env = _git_env()
+
+        (wh / "contexts" / "test.md").write_text("# Test modified\n")
+        (wh / "scratch.md").write_text("# scratch\n")
+
+        result = contribute(
+            project, message="commit tracked only", push=False, only_tracked=True
+        )
+        assert result.status == "committed"
+
+        committed_files = subprocess.run(
+            ["git", "show", "--name-only", "--format=", "HEAD"],
+            cwd=wh,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert "contexts/test.md" in committed_files.stdout
+        assert "scratch.md" not in committed_files.stdout
+
+    def test_default_paths_none_with_no_dirty_files_returns_no_changes(
+        self, contrib_project
+    ):
+        """Default mode: clean warehouse → no_changes."""
+        project, wh = contrib_project
+        result = contribute(project, message="x", push=False)
+        assert result.status == "no_changes"
+        assert result.dirty_outside_scope_count == 0
+
+    def test_default_paths_to_dirty_brand_new_file_commits(self, contrib_project):
+        """Default: --paths pointing to an untracked but dirty file commits it."""
+        project, wh = contrib_project
+
+        (wh / "fresh.md").write_text("# fresh\n")  # untracked
+
+        result = contribute(
+            project,
+            message="add fresh",
+            push=False,
+            paths=("fresh.md",),
+        )
+        assert result.status == "committed"
+
+    def test_default_paths_normalization_still_applied(self, contrib_project):
+        """Default: leading './' and '//' are normalized before the dirty check."""
+        project, wh = contrib_project
+        (wh / "contexts" / "test.md").write_text("# normalized\n")
+
+        result = contribute(
+            project,
+            message="normalize",
+            push=False,
+            paths=("./contexts//test.md",),
+        )
+        assert result.status == "committed"
+
+    def test_default_paths_absolute_rejected(self, contrib_project):
+        """Default: absolute paths still raise (path-shape validation runs first)."""
+        project, wh = contrib_project
+        with pytest.raises(ValueError) as exc_info:
+            contribute(
+                project,
+                message="x",
+                push=False,
+                paths=("/absolute/foo.md",),
+            )
+        assert "absolute" in str(exc_info.value).lower()
+
+    def test_default_excludes_dot_git_paths(self, contrib_project):
+        """Default (paths=None): contents of .git/ never reach the commit."""
+        project, wh = contrib_project
+        env = _git_env()
+
+        # Trick: write something inside .git/ — git status won't list it,
+        # but defend that _all_dirty_paths drops anything under .git/.
+        (wh / ".git" / "junk.txt").write_text("nope\n")
+        (wh / "contexts" / "test.md").write_text("# test\n")
+
+        result = contribute(project, message="commit", push=False)
+        assert result.status == "committed"
+
+        committed_files = subprocess.run(
+            ["git", "show", "--name-only", "--format=", "HEAD"],
+            cwd=wh,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert ".git" not in committed_files.stdout

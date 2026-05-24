@@ -350,7 +350,12 @@ class TestFilterCleanPaths:
 
 
 class TestBeaconYamlDefault:
-    """Tests for Finding 2 fix: beacon.yaml resolution uses project root, not warehouse."""
+    """Project-root resolution helpers used by the --only-project-artifacts opt-in.
+
+    PER-202 made the default warehouse-scoped (see TestWarehouseScopedDefault),
+    but the legacy beacon.yaml-filtered path still depends on these helpers to
+    locate the invoking project's beacon.yaml.
+    """
 
     def _make_project_with_beacon_yaml(
         self, tmp_path: Path, patterns: list[str]
@@ -843,3 +848,162 @@ class TestPer183AgentsAreTracked:
         mod = _load_script()
         result = mod.summarize(warehouse, beacon_yaml)
         assert any(e["path"] == "contexts/c1.md" for e in result["tracked_paths"])
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PER-202: warehouse-scoped enumeration is the new default
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestWarehouseScopedDefault:
+    """PER-202: default mode enumerates every dirty warehouse path with no project context.
+
+    The skill must work from any CWD, including a directory with no
+    ``.agentic-beacon/config.toml`` and against warehouses with no
+    ``beacon.yaml`` anywhere.
+    """
+
+    def test_summarize_all_returns_dirty_path_with_no_beacon_yaml(self, tmp_path):
+        """No beacon.yaml anywhere → dirty path still appears."""
+        warehouse = _make_git_warehouse(tmp_path)
+        ctx_file = warehouse / "contexts" / "python-standards.md"
+        ctx_file.write_text("# Python Standards\n")
+        _initial_commit(warehouse, [ctx_file])
+        ctx_file.write_text("# Python Standards\nmodified\n")
+
+        mod = _load_script()
+        result = mod.summarize_all(warehouse)
+        paths = [e["path"] for e in result["tracked_paths"]]
+        assert "contexts/python-standards.md" in paths
+
+    def test_summarize_all_includes_brand_new_untracked_skill(self, tmp_path):
+        """Untracked file under skills/never-adopted/ appears in tracked_paths."""
+        warehouse = _make_git_warehouse(tmp_path)
+        # Initial empty commit so HEAD exists
+        subprocess.run(
+            ["git", "-C", str(warehouse), "commit", "--allow-empty", "-m", "init"],
+            check=True,
+            capture_output=True,
+        )
+        skill_dir = warehouse / "skills" / "never-adopted"
+        skill_dir.mkdir(parents=True)
+        skill_file = skill_dir / "SKILL.md"
+        skill_file.write_text("---\nname: never-adopted\n---\nhello\n")
+
+        mod = _load_script()
+        result = mod.summarize_all(warehouse)
+        paths = [e["path"] for e in result["tracked_paths"]]
+        assert "skills/never-adopted/SKILL.md" in paths, (
+            f"PER-202: brand-new untracked skill should appear. Got: {paths}"
+        )
+        entry = next(
+            e
+            for e in result["tracked_paths"]
+            if e["path"] == "skills/never-adopted/SKILL.md"
+        )
+        assert entry["git_status"].strip() == "??"
+        assert entry["warehouse_area"] == "skills"
+
+    def test_summarize_all_classifies_warehouse_area(self, tmp_path):
+        """warehouse_area is derived from the top-level directory."""
+        warehouse = _make_git_warehouse(tmp_path)
+        subprocess.run(
+            ["git", "-C", str(warehouse), "commit", "--allow-empty", "-m", "init"],
+            check=True,
+            capture_output=True,
+        )
+        # Create one dirty file in each known area + one in "other"
+        (warehouse / "contexts").mkdir(exist_ok=True)
+        (warehouse / "knowledge").mkdir(exist_ok=True)
+        (warehouse / "skills" / "s").mkdir(parents=True, exist_ok=True)
+        (warehouse / "agents").mkdir(exist_ok=True)
+        (warehouse / "docs").mkdir(exist_ok=True)
+
+        (warehouse / "contexts" / "c.md").write_text("c\n")
+        (warehouse / "knowledge" / "k.md").write_text("k\n")
+        (warehouse / "skills" / "s" / "SKILL.md").write_text("s\n")
+        (warehouse / "agents" / "a.md").write_text("a\n")
+        (warehouse / "docs" / "d.md").write_text("d\n")
+
+        mod = _load_script()
+        result = mod.summarize_all(warehouse)
+        by_path = {e["path"]: e["warehouse_area"] for e in result["tracked_paths"]}
+        assert by_path.get("contexts/c.md") == "contexts"
+        assert by_path.get("knowledge/k.md") == "knowledge"
+        assert by_path.get("skills/s/SKILL.md") == "skills"
+        assert by_path.get("agents/a.md") == "agents"
+        assert by_path.get("docs/d.md") == "other"
+
+    def test_summarize_all_excludes_clean_files(self, tmp_path):
+        """Committed-and-untouched files do not appear."""
+        warehouse = _make_git_warehouse(tmp_path)
+        ctx_file = warehouse / "contexts" / "clean.md"
+        ctx_file.write_text("# clean\n")
+        _initial_commit(warehouse, [ctx_file])
+
+        mod = _load_script()
+        result = mod.summarize_all(warehouse)
+        paths = [e["path"] for e in result["tracked_paths"]]
+        assert "contexts/clean.md" not in paths
+        assert paths == []
+
+    def test_summarize_all_includes_deleted_file(self, tmp_path):
+        """Unstaged deletion appears with a D status (PER-186 regression in new path)."""
+        warehouse = _make_git_warehouse(tmp_path)
+        ctx_file = warehouse / "contexts" / "to-delete.md"
+        ctx_file.write_text("# delete me\n")
+        _initial_commit(warehouse, [ctx_file])
+        ctx_file.unlink()
+
+        mod = _load_script()
+        result = mod.summarize_all(warehouse)
+        entries = {e["path"]: e for e in result["tracked_paths"]}
+        assert "contexts/to-delete.md" in entries
+        assert "D" in entries["contexts/to-delete.md"]["git_status"]
+
+    def test_classify_warehouse_area_helper(self):
+        """classify_warehouse_area maps top-level directory to area string."""
+        mod = _load_script()
+        assert mod.classify_warehouse_area("contexts/foo.md") == "contexts"
+        assert mod.classify_warehouse_area("knowledge/python/lesson.md") == "knowledge"
+        assert mod.classify_warehouse_area("skills/foo/SKILL.md") == "skills"
+        assert mod.classify_warehouse_area("agents/foo.md") == "agents"
+        assert mod.classify_warehouse_area("docs/README.md") == "other"
+        assert mod.classify_warehouse_area("") == "other"
+
+    def test_summarize_all_no_project_context_required(self, tmp_path, monkeypatch):
+        """Invocation from a CWD with no .agentic-beacon/config.toml succeeds."""
+        warehouse = _make_git_warehouse(tmp_path)
+        ctx_file = warehouse / "contexts" / "f.md"
+        ctx_file.write_text("# f\n")
+        _initial_commit(warehouse, [ctx_file])
+        ctx_file.write_text("# f modified\n")
+
+        # CWD is a bare directory with no beacon config in the tree
+        bare = tmp_path / "elsewhere"
+        bare.mkdir()
+        monkeypatch.chdir(bare)
+
+        mod = _load_script()
+        # Must not raise, must not depend on project root resolution
+        result = mod.summarize_all(warehouse)
+        paths = [e["path"] for e in result["tracked_paths"]]
+        assert "contexts/f.md" in paths
+
+    def test_summarize_all_skips_dot_git_entries(self, tmp_path):
+        """Anything under .git/ is never reported."""
+        warehouse = _make_git_warehouse(tmp_path)
+        subprocess.run(
+            ["git", "-C", str(warehouse), "commit", "--allow-empty", "-m", "init"],
+            check=True,
+            capture_output=True,
+        )
+        # Write a junk file inside .git/ — porcelain would never list it,
+        # but the filter is defensive in case of unusual configurations.
+        junk = warehouse / ".git" / "spurious.txt"
+        junk.write_text("nope\n")
+
+        mod = _load_script()
+        result = mod.summarize_all(warehouse)
+        for e in result["tracked_paths"]:
+            assert not e["path"].startswith(".git/")

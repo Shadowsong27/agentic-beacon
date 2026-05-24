@@ -93,7 +93,7 @@ Suggested recovery:
 
 Do NOT stash, do NOT skip lint, do NOT proceed on a lint failure.
 
-### Step 3: Summarize Dirty Tracked Paths
+### Step 3: Summarize Dirty Warehouse Paths
 
 Run the summarizer to build a structured view of what has changed:
 
@@ -101,21 +101,17 @@ Run the summarizer to build a structured view of what has changed:
 uv run ${SKILL_DIR}/scripts/summarize_changes.py --warehouse "$WAREHOUSE_ROOT"
 ```
 
-The script auto-detects the project root by walking up from CWD looking for
-`.agentic-beacon/config.toml`. If auto-detection fails (e.g. skill is run from
-an unrelated directory), pass the project root explicitly:
-
-```bash
-uv run ${SKILL_DIR}/scripts/summarize_changes.py \
-  --warehouse "$WAREHOUSE_ROOT" \
-  --project-root /path/to/project
-```
+The summarizer enumerates **every** dirty path in the warehouse working tree
+(PER-202) — no `.agentic-beacon/config.toml` lookup, no `beacon.yaml` filter,
+no project-context dependency. The skill works from any CWD, including a brand
+new warehouse with no projects connected yet.
 
 Parse the JSON output. Each entry in `tracked_paths` contains:
 - `path` — warehouse-relative path
 - `git_status` — porcelain code (e.g. `M`, `A`, `??`)
 - `diff_stat` — one-line diff summary
 - `last_commit_age_days` — days since last commit, or `null`
+- `warehouse_area` — top-level area (`contexts`, `knowledge`, `skills`, `agents`, or `other`)
 
 If the JSON output is empty (`{"tracked_paths": []}`), tell the user there is
 nothing to contribute and stop cleanly.
@@ -358,7 +354,7 @@ Contribution summary:
 | Script | Purpose | Dependencies |
 |---|---|---|
 | `resolve_warehouse.py` | Resolve warehouse path from `.agentic-beacon/config.toml` | stdlib only |
-| `summarize_changes.py` | Build structured JSON view of dirty tracked paths | `agentic-beacon` |
+| `summarize_changes.py` | Build structured JSON view of every dirty warehouse path | `pyyaml` (PEP 723) |
 | `draft_commit_message.py` | Derive deterministic Conventional Commits message | stdlib only |
 | `push_warehouse.py` | Atomic push with recovery-command output on failure | stdlib only |
 
