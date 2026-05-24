@@ -1,5 +1,33 @@
 # Changelog
 
+## [3.5.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v3.4.0...agentic-beacon@v3.5.0) (2026-05-24)
+
+
+### Features
+
+* **doctor:** project-side symlink + [@path](https://github.com/path) integrity checks (PER-193) ([#155](https://github.com/Shadowsong27/agentic-beacon/issues/155)) ([ebb826c](https://github.com/Shadowsong27/agentic-beacon/commit/ebb826cd29924da177eac17762e83c1b9d330d05))
+
+
+### Bug Fixes
+
+* **adopt:** dedupe pending.yaml entries on write + read (PER-188) ([#154](https://github.com/Shadowsong27/agentic-beacon/issues/154)) ([4eac908](https://github.com/Shadowsong27/agentic-beacon/commit/4eac908f36e94f3de7dbf8da17b94d759c670c1e))
+* **skills:** handle compound git porcelain status codes in draft_commit_message.py ([#152](https://github.com/Shadowsong27/agentic-beacon/issues/152)) ([34b7218](https://github.com/Shadowsong27/agentic-beacon/commit/34b7218b8b51ab630fcf60b0440311e9ef5901a8))
+* **warehouse:** include tracked deleted files in summary + tracked-paths expansion (PER-186) ([#153](https://github.com/Shadowsong27/agentic-beacon/issues/153)) ([5765915](https://github.com/Shadowsong27/agentic-beacon/commit/5765915e63ae7d520935d6d02dd4895d756fc5ca))
+* **warehouse:** make contribute + summarize warehouse-scoped (PER-202, PER-203) ([#156](https://github.com/Shadowsong27/agentic-beacon/issues/156)) ([6ad58c8](https://github.com/Shadowsong27/agentic-beacon/commit/6ad58c84c7e33d77de55f483cef68f7553e89fd0))
+* **warehouse:** normalize --paths input before tracked-set membership check (PER-184) ([#151](https://github.com/Shadowsong27/agentic-beacon/issues/151)) ([daac8e0](https://github.com/Shadowsong27/agentic-beacon/commit/daac8e0ff6ff1fd7e4454672038f11e590533758))
+* **warehouse:** surface out-of-scope dirty file count in status/contribute ([#148](https://github.com/Shadowsong27/agentic-beacon/issues/148)) ([96ce01c](https://github.com/Shadowsong27/agentic-beacon/commit/96ce01c97e1e5247c94890409e54145b1b88bca2))
+
+
+### Documentation
+
+* **agents:** document _partials convention + record detect_agent_targets gating decision ([8f6b0c6](https://github.com/Shadowsong27/agentic-beacon/commit/8f6b0c613b45e663fd98a943f7ef526a45529317))
+* consolidate docs/ into mkdocs site (PER-190) ([#150](https://github.com/Shadowsong27/agentic-beacon/issues/150)) ([83b1fbf](https://github.com/Shadowsong27/agentic-beacon/commit/83b1fbf86adba0b2c902ff34838f5ad15454049b))
+
+
+### Miscellaneous Chores
+
+* **ci:** refresh agents/README.md template hashes after docs sync ([048b36e](https://github.com/Shadowsong27/agentic-beacon/commit/048b36ee3c2815a0332dcf66f16560264f7b1c43))
+
 ## [3.4.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v3.3.0...agentic-beacon@v3.4.0) (2026-05-17)
 
 
