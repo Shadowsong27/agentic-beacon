@@ -284,7 +284,12 @@ def contribute(
             # rename and is fragile against unusual filenames.
             if not _has_any_dirty_path(warehouse_path):
                 return ContributeResult(status="no_changes")
-            _run_git(warehouse_path, ["add", "-A"])
+            add_result = _run_git(warehouse_path, ["add", "-A"])
+            if add_result.returncode != 0:
+                logger.error("Git add -A failed: {}", add_result.stderr)
+                raise RuntimeError(
+                    f"Git add -A failed in warehouse: {add_result.stderr.strip()}"
+                )
             commit_result = _run_git(warehouse_path, ["commit", "-m", message])
             if commit_result.returncode != 0:
                 logger.error("Git commit failed: {}", commit_result.stderr)
