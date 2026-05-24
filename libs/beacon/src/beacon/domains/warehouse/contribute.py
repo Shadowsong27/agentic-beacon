@@ -68,6 +68,22 @@ def _has_any_dirty_path(warehouse_path: Path) -> bool:
     return any(line.strip() for line in full.stdout.splitlines())
 
 
+def _unquote_porcelain_path(path: str) -> str:
+    """Unquote a ``git status --porcelain`` path.
+
+    Git wraps paths containing whitespace, control chars, or non-ASCII in
+    double quotes and C-escapes the contents. Unwrap them so dict keys match
+    user-supplied (unquoted) ``--paths`` arguments. Plain ASCII paths pass
+    through unchanged.
+    """
+    if path.startswith('"') and path.endswith('"'):
+        try:
+            return path[1:-1].encode("utf-8").decode("unicode_escape")
+        except UnicodeDecodeError:
+            return path
+    return path
+
+
 def _expand_rename_sources(warehouse_path: Path, user_paths: list[str]) -> list[str]:
     """For each user path that is the destination of a rename or copy, also
     include the source path in the returned list.
@@ -97,7 +113,9 @@ def _expand_rename_sources(warehouse_path: Path, user_paths: list[str]) -> list[
         # Gate the ' -> ' split on R/C status codes (PR#156 M2 lesson).
         if code[0] in ("R", "C") and " -> " in rest:
             src, dst = rest.split(" -> ", 1)
-            rename_sources_by_dest[dst] = src
+            rename_sources_by_dest[_unquote_porcelain_path(dst)] = (
+                _unquote_porcelain_path(src)
+            )
 
     expanded: list[str] = []
     seen: set[str] = set()

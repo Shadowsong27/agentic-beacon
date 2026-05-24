@@ -808,6 +808,76 @@ class TestPer203WarehouseScopedDefault:
         )
         assert "renamed.md" in out
 
+    def test_default_paths_rename_with_spaces_commits_both_sides(self, contrib_project):
+        """--paths <dest-with-spaces> for a rename auto-expands source path.
+
+        Regression for opencode-review PR#156 round 3: porcelain quotes paths
+        containing whitespace (e.g. ``"contexts/new name.md"``), so the dict
+        lookup in _expand_rename_sources must unquote them before matching
+        against the user's unquoted --paths argument. Without unquoting, the
+        rename source (`contexts/old name.md`) is never added to the commit
+        pathspec and its staged deletion is left dangling.
+        """
+        project, wh = contrib_project
+        env = _git_env()
+
+        # Set up a tracked file with a space in the name
+        spaced_old = wh / "contexts" / "old name.md"
+        spaced_old.write_text("# spaced\n")
+        subprocess.run(
+            ["git", "-C", str(wh), "add", "contexts/old name.md"],
+            cwd=wh,
+            env=env,
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(wh), "commit", "-m", "add spaced file"],
+            cwd=wh,
+            env=env,
+            check=True,
+            capture_output=True,
+        )
+
+        # git mv to a new name (also with a space)
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(wh),
+                "mv",
+                "contexts/old name.md",
+                "contexts/new name.md",
+            ],
+            cwd=wh,
+            env=env,
+            check=True,
+            capture_output=True,
+        )
+
+        result = contribute(
+            project,
+            message="rename spaced file via --paths",
+            push=False,
+            paths=("contexts/new name.md",),
+        )
+        assert result.status == "committed"
+
+        # Working tree + index must be clean — the old-side deletion is
+        # NOT left dangling.
+        post_status = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=wh,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert post_status.stdout.strip() == "", (
+            f"After spaced rename commit, tree must be clean. "
+            f"Got: {post_status.stdout!r}"
+        )
+
     def test_default_paths_explicit_rename_dest_commits_both_sides(
         self, contrib_project
     ):
