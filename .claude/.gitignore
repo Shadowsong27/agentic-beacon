@@ -1,2 +1,6 @@
 skills/
 settings.local.json
+
+# Agentic Beacon
+scheduled_tasks.lock
+worktrees/
