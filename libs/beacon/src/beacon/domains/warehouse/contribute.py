@@ -68,6 +68,63 @@ def _has_any_dirty_path(warehouse_path: Path) -> bool:
     return any(line.strip() for line in full.stdout.splitlines())
 
 
+def _expand_rename_sources(warehouse_path: Path, user_paths: list[str]) -> list[str]:
+    """For each user path that is the destination of a rename or copy, also
+    include the source path in the returned list.
+
+    Porcelain reports renames as ``R  old -> new`` and copies as ``C  old ->
+    new``. When the caller asks to commit only ``new``, git would commit the
+    new file but leave the old-side deletion staged. Including both sides in
+    the pathspec keeps the commit atomic.
+
+    The source path appears immediately after its destination in the returned
+    list to keep ordering predictable. Duplicate sources (when multiple
+    destinations map to the same source — unusual but valid for copies) are
+    only added once.
+    """
+    rc, stdout, _ = _run_git_inner(
+        warehouse_path, ["status", "--porcelain", "--untracked-files=all"]
+    )
+    if rc != 0:
+        return user_paths
+
+    rename_sources_by_dest: dict[str, str] = {}
+    for line in stdout.splitlines():
+        if len(line) < 4:
+            continue
+        code = line[:2]
+        rest = line[3:]
+        # Gate the ' -> ' split on R/C status codes (PR#156 M2 lesson).
+        if code[0] in ("R", "C") and " -> " in rest:
+            src, dst = rest.split(" -> ", 1)
+            rename_sources_by_dest[dst] = src
+
+    expanded: list[str] = []
+    seen: set[str] = set()
+    for p in user_paths:
+        if p not in seen:
+            expanded.append(p)
+            seen.add(p)
+        src = rename_sources_by_dest.get(p)
+        if src and src not in seen:
+            expanded.append(src)
+            seen.add(src)
+    return expanded
+
+
+def _run_git_inner(
+    warehouse_path: Path, args: list[str], timeout: int = 30
+) -> tuple[int, str, str]:
+    """Internal git runner returning a (rc, stdout, stderr) tuple."""
+    result = subprocess.run(
+        ["git", "-C", str(warehouse_path), *args],
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+    )
+    return result.returncode, result.stdout, result.stderr
+
+
 def _validate_dirty(warehouse_path: Path, candidate_paths: list[str]) -> None:
     """Raise ValueError if any candidate path has no porcelain status.
 
@@ -160,7 +217,11 @@ def contribute(
         if paths is not None:
             normalized_paths = [normalize_relative_path(p) for p in paths]
             _validate_dirty(warehouse_path, normalized_paths)
-            commit_paths = normalized_paths
+            # If any user path is the destination of a rename, transparently
+            # include the source so the commit captures both sides (PR#156
+            # round-2 review). Without this, `git commit -- dest` would
+            # commit the new file but leave the old-side deletion staged.
+            commit_paths = _expand_rename_sources(warehouse_path, normalized_paths)
         else:
             # paths=None: commit the entire working tree. We deliberately do
             # NOT enumerate-then-restrict here — `git add -A` + an unrestricted

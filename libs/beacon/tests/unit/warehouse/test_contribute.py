@@ -808,6 +808,61 @@ class TestPer203WarehouseScopedDefault:
         )
         assert "renamed.md" in out
 
+    def test_default_paths_explicit_rename_dest_commits_both_sides(
+        self, contrib_project
+    ):
+        """--paths <dest> for a rename auto-expands to include the source.
+
+        Regression for opencode-review PR#156 round 2: previously, passing
+        the destination of a git mv via --paths committed the new file but
+        left the old-side deletion staged. _expand_rename_sources() now
+        transparently includes the source path so the commit is atomic.
+        """
+        project, wh = contrib_project
+        env = _git_env()
+
+        subprocess.run(
+            ["git", "-C", str(wh), "mv", "contexts/test.md", "contexts/renamed.md"],
+            cwd=wh,
+            env=env,
+            check=True,
+            capture_output=True,
+        )
+
+        result = contribute(
+            project,
+            message="rename via --paths",
+            push=False,
+            paths=("contexts/renamed.md",),
+        )
+        assert result.status == "committed"
+
+        # Working tree + index must be clean — the old-side deletion is
+        # NOT left dangling as a staged change.
+        post_status = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=wh,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert post_status.stdout.strip() == "", (
+            f"After path-limited rename commit, tree must be clean. "
+            f"Got: {post_status.stdout!r}"
+        )
+
+        # Both sides must appear in the commit.
+        committed = subprocess.run(
+            ["git", "show", "--name-status", "--format=", "HEAD"],
+            cwd=wh,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert "renamed.md" in committed.stdout
+
     def test_default_paths_none_handles_filename_with_arrow(self, contrib_project):
         """Default mode commits a file literally named 'a -> b.md' without misparsing.
 
