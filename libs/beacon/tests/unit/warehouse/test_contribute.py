@@ -808,6 +808,70 @@ class TestPer203WarehouseScopedDefault:
         )
         assert "renamed.md" in out
 
+    def test_default_paths_rename_with_arrow_in_source_commits_both_sides(
+        self, contrib_project
+    ):
+        """--paths <dest> for a rename whose SOURCE contains ' -> '.
+
+        Regression for opencode-review PR#156 round 4: the prior parser would
+        split on the ' -> ' substring inside the source path, producing the
+        wrong source name and leaving the actual source's deletion staged.
+        The -z parser handles this correctly.
+        """
+        project, wh = contrib_project
+        env = _git_env()
+
+        # Create + commit a file whose name contains ' -> '
+        (wh / "notes").mkdir(exist_ok=True)
+        weird_src = wh / "notes" / "a -> b.md"
+        weird_src.write_text("# weird\n")
+        subprocess.run(
+            ["git", "-C", str(wh), "add", "notes/a -> b.md"],
+            cwd=wh,
+            env=env,
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "-C", str(wh), "commit", "-m", "add weird-named file"],
+            cwd=wh,
+            env=env,
+            check=True,
+            capture_output=True,
+        )
+
+        # Rename via git mv to a plain destination
+        subprocess.run(
+            ["git", "-C", str(wh), "mv", "notes/a -> b.md", "notes/c.md"],
+            cwd=wh,
+            env=env,
+            check=True,
+            capture_output=True,
+        )
+
+        result = contribute(
+            project,
+            message="rename arrow-source file via --paths",
+            push=False,
+            paths=("notes/c.md",),
+        )
+        assert result.status == "committed"
+
+        # Working tree + index clean: the deletion of 'notes/a -> b.md' was
+        # picked up as part of the rename, not left dangling.
+        post_status = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=wh,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert post_status.stdout.strip() == "", (
+            f"After arrow-source rename commit, tree must be clean. "
+            f"Got: {post_status.stdout!r}"
+        )
+
     def test_default_paths_rename_with_spaces_commits_both_sides(self, contrib_project):
         """--paths <dest-with-spaces> for a rename auto-expands source path.
 

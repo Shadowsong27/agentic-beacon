@@ -257,43 +257,64 @@ def classify_warehouse_area(path: str) -> str:
 def enumerate_dirty_paths(warehouse: Path) -> list[tuple[str, str]]:
     """Return [(path, status_code)] for every dirty path in the warehouse working tree.
 
-    Parses `git status --porcelain` directly — no beacon.yaml lookup, no project
-    context required. Handles renames by reporting the destination path. Skips
-    submodule directory entries (status starts with 'C ') and any path that
-    happens to fall under .git/.
+    Uses `git status --porcelain=v1 -z` so the parser is immune to:
+      * substring collisions on ` -> ` in regular filenames
+      * git's C-style quoting of paths containing spaces or special chars
+      * rename source paths that themselves contain ` -> `
+
+    The `-z` format emits NUL-delimited records with no escaping. A normal
+    entry is one record `XY <path>\\0`; rename / copy entries occupy two
+    records `XY <new>\\0<old>\\0`. We report the destination path for
+    rename/copy entries (the same convention as the human-readable format).
+
+    `--untracked-files=all` is required so a brand-new directory (e.g.
+    `skills/never-adopted/`) expands to its constituent files rather than
+    appearing as a single directory entry.
     """
-    # --untracked-files=all expands untracked directories to their constituent
-    # files; the default (--untracked-files=normal) reports only the directory
-    # name, which loses the path we need to commit.
-    rc, stdout, stderr = _run_git(
-        warehouse, ["status", "--porcelain", "--untracked-files=all"]
+    rc, stdout_bytes, stderr_bytes = _run_git_bytes(
+        warehouse, ["status", "--porcelain=v1", "-z", "--untracked-files=all"]
     )
     if rc != 0:
-        raise RuntimeError(f"git status failed in {warehouse}: {stderr.strip()}")
+        raise RuntimeError(
+            f"git status failed in {warehouse}: "
+            f"{stderr_bytes.decode('utf-8', errors='replace').strip()}"
+        )
+
+    # Split on NUL; trailing NUL produces an empty final record.
+    records = stdout_bytes.split(b"\0")
+    if records and records[-1] == b"":
+        records.pop()
 
     entries: list[tuple[str, str]] = []
-    for line in stdout.splitlines():
-        if len(line) < 4:
+    i = 0
+    while i < len(records):
+        rec = records[i]
+        if len(rec) < 3:
+            i += 1
             continue
-        code = line[:2]
-        rest = line[3:]
-        # Rename / copy: 'R  old -> new' or 'C  old -> new'. Gate the split on
-        # the status code rather than the literal ' -> ' substring — a regular
-        # untracked filename can contain ' -> ' and must not be misparsed.
-        if code[0] in ("R", "C") and " -> " in rest:
-            path = rest.split(" -> ", 1)[1]
+        code = rec[:2].decode("utf-8", errors="replace")
+        new_path = rec[3:].decode("utf-8", errors="replace")
+        if code[0] in ("R", "C") and i + 1 < len(records):
+            # Rename/copy: also consume the old-path record.
+            i += 2
         else:
-            path = rest
-        # Strip git's quoting of paths containing special characters
-        if path.startswith('"') and path.endswith('"'):
-            try:
-                path = path[1:-1].encode("utf-8").decode("unicode_escape")
-            except UnicodeDecodeError:
-                pass
-        if ".git" in Path(path).parts:
+            i += 1
+        if ".git" in Path(new_path).parts:
             continue
-        entries.append((path, code))
+        entries.append((new_path, code))
     return entries
+
+
+def _run_git_bytes(
+    warehouse: Path, args: list[str], timeout: int = 30
+) -> tuple[int, bytes, bytes]:
+    """Run a git command inside warehouse, return (rc, stdout_bytes, stderr_bytes)."""
+    result = subprocess.run(
+        ["git", "-C", str(warehouse)] + args,
+        capture_output=True,
+        timeout=timeout,
+    )
+    return result.returncode, result.stdout, result.stderr
 
 
 def summarize_all(warehouse: Path) -> dict:

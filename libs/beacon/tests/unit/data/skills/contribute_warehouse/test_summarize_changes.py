@@ -1019,6 +1019,39 @@ class TestWarehouseScopedDefault:
             f"Original filename must round-trip. Got: {paths}"
         )
 
+    def test_summarize_all_rename_with_arrow_in_source_path(self, tmp_path):
+        """Rename where the SOURCE path contains ' -> ' is parsed correctly.
+
+        Regression for opencode-review PR#156 round 4: the previous
+        ' -> '-split-based parser would split on the substring inside the
+        source path, mapping the rename incorrectly. The -z parser is
+        immune.
+        """
+        warehouse = _make_git_warehouse(tmp_path)
+        (warehouse / "notes").mkdir(exist_ok=True)
+        weird_src = warehouse / "notes" / "a -> b.md"
+        weird_src.write_text("# weird src\n")
+        _initial_commit(warehouse, [weird_src])
+
+        # Rename the file with ' -> ' in its name to a plain destination
+        subprocess.run(
+            ["git", "-C", str(warehouse), "mv", "notes/a -> b.md", "notes/c.md"],
+            check=True,
+            capture_output=True,
+        )
+
+        mod = _load_script()
+        result = mod.summarize_all(warehouse)
+        paths = [e["path"] for e in result["tracked_paths"]]
+        # The destination must be the real new path 'notes/c.md', NOT 'b.md'
+        # (which would result from naively splitting on ' -> ').
+        assert "notes/c.md" in paths, (
+            f"Rename with arrow-in-source should report 'notes/c.md'. Got: {paths}"
+        )
+        assert "b.md" not in paths, (
+            f"' -> ' substring split must not corrupt rename dest. Got: {paths}"
+        )
+
     def test_summarize_all_rename_uses_destination_path(self, tmp_path):
         """A staged rename 'R old -> new' reports the new path."""
         warehouse = _make_git_warehouse(tmp_path)

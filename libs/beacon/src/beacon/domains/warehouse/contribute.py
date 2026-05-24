@@ -68,54 +68,82 @@ def _has_any_dirty_path(warehouse_path: Path) -> bool:
     return any(line.strip() for line in full.stdout.splitlines())
 
 
-def _unquote_porcelain_path(path: str) -> str:
-    """Unquote a ``git status --porcelain`` path.
+def _parse_porcelain_z(stdout_bytes: bytes) -> list[tuple[str, str, str | None]]:
+    """Parse ``git status --porcelain=v1 -z`` output.
 
-    Git wraps paths containing whitespace, control chars, or non-ASCII in
-    double quotes and C-escapes the contents. Unwrap them so dict keys match
-    user-supplied (unquoted) ``--paths`` arguments. Plain ASCII paths pass
-    through unchanged.
+    The ``-z`` format emits NUL-delimited records with no quoting or escaping.
+    Each normal entry is one record ``XY <path>\\0``. Rename and copy entries
+    occupy *two* records: ``XY <new-path>\\0<old-path>\\0``. The XY status
+    code is the first two bytes; byte 2 is a space; the path starts at byte 3.
+
+    Returns ``(code, new_path, old_path)`` tuples. ``old_path`` is ``None``
+    for non-R/C entries.
+
+    Using ``-z`` sidesteps every variant of the string-split parsing bug:
+    substring ``' -> '`` in untracked filenames, C-quoted paths with spaces
+    or special chars, and rename source paths that themselves contain
+    ``' -> '`` (PR#156 review rounds 1-4).
     """
-    if path.startswith('"') and path.endswith('"'):
-        try:
-            return path[1:-1].encode("utf-8").decode("unicode_escape")
-        except UnicodeDecodeError:
-            return path
-    return path
+    records = stdout_bytes.split(b"\0")
+    # The terminating NUL produces an empty trailing record.
+    if records and records[-1] == b"":
+        records.pop()
+
+    result: list[tuple[str, str, str | None]] = []
+    i = 0
+    while i < len(records):
+        rec = records[i]
+        if len(rec) < 3:
+            i += 1
+            continue
+        code = rec[:2].decode("utf-8", errors="replace")
+        new_path = rec[3:].decode("utf-8", errors="replace")
+        if code[0] in ("R", "C") and i + 1 < len(records):
+            old_path = records[i + 1].decode("utf-8", errors="replace")
+            result.append((code, new_path, old_path))
+            i += 2
+        else:
+            result.append((code, new_path, None))
+            i += 1
+    return result
+
+
+def _run_git_bytes(
+    warehouse_path: Path, args: list[str], timeout: int = 30
+) -> tuple[int, bytes, bytes]:
+    """Internal git runner returning raw bytes (required for ``-z`` parsing)."""
+    result = subprocess.run(
+        ["git", "-C", str(warehouse_path), *args],
+        capture_output=True,
+        timeout=timeout,
+    )
+    return result.returncode, result.stdout, result.stderr
 
 
 def _expand_rename_sources(warehouse_path: Path, user_paths: list[str]) -> list[str]:
     """For each user path that is the destination of a rename or copy, also
     include the source path in the returned list.
 
-    Porcelain reports renames as ``R  old -> new`` and copies as ``C  old ->
-    new``. When the caller asks to commit only ``new``, git would commit the
-    new file but leave the old-side deletion staged. Including both sides in
-    the pathspec keeps the commit atomic.
+    Uses ``git status --porcelain=v1 -z`` so the parser is immune to:
+      * substring collisions on ``' -> '`` in regular filenames
+      * git's C-style quoting of paths containing spaces or special chars
+      * rename source paths that themselves contain ``' -> '``
 
     The source path appears immediately after its destination in the returned
-    list to keep ordering predictable. Duplicate sources (when multiple
-    destinations map to the same source — unusual but valid for copies) are
-    only added once.
+    list. Duplicate sources (when multiple destinations map to the same source
+    — unusual but valid for copies) are only added once.
     """
-    rc, stdout, _ = _run_git_inner(
-        warehouse_path, ["status", "--porcelain", "--untracked-files=all"]
+    rc, stdout, _ = _run_git_bytes(
+        warehouse_path,
+        ["status", "--porcelain=v1", "-z", "--untracked-files=all"],
     )
     if rc != 0:
         return user_paths
 
     rename_sources_by_dest: dict[str, str] = {}
-    for line in stdout.splitlines():
-        if len(line) < 4:
-            continue
-        code = line[:2]
-        rest = line[3:]
-        # Gate the ' -> ' split on R/C status codes (PR#156 M2 lesson).
-        if code[0] in ("R", "C") and " -> " in rest:
-            src, dst = rest.split(" -> ", 1)
-            rename_sources_by_dest[_unquote_porcelain_path(dst)] = (
-                _unquote_porcelain_path(src)
-            )
+    for code, new_path, old_path in _parse_porcelain_z(stdout):
+        if code[0] in ("R", "C") and old_path is not None:
+            rename_sources_by_dest[new_path] = old_path
 
     expanded: list[str] = []
     seen: set[str] = set()
@@ -128,19 +156,6 @@ def _expand_rename_sources(warehouse_path: Path, user_paths: list[str]) -> list[
             expanded.append(src)
             seen.add(src)
     return expanded
-
-
-def _run_git_inner(
-    warehouse_path: Path, args: list[str], timeout: int = 30
-) -> tuple[int, str, str]:
-    """Internal git runner returning a (rc, stdout, stderr) tuple."""
-    result = subprocess.run(
-        ["git", "-C", str(warehouse_path), *args],
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-    )
-    return result.returncode, result.stdout, result.stderr
 
 
 def _validate_dirty(warehouse_path: Path, candidate_paths: list[str]) -> None:
