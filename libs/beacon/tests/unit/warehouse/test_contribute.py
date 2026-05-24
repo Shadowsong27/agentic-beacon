@@ -808,6 +808,44 @@ class TestPer203WarehouseScopedDefault:
         )
         assert "renamed.md" in out
 
+    def test_default_paths_empty_string_rejected(self, contrib_project):
+        """--paths "" must not commit the entire warehouse.
+
+        Regression for opencode-review PR#156 round 8: previously
+        normalize_relative_path("") returned "." which became the literal
+        pathspec :(literal). and matched everything dirty in the warehouse.
+        """
+        project, wh = contrib_project
+        (wh / "contexts" / "test.md").write_text("# modified\n")
+
+        with pytest.raises(ValueError) as exc_info:
+            contribute(
+                project,
+                message="should fail",
+                push=False,
+                paths=("",),
+            )
+        assert "empty" in str(exc_info.value).lower()
+
+    def test_default_paths_dot_rejected(self, contrib_project):
+        """--paths "." must not commit the entire warehouse.
+
+        Companion to test_default_paths_empty_string_rejected — same root
+        cause, alternative payload. ".", "./", and "" all collapse to the
+        warehouse root and must be rejected by normalize_relative_path.
+        """
+        project, wh = contrib_project
+        (wh / "contexts" / "test.md").write_text("# modified\n")
+
+        with pytest.raises(ValueError) as exc_info:
+            contribute(
+                project,
+                message="should fail",
+                push=False,
+                paths=(".",),
+            )
+        assert "warehouse root" in str(exc_info.value).lower()
+
     def test_default_paths_glob_pattern_rejected_not_expanded(self, contrib_project):
         """--paths '*.md' is treated as a literal filename, not a glob.
 

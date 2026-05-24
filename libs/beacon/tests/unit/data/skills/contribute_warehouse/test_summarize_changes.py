@@ -1073,6 +1073,51 @@ class TestWarehouseScopedDefault:
             f"Rename should appear with destination path. Got: {paths}"
         )
 
+    def test_summarize_all_untracked_file_has_synthetic_diff_stat(self, tmp_path):
+        """Brand-new untracked files get a synthesized 'new file, N insertions' stat.
+
+        Regression for opencode-review PR#156 round 8: PER-202 made
+        untracked files a default summarizer case, but git diff --stat
+        returns nothing for ?? entries. The triage UI now gets a
+        line-count summary instead of an empty string.
+        """
+        warehouse = _make_git_warehouse(tmp_path)
+        subprocess.run(
+            ["git", "-C", str(warehouse), "commit", "--allow-empty", "-m", "init"],
+            check=True,
+            capture_output=True,
+        )
+        new_file = warehouse / "knowledge" / "fresh.md"
+        new_file.parent.mkdir(exist_ok=True)
+        new_file.write_text("line 1\nline 2\nline 3\n")
+
+        mod = _load_script()
+        result = mod.summarize_all(warehouse)
+        entries = {e["path"]: e for e in result["tracked_paths"]}
+        assert "knowledge/fresh.md" in entries
+        stat = entries["knowledge/fresh.md"]["diff_stat"]
+        # Should NOT be empty (regression).
+        assert stat, f"Untracked file must have a synthesized diff_stat, got: {stat!r}"
+        assert "new file" in stat
+        assert "3" in stat  # line count
+
+    def test_summarize_all_single_line_untracked_uses_singular(self, tmp_path):
+        """One-line untracked file pluralization is correct."""
+        warehouse = _make_git_warehouse(tmp_path)
+        subprocess.run(
+            ["git", "-C", str(warehouse), "commit", "--allow-empty", "-m", "init"],
+            check=True,
+            capture_output=True,
+        )
+        one_liner = warehouse / "notes.md"
+        one_liner.write_text("just one line\n")
+
+        mod = _load_script()
+        result = mod.summarize_all(warehouse)
+        entries = {e["path"]: e for e in result["tracked_paths"]}
+        assert "notes.md" in entries
+        assert "1 insertion(+)" in entries["notes.md"]["diff_stat"]
+
     def test_summarize_all_skips_dot_git_entries(self, tmp_path):
         """Anything under .git/ is never reported."""
         warehouse = _make_git_warehouse(tmp_path)

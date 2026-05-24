@@ -317,6 +317,23 @@ def _run_git_bytes(
     return result.returncode, result.stdout, result.stderr
 
 
+def _untracked_diff_stat(warehouse: Path, path: str) -> str:
+    """Synthesize a diff_stat for an untracked (``??``) file.
+
+    ``git diff --stat`` returns nothing for untracked files, so without this
+    the summarizer's triage output is degraded for the very entries PER-202
+    made first-class (brand-new artifacts not yet adopted by any project).
+    Mirror the shape of git's "1 file changed, N insertions(+)" summary.
+    """
+    full_path = warehouse / path
+    try:
+        with open(full_path, "rb") as f:
+            line_count = sum(1 for _ in f)
+    except OSError:
+        return "new file"
+    return f"new file, {line_count} insertion{'s' if line_count != 1 else ''}(+)"
+
+
 def summarize_all(warehouse: Path) -> dict:
     """Build the summary dict of every dirty path in the warehouse working tree."""
     try:
@@ -327,7 +344,13 @@ def summarize_all(warehouse: Path) -> dict:
 
     results = []
     for path, status in sorted(entries, key=lambda e: e[0]):
-        diff_stat = get_diff_stat(warehouse, path)
+        # Untracked files ('??') have no git-diff representation. Synthesize
+        # a line-count summary so the triage UI has something to show
+        # (PR#156 round 8).
+        if status.strip() == "??":
+            diff_stat = _untracked_diff_stat(warehouse, path)
+        else:
+            diff_stat = get_diff_stat(warehouse, path)
         age = get_last_commit_age_days(warehouse, path)
         results.append(
             {
