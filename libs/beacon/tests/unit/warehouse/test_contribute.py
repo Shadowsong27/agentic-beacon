@@ -808,6 +808,51 @@ class TestPer203WarehouseScopedDefault:
         )
         assert "renamed.md" in out
 
+    def test_default_paths_rename_source_in_paths_commits_both_sides(
+        self, contrib_project
+    ):
+        """--paths <source-of-rename> pulls in the destination too.
+
+        Regression for opencode-review PR#156 round 5: previously only
+        destination -> source was mapped, so passing the rename source path
+        committed just the deletion and left the new file staged. The
+        bidirectional rename map fixes this — passing either side captures
+        both.
+        """
+        project, wh = contrib_project
+        env = _git_env()
+
+        subprocess.run(
+            ["git", "-C", str(wh), "mv", "contexts/test.md", "contexts/renamed.md"],
+            cwd=wh,
+            env=env,
+            check=True,
+            capture_output=True,
+        )
+
+        # User supplies the SOURCE path (now deleted from working tree)
+        result = contribute(
+            project,
+            message="rename via --paths <source>",
+            push=False,
+            paths=("contexts/test.md",),
+        )
+        assert result.status == "committed"
+
+        # Working tree + index must be clean.
+        post_status = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=wh,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert post_status.stdout.strip() == "", (
+            f"After source-path rename commit, tree must be clean. "
+            f"Got: {post_status.stdout!r}"
+        )
+
     def test_default_paths_rename_with_arrow_in_source_commits_both_sides(
         self, contrib_project
     ):

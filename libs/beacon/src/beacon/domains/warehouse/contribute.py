@@ -140,10 +140,15 @@ def _expand_rename_sources(warehouse_path: Path, user_paths: list[str]) -> list[
     if rc != 0:
         return user_paths
 
-    rename_sources_by_dest: dict[str, str] = {}
+    # Bidirectional rename map: passing EITHER side of a rename in --paths
+    # must pull in the OTHER side so the commit is atomic. Without the
+    # source -> dest direction, --paths <old-path> would commit only the
+    # deletion and leave the new file staged (PR#156 round 5).
+    rename_counterpart: dict[str, str] = {}
     for code, new_path, old_path in _parse_porcelain_z(stdout):
         if code[0] in ("R", "C") and old_path is not None:
-            rename_sources_by_dest[new_path] = old_path
+            rename_counterpart[new_path] = old_path
+            rename_counterpart[old_path] = new_path
 
     expanded: list[str] = []
     seen: set[str] = set()
@@ -151,10 +156,10 @@ def _expand_rename_sources(warehouse_path: Path, user_paths: list[str]) -> list[
         if p not in seen:
             expanded.append(p)
             seen.add(p)
-        src = rename_sources_by_dest.get(p)
-        if src and src not in seen:
-            expanded.append(src)
-            seen.add(src)
+        counterpart = rename_counterpart.get(p)
+        if counterpart and counterpart not in seen:
+            expanded.append(counterpart)
+            seen.add(counterpart)
     return expanded
 
 
