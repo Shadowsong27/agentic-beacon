@@ -55,37 +55,17 @@ def _count_dirty_outside_scope(warehouse_path: Path, tracked: list[str]) -> int:
     return max(0, total_lines - filtered_lines)
 
 
-def _all_dirty_paths(warehouse_path: Path) -> list[str]:
-    """Return every dirty path in the warehouse working tree.
+def _has_any_dirty_path(warehouse_path: Path) -> bool:
+    """Return True iff the warehouse working tree contains at least one dirty path.
 
-    Parses ``git status --porcelain`` directly. Handles renames by emitting the
-    destination path. Skips entries under ``.git/``.
-
-    ``--untracked-files=all`` is required so that a brand-new directory (e.g.
-    ``skills/never-adopted/``) expands to its constituent files rather than
-    appearing as a single directory entry.
+    Used as a non-empty-changes gate for the default-mode commit. The actual
+    staging path uses ``git add -A`` directly, so we no longer need to
+    enumerate or parse porcelain entries here.
     """
     full = _run_git(warehouse_path, ["status", "--porcelain", "--untracked-files=all"])
     if full.returncode != 0:
-        return []
-    paths: list[str] = []
-    for line in full.stdout.splitlines():
-        if len(line) < 4:
-            continue
-        rest = line[3:]
-        if " -> " in rest:
-            path = rest.split(" -> ", 1)[1]
-        else:
-            path = rest
-        if path.startswith('"') and path.endswith('"'):
-            try:
-                path = path[1:-1].encode("utf-8").decode("unicode_escape")
-            except UnicodeDecodeError:
-                pass
-        if ".git" in Path(path).parts:
-            continue
-        paths.append(path)
-    return paths
+        return False
+    return any(line.strip() for line in full.stdout.splitlines())
 
 
 def _validate_dirty(warehouse_path: Path, candidate_paths: list[str]) -> None:
@@ -182,10 +162,35 @@ def contribute(
             _validate_dirty(warehouse_path, normalized_paths)
             commit_paths = normalized_paths
         else:
-            commit_paths = _all_dirty_paths(warehouse_path)
-
-        if not commit_paths:
-            return ContributeResult(status="no_changes")
+            # paths=None: commit the entire working tree. We deliberately do
+            # NOT enumerate-then-restrict here — `git add -A` + an unrestricted
+            # commit handles renames (R old -> new) and deletions correctly,
+            # whereas an explicit pathspec list silently drops one side of a
+            # rename and is fragile against unusual filenames.
+            if not _has_any_dirty_path(warehouse_path):
+                return ContributeResult(status="no_changes")
+            _run_git(warehouse_path, ["add", "-A"])
+            commit_result = _run_git(warehouse_path, ["commit", "-m", message])
+            if commit_result.returncode != 0:
+                logger.error("Git commit failed: {}", commit_result.stderr)
+                raise RuntimeError(
+                    f"Git commit failed in warehouse: {commit_result.stderr.strip()}"
+                )
+            sha_result = _run_git(warehouse_path, ["rev-parse", "HEAD"])
+            committed_sha = (
+                sha_result.stdout.strip() if sha_result.returncode == 0 else None
+            )
+            if push:
+                push_result = _run_git(warehouse_path, ["push"])
+                if push_result.returncode != 0:
+                    return ContributeResult(
+                        status="push_failed",
+                        committed_sha=committed_sha,
+                        message=push_result.stderr,
+                    )
+            return ContributeResult(
+                status="committed", committed_sha=committed_sha, message=message
+            )
 
     # Check git status for the paths we intend to commit
     status_result = _run_git(

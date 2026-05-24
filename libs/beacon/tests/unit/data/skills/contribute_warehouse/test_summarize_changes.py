@@ -990,6 +990,56 @@ class TestWarehouseScopedDefault:
         paths = [e["path"] for e in result["tracked_paths"]]
         assert "contexts/f.md" in paths
 
+    def test_summarize_all_handles_filename_with_arrow_literal(self, tmp_path):
+        """File literally named 'notes/a -> b.md' is not misparsed as a rename.
+
+        Regression for opencode-review PR #156 finding M2: the ' -> ' substring
+        must not trigger rename-style splitting on non-R/C status codes.
+        """
+        warehouse = _make_git_warehouse(tmp_path)
+        subprocess.run(
+            ["git", "-C", str(warehouse), "commit", "--allow-empty", "-m", "init"],
+            check=True,
+            capture_output=True,
+        )
+        (warehouse / "notes").mkdir(exist_ok=True)
+        weird = warehouse / "notes" / "a -> b.md"
+        weird.write_text("# weird\n")
+
+        mod = _load_script()
+        result = mod.summarize_all(warehouse)
+        paths = [e["path"] for e in result["tracked_paths"]]
+        # The literal filename must round-trip; it must NOT be reduced to 'b.md'.
+        # Git porcelain quotes paths containing special chars, so the path may
+        # come back wrapped in quotes — accept either form.
+        assert "b.md" not in paths, (
+            f"opencode PR#156 M2: ' -> ' substring split must not fire for non-R/C codes. Got: {paths}"
+        )
+        assert any("a -> b.md" in p for p in paths), (
+            f"Original filename must round-trip. Got: {paths}"
+        )
+
+    def test_summarize_all_rename_uses_destination_path(self, tmp_path):
+        """A staged rename 'R old -> new' reports the new path."""
+        warehouse = _make_git_warehouse(tmp_path)
+        orig = warehouse / "contexts" / "old.md"
+        orig.write_text("# orig\n")
+        _initial_commit(warehouse, [orig])
+
+        # git mv to trigger an R record
+        subprocess.run(
+            ["git", "-C", str(warehouse), "mv", "contexts/old.md", "contexts/new.md"],
+            check=True,
+            capture_output=True,
+        )
+
+        mod = _load_script()
+        result = mod.summarize_all(warehouse)
+        paths = [e["path"] for e in result["tracked_paths"]]
+        assert "contexts/new.md" in paths, (
+            f"Rename should appear with destination path. Got: {paths}"
+        )
+
     def test_summarize_all_skips_dot_git_entries(self, tmp_path):
         """Anything under .git/ is never reported."""
         warehouse = _make_git_warehouse(tmp_path)

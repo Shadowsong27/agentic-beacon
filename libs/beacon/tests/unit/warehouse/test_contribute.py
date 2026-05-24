@@ -759,6 +759,98 @@ class TestPer203WarehouseScopedDefault:
             )
         assert "absolute" in str(exc_info.value).lower()
 
+    def test_default_paths_none_commits_rename_with_both_sides(self, contrib_project):
+        """Default mode commits a rename cleanly — old deletion + new add.
+
+        Regression for opencode-review PR #156 finding M1: enumerating dirty
+        paths and committing only the destination of 'R old -> new' would
+        leave the old-side deletion staged. The default path uses
+        'git add -A' + unrestricted commit, which captures both sides.
+        """
+        project, wh = contrib_project
+        env = _git_env()
+
+        # git mv the tracked file → triggers an R record in porcelain
+        subprocess.run(
+            ["git", "-C", str(wh), "mv", "contexts/test.md", "contexts/renamed.md"],
+            cwd=wh,
+            env=env,
+            check=True,
+            capture_output=True,
+        )
+
+        result = contribute(project, message="rename test.md to renamed.md", push=False)
+        assert result.status == "committed"
+
+        committed_files = subprocess.run(
+            ["git", "show", "--name-status", "--format=", "HEAD"],
+            cwd=wh,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        # Both sides must appear: the deletion of the old name and the
+        # addition of the new name (or a single rename record covering both).
+        out = committed_files.stdout
+        # After commit, the working tree + index must be clean — no leftover
+        # staged deletion of the old path.
+        post_status = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=wh,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert post_status.stdout.strip() == "", (
+            f"After rename commit, tree must be clean. Got: {post_status.stdout!r}"
+        )
+        assert "renamed.md" in out
+
+    def test_default_paths_none_handles_filename_with_arrow(self, contrib_project):
+        """Default mode commits a file literally named 'a -> b.md' without misparsing.
+
+        Regression for opencode-review PR #156 finding M2: the previous
+        path-enumeration code would treat ' -> ' as a rename separator and
+        produce the wrong pathspec, leaving the real file uncommitted.
+        Switching the default to 'git add -A' sidesteps the parsing entirely.
+        """
+        project, wh = contrib_project
+        env = _git_env()
+
+        (wh / "notes").mkdir(exist_ok=True)
+        weird = wh / "notes" / "a -> b.md"
+        weird.write_text("# weird\n")
+
+        result = contribute(project, message="add notes/a -> b.md", push=False)
+        assert result.status == "committed"
+
+        committed = subprocess.run(
+            ["git", "show", "--name-only", "--format=", "HEAD"],
+            cwd=wh,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        # Git quotes the special-char path in show output, so check substring.
+        assert "a -> b.md" in committed.stdout, (
+            f"Weird filename must be committed verbatim. Got: {committed.stdout!r}"
+        )
+        # Working tree must be clean — the real file is not left dangling.
+        post_status = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=wh,
+            env=env,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert post_status.stdout.strip() == "", (
+            f"Tree must be clean after commit. Got: {post_status.stdout!r}"
+        )
+
     def test_default_excludes_dot_git_paths(self, contrib_project):
         """Default (paths=None): contents of .git/ never reach the commit."""
         project, wh = contrib_project

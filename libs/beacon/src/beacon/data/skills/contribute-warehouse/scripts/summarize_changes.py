@@ -277,8 +277,10 @@ def enumerate_dirty_paths(warehouse: Path) -> list[tuple[str, str]]:
             continue
         code = line[:2]
         rest = line[3:]
-        # Rename / copy: 'R  old -> new' or 'C  old -> new'
-        if " -> " in rest:
+        # Rename / copy: 'R  old -> new' or 'C  old -> new'. Gate the split on
+        # the status code rather than the literal ' -> ' substring — a regular
+        # untracked filename can contain ' -> ' and must not be misparsed.
+        if code[0] in ("R", "C") and " -> " in rest:
             path = rest.split(" -> ", 1)[1]
         else:
             path = rest
