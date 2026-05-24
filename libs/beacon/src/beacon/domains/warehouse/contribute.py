@@ -163,6 +163,20 @@ def _expand_rename_sources(warehouse_path: Path, user_paths: list[str]) -> list[
     return expanded
 
 
+def _literal_pathspec(path: str) -> str:
+    """Wrap ``path`` in git's ``:(literal)`` pathspec magic.
+
+    Without this, git interprets every CLI path argument as a pathspec —
+    so ``--paths '*.md'`` or ``--paths ':(glob)**/*.md'`` would expand to
+    multiple files even though the abc warehouse contribute CLI documents
+    ``--paths`` as a single warehouse-relative filename. The ``(literal)``
+    magic disables wildcards, attr matchers, and the rest of the pathspec
+    DSL, so a glob argument either matches an actual file with that exact
+    name or fails the dirty-check (PR#156 round 6).
+    """
+    return f":(literal){path}"
+
+
 def _validate_dirty(warehouse_path: Path, candidate_paths: list[str]) -> None:
     """Raise ValueError if any candidate path has no porcelain status.
 
@@ -173,7 +187,9 @@ def _validate_dirty(warehouse_path: Path, candidate_paths: list[str]) -> None:
     """
     not_dirty: list[str] = []
     for p in candidate_paths:
-        status = _run_git(warehouse_path, ["status", "--porcelain", "--", p])
+        status = _run_git(
+            warehouse_path, ["status", "--porcelain", "--", _literal_pathspec(p)]
+        )
         if status.returncode != 0 or not status.stdout.strip():
             not_dirty.append(p)
     if not_dirty:
@@ -291,9 +307,16 @@ def contribute(
                 status="committed", committed_sha=committed_sha, message=message
             )
 
+    # Wrap every commit path in :(literal) magic before handing to git, so a
+    # user passing `--paths '*.md'` or any other pathspec wildcard cannot
+    # match additional files (PR#156 round 6). Pathspecs that originate from
+    # beacon.yaml expansion in only_tracked mode are already literal filenames
+    # but get the same treatment for uniformity / defense-in-depth.
+    git_pathspecs = [_literal_pathspec(p) for p in commit_paths]
+
     # Check git status for the paths we intend to commit
     status_result = _run_git(
-        warehouse_path, ["status", "--porcelain", "--", *commit_paths]
+        warehouse_path, ["status", "--porcelain", "--", *git_pathspecs]
     )
     if not status_result.stdout.strip():
         if only_tracked:
@@ -308,11 +331,11 @@ def contribute(
         return ContributeResult(status="no_changes")
 
     # Stage the paths we intend to commit
-    _run_git(warehouse_path, ["add", "--", *commit_paths])
+    _run_git(warehouse_path, ["add", "--", *git_pathspecs])
 
     # Commit
     commit_result = _run_git(
-        warehouse_path, ["commit", "-m", message, "--", *commit_paths]
+        warehouse_path, ["commit", "-m", message, "--", *git_pathspecs]
     )
     if commit_result.returncode != 0:
         logger.error("Git commit failed: {}", commit_result.stderr)

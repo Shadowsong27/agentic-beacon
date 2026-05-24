@@ -118,14 +118,14 @@ nothing to contribute and stop cleanly.
 
 ### Step 4: Intent Triage
 
-Present the dirty tracked paths to the user and ask them to classify each as:
+Present the dirty warehouse paths to the user and ask them to classify each as:
 
 - **include** — commit this in the current session
 - **leave-for-later** — skip for now; do not stage, stash, or modify
 
 Example presentation:
 ```
-Dirty tracked paths (3 files):
+Dirty warehouse paths (3 files):
 
   1. contexts/python-standards.md   [M — 12 insertions, 3 deletions]
   2. knowledge/python/lessons/type-hints.md   [A — new file]
@@ -338,7 +338,7 @@ Contribution summary:
 
 - [ ] Run `resolve_warehouse.py` — STOP if exits non-zero
 - [ ] Run `abc warehouse lint <warehouse>` — STOP and surface errors if non-zero
-- [ ] Run `summarize_changes.py` — STOP if no dirty tracked paths
+- [ ] Run `summarize_changes.py` — STOP if no dirty warehouse paths
 - [ ] Triage dirty files with the user (include / leave-for-later)
 - [ ] Dedup scan for `knowledge/` files — flag overlaps before proceeding
 - [ ] Cohesion check — propose split if multiple independent changes

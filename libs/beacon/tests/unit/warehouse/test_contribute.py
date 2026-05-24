@@ -808,6 +808,54 @@ class TestPer203WarehouseScopedDefault:
         )
         assert "renamed.md" in out
 
+    def test_default_paths_glob_pattern_rejected_not_expanded(self, contrib_project):
+        """--paths '*.md' is treated as a literal filename, not a glob.
+
+        Regression for opencode-review PR#156 round 6: without :(literal)
+        pathspec magic, git would expand the glob and commit multiple files
+        even though the CLI documents --paths as a single warehouse-relative
+        filename. With the literal pathspec wrapping, '*.md' is looked up as
+        an actual file with that exact name — which does not exist, so the
+        dirty-check rejects it.
+        """
+        project, wh = contrib_project
+
+        # Several real .md files are dirty
+        (wh / "contexts" / "test.md").write_text("# modified\n")
+        (wh / "scratch.md").write_text("# new\n")
+
+        # Pre-fix: '*.md' would glob-expand to both files and commit them all.
+        # Post-fix: the literal pathspec lookup fails the dirty check.
+        with pytest.raises(ValueError) as exc_info:
+            contribute(
+                project,
+                message="exploit attempt",
+                push=False,
+                paths=("*.md",),
+            )
+        assert "*.md" in str(exc_info.value)
+        assert "not dirty" in str(exc_info.value)
+
+    def test_default_paths_pathspec_magic_rejected_not_expanded(self, contrib_project):
+        """--paths ':(glob)**/*.md' is treated as a literal filename, not pathspec magic.
+
+        Regression for opencode-review PR#156 round 6: defends against the
+        more explicit git-pathspec-DSL injection variant.
+        """
+        project, wh = contrib_project
+
+        (wh / "contexts" / "test.md").write_text("# modified\n")
+        (wh / "scratch.md").write_text("# new\n")
+
+        with pytest.raises(ValueError) as exc_info:
+            contribute(
+                project,
+                message="exploit attempt",
+                push=False,
+                paths=(":(glob)**/*.md",),
+            )
+        assert "not dirty" in str(exc_info.value)
+
     def test_default_paths_rename_source_in_paths_commits_both_sides(
         self, contrib_project
     ):
