@@ -392,20 +392,35 @@ def warehouse_list(*, artifact_type: str | None) -> None:
     type=str,
     help=(
         "Warehouse-relative path to commit (repeatable). When omitted, "
-        "commits all beacon.yaml-tracked dirty paths (current behavior)."
+        "commits every dirty path in the warehouse working tree."
     ),
 )
-def warehouse_contribute(*, message: str, push: bool, paths: tuple[str, ...]) -> None:
+@click.option(
+    "--only-tracked",
+    "only_tracked",
+    is_flag=True,
+    help=(
+        "Restrict the commit to paths declared in this project's beacon.yaml. "
+        "Out-of-scope paths in --paths are rejected. Default is warehouse-scoped: "
+        "any dirty warehouse path is acceptable (PER-203)."
+    ),
+)
+def warehouse_contribute(
+    *, message: str, push: bool, paths: tuple[str, ...], only_tracked: bool
+) -> None:
     """Commit changes in the warehouse working tree.
 
-    Stages and commits files tracked by beacon.yaml that have uncommitted
-    changes in the warehouse clone.
+    By default (PER-203), stages and commits every dirty path in the warehouse —
+    brand-new artifacts and cross-project knowledge are both acceptable.
+    Pass --only-tracked to fall back to the legacy project-scoped invariant
+    (restrict to paths declared in this project's beacon.yaml).
 
     Example:
         abc warehouse contribute -m "Update python standards"
         abc warehouse contribute -m "Fix typo" --push
         abc warehouse contribute -m "Update skill" --paths skills/foo/SKILL.md
         abc warehouse contribute -m "Split commit" --paths a.md --paths b.md
+        abc warehouse contribute -m "Tracked only" --only-tracked
     """
     try:
         result = contribute(
@@ -413,6 +428,7 @@ def warehouse_contribute(*, message: str, push: bool, paths: tuple[str, ...]) ->
             message=message,
             push=push,
             paths=tuple(paths) or None,
+            only_tracked=only_tracked,
         )
     except ValueError as e:
         console.print(f"[red]Error:[/red] {e}")

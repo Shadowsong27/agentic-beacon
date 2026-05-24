@@ -93,7 +93,7 @@ Suggested recovery:
 
 Do NOT stash, do NOT skip lint, do NOT proceed on a lint failure.
 
-### Step 3: Summarize Dirty Tracked Paths
+### Step 3: Summarize Dirty Warehouse Paths
 
 Run the summarizer to build a structured view of what has changed:
 
@@ -101,35 +101,31 @@ Run the summarizer to build a structured view of what has changed:
 uv run ${SKILL_DIR}/scripts/summarize_changes.py --warehouse "$WAREHOUSE_ROOT"
 ```
 
-The script auto-detects the project root by walking up from CWD looking for
-`.agentic-beacon/config.toml`. If auto-detection fails (e.g. skill is run from
-an unrelated directory), pass the project root explicitly:
-
-```bash
-uv run ${SKILL_DIR}/scripts/summarize_changes.py \
-  --warehouse "$WAREHOUSE_ROOT" \
-  --project-root /path/to/project
-```
+The summarizer enumerates **every** dirty path in the warehouse working tree
+(PER-202) — no `.agentic-beacon/config.toml` lookup, no `beacon.yaml` filter,
+no project-context dependency. The skill works from any CWD, including a brand
+new warehouse with no projects connected yet.
 
 Parse the JSON output. Each entry in `tracked_paths` contains:
 - `path` — warehouse-relative path
 - `git_status` — porcelain code (e.g. `M`, `A`, `??`)
 - `diff_stat` — one-line diff summary
 - `last_commit_age_days` — days since last commit, or `null`
+- `warehouse_area` — top-level area (`contexts`, `knowledge`, `skills`, `agents`, or `other`)
 
 If the JSON output is empty (`{"tracked_paths": []}`), tell the user there is
 nothing to contribute and stop cleanly.
 
 ### Step 4: Intent Triage
 
-Present the dirty tracked paths to the user and ask them to classify each as:
+Present the dirty warehouse paths to the user and ask them to classify each as:
 
 - **include** — commit this in the current session
 - **leave-for-later** — skip for now; do not stage, stash, or modify
 
 Example presentation:
 ```
-Dirty tracked paths (3 files):
+Dirty warehouse paths (3 files):
 
   1. contexts/python-standards.md   [M — 12 insertions, 3 deletions]
   2. knowledge/python/lessons/type-hints.md   [A — new file]
@@ -342,7 +338,7 @@ Contribution summary:
 
 - [ ] Run `resolve_warehouse.py` — STOP if exits non-zero
 - [ ] Run `abc warehouse lint <warehouse>` — STOP and surface errors if non-zero
-- [ ] Run `summarize_changes.py` — STOP if no dirty tracked paths
+- [ ] Run `summarize_changes.py` — STOP if no dirty warehouse paths
 - [ ] Triage dirty files with the user (include / leave-for-later)
 - [ ] Dedup scan for `knowledge/` files — flag overlaps before proceeding
 - [ ] Cohesion check — propose split if multiple independent changes
@@ -358,7 +354,7 @@ Contribution summary:
 | Script | Purpose | Dependencies |
 |---|---|---|
 | `resolve_warehouse.py` | Resolve warehouse path from `.agentic-beacon/config.toml` | stdlib only |
-| `summarize_changes.py` | Build structured JSON view of dirty tracked paths | `agentic-beacon` |
+| `summarize_changes.py` | Build structured JSON view of every dirty warehouse path | `pyyaml` (PEP 723) |
 | `draft_commit_message.py` | Derive deterministic Conventional Commits message | stdlib only |
 | `push_warehouse.py` | Atomic push with recovery-command output on failure | stdlib only |
 

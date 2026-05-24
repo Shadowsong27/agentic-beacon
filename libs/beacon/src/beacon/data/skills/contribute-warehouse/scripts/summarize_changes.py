@@ -2,27 +2,35 @@
 # requires-python = ">=3.11"
 # dependencies = ["pyyaml>=6.0"]
 # ///
-"""Summarize dirty tracked warehouse paths for the contribute-warehouse skill.
+"""Summarize dirty warehouse paths for the contribute-warehouse skill.
 
 # Self-contained script -- no beacon package required at runtime.
 
-Outputs a single JSON object on stdout:
-  {"tracked_paths": [{"path": str, "git_status": str, "diff_stat": str, "last_commit_age_days": int|null}]}
+By default (PER-202), enumerates EVERY dirty path under the warehouse working
+tree via `git status --porcelain`, regardless of project context. Pass
+`--only-project-artifacts` to fall back to the legacy beacon.yaml-filtered
+behavior.
 
-Only dirty (modified/added/untracked) tracked paths appear in the output.
-Clean paths are filtered out.
+Outputs a single JSON object on stdout:
+  {"tracked_paths": [{"path": str, "git_status": str, "diff_stat": str,
+                      "last_commit_age_days": int|null,
+                      "warehouse_area": str}]}
+
+Only dirty (modified/added/untracked/deleted) paths appear in the output.
 
 Usage:
-    uv run summarize_changes.py --warehouse <path> [--beacon-yaml <path>]
-    uv run summarize_changes.py --warehouse <path> [--project-root <path>]
+    # Default: enumerate ALL dirty warehouse paths (PER-202)
+    uv run summarize_changes.py --warehouse <path>
 
-beacon.yaml resolution order:
+    # Opt-in legacy behavior: filter through invoking project's beacon.yaml
+    uv run summarize_changes.py --warehouse <path> --only-project-artifacts
+    uv run summarize_changes.py --warehouse <path> --only-project-artifacts --project-root <path>
+    uv run summarize_changes.py --warehouse <path> --only-project-artifacts --beacon-yaml <path>
+
+beacon.yaml resolution order (only when --only-project-artifacts is set):
   1. --beacon-yaml (explicit path) takes highest precedence.
   2. --project-root / auto-detected project root → <project_root>/.agentic-beacon/beacon.yaml.
   3. If neither is discoverable, exits non-zero with a clear message.
-
-NOTE: The default does NOT fall back to <warehouse>/.agentic-beacon/beacon.yaml —
-warehouses do not contain this file; beacon.yaml lives in the project root.
 """
 
 import argparse
@@ -229,8 +237,145 @@ def is_dirty(status_code: str) -> bool:
     return bool(stripped)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Warehouse-wide enumeration (PER-202 default)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+_AREA_PREFIXES = ("contexts", "knowledge", "skills", "agents")
+
+
+def classify_warehouse_area(path: str) -> str:
+    """Return the warehouse area for `path` ('contexts'/'knowledge'/'skills'/'agents'/'other').
+
+    Top-level directory of the warehouse-relative path determines the area.
+    """
+    head = path.split("/", 1)[0] if path else ""
+    return head if head in _AREA_PREFIXES else "other"
+
+
+def enumerate_dirty_paths(warehouse: Path) -> list[tuple[str, str]]:
+    """Return [(path, status_code)] for every dirty path in the warehouse working tree.
+
+    Uses `git status --porcelain=v1 -z` so the parser is immune to:
+      * substring collisions on ` -> ` in regular filenames
+      * git's C-style quoting of paths containing spaces or special chars
+      * rename source paths that themselves contain ` -> `
+
+    The `-z` format emits NUL-delimited records with no escaping. A normal
+    entry is one record `XY <path>\\0`; rename / copy entries occupy two
+    records `XY <new>\\0<old>\\0`. We report the destination path for
+    rename/copy entries (the same convention as the human-readable format).
+
+    `--untracked-files=all` is required so a brand-new directory (e.g.
+    `skills/never-adopted/`) expands to its constituent files rather than
+    appearing as a single directory entry.
+    """
+    rc, stdout_bytes, stderr_bytes = _run_git_bytes(
+        warehouse, ["status", "--porcelain=v1", "-z", "--untracked-files=all"]
+    )
+    if rc != 0:
+        raise RuntimeError(
+            f"git status failed in {warehouse}: "
+            f"{stderr_bytes.decode('utf-8', errors='replace').strip()}"
+        )
+
+    # Split on NUL; trailing NUL produces an empty final record.
+    records = stdout_bytes.split(b"\0")
+    if records and records[-1] == b"":
+        records.pop()
+
+    entries: list[tuple[str, str]] = []
+    i = 0
+    while i < len(records):
+        rec = records[i]
+        if len(rec) < 3:
+            i += 1
+            continue
+        code = rec[:2].decode("utf-8", errors="replace")
+        new_path = rec[3:].decode("utf-8", errors="replace")
+        if code[0] in ("R", "C") and i + 1 < len(records):
+            # Rename/copy: also consume the old-path record.
+            i += 2
+        else:
+            i += 1
+        if ".git" in Path(new_path).parts:
+            continue
+        entries.append((new_path, code))
+    return entries
+
+
+def _run_git_bytes(
+    warehouse: Path, args: list[str], timeout: int = 30
+) -> tuple[int, bytes, bytes]:
+    """Run a git command inside warehouse, return (rc, stdout_bytes, stderr_bytes)."""
+    result = subprocess.run(
+        ["git", "-C", str(warehouse)] + args,
+        capture_output=True,
+        timeout=timeout,
+    )
+    return result.returncode, result.stdout, result.stderr
+
+
+def _untracked_diff_stat(warehouse: Path, path: str) -> str:
+    """Synthesize a diff_stat for an untracked (``??``) file.
+
+    ``git diff --stat`` returns nothing for untracked files, so without this
+    the summarizer's triage output is degraded for the very entries PER-202
+    made first-class (brand-new artifacts not yet adopted by any project).
+    Mirror the shape of git's "1 file changed, N insertions(+)" summary.
+    """
+    full_path = warehouse / path
+    try:
+        with open(full_path, "rb") as f:
+            line_count = sum(1 for _ in f)
+    except OSError:
+        return "new file"
+    return f"new file, {line_count} insertion{'s' if line_count != 1 else ''}(+)"
+
+
+def summarize_all(warehouse: Path) -> dict:
+    """Build the summary dict of every dirty path in the warehouse working tree."""
+    try:
+        entries = enumerate_dirty_paths(warehouse)
+    except Exception as e:
+        print(f"Error enumerating dirty paths: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    results = []
+    for path, status in sorted(entries, key=lambda e: e[0]):
+        # Untracked files ('??') have no git-diff representation. Synthesize
+        # a line-count summary so the triage UI has something to show
+        # (PR#156 round 8).
+        if status.strip() == "??":
+            diff_stat = _untracked_diff_stat(warehouse, path)
+        else:
+            diff_stat = get_diff_stat(warehouse, path)
+        age = get_last_commit_age_days(warehouse, path)
+        results.append(
+            {
+                "path": path,
+                "git_status": status,
+                "diff_stat": diff_stat,
+                "last_commit_age_days": age,
+                "warehouse_area": classify_warehouse_area(path),
+            }
+        )
+
+    return {"tracked_paths": results}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# beacon.yaml-filtered enumeration (--only-project-artifacts opt-in)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
 def summarize(warehouse: Path, beacon_yaml: Path) -> dict:
-    """Build the summary dict of dirty tracked paths."""
+    """Build the summary dict of dirty paths filtered through beacon.yaml.
+
+    Used by `--only-project-artifacts`. Returns the same JSON shape as
+    `summarize_all`, including `warehouse_area`.
+    """
     if not beacon_yaml.exists():
         return {"tracked_paths": []}
 
@@ -261,6 +406,7 @@ def summarize(warehouse: Path, beacon_yaml: Path) -> dict:
                 "git_status": status,
                 "diff_stat": diff_stat,
                 "last_commit_age_days": age,
+                "warehouse_area": classify_warehouse_area(path),
             }
         )
 
@@ -269,7 +415,7 @@ def summarize(warehouse: Path, beacon_yaml: Path) -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Summarize dirty tracked warehouse paths as JSON."
+        description="Summarize dirty warehouse paths as JSON."
     )
     parser.add_argument(
         "--warehouse",
@@ -277,11 +423,20 @@ def main() -> None:
         help="Absolute path to the warehouse root.",
     )
     parser.add_argument(
+        "--only-project-artifacts",
+        action="store_true",
+        help=(
+            "Restore legacy behavior: filter dirty paths through the invoking "
+            "project's beacon.yaml. Requires --beacon-yaml or a resolvable "
+            "project root."
+        ),
+    )
+    parser.add_argument(
         "--beacon-yaml",
         default=None,
         help=(
-            "Explicit path to beacon.yaml. When provided, takes precedence over "
-            "--project-root and auto-detection."
+            "Explicit path to beacon.yaml. Only honored with --only-project-artifacts. "
+            "Takes precedence over --project-root and auto-detection."
         ),
     )
     parser.add_argument(
@@ -289,7 +444,8 @@ def main() -> None:
         default=None,
         help=(
             "Path to the project root (the directory containing .agentic-beacon/). "
-            "When omitted, auto-detected by walking up from the current directory."
+            "Only honored with --only-project-artifacts. When omitted, "
+            "auto-detected by walking up from the current directory."
         ),
     )
     args = parser.parse_args()
@@ -299,7 +455,17 @@ def main() -> None:
         print(f"Error: warehouse path does not exist: {warehouse}", file=sys.stderr)
         sys.exit(1)
 
-    # Resolve beacon.yaml path
+    # Default (PER-202): enumerate ALL dirty warehouse paths, no project context.
+    if not args.only_project_artifacts:
+        try:
+            result = summarize_all(warehouse)
+        except Exception as e:
+            print(f"Error: {e}", file=sys.stderr)
+            sys.exit(1)
+        print(json.dumps(result, indent=2))
+        sys.exit(0)
+
+    # Opt-in legacy: filter through invoking project's beacon.yaml.
     if args.beacon_yaml:
         beacon_yaml = Path(args.beacon_yaml)
     else:
@@ -310,7 +476,7 @@ def main() -> None:
 
         if project_root is None:
             print(
-                "Error: could not auto-detect a project root "
+                "Error: --only-project-artifacts requires a resolvable project root "
                 "(.agentic-beacon/config.toml not found in current directory or any parent). "
                 "Pass --project-root <path> or --beacon-yaml <path> explicitly.",
                 file=sys.stderr,

@@ -1,7 +1,10 @@
 """Warehouse contribute domain logic.
 
-Encapsulates git add + git commit inside the warehouse clone,
-driven by a project's .agentic-beacon/config.toml and beacon.yaml.
+Encapsulates git add + git commit inside the warehouse clone. By default
+(PER-203), accepts any dirty path in the warehouse working tree — the
+invariant is "is this a real dirty warehouse path?", not "is this in the
+invoking project's beacon.yaml?". Pass ``only_tracked=True`` to restore the
+legacy beacon.yaml-filtered behavior.
 """
 
 import subprocess
@@ -52,28 +55,177 @@ def _count_dirty_outside_scope(warehouse_path: Path, tracked: list[str]) -> int:
     return max(0, total_lines - filtered_lines)
 
 
+def _has_any_dirty_path(warehouse_path: Path) -> bool:
+    """Return True iff the warehouse working tree contains at least one dirty path.
+
+    Used as a non-empty-changes gate for the default-mode commit. The actual
+    staging path uses ``git add -A`` directly, so we no longer need to
+    enumerate or parse porcelain entries here.
+    """
+    full = _run_git(warehouse_path, ["status", "--porcelain", "--untracked-files=all"])
+    if full.returncode != 0:
+        return False
+    return any(line.strip() for line in full.stdout.splitlines())
+
+
+def _parse_porcelain_z(stdout_bytes: bytes) -> list[tuple[str, str, str | None]]:
+    """Parse ``git status --porcelain=v1 -z`` output.
+
+    The ``-z`` format emits NUL-delimited records with no quoting or escaping.
+    Each normal entry is one record ``XY <path>\\0``. Rename and copy entries
+    occupy *two* records: ``XY <new-path>\\0<old-path>\\0``. The XY status
+    code is the first two bytes; byte 2 is a space; the path starts at byte 3.
+
+    Returns ``(code, new_path, old_path)`` tuples. ``old_path`` is ``None``
+    for non-R/C entries.
+
+    Using ``-z`` sidesteps every variant of the string-split parsing bug:
+    substring ``' -> '`` in untracked filenames, C-quoted paths with spaces
+    or special chars, and rename source paths that themselves contain
+    ``' -> '`` (PR#156 review rounds 1-4).
+    """
+    records = stdout_bytes.split(b"\0")
+    # The terminating NUL produces an empty trailing record.
+    if records and records[-1] == b"":
+        records.pop()
+
+    result: list[tuple[str, str, str | None]] = []
+    i = 0
+    while i < len(records):
+        rec = records[i]
+        if len(rec) < 3:
+            i += 1
+            continue
+        code = rec[:2].decode("utf-8", errors="replace")
+        new_path = rec[3:].decode("utf-8", errors="replace")
+        if code[0] in ("R", "C") and i + 1 < len(records):
+            old_path = records[i + 1].decode("utf-8", errors="replace")
+            result.append((code, new_path, old_path))
+            i += 2
+        else:
+            result.append((code, new_path, None))
+            i += 1
+    return result
+
+
+def _run_git_bytes(
+    warehouse_path: Path, args: list[str], timeout: int = 30
+) -> tuple[int, bytes, bytes]:
+    """Internal git runner returning raw bytes (required for ``-z`` parsing)."""
+    result = subprocess.run(
+        ["git", "-C", str(warehouse_path), *args],
+        capture_output=True,
+        timeout=timeout,
+    )
+    return result.returncode, result.stdout, result.stderr
+
+
+def _expand_rename_sources(warehouse_path: Path, user_paths: list[str]) -> list[str]:
+    """For each user path that is the destination of a rename or copy, also
+    include the source path in the returned list.
+
+    Uses ``git status --porcelain=v1 -z`` so the parser is immune to:
+      * substring collisions on ``' -> '`` in regular filenames
+      * git's C-style quoting of paths containing spaces or special chars
+      * rename source paths that themselves contain ``' -> '``
+
+    The source path appears immediately after its destination in the returned
+    list. Duplicate sources (when multiple destinations map to the same source
+    — unusual but valid for copies) are only added once.
+    """
+    rc, stdout, _ = _run_git_bytes(
+        warehouse_path,
+        ["status", "--porcelain=v1", "-z", "--untracked-files=all"],
+    )
+    if rc != 0:
+        return user_paths
+
+    # Bidirectional rename map: passing EITHER side of a rename in --paths
+    # must pull in the OTHER side so the commit is atomic. Without the
+    # source -> dest direction, --paths <old-path> would commit only the
+    # deletion and leave the new file staged (PR#156 round 5).
+    rename_counterpart: dict[str, str] = {}
+    for code, new_path, old_path in _parse_porcelain_z(stdout):
+        if code[0] in ("R", "C") and old_path is not None:
+            rename_counterpart[new_path] = old_path
+            rename_counterpart[old_path] = new_path
+
+    expanded: list[str] = []
+    seen: set[str] = set()
+    for p in user_paths:
+        if p not in seen:
+            expanded.append(p)
+            seen.add(p)
+        counterpart = rename_counterpart.get(p)
+        if counterpart and counterpart not in seen:
+            expanded.append(counterpart)
+            seen.add(counterpart)
+    return expanded
+
+
+def _literal_pathspec(path: str) -> str:
+    """Wrap ``path`` in git's ``:(literal)`` pathspec magic.
+
+    Without this, git interprets every CLI path argument as a pathspec —
+    so ``--paths '*.md'`` or ``--paths ':(glob)**/*.md'`` would expand to
+    multiple files even though the abc warehouse contribute CLI documents
+    ``--paths`` as a single warehouse-relative filename. The ``(literal)``
+    magic disables wildcards, attr matchers, and the rest of the pathspec
+    DSL, so a glob argument either matches an actual file with that exact
+    name or fails the dirty-check (PR#156 round 6).
+    """
+    return f":(literal){path}"
+
+
+def _validate_dirty(warehouse_path: Path, candidate_paths: list[str]) -> None:
+    """Raise ValueError if any candidate path has no porcelain status.
+
+    A path is acceptable when ``git status --porcelain -- <path>`` returns a
+    non-empty line. This covers modified (M), added (A), untracked (??),
+    deleted (D), renamed (R), and copied (C) — i.e. anything dirty in the
+    warehouse working tree.
+    """
+    not_dirty: list[str] = []
+    for p in candidate_paths:
+        status = _run_git(
+            warehouse_path, ["status", "--porcelain", "--", _literal_pathspec(p)]
+        )
+        if status.returncode != 0 or not status.stdout.strip():
+            not_dirty.append(p)
+    if not_dirty:
+        raise ValueError(
+            "The following paths are not dirty in the warehouse working tree "
+            "(no uncommitted change) and cannot be committed: "
+            f"{', '.join(repr(p) for p in not_dirty)}"
+        )
+
+
 def contribute(
     project_root: Path,
     *,
     message: str,
     push: bool = False,
     paths: tuple[str, ...] | None = None,
+    only_tracked: bool = False,
 ) -> ContributeResult:
     """Contribute local changes to the warehouse.
 
-    Stages and commits files tracked by beacon.yaml that have uncommitted
-    changes in the warehouse working tree.
+    Stages and commits dirty paths in the warehouse working tree.
 
     Args:
-        project_root: Path to the project root.
+        project_root: Path to the project root (used to resolve the connected
+            warehouse via ``.agentic-beacon/config.toml``).
         message: Commit message (must be non-empty).
         push: Whether to push after committing.
         paths: Optional tuple of warehouse-relative paths to restrict the commit
-            to. When None (the default), all beacon.yaml-tracked dirty paths are
-            committed (existing behaviour). When provided, every path must be a
-            member of the beacon.yaml-tracked set; paths outside that set raise
-            ValueError. An empty tuple is rejected — omit the argument to commit
-            all tracked paths.
+            to. When None (the default), every dirty path in the warehouse
+            working tree is committed.
+        only_tracked: When True, restore the legacy project-scoped invariant —
+            commits are restricted to paths declared in the invoking project's
+            ``beacon.yaml`` and out-of-scope paths in ``paths`` raise
+            ValueError. When False (the default, PER-203), any dirty warehouse
+            path is acceptable, including brand-new artifacts and cross-project
+            knowledge that no ``beacon.yaml`` lists.
 
     Returns:
         ContributeResult indicating the outcome.
@@ -83,54 +235,112 @@ def contribute(
 
     if paths is not None and len(paths) == 0:
         raise ValueError(
-            "--paths must not be empty when provided; omit the flag to commit all tracked paths"
+            "--paths must not be empty when provided; omit the flag to commit all dirty paths"
         )
 
     warehouse_path, _ = ensure_sync_ready(project_root)
 
-    beacon_yaml = project_root / ".agentic-beacon" / "beacon.yaml"
-    tracked_paths = get_tracked_paths(warehouse_path, beacon_yaml)
+    if only_tracked:
+        beacon_yaml = project_root / ".agentic-beacon" / "beacon.yaml"
+        tracked_paths = get_tracked_paths(warehouse_path, beacon_yaml)
 
-    if paths is not None:
-        normalized_paths = [normalize_relative_path(p) for p in paths]
-        tracked_set = set(tracked_paths)
-        untracked = [p for p in normalized_paths if p not in tracked_set]
-        if untracked:
-            raise ValueError(
-                f"The following paths are not tracked by beacon.yaml and cannot be committed: "
-                f"{', '.join(repr(p) for p in untracked)}"
+        if paths is not None:
+            normalized_paths = [normalize_relative_path(p) for p in paths]
+            tracked_set = set(tracked_paths)
+            untracked = [p for p in normalized_paths if p not in tracked_set]
+            if untracked:
+                raise ValueError(
+                    "The following paths are not tracked by beacon.yaml and cannot be committed: "
+                    f"{', '.join(repr(p) for p in untracked)}"
+                )
+            commit_paths = normalized_paths
+        else:
+            commit_paths = tracked_paths
+
+        if not commit_paths:
+            count = (
+                _count_dirty_outside_scope(warehouse_path, tracked_paths)
+                if paths is None
+                else 0
             )
-        # Use the caller-supplied paths (preserving their order), scoped within tracked_paths
-        commit_paths = normalized_paths
+            return ContributeResult(
+                status="no_changes", dirty_outside_scope_count=count
+            )
     else:
-        commit_paths = tracked_paths
+        # PER-203 default: warehouse-scoped — accept any dirty warehouse path.
+        if paths is not None:
+            normalized_paths = [normalize_relative_path(p) for p in paths]
+            _validate_dirty(warehouse_path, normalized_paths)
+            # If any user path is the destination of a rename, transparently
+            # include the source so the commit captures both sides (PR#156
+            # round-2 review). Without this, `git commit -- dest` would
+            # commit the new file but leave the old-side deletion staged.
+            commit_paths = _expand_rename_sources(warehouse_path, normalized_paths)
+        else:
+            # paths=None: commit the entire working tree. We deliberately do
+            # NOT enumerate-then-restrict here — `git add -A` + an unrestricted
+            # commit handles renames (R old -> new) and deletions correctly,
+            # whereas an explicit pathspec list silently drops one side of a
+            # rename and is fragile against unusual filenames.
+            if not _has_any_dirty_path(warehouse_path):
+                return ContributeResult(status="no_changes")
+            add_result = _run_git(warehouse_path, ["add", "-A"])
+            if add_result.returncode != 0:
+                logger.error("Git add -A failed: {}", add_result.stderr)
+                raise RuntimeError(
+                    f"Git add -A failed in warehouse: {add_result.stderr.strip()}"
+                )
+            commit_result = _run_git(warehouse_path, ["commit", "-m", message])
+            if commit_result.returncode != 0:
+                logger.error("Git commit failed: {}", commit_result.stderr)
+                raise RuntimeError(
+                    f"Git commit failed in warehouse: {commit_result.stderr.strip()}"
+                )
+            sha_result = _run_git(warehouse_path, ["rev-parse", "HEAD"])
+            committed_sha = (
+                sha_result.stdout.strip() if sha_result.returncode == 0 else None
+            )
+            if push:
+                push_result = _run_git(warehouse_path, ["push"])
+                if push_result.returncode != 0:
+                    return ContributeResult(
+                        status="push_failed",
+                        committed_sha=committed_sha,
+                        message=push_result.stderr,
+                    )
+            return ContributeResult(
+                status="committed", committed_sha=committed_sha, message=message
+            )
 
-    if not commit_paths:
-        count = (
-            _count_dirty_outside_scope(warehouse_path, tracked_paths)
-            if paths is None
-            else 0
-        )
-        return ContributeResult(status="no_changes", dirty_outside_scope_count=count)
+    # Wrap every commit path in :(literal) magic before handing to git, so a
+    # user passing `--paths '*.md'` or any other pathspec wildcard cannot
+    # match additional files (PR#156 round 6). Pathspecs that originate from
+    # beacon.yaml expansion in only_tracked mode are already literal filenames
+    # but get the same treatment for uniformity / defense-in-depth.
+    git_pathspecs = [_literal_pathspec(p) for p in commit_paths]
 
     # Check git status for the paths we intend to commit
     status_result = _run_git(
-        warehouse_path, ["status", "--porcelain", "--", *commit_paths]
+        warehouse_path, ["status", "--porcelain", "--", *git_pathspecs]
     )
     if not status_result.stdout.strip():
-        count = (
-            _count_dirty_outside_scope(warehouse_path, tracked_paths)
-            if paths is None
-            else 0
-        )
-        return ContributeResult(status="no_changes", dirty_outside_scope_count=count)
+        if only_tracked:
+            count = (
+                _count_dirty_outside_scope(warehouse_path, tracked_paths)
+                if paths is None
+                else 0
+            )
+            return ContributeResult(
+                status="no_changes", dirty_outside_scope_count=count
+            )
+        return ContributeResult(status="no_changes")
 
     # Stage the paths we intend to commit
-    _run_git(warehouse_path, ["add", "--", *commit_paths])
+    _run_git(warehouse_path, ["add", "--", *git_pathspecs])
 
     # Commit
     commit_result = _run_git(
-        warehouse_path, ["commit", "-m", message, "--", *commit_paths]
+        warehouse_path, ["commit", "-m", message, "--", *git_pathspecs]
     )
     if commit_result.returncode != 0:
         logger.error("Git commit failed: {}", commit_result.stderr)
