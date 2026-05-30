@@ -1024,15 +1024,25 @@ def test_sync_with_agent_partials(project_dir: Path, warehouse: Path, monkeypatc
         f"Artifact partial symlink is broken: {artifact_partial}"
     )
 
-    # Partial must be wired into .claude/agents/_partials/
+    # Partial must be wired into .claude/agents/_partials/ as a wrapper
+    # (PER-238: regular file with `disable: true` frontmatter, not a raw
+    # symlink — so opencode/Claude Code don't expose it as a callable agent).
     claude_partial = (
         project_dir / ".claude" / "agents" / "_partials" / "deep-review-checklist.md"
     )
-    assert claude_partial.is_symlink(), (
-        f"Expected .claude partial symlink at {claude_partial}"
+    assert claude_partial.is_file() and not claude_partial.is_symlink(), (
+        f"Expected .claude partial wrapper file at {claude_partial}"
     )
-    assert claude_partial.exists(), (
-        f".claude partial symlink is broken: {claude_partial}"
+    wrapper_content = claude_partial.read_text()
+    assert wrapper_content.startswith("---\n"), (
+        f"Wrapper at {claude_partial} missing frontmatter fence"
+    )
+    assert "disable: true" in wrapper_content.split("\n---\n", 1)[0], (
+        f"Wrapper at {claude_partial} missing disable: true"
+    )
+    # Original partial body must be inlined for relative-link resolution.
+    assert "Deep Review Checklist" in wrapper_content, (
+        f"Wrapper at {claude_partial} missing original partial body"
     )
 
     # Partial must NOT be discoverable as an adoptable agent.

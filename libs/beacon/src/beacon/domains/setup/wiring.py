@@ -462,39 +462,113 @@ def wire_agent_opencode(project_root: Path, artifact_file: Path) -> Path:
     return dest
 
 
+# PER-238 stopgap: partials co-distributed under .{tool}/agents/_partials/
+# get auto-discovered by opencode (and likely Claude Code) as full subagents,
+# polluting `@`-autocomplete and the LLM's Task-tool agent listing. Wrapping
+# each partial in a `disable: true` frontmatter block at wire time hides the
+# file from both empirically (verified against opencode 1.14.31 — see PER-238
+# comment thread for the test matrix). The partial body is inlined verbatim
+# below the frontmatter so agents that reference the partial via a relative
+# markdown link (e.g. `[checklist](_partials/deep-review-checklist.md)`) still
+# see the full content when they follow the link.
+#
+# Long-term fix (Option C in PER-238) is to stop co-distributing partials
+# entirely once PER-206's canonical-link form lands.
+_PARTIAL_WRAPPER_FRONTMATTER = (
+    "---\n"
+    "description: >-\n"
+    "  Internal fragment referenced by other agents — not a real agent.\n"
+    "  Disabled at wire time by Beacon (PER-238).\n"
+    "mode: subagent\n"
+    "disable: true\n"
+    "---\n\n"
+)
+
+
+def _strip_existing_frontmatter(body: str) -> str:
+    """If body starts with a YAML frontmatter block (``---\\n...---\\n``), strip it.
+
+    Defensive: today's only partial has no frontmatter, but if a future partial
+    starts shipping its own frontmatter we don't want to emit two `---` blocks
+    back-to-back (which would parse as malformed YAML and confuse opencode).
+    Returns the body verbatim if no frontmatter is detected.
+    """
+    if not body.startswith("---\n"):
+        return body
+    # Find the closing fence on its own line.
+    end = body.find("\n---\n", 4)
+    if end == -1:
+        # Malformed / unterminated — return as-is and let the model see it.
+        return body
+    return body[end + len("\n---\n") :].lstrip("\n")
+
+
+def _build_partial_wrapper(partial_file: Path) -> str:
+    """Render the wrapper file content for a partial.
+
+    Format: PER-238 stopgap frontmatter + the partial body verbatim (with any
+    existing frontmatter stripped to avoid double-fences).
+    """
+    body = partial_file.read_text(encoding="utf-8")
+    return _PARTIAL_WRAPPER_FRONTMATTER + _strip_existing_frontmatter(body)
+
+
 def _wire_partial(
     project_root: Path,
     partial_file: Path,
     rel: Path,
     tool: str,
 ) -> Path:
-    """Create a symlink for a partial file under .<tool>/agents/<rel>.
+    """Wire a partial file into ``.<tool>/agents/<rel>`` as a wrapped regular file.
 
-    Idempotent: if the symlink already points at the same target, it is left
-    unchanged.  A stale symlink pointing at a different target is replaced.
-    The parent directory is created if it does not exist.
+    PER-238 stopgap: instead of a raw symlink (which opencode auto-discovers as
+    a full subagent), we write a regular file whose content is
+    ``disable: true`` frontmatter followed by the partial body inlined verbatim.
+    Empirically (opencode 1.14.31), ``disable: true`` removes the file from
+    both ``opencode agent list`` and the LLM's Task-tool agent listing while
+    keeping the body resolvable when other agents follow a relative markdown
+    link to it.
+
+    Idempotent: if the destination is already a regular file with identical
+    wrapped content, it is left untouched (preserves mtime — relied upon by
+    ``test_partials_idempotent``). A stale symlink (pre-PER-238 layout) or a
+    drifted wrapper file is replaced. The parent directory is created if it
+    does not exist.
 
     Args:
         project_root: Project root directory.
-        partial_file: Path to the partial artifact file (the symlink target).
-        rel: Relative path under agents/ (e.g. _partials/deep-review-checklist.md).
-        tool: "claudecode" or "opencode".
+        partial_file: Path to the partial artifact file in the warehouse —
+            its body is inlined into the wrapper at wire time.
+        rel: Relative path under agents/ (e.g.
+            ``_partials/deep-review-checklist.md``).
+        tool: ``"claudecode"`` or ``"opencode"``.
 
     Returns:
-        Path to the created (or existing) symlink.
+        Path to the wrapper file.
+
+    Raises:
+        RegularFileConflictError: If the destination is a regular file that
+            does NOT match the expected wrapper content (i.e. user-owned).
     """
     tool_dir = ".claude" if tool == "claudecode" else ".opencode"
     dest = project_root / tool_dir / "agents" / rel
     dest.parent.mkdir(parents=True, exist_ok=True)
 
+    expected = _build_partial_wrapper(partial_file)
+
     if dest.is_symlink():
-        try:
-            if dest.resolve(strict=False) == partial_file.resolve(strict=False):
-                return dest
-        except OSError:
-            pass
+        # Pre-PER-238 layout: a raw symlink. Always replace with a wrapper
+        # regardless of what it pointed at — the symlink itself is the bug.
         dest.unlink()
     elif dest.exists():
+        # Regular file already there. If it matches the wrapper we'd write,
+        # leave it alone (idempotent). Otherwise it's user-owned content.
+        try:
+            current = dest.read_text(encoding="utf-8")
+        except OSError:
+            current = None
+        if current == expected:
+            return dest
         raise RegularFileConflictError(
             conflicts=[
                 AgentWireConflict(
@@ -505,8 +579,12 @@ def _wire_partial(
             ],
         )
 
-    dest.symlink_to(partial_file)
-    logger.debug("Wired partial to {}/agents/: {}", tool_dir, rel)
+    dest.write_text(expected, encoding="utf-8")
+    logger.debug(
+        "Wired partial wrapper to {}/agents/: {} (PER-238 stopgap)",
+        tool_dir,
+        rel,
+    )
     return dest
 
 
@@ -596,29 +674,33 @@ def wire_agents_atomically(
                     )
                 )
 
-    # Also check partial destinations (PER-164)
+    # Also check partial destinations (PER-164/PER-238). Unlike top-level
+    # agent destinations, a regular file at a partial path is **expected**
+    # post-PER-238 — it's the wrapper we wrote on the previous wire. Flag a
+    # conflict only if the existing file's content does NOT match the wrapper
+    # we'd emit. Otherwise it's idempotent re-wire and we leave it alone.
     for partial_file in partial_files:
         rel = partial_file.relative_to(artifacts_agents_dir)
-        if "claudecode" in detected_tools:
-            cc_dest = project_root / ".claude" / "agents" / rel
-            if cc_dest.is_file() and not cc_dest.is_symlink():
-                pre_conflicts.append(
-                    AgentWireConflict(
-                        dest=cc_dest,
-                        agent_name=str(rel),
-                        tool="claudecode",
-                    )
+        expected_wrapper = _build_partial_wrapper(partial_file)
+        for tool, tool_dir in (("claudecode", ".claude"), ("opencode", ".opencode")):
+            if tool not in detected_tools:
+                continue
+            dest = project_root / tool_dir / "agents" / rel
+            if not (dest.is_file() and not dest.is_symlink()):
+                continue
+            try:
+                current = dest.read_text(encoding="utf-8")
+            except OSError:
+                current = None
+            if current == expected_wrapper:
+                continue  # idempotent: our own previously-written wrapper
+            pre_conflicts.append(
+                AgentWireConflict(
+                    dest=dest,
+                    agent_name=str(rel),
+                    tool=tool,
                 )
-        if "opencode" in detected_tools:
-            oc_dest = project_root / ".opencode" / "agents" / rel
-            if oc_dest.is_file() and not oc_dest.is_symlink():
-                pre_conflicts.append(
-                    AgentWireConflict(
-                        dest=oc_dest,
-                        agent_name=str(rel),
-                        tool="opencode",
-                    )
-                )
+            )
 
     if pre_conflicts:
         raise RegularFileConflictError(conflicts=pre_conflicts)
