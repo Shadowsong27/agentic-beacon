@@ -462,52 +462,191 @@ def wire_agent_opencode(project_root: Path, artifact_file: Path) -> Path:
     return dest
 
 
+# PER-238 stopgap: partials co-distributed under .{tool}/agents/_partials/
+# get auto-discovered by opencode (and likely Claude Code) as full subagents,
+# polluting `@`-autocomplete and the LLM's Task-tool agent listing. Wrapping
+# each partial in a `disable: true` frontmatter block at wire time hides the
+# file from both empirically (verified against opencode 1.14.31 — see PER-238
+# comment thread for the test matrix). The partial body is inlined verbatim
+# below the frontmatter so agents that reference the partial via a relative
+# markdown link (e.g. `[checklist](_partials/deep-review-checklist.md)`) still
+# see the full content when they follow the link.
+#
+# Long-term fix (Option C in PER-238) is to stop co-distributing partials
+# entirely once PER-206's canonical-link form lands.
+_PARTIAL_WRAPPER_FRONTMATTER = (
+    "---\n"
+    "description: >-\n"
+    "  Internal fragment referenced by other agents — not a real agent.\n"
+    "  Disabled at wire time by Beacon (PER-238).\n"
+    "mode: subagent\n"
+    "disable: true\n"
+    "---\n\n"
+)
+
+
+def _strip_existing_frontmatter(body: str) -> str:
+    """If body starts with a YAML frontmatter block (``---\\n...---\\n``), strip it.
+
+    Defensive: today's only partial has no frontmatter, but if a future partial
+    starts shipping its own frontmatter we don't want to emit two `---` blocks
+    back-to-back (which would parse as malformed YAML and confuse opencode).
+    Returns the body verbatim if no frontmatter is detected.
+    """
+    if not body.startswith("---\n"):
+        return body
+    # Find the closing fence on its own line.
+    end = body.find("\n---\n", 4)
+    if end == -1:
+        # Malformed / unterminated — return as-is and let the model see it.
+        return body
+    return body[end + len("\n---\n") :].lstrip("\n")
+
+
+def _build_partial_wrapper(partial_file: Path) -> str:
+    """Render the wrapper file content for a partial.
+
+    Format: PER-238 stopgap frontmatter + the partial body verbatim (with any
+    existing frontmatter stripped to avoid double-fences).
+    """
+    body = partial_file.read_text(encoding="utf-8")
+    return _PARTIAL_WRAPPER_FRONTMATTER + _strip_existing_frontmatter(body)
+
+
+def _is_beacon_owned_partial_wrapper(dest: Path) -> bool:
+    """Return True if ``dest`` is a regular file Beacon previously wrote as a
+    partial wrapper.
+
+    We detect Beacon-owned wrappers by the **exact** frontmatter prefix
+    (``_PARTIAL_WRAPPER_FRONTMATTER``). The body below that prefix may
+    legitimately drift between syncs whenever the warehouse partial body is
+    edited, so refreshing such a file is safe and expected. Any other
+    regular file at the destination — including a hand-edited wrapper whose
+    frontmatter someone changed — is treated as user-owned.
+
+    Returns False on any read error (treat as user-owned, defensively).
+    """
+    try:
+        return dest.read_text(encoding="utf-8").startswith(_PARTIAL_WRAPPER_FRONTMATTER)
+    except OSError:
+        return False
+
+
 def _wire_partial(
     project_root: Path,
     partial_file: Path,
     rel: Path,
     tool: str,
 ) -> Path:
-    """Create a symlink for a partial file under .<tool>/agents/<rel>.
+    """Wire a partial file into ``.<tool>/agents/<rel>`` as a wrapped regular file.
 
-    Idempotent: if the symlink already points at the same target, it is left
-    unchanged.  A stale symlink pointing at a different target is replaced.
-    The parent directory is created if it does not exist.
+    PER-238 stopgap: instead of a raw symlink (which opencode auto-discovers as
+    a full subagent), we write a regular file whose content is
+    ``disable: true`` frontmatter followed by the partial body inlined verbatim.
+    Empirically (opencode 1.14.31), ``disable: true`` removes the file from
+    both ``opencode agent list`` and the LLM's Task-tool agent listing while
+    keeping the body resolvable when other agents follow a relative markdown
+    link to it.
+
+    Idempotent: if the destination is already a regular file with identical
+    wrapped content, it is left untouched (preserves mtime — relied upon by
+    ``test_partials_idempotent``). A stale symlink (pre-PER-238 layout) or a
+    drifted wrapper file is replaced. The parent directory is created if it
+    does not exist.
 
     Args:
         project_root: Project root directory.
-        partial_file: Path to the partial artifact file (the symlink target).
-        rel: Relative path under agents/ (e.g. _partials/deep-review-checklist.md).
-        tool: "claudecode" or "opencode".
+        partial_file: Path to the partial artifact file in the warehouse —
+            its body is inlined into the wrapper at wire time.
+        rel: Relative path under agents/ (e.g.
+            ``_partials/deep-review-checklist.md``).
+        tool: ``"claudecode"`` or ``"opencode"``.
 
     Returns:
-        Path to the created (or existing) symlink.
+        Path to the wrapper file.
+
+    Raises:
+        RegularFileConflictError: If the destination is a regular file that
+            does NOT match the expected wrapper content (i.e. user-owned).
     """
     tool_dir = ".claude" if tool == "claudecode" else ".opencode"
     dest = project_root / tool_dir / "agents" / rel
     dest.parent.mkdir(parents=True, exist_ok=True)
 
+    expected = _build_partial_wrapper(partial_file)
+
     if dest.is_symlink():
-        try:
-            if dest.resolve(strict=False) == partial_file.resolve(strict=False):
-                return dest
-        except OSError:
-            pass
+        # Pre-PER-238 layout: a raw symlink. Always replace with a wrapper
+        # regardless of what it pointed at — the symlink itself is the bug.
         dest.unlink()
     elif dest.exists():
-        raise RegularFileConflictError(
-            conflicts=[
-                AgentWireConflict(
-                    dest=dest,
-                    agent_name=str(rel),
-                    tool=tool,
-                ),
-            ],
-        )
+        # Regular file at the destination. Two cases:
+        #   1. It's a Beacon-owned wrapper from a previous sync (recognised
+        #      by the exact wrapper frontmatter prefix). The body may have
+        #      drifted because the warehouse partial body was edited — that
+        #      is expected and we should refresh in place. If the content
+        #      already matches what we'd write, leave it alone to preserve
+        #      mtime (idempotent re-wire).
+        #   2. It's user-authored content that happens to sit at the same
+        #      path. Refuse to overwrite.
+        try:
+            current = dest.read_text(encoding="utf-8")
+        except OSError:
+            current = None
+        if current == expected:
+            return dest
+        if current is not None and current.startswith(_PARTIAL_WRAPPER_FRONTMATTER):
+            # Stale Beacon-owned wrapper — refresh below.
+            pass
+        else:
+            raise RegularFileConflictError(
+                conflicts=[
+                    AgentWireConflict(
+                        dest=dest,
+                        agent_name=str(rel),
+                        tool=tool,
+                    ),
+                ],
+            )
 
-    dest.symlink_to(partial_file)
-    logger.debug("Wired partial to {}/agents/: {}", tool_dir, rel)
+    dest.write_text(expected, encoding="utf-8")
+    logger.debug(
+        "Wired partial wrapper to {}/agents/: {} (PER-238 stopgap)",
+        tool_dir,
+        rel,
+    )
     return dest
+
+
+def _snapshot_partial_path(p: Path) -> tuple[str, Path | str | None]:
+    """Snapshot a partial destination's pre-wire state.
+
+    Like ``snapshot_agent_path`` but distinguishes Beacon-owned wrapper files
+    (``wrapper_file`` kind, content captured for rollback) from user-owned
+    regular files. Without this distinction the rollback closure in
+    ``wire_agents_atomically`` cannot restore a refreshed wrapper after a
+    later wire step fails — addressed in PER-238 PR #157 round-2 review.
+
+    Returns:
+        ("symlink", current_target)  — pre-PER-238 raw symlink, target captured.
+        ("wrapper_file", content)    — Beacon-owned wrapper, full content captured.
+        ("regular_file", None)       — user-owned regular file (never modified).
+        ("missing", None)            — nothing there yet.
+    """
+    if p.is_symlink():
+        return ("symlink", p.readlink())
+    if p.is_file():
+        if _is_beacon_owned_partial_wrapper(p):
+            try:
+                return ("wrapper_file", p.read_text(encoding="utf-8"))
+            except OSError:
+                # Fall through and treat as user-owned defensively. The
+                # in-flight wire helpers will refuse to mutate it anyway.
+                return ("regular_file", None)
+        return ("regular_file", None)
+    if p.exists():
+        return ("regular_file", None)
+    return ("missing", None)
 
 
 def wire_agents_atomically(
@@ -596,63 +735,73 @@ def wire_agents_atomically(
                     )
                 )
 
-    # Also check partial destinations (PER-164)
+    # Also check partial destinations (PER-164/PER-238). Unlike top-level
+    # agent destinations, a regular file at a partial path is **expected**
+    # post-PER-238 — it's a Beacon-owned wrapper from a previous sync. We
+    # recognise wrappers by the exact frontmatter prefix; a stale wrapper
+    # whose body drifted (because the warehouse partial body was edited)
+    # is **not** a conflict and will be refreshed in `_wire_partial`. Only
+    # flag genuinely user-authored regular files.
     for partial_file in partial_files:
         rel = partial_file.relative_to(artifacts_agents_dir)
-        if "claudecode" in detected_tools:
-            cc_dest = project_root / ".claude" / "agents" / rel
-            if cc_dest.is_file() and not cc_dest.is_symlink():
-                pre_conflicts.append(
-                    AgentWireConflict(
-                        dest=cc_dest,
-                        agent_name=str(rel),
-                        tool="claudecode",
-                    )
+        for tool, tool_dir in (("claudecode", ".claude"), ("opencode", ".opencode")):
+            if tool not in detected_tools:
+                continue
+            dest = project_root / tool_dir / "agents" / rel
+            if not (dest.is_file() and not dest.is_symlink()):
+                continue
+            if _is_beacon_owned_partial_wrapper(dest):
+                continue  # Beacon-owned wrapper — idempotent or refresh.
+            pre_conflicts.append(
+                AgentWireConflict(
+                    dest=dest,
+                    agent_name=str(rel),
+                    tool=tool,
                 )
-        if "opencode" in detected_tools:
-            oc_dest = project_root / ".opencode" / "agents" / rel
-            if oc_dest.is_file() and not oc_dest.is_symlink():
-                pre_conflicts.append(
-                    AgentWireConflict(
-                        dest=oc_dest,
-                        agent_name=str(rel),
-                        tool="opencode",
-                    )
-                )
+            )
 
     if pre_conflicts:
         raise RegularFileConflictError(conflicts=pre_conflicts)
 
-    snapshots: list[tuple[Path, str, Path | None]] = []
+    snapshots: list[tuple[Path, str, Path | str | None]] = []
 
     def _rollback() -> None:
-        for path, kind, prior_target in reversed(snapshots):
+        for path, kind, prior in reversed(snapshots):
             try:
                 if kind == "missing":
                     if path.is_symlink() or path.exists():
                         path.unlink()
                 elif kind == "symlink":
+                    assert isinstance(prior, Path)
                     if path.is_symlink():
-                        if path.readlink() != prior_target:
+                        if path.readlink() != prior:
                             path.unlink()
-                            path.symlink_to(prior_target)
+                            path.symlink_to(prior)
                     else:
                         if path.exists():
                             path.unlink()
                         path.parent.mkdir(parents=True, exist_ok=True)
-                        path.symlink_to(prior_target)
+                        path.symlink_to(prior)
+                elif kind == "wrapper_file":
+                    # PER-238 round-2: a refreshed wrapper must be restored
+                    # to its pre-wire content if a later wire step fails.
+                    assert isinstance(prior, str)
+                    if path.is_symlink():
+                        path.unlink()
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text(prior, encoding="utf-8")
                 # "regular_file" snapshots imply wire never succeeded for
-                # that path (the wire helpers refuse to overwrite regular
-                # files), so no restore is needed.
+                # that path (the wire helpers refuse to overwrite user-owned
+                # regular files), so no restore is needed.
             except OSError as e:
                 logger.warning(
                     "wire_agents_atomically: rollback step failed for "
-                    "{} (kind={}, prior_target={}): {}. "
+                    "{} (kind={}, prior={}): {}. "
                     "Continuing with remaining snapshots; "
                     "post-failure state may be partially restored.",
                     path,
                     kind,
-                    prior_target,
+                    prior,
                     e,
                 )
 
@@ -668,16 +817,17 @@ def wire_agents_atomically(
                 snapshots.append((oc_dest, *snapshot_agent_path(oc_dest)))
                 wire_agent_opencode(project_root, artifact_file)
 
-        # Wire partials into each detected tool (PER-164)
+        # Wire partials into each detected tool (PER-164/PER-238).
+        # Use _snapshot_partial_path so refreshed wrappers can be rolled back.
         for partial_file in partial_files:
             rel = partial_file.relative_to(artifacts_agents_dir)
             if "claudecode" in detected_tools:
                 cc_dest = project_root / ".claude" / "agents" / rel
-                snapshots.append((cc_dest, *snapshot_agent_path(cc_dest)))
+                snapshots.append((cc_dest, *_snapshot_partial_path(cc_dest)))
                 _wire_partial(project_root, partial_file, rel, "claudecode")
             if "opencode" in detected_tools:
                 oc_dest = project_root / ".opencode" / "agents" / rel
-                snapshots.append((oc_dest, *snapshot_agent_path(oc_dest)))
+                snapshots.append((oc_dest, *_snapshot_partial_path(oc_dest)))
                 _wire_partial(project_root, partial_file, rel, "opencode")
     except Exception:
         _rollback()

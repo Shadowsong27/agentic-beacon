@@ -830,13 +830,20 @@ def _make_partial(base: Path, rel: str, content: str = "partial") -> Path:
 
 class TestWireAgentsAtomicallyPartials:
     def test_partials_wired_to_both_tools(self, tmp_path):
-        """Partials under artifacts/agents/_partials/ get symlinked into both tools (PER-164)."""
+        """Partials under artifacts/agents/_partials/ get wrapped+wired into both tools.
+
+        PER-164 introduced the wiring; PER-238 changed the wire output from a
+        raw symlink to a regular file with `disable: true` frontmatter so
+        opencode doesn't surface the partial as a callable subagent. Both the
+        frontmatter and the original partial body must be present.
+        """
         project = tmp_path / "proj"
         project.mkdir()
         artifact = _make_artifact(tmp_path / "warehouse", "spec-planner.md")
         partial = _make_partial(
             project / ".agentic-beacon" / "artifacts",
             "deep-review-checklist.md",
+            content="# Deep-review checklist\n\nbody line one\n",
         )
 
         wire_agents_atomically(project, [artifact], {"claudecode", "opencode"})
@@ -847,17 +854,30 @@ class TestWireAgentsAtomicallyPartials:
         oc_partial = (
             project / ".opencode" / "agents" / "_partials" / "deep-review-checklist.md"
         )
-        assert cc_partial.is_symlink(), (
-            f"Expected .claude partial symlink at {cc_partial}"
+        # PER-238: wrappers are regular files, NOT symlinks.
+        assert cc_partial.is_file() and not cc_partial.is_symlink(), (
+            f"Expected regular-file wrapper at {cc_partial}, not a symlink"
         )
-        assert cc_partial.readlink() == partial
-        assert oc_partial.is_symlink(), (
-            f"Expected .opencode partial symlink at {oc_partial}"
+        assert oc_partial.is_file() and not oc_partial.is_symlink(), (
+            f"Expected regular-file wrapper at {oc_partial}, not a symlink"
         )
-        assert oc_partial.readlink() == partial
+        for wrapped in (cc_partial, oc_partial):
+            content = wrapped.read_text()
+            assert content.startswith("---\n"), (
+                f"Wrapper at {wrapped} missing frontmatter fence"
+            )
+            assert "disable: true" in content, (
+                f"Wrapper at {wrapped} missing disable: true"
+            )
+            # Original body must be inlined verbatim below the frontmatter.
+            assert "body line one" in content, (
+                f"Wrapper at {wrapped} missing original partial body"
+            )
+        # Original warehouse partial must be untouched.
+        assert partial.read_text() == "# Deep-review checklist\n\nbody line one\n"
 
     def test_partials_idempotent(self, tmp_path):
-        """Re-running wire_agents_atomically does not duplicate partial symlinks (PER-164)."""
+        """Re-running wire_agents_atomically does not rewrite unchanged partial wrappers (PER-164/PER-238)."""
         project = tmp_path / "proj"
         project.mkdir()
         artifact = _make_artifact(tmp_path / "warehouse", "spec-planner.md")
@@ -883,6 +903,7 @@ class TestWireAgentsAtomicallyPartials:
         nested = _make_partial(
             project / ".agentic-beacon" / "artifacts",
             "sub/dir/nested.md",
+            content="# nested\n\ninner body\n",
         )
 
         wire_agents_atomically(project, [artifact], {"claudecode"})
@@ -890,8 +911,13 @@ class TestWireAgentsAtomicallyPartials:
         cc_nested = (
             project / ".claude" / "agents" / "_partials" / "sub" / "dir" / "nested.md"
         )
-        assert cc_nested.is_symlink()
-        assert cc_nested.readlink() == nested
+        # PER-238: regular-file wrapper, not symlink.
+        assert cc_nested.is_file() and not cc_nested.is_symlink()
+        content = cc_nested.read_text()
+        assert "disable: true" in content
+        assert "inner body" in content
+        # Source warehouse partial unchanged.
+        assert nested.read_text() == "# nested\n\ninner body\n"
 
     def test_no_partials_dir_is_noop(self, tmp_path):
         """When no _partials/ directory exists, wire_agents_atomically still works."""
@@ -979,3 +1005,254 @@ class TestWireAgentsAtomicallyPartials:
         assert not (project / ".claude" / "agents" / "agent-a.md").exists()
         assert not (project / ".claude" / "agents" / "_partials").exists()
         assert blocker.read_text() == "user content"
+
+
+# ---------------------------------------------------------------------------
+# PER-238: partial wrappers carry disable: true frontmatter and idempotently
+# replace pre-PER-238 raw symlinks.
+# ---------------------------------------------------------------------------
+
+
+class TestWirePartialPER238Wrapper:
+    def test_wrapper_carries_disable_true_frontmatter(self, tmp_path):
+        """Empirical PER-238 contract: the wrapper file must declare
+        `disable: true` and `mode: subagent` so opencode (and Claude Code)
+        skip the partial during agent autodiscovery.
+        """
+        project = tmp_path / "proj"
+        project.mkdir()
+        artifact = _make_artifact(tmp_path / "warehouse", "spec-planner.md")
+        _make_partial(
+            project / ".agentic-beacon" / "artifacts",
+            "deep-review-checklist.md",
+            content="# Deep-review checklist\n\nbody\n",
+        )
+
+        wire_agents_atomically(project, [artifact], {"claudecode"})
+
+        cc_wrap = (
+            project / ".claude" / "agents" / "_partials" / "deep-review-checklist.md"
+        )
+        content = cc_wrap.read_text()
+        # Frontmatter fence is the very first thing in the file — opencode
+        # parses YAML only at the head.
+        assert content.startswith("---\n")
+        # Extract the frontmatter block (everything between the first two ---).
+        head, _, body = content[4:].partition("\n---\n")
+        assert "mode: subagent" in head, f"frontmatter missing mode:\n{head}"
+        assert "disable: true" in head, f"frontmatter missing disable:\n{head}"
+        # Body is preserved verbatim after the frontmatter.
+        assert body.endswith("# Deep-review checklist\n\nbody\n"), body
+
+    def test_wrapper_replaces_pre_per238_symlink(self, tmp_path):
+        """Migration: an existing raw symlink (pre-PER-238 layout) must be
+        replaced by a wrapper file on the next wire pass — without raising.
+        """
+        project = tmp_path / "proj"
+        project.mkdir()
+        artifact = _make_artifact(tmp_path / "warehouse", "spec-planner.md")
+        partial = _make_partial(
+            project / ".agentic-beacon" / "artifacts",
+            "deep-review-checklist.md",
+            content="# checklist\n\nbody\n",
+        )
+
+        # Simulate the pre-PER-238 state: a raw symlink to the partial.
+        cc_dir = project / ".claude" / "agents" / "_partials"
+        cc_dir.mkdir(parents=True, exist_ok=True)
+        legacy = cc_dir / "deep-review-checklist.md"
+        legacy.symlink_to(partial)
+        assert legacy.is_symlink()
+
+        wire_agents_atomically(project, [artifact], {"claudecode"})
+
+        # Now a regular-file wrapper, not a symlink.
+        assert legacy.is_file() and not legacy.is_symlink()
+        assert "disable: true" in legacy.read_text()
+
+    def test_wrapper_strips_existing_partial_frontmatter(self, tmp_path):
+        """Defensive: if a partial ships with its own YAML frontmatter, the
+        wrapper must NOT emit two ``---`` blocks back-to-back (which would
+        confuse opencode's frontmatter parser). The partial's frontmatter is
+        stripped; only the body is inlined under our wrapper frontmatter.
+        """
+        project = tmp_path / "proj"
+        project.mkdir()
+        artifact = _make_artifact(tmp_path / "warehouse", "spec-planner.md")
+        _make_partial(
+            project / ".agentic-beacon" / "artifacts",
+            "with-fm.md",
+            content="---\nfoo: bar\n---\n\nactual body\n",
+        )
+
+        wire_agents_atomically(project, [artifact], {"claudecode"})
+
+        cc_wrap = project / ".claude" / "agents" / "_partials" / "with-fm.md"
+        content = cc_wrap.read_text()
+        # Exactly one frontmatter block at the head.
+        assert content.count("\n---\n") == 1, (
+            f"Expected exactly one frontmatter block, got:\n{content}"
+        )
+        # The partial's original frontmatter values are gone.
+        assert "foo: bar" not in content
+        # The body survives.
+        assert content.endswith("actual body\n")
+
+    def test_wrapper_conflicts_with_unrelated_user_file(self, tmp_path):
+        """If a user-authored regular file already sits at the wrapper path
+        and its content does NOT match the wrapper we'd write, the wire must
+        raise RegularFileConflictError — same protection as for top-level
+        agent destinations.
+        """
+        project = tmp_path / "proj"
+        project.mkdir()
+        artifact = _make_artifact(tmp_path / "warehouse", "spec-planner.md")
+        _make_partial(
+            project / ".agentic-beacon" / "artifacts",
+            "deep-review-checklist.md",
+            content="# checklist\n\nbody\n",
+        )
+
+        cc_dir = project / ".claude" / "agents" / "_partials"
+        cc_dir.mkdir(parents=True, exist_ok=True)
+        user_file = cc_dir / "deep-review-checklist.md"
+        user_file.write_text("hand-written user content")
+
+        with pytest.raises(RegularFileConflictError):
+            wire_agents_atomically(project, [artifact], {"claudecode"})
+
+        # User file untouched.
+        assert user_file.read_text() == "hand-written user content"
+
+    def test_wrapper_refreshes_when_warehouse_body_changes(self, tmp_path):
+        """Regression for opencode-review Medium finding on PR #157:
+
+        A wrapper written by a previous sync must be **refreshed in place**
+        when the warehouse partial body changes — not flagged as a user
+        conflict. Beacon-owned wrappers are recognised by the exact
+        frontmatter prefix; only the body below is allowed to drift.
+        """
+        project = tmp_path / "proj"
+        project.mkdir()
+        artifact = _make_artifact(tmp_path / "warehouse", "spec-planner.md")
+        partial = _make_partial(
+            project / ".agentic-beacon" / "artifacts",
+            "deep-review-checklist.md",
+            content="# checklist\n\nv1 body\n",
+        )
+
+        # First sync: wrapper holds v1 body.
+        wire_agents_atomically(project, [artifact], {"claudecode"})
+        cc_wrap = (
+            project / ".claude" / "agents" / "_partials" / "deep-review-checklist.md"
+        )
+        assert "v1 body" in cc_wrap.read_text()
+
+        # Warehouse partial body edited.
+        partial.write_text("# checklist\n\nv2 body\n")
+
+        # Re-sync must succeed and refresh the wrapper to v2 — NOT raise
+        # RegularFileConflictError.
+        wire_agents_atomically(project, [artifact], {"claudecode"})
+
+        refreshed = cc_wrap.read_text()
+        assert "v2 body" in refreshed, (
+            f"Wrapper did not refresh after warehouse partial edit:\n{refreshed}"
+        )
+        assert "v1 body" not in refreshed, (
+            f"Stale v1 body still present in wrapper:\n{refreshed}"
+        )
+        # Frontmatter still intact.
+        assert refreshed.startswith("---\n")
+        assert "disable: true" in refreshed.split("\n---\n", 1)[0]
+
+    def test_wrapper_with_drifted_body_not_user_conflict_in_preflight(self, tmp_path):
+        """Companion to the refresh test, exercising the **pre-flight** path.
+
+        When two partials are wired and only the second triggers a refresh,
+        the pre-flight scan must NOT short-circuit with a conflict on the
+        first partial just because its body has drifted. Bug from PR #157
+        opencode-review: the preflight compared full-file equality instead
+        of recognising Beacon-owned wrappers by frontmatter.
+        """
+        project = tmp_path / "proj"
+        project.mkdir()
+        artifact = _make_artifact(tmp_path / "warehouse", "spec-planner.md")
+        first = _make_partial(
+            project / ".agentic-beacon" / "artifacts", "first.md", "v1\n"
+        )
+        _make_partial(
+            project / ".agentic-beacon" / "artifacts", "second.md", "second body\n"
+        )
+        wire_agents_atomically(project, [artifact], {"claudecode"})
+
+        # Drift the first partial's warehouse body without touching the
+        # wrapper on disk.
+        first.write_text("v2\n")
+
+        # Pre-flight must accept the existing first wrapper as Beacon-owned
+        # despite the body drift, AND wire the second partial successfully.
+        wire_agents_atomically(project, [artifact], {"claudecode"})
+
+        cc_first = project / ".claude" / "agents" / "_partials" / "first.md"
+        cc_second = project / ".claude" / "agents" / "_partials" / "second.md"
+        assert "v2" in cc_first.read_text()
+        assert "second body" in cc_second.read_text()
+
+    def test_refreshed_wrapper_rolled_back_when_later_wire_fails(
+        self, tmp_path, monkeypatch
+    ):
+        """Regression for opencode-review round-2 Medium finding on PR #157:
+
+        When ``_wire_partial`` refreshes an existing Beacon-owned wrapper
+        in-place (because the warehouse partial body drifted), the refreshed
+        content must be rolled back to its pre-wire state if a later wire
+        step fails. Before the fix, ``snapshot_agent_path`` recorded
+        ``regular_file`` for the existing wrapper and the rollback closure
+        treated that snapshot as a no-op, leaving the partial-applied refresh
+        on disk after a failure.
+        """
+        from beacon.domains.setup import wiring as wiring_mod
+
+        project = tmp_path / "proj"
+        project.mkdir()
+        artifact = _make_artifact(tmp_path / "warehouse", "spec-planner.md")
+        first = _make_partial(
+            project / ".agentic-beacon" / "artifacts", "first.md", "v1\n"
+        )
+        _make_partial(
+            project / ".agentic-beacon" / "artifacts", "second.md", "second body\n"
+        )
+
+        # Initial sync — both wrappers written.
+        wire_agents_atomically(project, [artifact], {"claudecode"})
+        cc_first = project / ".claude" / "agents" / "_partials" / "first.md"
+        v1_content = cc_first.read_text()
+        assert "v1" in v1_content
+
+        # Drift the first partial body, then arrange for the SECOND wire to
+        # fail. The first wire will refresh the wrapper from v1 → v2 and
+        # rollback must put v1 back.
+        first.write_text("v2\n")
+        real_wire_partial = wiring_mod._wire_partial
+        calls = {"n": 0}
+
+        def flaky_wire_partial(*args, **kwargs):
+            calls["n"] += 1
+            if calls["n"] == 2:
+                raise BeaconSyncError("simulated mid-wire failure")
+            return real_wire_partial(*args, **kwargs)
+
+        monkeypatch.setattr(wiring_mod, "_wire_partial", flaky_wire_partial)
+
+        with pytest.raises(BeaconSyncError, match="simulated mid-wire failure"):
+            wire_agents_atomically(project, [artifact], {"claudecode"})
+
+        # The refreshed wrapper must be restored to the pre-wire (v1) state.
+        restored = cc_first.read_text()
+        assert restored == v1_content, (
+            "Refreshed wrapper not rolled back; expected pre-wire content "
+            f"but got:\n{restored}"
+        )
+        # Sanity: the flaky wrapper was actually invoked twice.
+        assert calls["n"] == 2
