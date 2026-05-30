@@ -1198,3 +1198,61 @@ class TestWirePartialPER238Wrapper:
         cc_second = project / ".claude" / "agents" / "_partials" / "second.md"
         assert "v2" in cc_first.read_text()
         assert "second body" in cc_second.read_text()
+
+    def test_refreshed_wrapper_rolled_back_when_later_wire_fails(
+        self, tmp_path, monkeypatch
+    ):
+        """Regression for opencode-review round-2 Medium finding on PR #157:
+
+        When ``_wire_partial`` refreshes an existing Beacon-owned wrapper
+        in-place (because the warehouse partial body drifted), the refreshed
+        content must be rolled back to its pre-wire state if a later wire
+        step fails. Before the fix, ``snapshot_agent_path`` recorded
+        ``regular_file`` for the existing wrapper and the rollback closure
+        treated that snapshot as a no-op, leaving the partial-applied refresh
+        on disk after a failure.
+        """
+        from beacon.domains.setup import wiring as wiring_mod
+
+        project = tmp_path / "proj"
+        project.mkdir()
+        artifact = _make_artifact(tmp_path / "warehouse", "spec-planner.md")
+        first = _make_partial(
+            project / ".agentic-beacon" / "artifacts", "first.md", "v1\n"
+        )
+        _make_partial(
+            project / ".agentic-beacon" / "artifacts", "second.md", "second body\n"
+        )
+
+        # Initial sync — both wrappers written.
+        wire_agents_atomically(project, [artifact], {"claudecode"})
+        cc_first = project / ".claude" / "agents" / "_partials" / "first.md"
+        v1_content = cc_first.read_text()
+        assert "v1" in v1_content
+
+        # Drift the first partial body, then arrange for the SECOND wire to
+        # fail. The first wire will refresh the wrapper from v1 → v2 and
+        # rollback must put v1 back.
+        first.write_text("v2\n")
+        real_wire_partial = wiring_mod._wire_partial
+        calls = {"n": 0}
+
+        def flaky_wire_partial(*args, **kwargs):
+            calls["n"] += 1
+            if calls["n"] == 2:
+                raise BeaconSyncError("simulated mid-wire failure")
+            return real_wire_partial(*args, **kwargs)
+
+        monkeypatch.setattr(wiring_mod, "_wire_partial", flaky_wire_partial)
+
+        with pytest.raises(BeaconSyncError, match="simulated mid-wire failure"):
+            wire_agents_atomically(project, [artifact], {"claudecode"})
+
+        # The refreshed wrapper must be restored to the pre-wire (v1) state.
+        restored = cc_first.read_text()
+        assert restored == v1_content, (
+            "Refreshed wrapper not rolled back; expected pre-wire content "
+            f"but got:\n{restored}"
+        )
+        # Sanity: the flaky wrapper was actually invoked twice.
+        assert calls["n"] == 2

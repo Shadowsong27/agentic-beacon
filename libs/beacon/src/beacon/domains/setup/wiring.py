@@ -618,6 +618,37 @@ def _wire_partial(
     return dest
 
 
+def _snapshot_partial_path(p: Path) -> tuple[str, Path | str | None]:
+    """Snapshot a partial destination's pre-wire state.
+
+    Like ``snapshot_agent_path`` but distinguishes Beacon-owned wrapper files
+    (``wrapper_file`` kind, content captured for rollback) from user-owned
+    regular files. Without this distinction the rollback closure in
+    ``wire_agents_atomically`` cannot restore a refreshed wrapper after a
+    later wire step fails — addressed in PER-238 PR #157 round-2 review.
+
+    Returns:
+        ("symlink", current_target)  — pre-PER-238 raw symlink, target captured.
+        ("wrapper_file", content)    — Beacon-owned wrapper, full content captured.
+        ("regular_file", None)       — user-owned regular file (never modified).
+        ("missing", None)            — nothing there yet.
+    """
+    if p.is_symlink():
+        return ("symlink", p.readlink())
+    if p.is_file():
+        if _is_beacon_owned_partial_wrapper(p):
+            try:
+                return ("wrapper_file", p.read_text(encoding="utf-8"))
+            except OSError:
+                # Fall through and treat as user-owned defensively. The
+                # in-flight wire helpers will refuse to mutate it anyway.
+                return ("regular_file", None)
+        return ("regular_file", None)
+    if p.exists():
+        return ("regular_file", None)
+    return ("missing", None)
+
+
 def wire_agents_atomically(
     project_root: Path,
     agent_artifact_files: list[Path],
@@ -732,36 +763,45 @@ def wire_agents_atomically(
     if pre_conflicts:
         raise RegularFileConflictError(conflicts=pre_conflicts)
 
-    snapshots: list[tuple[Path, str, Path | None]] = []
+    snapshots: list[tuple[Path, str, Path | str | None]] = []
 
     def _rollback() -> None:
-        for path, kind, prior_target in reversed(snapshots):
+        for path, kind, prior in reversed(snapshots):
             try:
                 if kind == "missing":
                     if path.is_symlink() or path.exists():
                         path.unlink()
                 elif kind == "symlink":
+                    assert isinstance(prior, Path)
                     if path.is_symlink():
-                        if path.readlink() != prior_target:
+                        if path.readlink() != prior:
                             path.unlink()
-                            path.symlink_to(prior_target)
+                            path.symlink_to(prior)
                     else:
                         if path.exists():
                             path.unlink()
                         path.parent.mkdir(parents=True, exist_ok=True)
-                        path.symlink_to(prior_target)
+                        path.symlink_to(prior)
+                elif kind == "wrapper_file":
+                    # PER-238 round-2: a refreshed wrapper must be restored
+                    # to its pre-wire content if a later wire step fails.
+                    assert isinstance(prior, str)
+                    if path.is_symlink():
+                        path.unlink()
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text(prior, encoding="utf-8")
                 # "regular_file" snapshots imply wire never succeeded for
-                # that path (the wire helpers refuse to overwrite regular
-                # files), so no restore is needed.
+                # that path (the wire helpers refuse to overwrite user-owned
+                # regular files), so no restore is needed.
             except OSError as e:
                 logger.warning(
                     "wire_agents_atomically: rollback step failed for "
-                    "{} (kind={}, prior_target={}): {}. "
+                    "{} (kind={}, prior={}): {}. "
                     "Continuing with remaining snapshots; "
                     "post-failure state may be partially restored.",
                     path,
                     kind,
-                    prior_target,
+                    prior,
                     e,
                 )
 
@@ -777,16 +817,17 @@ def wire_agents_atomically(
                 snapshots.append((oc_dest, *snapshot_agent_path(oc_dest)))
                 wire_agent_opencode(project_root, artifact_file)
 
-        # Wire partials into each detected tool (PER-164)
+        # Wire partials into each detected tool (PER-164/PER-238).
+        # Use _snapshot_partial_path so refreshed wrappers can be rolled back.
         for partial_file in partial_files:
             rel = partial_file.relative_to(artifacts_agents_dir)
             if "claudecode" in detected_tools:
                 cc_dest = project_root / ".claude" / "agents" / rel
-                snapshots.append((cc_dest, *snapshot_agent_path(cc_dest)))
+                snapshots.append((cc_dest, *_snapshot_partial_path(cc_dest)))
                 _wire_partial(project_root, partial_file, rel, "claudecode")
             if "opencode" in detected_tools:
                 oc_dest = project_root / ".opencode" / "agents" / rel
-                snapshots.append((oc_dest, *snapshot_agent_path(oc_dest)))
+                snapshots.append((oc_dest, *_snapshot_partial_path(oc_dest)))
                 _wire_partial(project_root, partial_file, rel, "opencode")
     except Exception:
         _rollback()
