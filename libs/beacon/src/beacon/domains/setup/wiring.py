@@ -513,6 +513,25 @@ def _build_partial_wrapper(partial_file: Path) -> str:
     return _PARTIAL_WRAPPER_FRONTMATTER + _strip_existing_frontmatter(body)
 
 
+def _is_beacon_owned_partial_wrapper(dest: Path) -> bool:
+    """Return True if ``dest`` is a regular file Beacon previously wrote as a
+    partial wrapper.
+
+    We detect Beacon-owned wrappers by the **exact** frontmatter prefix
+    (``_PARTIAL_WRAPPER_FRONTMATTER``). The body below that prefix may
+    legitimately drift between syncs whenever the warehouse partial body is
+    edited, so refreshing such a file is safe and expected. Any other
+    regular file at the destination — including a hand-edited wrapper whose
+    frontmatter someone changed — is treated as user-owned.
+
+    Returns False on any read error (treat as user-owned, defensively).
+    """
+    try:
+        return dest.read_text(encoding="utf-8").startswith(_PARTIAL_WRAPPER_FRONTMATTER)
+    except OSError:
+        return False
+
+
 def _wire_partial(
     project_root: Path,
     partial_file: Path,
@@ -561,23 +580,34 @@ def _wire_partial(
         # regardless of what it pointed at — the symlink itself is the bug.
         dest.unlink()
     elif dest.exists():
-        # Regular file already there. If it matches the wrapper we'd write,
-        # leave it alone (idempotent). Otherwise it's user-owned content.
+        # Regular file at the destination. Two cases:
+        #   1. It's a Beacon-owned wrapper from a previous sync (recognised
+        #      by the exact wrapper frontmatter prefix). The body may have
+        #      drifted because the warehouse partial body was edited — that
+        #      is expected and we should refresh in place. If the content
+        #      already matches what we'd write, leave it alone to preserve
+        #      mtime (idempotent re-wire).
+        #   2. It's user-authored content that happens to sit at the same
+        #      path. Refuse to overwrite.
         try:
             current = dest.read_text(encoding="utf-8")
         except OSError:
             current = None
         if current == expected:
             return dest
-        raise RegularFileConflictError(
-            conflicts=[
-                AgentWireConflict(
-                    dest=dest,
-                    agent_name=str(rel),
-                    tool=tool,
-                ),
-            ],
-        )
+        if current is not None and current.startswith(_PARTIAL_WRAPPER_FRONTMATTER):
+            # Stale Beacon-owned wrapper — refresh below.
+            pass
+        else:
+            raise RegularFileConflictError(
+                conflicts=[
+                    AgentWireConflict(
+                        dest=dest,
+                        agent_name=str(rel),
+                        tool=tool,
+                    ),
+                ],
+            )
 
     dest.write_text(expected, encoding="utf-8")
     logger.debug(
@@ -676,24 +706,21 @@ def wire_agents_atomically(
 
     # Also check partial destinations (PER-164/PER-238). Unlike top-level
     # agent destinations, a regular file at a partial path is **expected**
-    # post-PER-238 — it's the wrapper we wrote on the previous wire. Flag a
-    # conflict only if the existing file's content does NOT match the wrapper
-    # we'd emit. Otherwise it's idempotent re-wire and we leave it alone.
+    # post-PER-238 — it's a Beacon-owned wrapper from a previous sync. We
+    # recognise wrappers by the exact frontmatter prefix; a stale wrapper
+    # whose body drifted (because the warehouse partial body was edited)
+    # is **not** a conflict and will be refreshed in `_wire_partial`. Only
+    # flag genuinely user-authored regular files.
     for partial_file in partial_files:
         rel = partial_file.relative_to(artifacts_agents_dir)
-        expected_wrapper = _build_partial_wrapper(partial_file)
         for tool, tool_dir in (("claudecode", ".claude"), ("opencode", ".opencode")):
             if tool not in detected_tools:
                 continue
             dest = project_root / tool_dir / "agents" / rel
             if not (dest.is_file() and not dest.is_symlink()):
                 continue
-            try:
-                current = dest.read_text(encoding="utf-8")
-            except OSError:
-                current = None
-            if current == expected_wrapper:
-                continue  # idempotent: our own previously-written wrapper
+            if _is_beacon_owned_partial_wrapper(dest):
+                continue  # Beacon-owned wrapper — idempotent or refresh.
             pre_conflicts.append(
                 AgentWireConflict(
                     dest=dest,

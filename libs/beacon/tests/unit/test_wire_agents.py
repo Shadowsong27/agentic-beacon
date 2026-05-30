@@ -1123,3 +1123,78 @@ class TestWirePartialPER238Wrapper:
 
         # User file untouched.
         assert user_file.read_text() == "hand-written user content"
+
+    def test_wrapper_refreshes_when_warehouse_body_changes(self, tmp_path):
+        """Regression for opencode-review Medium finding on PR #157:
+
+        A wrapper written by a previous sync must be **refreshed in place**
+        when the warehouse partial body changes — not flagged as a user
+        conflict. Beacon-owned wrappers are recognised by the exact
+        frontmatter prefix; only the body below is allowed to drift.
+        """
+        project = tmp_path / "proj"
+        project.mkdir()
+        artifact = _make_artifact(tmp_path / "warehouse", "spec-planner.md")
+        partial = _make_partial(
+            project / ".agentic-beacon" / "artifacts",
+            "deep-review-checklist.md",
+            content="# checklist\n\nv1 body\n",
+        )
+
+        # First sync: wrapper holds v1 body.
+        wire_agents_atomically(project, [artifact], {"claudecode"})
+        cc_wrap = (
+            project / ".claude" / "agents" / "_partials" / "deep-review-checklist.md"
+        )
+        assert "v1 body" in cc_wrap.read_text()
+
+        # Warehouse partial body edited.
+        partial.write_text("# checklist\n\nv2 body\n")
+
+        # Re-sync must succeed and refresh the wrapper to v2 — NOT raise
+        # RegularFileConflictError.
+        wire_agents_atomically(project, [artifact], {"claudecode"})
+
+        refreshed = cc_wrap.read_text()
+        assert "v2 body" in refreshed, (
+            f"Wrapper did not refresh after warehouse partial edit:\n{refreshed}"
+        )
+        assert "v1 body" not in refreshed, (
+            f"Stale v1 body still present in wrapper:\n{refreshed}"
+        )
+        # Frontmatter still intact.
+        assert refreshed.startswith("---\n")
+        assert "disable: true" in refreshed.split("\n---\n", 1)[0]
+
+    def test_wrapper_with_drifted_body_not_user_conflict_in_preflight(self, tmp_path):
+        """Companion to the refresh test, exercising the **pre-flight** path.
+
+        When two partials are wired and only the second triggers a refresh,
+        the pre-flight scan must NOT short-circuit with a conflict on the
+        first partial just because its body has drifted. Bug from PR #157
+        opencode-review: the preflight compared full-file equality instead
+        of recognising Beacon-owned wrappers by frontmatter.
+        """
+        project = tmp_path / "proj"
+        project.mkdir()
+        artifact = _make_artifact(tmp_path / "warehouse", "spec-planner.md")
+        first = _make_partial(
+            project / ".agentic-beacon" / "artifacts", "first.md", "v1\n"
+        )
+        _make_partial(
+            project / ".agentic-beacon" / "artifacts", "second.md", "second body\n"
+        )
+        wire_agents_atomically(project, [artifact], {"claudecode"})
+
+        # Drift the first partial's warehouse body without touching the
+        # wrapper on disk.
+        first.write_text("v2\n")
+
+        # Pre-flight must accept the existing first wrapper as Beacon-owned
+        # despite the body drift, AND wire the second partial successfully.
+        wire_agents_atomically(project, [artifact], {"claudecode"})
+
+        cc_first = project / ".claude" / "agents" / "_partials" / "first.md"
+        cc_second = project / ".claude" / "agents" / "_partials" / "second.md"
+        assert "v2" in cc_first.read_text()
+        assert "second body" in cc_second.read_text()
