@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.5.1](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v3.5.0...agentic-beacon@v3.5.1) (2026-05-30)
+
+
+### Bug Fixes
+
+* **setup:** wrap agent partials with disable: true frontmatter (PER-238) ([#157](https://github.com/Shadowsong27/agentic-beacon/issues/157)) ([7289a80](https://github.com/Shadowsong27/agentic-beacon/commit/7289a80e1df662e83de7dab7a93041490eb50aa1))
+
 ## [3.5.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v3.4.0...agentic-beacon@v3.5.0) (2026-05-24)
 
 
