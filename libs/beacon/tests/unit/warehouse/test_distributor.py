@@ -7,7 +7,10 @@ Regression tests for:
 """
 
 import pytest
-from beacon.domains.distribution.distributor import WarehouseDistributor
+from beacon.domains.distribution.distributor import (
+    WarehouseDistributor,
+    is_partial_path,
+)
 from beacon.domains.warehouse.catalog import generate_warehouse_catalog
 
 
@@ -176,7 +179,7 @@ def test_catalog_skills_example_uses_skills_prefix(temp_dir):
     assert "skills/" in catalog
 
 
-# ========== PER-164: _partials filtering ==========
+# ========== Agent partial filtering ==========
 
 
 @pytest.fixture
@@ -185,12 +188,14 @@ def warehouse_with_partials(temp_dir):
     wh = temp_dir / "warehouse"
     wh.mkdir()
     (wh / "agents").mkdir()
+    (wh / "agent-partials").mkdir()
     (wh / "contexts").mkdir()
     (wh / "knowledge").mkdir()
     (wh / "skills").mkdir()
     (wh / "agents" / "foo.md").write_text("# Agent Foo")
     (wh / "agents" / "_partials").mkdir()
     (wh / "agents" / "_partials" / "p.md").write_text("# Partial")
+    (wh / "agent-partials" / "root.md").write_text("# Root Partial")
     (wh / "agents" / "_internal").mkdir()
     (wh / "agents" / "_internal" / "q.md").write_text("# Internal")
     (wh / "agents" / "some-dir").mkdir()
@@ -198,8 +203,24 @@ def warehouse_with_partials(temp_dir):
     return wh
 
 
+@pytest.mark.parametrize(
+    ("rel_path", "expected"),
+    [
+        ("agent-partials/deep-review-checklist.md", True),
+        ("agent-partials/sub/x.md", True),
+        ("agents/_partials/x.md", True),
+        ("_partials/x.md", True),
+        ("agents/spec-planner.md", False),
+        ("contexts/foo.md", False),
+    ],
+)
+def test_is_partial_path_cases(rel_path, expected):
+    """Recognize canonical and legacy partial locations, but not agents."""
+    assert is_partial_path(rel_path) is expected
+
+
 def test_list_agents_skips_partials_dir(warehouse_with_partials, temp_dir):
-    """_list_agents skips agents/_partials/*.md (PER-164)."""
+    """_list_agents skips legacy agents/_partials/*.md for safety."""
     distributor = WarehouseDistributor(
         warehouse_root=warehouse_with_partials,
         target_root=temp_dir / "project",
@@ -207,14 +228,13 @@ def test_list_agents_skips_partials_dir(warehouse_with_partials, temp_dir):
     result = distributor._list_agents(warehouse_with_partials / "agents")
     assert "agents/_partials/p.md" not in result
     assert "agents/foo.md" in result
+    assert is_partial_path("agent-partials/root.md") is True
 
 
 def test_list_agents_only_skips_partials_not_other_underscore_dirs(
     warehouse_with_partials, temp_dir
 ):
-    """Filter is scoped to ``_partials/`` specifically — other underscore dirs
-    are still listed because sync only co-distributes ``_partials/`` (PER-164).
-    """
+    """Filter is scoped to partial paths specifically, not all underscore dirs."""
     distributor = WarehouseDistributor(
         warehouse_root=warehouse_with_partials,
         target_root=temp_dir / "project",

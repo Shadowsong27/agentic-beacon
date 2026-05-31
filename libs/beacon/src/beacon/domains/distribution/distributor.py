@@ -10,16 +10,16 @@ from beacon.core.file_filter import ARTIFACT_IGNORE_PATTERNS
 
 
 def is_partial_path(rel: Path | str) -> bool:
-    """Return True if the path is under an ``agents/_partials/`` directory.
+    """Return True if the path is a canonical or legacy agent partial.
 
-    Matches the warehouse convention for shared agent partials
-    (e.g. ``agents/_partials/deep-review-checklist.md``). The filter is
-    intentionally scoped to ``_partials/`` specifically — the same string
-    drives co-distribution in ``run_sync`` (``agents/_partials/**/*``), so
-    broadening the filter without broadening co-distribution would hide
-    files from agent listings while silently failing to ship them.
+    Accepts the canonical top-level ``agent-partials/`` location and the
+    legacy ``agents/_partials/`` / ``_partials/`` forms so agent discovery and
+    stale-prune paths can recognize pre-migration warehouses safely.
     """
     parts = Path(rel).parts
+
+    if parts and parts[0] == "agent-partials":
+        return True
 
     # Accept both warehouse-relative ('agents/_partials/...') and
     # agents-dir-relative ('_partials/...') input. Find the first occurrence

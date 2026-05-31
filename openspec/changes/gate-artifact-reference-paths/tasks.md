@@ -243,13 +243,13 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:4:end -->
 
 
-- [ ] 4.1 Retarget partial dependency glob `agents/_partials/**` → `agent-partials/**` in `orchestrator.py` (still gated on ≥1 declared agent)
+- [x] 4.1 Retarget partial dependency glob `agents/_partials/**` → `agent-partials/**` in `orchestrator.py` (still gated on ≥1 declared agent)
 <!-- opsx:tdd:4.1:begin -->
   - **Input**: pytest tests/unit -k 'orchestrator and partial' -v
   - **Expected Output**: Partials pulled from agent-partials/** only when ≥1 agent declared; mirrored to .agentic-beacon/artifacts/agent-partials/**
   - **Validation**: No agents declared → no partials pulled; agents declared → agent-partials/ files in artifact_paths
 <!-- opsx:tdd:4.1:end -->
-- [ ] 4.2 Update `is_partial_path()` in `distributor.py` and stale-partial handling in `delta.py` for the new `agent-partials/` location
+- [x] 4.2 Update `is_partial_path()` in `distributor.py` and stale-partial handling in `delta.py` for the new `agent-partials/` location
 <!-- opsx:tdd:4.2:begin -->
   - **Input**: pytest tests/unit -k 'is_partial_path or delta' -v
   - **Expected Output**: is_partial_path matches agent-partials/ paths; delta prunes stale agent-partials and legacy _partials symlinks
@@ -260,7 +260,7 @@ pytest tests/ -v --tb=short
     - TC3: legacy `agents/_partials/x.md` → recognized as stale for prune
     - TC4: nested `agent-partials/sub/x.md` → is_partial_path True
 <!-- opsx:tdd:4.2:end -->
-- [ ] 4.3 Remove partial co-distribution + `disable: true` stopgap wrapper in `setup/wiring.py`; prune stale Beacon-owned tool-dir partials on sync
+- [x] 4.3 Remove partial co-distribution + `disable: true` stopgap wrapper in `setup/wiring.py`; prune stale Beacon-owned tool-dir partials on sync
 <!-- opsx:tdd:4.3:begin -->
   - **Input**: pytest tests/unit -k 'wiring and partial' -v
   - **Expected Output**: No partial wrapper emitted into .claude/.opencode; Beacon-owned stale tool-dir partials pruned; user-owned files preserved
@@ -271,7 +271,7 @@ pytest tests/ -v --tb=short
     - TC3: user-created file at the partial path → preserved with warning
     - TC4: disable:true wrapper builder no longer invoked anywhere
 <!-- opsx:tdd:4.3:end -->
-- [ ] 4.4 Unit tests: partial materialized at `.agentic-beacon/artifacts/agent-partials/`, absent from `.claude/`/`.opencode/`, stale tool-dir partial pruned, no-op when no agents declared
+- [x] 4.4 Unit tests: partial materialized at `.agentic-beacon/artifacts/agent-partials/`, absent from `.claude/`/`.opencode/`, stale tool-dir partial pruned, no-op when no agents declared
 <!-- opsx:tdd:4.4:begin -->
   - **Input**: pytest tests/unit -k 'partial' -v
   - **Expected Output**: All partial-restructure unit tests pass

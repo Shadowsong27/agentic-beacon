@@ -414,9 +414,9 @@ class DeltaComparator:
                         summary.results.append(result)
 
             # Also iterate agents/ from warehouse when agents_paths is configured.
-            # Partials are co-distributed alongside agents (PER-164), so they
-            # are intentionally NOT skipped here — delta must surface missing
-            # or stale partial symlinks just like it does for agent files.
+            # Partials moved to top-level agent-partials/ in Phase 4, so this
+            # block now covers agent files only. Drift for mirrored
+            # agent-partials/ is surfaced through artifacts/ comparison.
             if self.agents_paths:
                 agents_dir = self.warehouse_path / "agents"
                 if agents_dir.is_dir():
