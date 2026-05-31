@@ -4,6 +4,10 @@ An **agent** is a distinct AI persona with its own scoped responsibility, instru
 
 There is **no bundled skill** for authoring an agent — you write the markdown directly. Either by hand or by asking your current agent to author one for you. Both are fine.
 
+For links from an agent to any other warehouse artifact, use the
+[canonical link convention](canonical-links.md). This is mandatory for agent-to-partial
+references because agents are wired outside `.agentic-beacon/artifacts/`.
+
 > Why an agent instead of a skill? Skills are best for cognitive or low-state procedures (a code review checklist, a templated transformation). Agents are better when the work has multiple phases, decision points, or wants its own context and tool surface. See [Skills design — Workflow Skills Probably Belong to Agents](../design/skills.md#workflow-skills-probably-belong-to-agents) for the line of reasoning.
 
 ---
@@ -121,32 +125,33 @@ Both directories are gitignored — they're per-machine state. The shared source
 
 ---
 
-## Sharing Fragments Between Agents — `agents/_partials/`
+## Sharing Fragments Between Agents — `agent-partials/`
 
-When several agents share a long checklist, decision table, or boilerplate block, you can extract it into a fragment under `agents/_partials/` and reference it from each agent's markdown via a relative link. Beacon understands this convention and co-distributes partials automatically.
+When several agents share a long checklist, decision table, or boilerplate block, extract it into a fragment under `agent-partials/` and reference it from each agent's markdown via a canonical link. Beacon mirrors partials into `.agentic-beacon/artifacts/agent-partials/` when at least one agent is declared, but it does not wire them into `.claude/agents/` or `.opencode/agents/`.
 
 ```
 agents/
 ├── agents.yaml
 ├── code-reviewer.md
-├── spec-planner.md
-└── _partials/
-    └── deep-review-checklist.md     ← shared between code-reviewer and spec-planner
+└── spec-planner.md
+
+agent-partials/
+└── deep-review-checklist.md
 ```
 
 Inside an agent file:
 
 ```markdown
-For the full per-file checklist, see [`_partials/deep-review-checklist.md`](_partials/deep-review-checklist.md).
+For the full per-file checklist, see [deep review checklist](.agentic-beacon/artifacts/agent-partials/deep-review-checklist.md).
 ```
 
 **Convention rules:**
 
-- Files under `agents/_partials/` are **fragments, not agents.** They are excluded from `abc warehouse list agents`, do not need entries in `agents.yaml`, and are not validated by `abc warehouse lint` as agents.
-- When any agent is declared in a project's `beacon.yaml`, every file under `agents/_partials/` is **co-distributed** alongside it. Partials appear as symlinks under `.claude/agents/_partials/` and `.opencode/agents/_partials/`, so relative markdown links inside the agent file resolve at tool runtime.
-- The filter is **scoped to `_partials/` specifically.** Other leading-underscore directories (e.g. `agents/_internal/`, `agents/_drafts/`) are **not** treated as partials and will trigger lint errors. Use the name `_partials/` exactly.
+- Files under `agent-partials/` are **fragments, not agents.** They do not need entries in `agents.yaml` and are not listed by `abc warehouse list agents`.
+- When any agent is declared in a project's `beacon.yaml`, every file under `agent-partials/` is mirrored into `.agentic-beacon/artifacts/agent-partials/`.
+- Agents must point at partials via canonical `.agentic-beacon/artifacts/agent-partials/...` links, not relative links.
 
-> **Why one shared name?** Broadening the filter without also broadening co-distribution would hide files from agent listings while silently failing to ship them. Keeping the convention narrow keeps the warehouse predictable.
+> Partials live outside the `agents/` tree so they cannot be mistaken for standalone agents by discovery or tool wiring.
 
 ---
 

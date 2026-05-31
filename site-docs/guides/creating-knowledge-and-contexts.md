@@ -9,6 +9,10 @@ Progressive disclosure â€” pulling deep detail in only when the agent needs it â
 
 This guide covers authoring each.
 
+For links from a context or knowledge file to another warehouse artifact, use the
+[canonical link convention](canonical-links.md). Relative cross-artifact links are not
+portable under Beacon's symlinked distribution model.
+
 ---
 
 ## Knowledge

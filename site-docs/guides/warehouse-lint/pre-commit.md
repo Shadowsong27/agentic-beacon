@@ -45,6 +45,15 @@ pre-commit install
 
 From then on, every `git commit` runs the lint against the whole working tree. A failure aborts the commit; fix the artifact and re-commit.
 
+For fixable malformed cross-artifact-relative links, the local repair path is:
+
+```bash
+abc warehouse lint --fix .
+```
+
+This rewrites only the canonicalizable link category. Keep the hook itself read-only;
+the commit should fail fast and let the contributor decide when to apply the rewrite.
+
 ---
 
 ## Field rationale

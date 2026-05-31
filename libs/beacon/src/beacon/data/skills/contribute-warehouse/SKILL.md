@@ -84,6 +84,7 @@ Warehouse lint failed. Resolve the following issues before contributing:
 <lint output>
 
 Suggested recovery:
+  - Run `abc warehouse lint --fix "$WAREHOUSE_ROOT"` for fixable malformed cross-artifact-relative links; it rewrites them to canonical form, preserves anchors, is idempotent, and is safe to run again. It does NOT fix warehouse-escape or missing-target findings — those stay manual.
   - Fix the failing files and re-run /contribute-warehouse
   - Or move the failing edits to a separate branch and re-run on a clean tree
   - As a last resort, you (the user) may discard the changes with
@@ -337,7 +338,7 @@ Contribution summary:
 ## Checklist for Agent
 
 - [ ] Run `resolve_warehouse.py` — STOP if exits non-zero
-- [ ] Run `abc warehouse lint <warehouse>` — STOP and surface errors if non-zero
+- [ ] Run `abc warehouse lint <warehouse>` — STOP and surface errors if non-zero; suggest `--fix` for fixable categories
 - [ ] Run `summarize_changes.py` — STOP if no dirty warehouse paths
 - [ ] Triage dirty files with the user (include / leave-for-later)
 - [ ] Dedup scan for `knowledge/` files — flag overlaps before proceeding

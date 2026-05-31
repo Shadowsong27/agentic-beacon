@@ -116,6 +116,15 @@ abc warehouse lint .
 
 If it fails on a current artifact, fix it first — landing the workflow against a broken tree blocks every future PR until someone unblocks `main`.
 
+For local repair before you push, run:
+
+```bash
+abc warehouse lint --fix .
+```
+
+That rewrites fixable malformed cross-artifact-relative links into canonical form.
+Keep CI read-only: the workflow should check and fail, not mutate the branch.
+
 ---
 
 ## Troubleshooting
