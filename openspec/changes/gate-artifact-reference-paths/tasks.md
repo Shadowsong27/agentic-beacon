@@ -147,13 +147,13 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:2:end -->
 
 
-- [ ] 2.1 Replace `_lint_knowledge_links` with `_lint_artifact_links` scanning `contexts/*.md`, `skills/*/SKILL.md`, `agents/*.md`, `knowledge/**/*.md`
+- [x] 2.1 Replace `_lint_knowledge_links` with `_lint_artifact_links` scanning `contexts/*.md`, `skills/*/SKILL.md`, `agents/*.md`, `knowledge/**/*.md`
 <!-- opsx:tdd:2.1:begin -->
   - **Input**: pytest tests/unit/test_lint.py -k artifact_links -v
   - **Expected Output**: All four artifact families scanned; findings sorted stably by (artifact_path, message)
   - **Validation**: Each family contributes findings; ordering deterministic cross-platform
 <!-- opsx:tdd:2.1:end -->
-- [ ] 2.2 Emit distinct error findings: malformed-cross-artifact, missing-target, unresolved-anchor, warehouse-escape; allow own-folder + absolute-url
+- [x] 2.2 Emit distinct error findings: malformed-cross-artifact, missing-target, unresolved-anchor, warehouse-escape; allow own-folder + absolute-url
 <!-- opsx:tdd:2.2:begin -->
   - **Input**: pytest tests/unit/test_lint.py -k findings -v
   - **Expected Output**: One LintFinding per defect with a category-specific message scoped to the artifact path
@@ -167,7 +167,7 @@ pytest tests/ -v --tb=short
     - TC6: absolute URL → no finding
     - TC7: valid canonical link with valid anchor → no finding
 <!-- opsx:tdd:2.2:end -->
-- [ ] 2.3 Validate same-file bare anchors (`#section`) against the file's own headings
+- [x] 2.3 Validate same-file bare anchors (`#section`) against the file's own headings
 <!-- opsx:tdd:2.3:begin -->
   - **Input**: pytest tests/unit/test_lint.py -k same_file_anchor -v
   - **Expected Output**: Bare `#slug` resolves against the linking file's own headings
@@ -177,14 +177,14 @@ pytest tests/ -v --tb=short
     - TC2: `#missing-heading` absent in same file → unresolved-anchor error
     - TC3: `#setup-1` resolves to the second duplicate `## Setup`
 <!-- opsx:tdd:2.3:end -->
-- [ ] 2.4 Keep `scan_file_for_knowledge` untouched (sync stays warning-only)
+- [x] 2.4 Keep `scan_file_for_knowledge` untouched (sync stays warning-only)
 <!-- opsx:tdd:2.4:begin -->
   - **Input**: pytest tests/unit -k 'scan_file_for_knowledge or sync_warning' -v
   - **Expected Output**: scan_file_for_knowledge signature/behaviour unchanged; abc sync logs warning and exits 0 on a broken link
   - **Validation**: No regression in the warning-only sync path; lint errors do not leak into sync
   - **Note**: Guard task: the lint-side error promotion must NOT modify scan_file_for_knowledge — verify by diff and by the sync-unchanged scenario.
 <!-- opsx:tdd:2.4:end -->
-- [ ] 2.5 Unit tests: fixture warehouses asserting each finding type + clean-pass + exit codes
+- [x] 2.5 Unit tests: fixture warehouses asserting each finding type + clean-pass + exit codes
 <!-- opsx:tdd:2.5:begin -->
   - **Input**: pytest tests/unit/test_lint.py -v
   - **Expected Output**: All lint finding-type tests pass; clean warehouse exits 0; any defect exits 1
@@ -201,8 +201,8 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:3:end -->
 
 
-- [ ] 3.1 Add `--fix` flag to `abc warehouse lint`; default remains read-only
-- [ ] 3.2 Implement in-place rewrite of cross-artifact-relative links via `to_canonical()`, preserving anchors; never touch own-folder/absolute/canonical/warehouse-escape links
+- [x] 3.1 Add `--fix` flag to `abc warehouse lint`; default remains read-only
+- [x] 3.2 Implement in-place rewrite of cross-artifact-relative links via `to_canonical()`, preserving anchors; never touch own-folder/absolute/canonical/warehouse-escape links
 <!-- opsx:tdd:3.2:begin -->
   - **Input**: pytest tests/unit/test_lint_fix.py -k rewrite -v
   - **Expected Output**: Only cross-artifact-relative links rewritten in place; anchors preserved; other categories untouched byte-for-byte
@@ -215,13 +215,13 @@ pytest tests/ -v --tb=short
     - TC5: warehouse-escape link → unchanged (not rewritten)
     - TC6: multiple links on one line → each rewritten independently, surrounding prose intact
 <!-- opsx:tdd:3.2:end -->
-- [ ] 3.3 Report rewritten-count + files touched; warehouse-escape links remain errors (exit 1)
+- [x] 3.3 Report rewritten-count + files touched; warehouse-escape links remain errors (exit 1)
 <!-- opsx:tdd:3.3:begin -->
   - **Input**: abc warehouse lint --fix <fixture-warehouse>
   - **Expected Output**: Summary lists N rewritten links across M files; remaining warehouse-escape errors printed; exit 1 if any error remains, else 0
   - **Validation**: Exit code reflects residual errors; counts match actual file edits
 <!-- opsx:tdd:3.3:end -->
-- [ ] 3.4 Unit tests: fix rewrites fixable link, leaves escape link, idempotency (second run no-ops), read-only without `--fix`
+- [x] 3.4 Unit tests: fix rewrites fixable link, leaves escape link, idempotency (second run no-ops), read-only without `--fix`
 <!-- opsx:tdd:3.4:begin -->
   - **Input**: pytest tests/unit/test_lint_fix.py -v
   - **Expected Output**: All fix tests pass including idempotency and read-only guarantees

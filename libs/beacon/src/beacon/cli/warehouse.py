@@ -594,6 +594,10 @@ def _print_lint_report(report: LintReport, _console: Console | None = None) -> N
     from rich.markup import escape
 
     c = _console if _console is not None else console
+    if report.rewritten_links or report.files_touched or "--fix" in " ".join(sys.argv):
+        c.print(
+            f"[cyan]Rewrote {report.rewritten_links} link(s) across {report.files_touched} file(s).[/cyan]"
+        )
     if not report:
         c.print("[green]✓ Lint passed.[/green]")
         return
@@ -627,7 +631,12 @@ def _print_lint_report(report: LintReport, _console: Console | None = None) -> N
     required=False,
     default=None,
 )
-def warehouse_lint(*, warehouse_path: Path | None) -> None:
+@click.option(
+    "--fix",
+    is_flag=True,
+    help="Rewrite fixable cross-artifact links in place before linting.",
+)
+def warehouse_lint(*, warehouse_path: Path | None, fix: bool) -> None:
     """Validate a warehouse directory end-to-end.
 
     Runs every Beacon-owned artifact validation rule against the warehouse at
@@ -643,8 +652,9 @@ def warehouse_lint(*, warehouse_path: Path | None) -> None:
     Examples:
         abc warehouse lint
         abc warehouse lint /path/to/warehouse
+        abc warehouse lint --fix /path/to/warehouse
     """
     target = warehouse_path or Path.cwd()
-    report = lint_warehouse(target)
+    report = lint_warehouse(target, fix=fix)
     _print_lint_report(report)
     sys.exit(1 if report.findings else 0)

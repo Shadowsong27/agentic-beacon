@@ -6,6 +6,7 @@ directory end-to-end by composing existing path-agnostic primitives.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -20,11 +21,17 @@ from beacon.core.dependencies.manifest import (
     validate_declared_skills,
 )
 from beacon.core.scanner.scanner import (
-    classify_knowledge_ref,
+    LINK_ABSOLUTE_URL,
+    LINK_CANONICAL,
+    LINK_CROSS_ARTIFACT_RELATIVE,
+    LINK_OWN_SKILL_FOLDER,
+    LINK_WAREHOUSE_ESCAPE,
+    classify_link,
+    extract_markdown_headings,
     extract_markdown_links,
-    is_absolute_url,
-    normalize_link_target,
-    resolve_link,
+    resolve_canonical_link,
+    slugify_heading,
+    to_canonical,
 )
 from beacon.domains.warehouse.validator import WarehouseValidator
 
@@ -42,25 +49,20 @@ class LintReport:
     """Aggregated lint report for a warehouse directory."""
 
     findings: tuple[LintFinding, ...]
+    rewritten_links: int = 0
+    files_touched: int = 0
 
     def __bool__(self) -> bool:
         return bool(self.findings)
 
 
-def lint_warehouse(warehouse_path: Path) -> LintReport:
-    """Validate a warehouse directory end-to-end.
-
-    Calls every rule helper, concatenates findings in fixed order, and
-    returns a LintReport. Rule helpers never raise — any exception from a
-    primitive is caught and converted to a LintFinding.
-
-    Args:
-        warehouse_path: Path to the warehouse directory.
-
-    Returns:
-        LintReport with all findings across all rules.
-    """
+def lint_warehouse(warehouse_path: Path, *, fix: bool = False) -> LintReport:
+    """Validate a warehouse directory end-to-end."""
     resolved = Path(warehouse_path).expanduser().resolve()
+    rewritten_links = 0
+    files_touched = 0
+    if fix:
+        rewritten_links, files_touched = _fix_artifact_links(resolved)
 
     findings: list[LintFinding] = []
     findings.extend(_lint_structure(resolved))
@@ -68,11 +70,54 @@ def lint_warehouse(warehouse_path: Path) -> LintReport:
     findings.extend(_lint_skill_requires(resolved))
     findings.extend(_lint_agent_manifest(resolved))
     findings.extend(_lint_agent_frontmatter(resolved))
-    findings.extend(_lint_knowledge_links(resolved))
+    findings.extend(_lint_artifact_links(resolved))
 
-    # Sort by (artifact_path, message) for stable cross-platform ordering
     sorted_findings = sorted(findings, key=lambda f: (f.artifact_path, f.message))
-    return LintReport(findings=tuple(sorted_findings))
+    return LintReport(
+        findings=tuple(sorted_findings),
+        rewritten_links=rewritten_links,
+        files_touched=files_touched,
+    )
+
+
+def _iter_artifact_markdown_files(warehouse_path: Path) -> list[tuple[Path, str]]:
+    """Return every markdown artifact path covered by the artifact-link lint."""
+    files_to_scan: list[tuple[Path, str]] = []
+
+    contexts_dir = warehouse_path / "contexts"
+    if contexts_dir.exists() and contexts_dir.is_dir():
+        for file_path in sorted(contexts_dir.iterdir()):
+            if file_path.is_file() and file_path.suffix == ".md":
+                files_to_scan.append((file_path, f"contexts/{file_path.name}"))
+
+    skills_dir = warehouse_path / "skills"
+    if skills_dir.exists() and skills_dir.is_dir():
+        for skill_dir in sorted(skills_dir.iterdir()):
+            if not skill_dir.is_dir():
+                continue
+            skill_file = skill_dir / "SKILL.md"
+            if skill_file.exists():
+                files_to_scan.append((skill_file, f"skills/{skill_dir.name}/SKILL.md"))
+
+    agents_dir = warehouse_path / "agents"
+    if agents_dir.exists() and agents_dir.is_dir():
+        for file_path in sorted(agents_dir.iterdir()):
+            if (
+                file_path.is_file()
+                and file_path.suffix == ".md"
+                and file_path.name != "README.md"
+            ):
+                files_to_scan.append((file_path, f"agents/{file_path.name}"))
+
+    knowledge_dir = warehouse_path / "knowledge"
+    if knowledge_dir.exists() and knowledge_dir.is_dir():
+        for file_path in sorted(knowledge_dir.rglob("*.md")):
+            if file_path.is_file():
+                files_to_scan.append(
+                    (file_path, file_path.relative_to(warehouse_path).as_posix())
+                )
+
+    return files_to_scan
 
 
 # ---------------------------------------------------------------------------
@@ -81,14 +126,7 @@ def lint_warehouse(warehouse_path: Path) -> LintReport:
 
 
 def _lint_structure(warehouse_path: Path) -> list[LintFinding]:
-    """Validate warehouse directory structure via WarehouseValidator.
-
-    Passes validate_manifest=False so WarehouseValidator runs only its
-    structural checks. The agent-manifest validators are invoked separately
-    by _lint_agent_manifest with per-defect, per-artifact-path findings —
-    running them here too would emit one combined <warehouse>-scoped finding
-    plus N per-defect findings for the same underlying issues.
-    """
+    """Validate warehouse directory structure via WarehouseValidator."""
     validator = WarehouseValidator()
     result = validator.validate(warehouse_path, validate_manifest=False)
     if result.valid:
@@ -128,7 +166,6 @@ def _lint_skill_frontmatter(warehouse_path: Path) -> list[LintFinding]:
             )
             continue
 
-        # Validate against SkillFrontmatter schema
         try:
             SkillFrontmatter(**result.data)
         except ValidationError as exc:
@@ -161,15 +198,12 @@ def _lint_skill_requires(warehouse_path: Path) -> list[LintFinding]:
 
         relative_path = f"skills/{skill_dir.name}/SKILL.md"
         result = parse_frontmatter(skill_file)
-
-        # Skip skills whose frontmatter is invalid — rule 2 handles those
         if not result.success:
             continue
 
         try:
             fm = SkillFrontmatter(**result.data)
         except ValidationError:
-            # Invalid schema — rule 2 already handles this
             continue
 
         for ctx_name in fm.requires.contexts:
@@ -179,8 +213,7 @@ def _lint_skill_requires(warehouse_path: Path) -> list[LintFinding]:
                     LintFinding(
                         artifact_path=relative_path,
                         message=(
-                            f"requires context '{ctx_name}' but "
-                            f"contexts/{ctx_name}.md does not exist"
+                            f"requires context '{ctx_name}' but contexts/{ctx_name}.md does not exist"
                         ),
                     )
                 )
@@ -194,31 +227,12 @@ def _lint_skill_requires(warehouse_path: Path) -> list[LintFinding]:
 
 
 def _extract_path_from_manifest_error(message: str) -> str:
-    """Try to extract an agent path from a manifest error message.
-
-    Recognised patterns (each returns an `agents/<name>.md`-shaped path so
-    findings get scoped to the agent file the message implicates):
-
-    - Explicit relative path: ``agents/<name>.md`` anywhere in the message.
-      Used by ``validate_agents_directory`` /
-      ``validate_agent_frontmatter_clean``.
-    - Agent name in quotes: ``Agent '<name>'`` (single or double).
-      Used by ``validate_declared_skills`` whose error format is
-      ``"Agent 'foo' declares skill 'bar' but ..."``.
-
-    Falls back to ``agents/agents.yaml`` only when neither pattern matches —
-    i.e. when the error is genuinely manifest-file-level (e.g. parse error)
-    or the format changed and this extractor no longer recognises it.
-    """
-    import re
-
-    # Pattern 1: explicit agents/<name>.md mention
+    """Try to extract an agent path from a manifest error message."""
     match = re.search(r"agents/([^/\s]+\.md)", message)
     if match:
         return f"agents/{match.group(1)}"
 
-    # Pattern 2: Agent '<name>' or Agent "<name>" — used by validate_declared_skills.
-    match = re.search(r"""Agent\s+['"]([^'"]+)['"]""", message)
+    match = re.search(r"""Agent\s+['\"]([^'\"]+)['\"]""", message)
     if match:
         return f"agents/{match.group(1)}.md"
 
@@ -226,36 +240,18 @@ def _extract_path_from_manifest_error(message: str) -> str:
 
 
 def _lint_agent_manifest(warehouse_path: Path) -> list[LintFinding]:
-    """Validate agent manifest and run downstream manifest validators.
-
-    Each validator is run independently in its own try/except so a failure in
-    one does not suppress findings from the others. Notably,
-    validate_agent_frontmatter_clean does NOT need a parsed manifest — it only
-    inspects agents/*.md frontmatter — so it must still run even when
-    load_agent_manifest fails.
-    """
+    """Validate agent manifest and run downstream manifest validators."""
     findings = []
-
-    # Track manifest parse outcome separately so we can short-circuit only the
-    # validators that actually need a parsed manifest (agents_directory +
-    # declared_skills), without suppressing frontmatter_clean.
     manifest = None
     manifest_parsed = False
     try:
         manifest = load_agent_manifest(warehouse_path)
         manifest_parsed = True
     except AgentManifestError as exc:
-        # load_agent_manifest formats failures as "<error>\nSee <migration-url>
-        # for ..." — the newline is a continuation, NOT a per-defect separator.
-        # Splitting it would inflate the finding count (one defect becomes N
-        # findings). Preserve the full message as a single finding. This
-        # differs from the validate_* helpers below where '\n' DOES separate
-        # per-defect lines and the split-and-fan-out treatment is correct.
         findings.append(
             LintFinding(artifact_path="agents/agents.yaml", message=str(exc).strip())
         )
 
-    # validate_agents_directory needs a parsed manifest — skip on parse failure.
     if manifest_parsed:
         try:
             validate_agents_directory(warehouse_path, manifest)
@@ -263,25 +259,26 @@ def _lint_agent_manifest(warehouse_path: Path) -> list[LintFinding]:
             for line in str(exc).split("\n"):
                 line = line.strip()
                 if line:
-                    artifact_path = _extract_path_from_manifest_error(line)
                     findings.append(
-                        LintFinding(artifact_path=artifact_path, message=line)
+                        LintFinding(
+                            artifact_path=_extract_path_from_manifest_error(line),
+                            message=line,
+                        )
                     )
 
-    # validate_agent_frontmatter_clean does NOT need a parsed manifest —
-    # always run it, even when load_agent_manifest failed. Otherwise an
-    # unparseable agents.yaml would mask agents with legacy `requires:` keys
-    # in their frontmatter.
     try:
         validate_agent_frontmatter_clean(warehouse_path)
     except AgentManifestError as exc:
         for line in str(exc).split("\n"):
             line = line.strip()
             if line:
-                artifact_path = _extract_path_from_manifest_error(line)
-                findings.append(LintFinding(artifact_path=artifact_path, message=line))
+                findings.append(
+                    LintFinding(
+                        artifact_path=_extract_path_from_manifest_error(line),
+                        message=line,
+                    )
+                )
 
-    # validate_declared_skills needs a parsed (non-None) manifest.
     if manifest_parsed and manifest is not None:
         try:
             validate_declared_skills(warehouse_path, manifest)
@@ -289,9 +286,11 @@ def _lint_agent_manifest(warehouse_path: Path) -> list[LintFinding]:
             for line in str(exc).split("\n"):
                 line = line.strip()
                 if line:
-                    artifact_path = _extract_path_from_manifest_error(line)
                     findings.append(
-                        LintFinding(artifact_path=artifact_path, message=line)
+                        LintFinding(
+                            artifact_path=_extract_path_from_manifest_error(line),
+                            message=line,
+                        )
                     )
 
     return findings
@@ -319,13 +318,11 @@ def _lint_agent_frontmatter(warehouse_path: Path) -> list[LintFinding]:
         result = parse_frontmatter(agent_file)
 
         if not result.success:
-            # When frontmatter is wholly absent/malformed, emit ONE finding only
             findings.append(
                 LintFinding(artifact_path=relative_path, message=result.message)
             )
             continue
 
-        # Check for required keys
         data = result.data or {}
         for key in ("name", "description"):
             if key not in data:
@@ -340,34 +337,15 @@ def _lint_agent_frontmatter(warehouse_path: Path) -> list[LintFinding]:
 
 
 # ---------------------------------------------------------------------------
-# Rule 6: Knowledge link integrity
+# Rule 6: Artifact link integrity
 # ---------------------------------------------------------------------------
 
 
-def _lint_knowledge_links(warehouse_path: Path) -> list[LintFinding]:
-    """Promote broken knowledge links to errors (without modifying scan_file_for_knowledge)."""
-    files_to_scan: list[tuple[Path, str]] = []
+def _lint_artifact_links(warehouse_path: Path) -> list[LintFinding]:
+    """Validate cross-artifact link integrity without changing sync behavior."""
+    findings: list[LintFinding] = []
 
-    # Scan contexts/*.md
-    contexts_dir = warehouse_path / "contexts"
-    if contexts_dir.exists() and contexts_dir.is_dir():
-        for f in sorted(contexts_dir.iterdir()):
-            if f.is_file() and f.suffix == ".md":
-                files_to_scan.append((f, f"contexts/{f.name}"))
-
-    # Scan skills/*/SKILL.md
-    skills_dir = warehouse_path / "skills"
-    if skills_dir.exists() and skills_dir.is_dir():
-        for skill_dir in sorted(skills_dir.iterdir()):
-            if skill_dir.is_dir():
-                skill_file = skill_dir / "SKILL.md"
-                if skill_file.exists():
-                    files_to_scan.append(
-                        (skill_file, f"skills/{skill_dir.name}/SKILL.md")
-                    )
-
-    findings = []
-    for file_path, relative_path in files_to_scan:
+    for file_path, relative_path in _iter_artifact_markdown_files(warehouse_path):
         try:
             content = file_path.read_text(encoding="utf-8")
         except OSError:
@@ -379,28 +357,165 @@ def _lint_knowledge_links(warehouse_path: Path) -> list[LintFinding]:
             )
             continue
 
-        links = extract_markdown_links(content)
-        for link in links:
-            raw_target = link.target
-            normalized = normalize_link_target(raw_target)
-            if not normalized or is_absolute_url(normalized):
+        own_headings = extract_markdown_headings(file_path)
+        for link in extract_markdown_links(content):
+            raw_target = link.target.strip()
+            if not raw_target:
                 continue
 
-            resolved = resolve_link(file_path, normalized, warehouse_path)
-            if resolved is None:
-                continue
-
-            resolved_abs = warehouse_path / resolved.warehouse_relative
-            if classify_knowledge_ref(resolved_abs, warehouse_path):
-                if not resolved_abs.exists():
+            if raw_target.startswith("#"):
+                anchor = slugify_heading(raw_target[1:])
+                if anchor not in own_headings:
                     findings.append(
                         LintFinding(
                             artifact_path=relative_path,
                             message=(
-                                f"broken knowledge link: {raw_target} → "
-                                f"{resolved.warehouse_relative} (file not found)"
+                                f"unresolved anchor: {raw_target} does not match any heading in {relative_path}"
                             ),
                         )
                     )
+                continue
 
-    return findings
+            category = classify_link(raw_target, file_path, warehouse_path)
+            if category in {LINK_ABSOLUTE_URL, LINK_OWN_SKILL_FOLDER}:
+                continue
+
+            if category == LINK_CROSS_ARTIFACT_RELATIVE:
+                findings.append(
+                    LintFinding(
+                        artifact_path=relative_path,
+                        message=(
+                            f"malformed cross-artifact link: {raw_target} must use canonical form "
+                            f"{to_canonical(raw_target, file_path, warehouse_path)}"
+                        ),
+                    )
+                )
+                continue
+
+            if category == LINK_WAREHOUSE_ESCAPE:
+                findings.append(
+                    LintFinding(
+                        artifact_path=relative_path,
+                        message=f"warehouse-escape link: {raw_target} resolves outside the warehouse root",
+                    )
+                )
+                continue
+
+            if category != LINK_CANONICAL:
+                continue
+
+            resolved = resolve_canonical_link(raw_target, warehouse_path)
+            if resolved is None:
+                continue
+            target_path, anchor = resolved
+
+            if not target_path.exists():
+                findings.append(
+                    LintFinding(
+                        artifact_path=relative_path,
+                        message=(
+                            f"missing canonical target: {raw_target} → {target_path.relative_to(warehouse_path).as_posix()}"
+                        ),
+                    )
+                )
+                continue
+
+            if anchor is not None and anchor not in extract_markdown_headings(
+                target_path
+            ):
+                findings.append(
+                    LintFinding(
+                        artifact_path=relative_path,
+                        message=(
+                            f"unresolved anchor: {raw_target} does not match any heading in "
+                            f"{target_path.relative_to(warehouse_path).as_posix()}"
+                        ),
+                    )
+                )
+
+    return sorted(findings, key=lambda f: (f.artifact_path, f.message))
+
+
+_INLINE_LINK_RE = re.compile(r"(?<!\\)(?<!!)\[([^\]]*)\]\(([^)]+)\)")
+
+
+def _fix_artifact_links(warehouse_path: Path) -> tuple[int, int]:
+    """Rewrite fixable cross-artifact links in place and report counts.
+
+    Mirrors ``extract_markdown_links`` exactly so ``--fix`` only ever touches
+    links that the lint would actually flag: links inside fenced code blocks
+    (``` / ~~~) and inline code spans (backticks) are left untouched.
+    """
+    rewritten_links = 0
+    files_touched = 0
+
+    for file_path, _relative_path in _iter_artifact_markdown_files(warehouse_path):
+        try:
+            original = file_path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+
+        changed = False
+
+        def replace_link(
+            match: re.Match[str], current_file_path: Path = file_path
+        ) -> str:
+            nonlocal rewritten_links, changed
+
+            full_text = match.group(0)
+            target = match.group(2).strip()
+            if (
+                classify_link(target, current_file_path, warehouse_path)
+                != LINK_CROSS_ARTIFACT_RELATIVE
+            ):
+                return full_text
+
+            changed = True
+            rewritten_links += 1
+            return full_text.replace(
+                match.group(2),
+                to_canonical(target, current_file_path, warehouse_path),
+                1,
+            )
+
+        out_lines: list[str] = []
+        in_code_fence = False
+        fence_char: str | None = None
+        for line in original.splitlines(keepends=True):
+            stripped = line.lstrip()
+
+            # Toggle fenced code block state on ``` or ~~~ at line start.
+            if not in_code_fence and (
+                stripped.startswith("```") or stripped.startswith("~~~")
+            ):
+                in_code_fence = True
+                fence_char = stripped[:3]
+                out_lines.append(line)
+                continue
+            if (
+                in_code_fence
+                and fence_char is not None
+                and stripped.startswith(fence_char)
+            ):
+                in_code_fence = False
+                fence_char = None
+                out_lines.append(line)
+                continue
+            if in_code_fence:
+                out_lines.append(line)
+                continue
+
+            # Outside fences: rewrite only the segments outside inline code
+            # spans (odd-indexed backtick splits are inside inline code).
+            parts = line.split("`")
+            for i, part in enumerate(parts):
+                if i % 2 == 0:
+                    parts[i] = _INLINE_LINK_RE.sub(replace_link, part)
+            out_lines.append("`".join(parts))
+
+        updated = "".join(out_lines)
+        if changed and updated != original:
+            file_path.write_text(updated, encoding="utf-8")
+            files_touched += 1
+
+    return rewritten_links, files_touched
