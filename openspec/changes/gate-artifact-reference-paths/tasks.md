@@ -288,8 +288,8 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:5:end -->
 
 
-- [ ] 5.1 Add a pre-commit step to `data/skills/contribute-warehouse/SKILL.md`: run `abc warehouse lint`, block on error findings, suggest `--fix`
-- [ ] 5.2 Verify the gate flow end-to-end against a dirty fixture warehouse
+- [x] 5.1 Add a pre-commit step to `data/skills/contribute-warehouse/SKILL.md`: run `abc warehouse lint`, block on error findings, suggest `--fix`
+- [x] 5.2 Verify the gate flow end-to-end against a dirty fixture warehouse
 <!-- opsx:tdd:5.2:begin -->
   - **Input**: Follow the contribute-warehouse skill against a fixture warehouse containing one planted cross-artifact-relative link, then re-run after `abc warehouse lint --fix`
   - **Expected Output**: First run blocks at the lint gate citing the malformed link; after --fix the gate passes and contribute proceeds
@@ -306,20 +306,20 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:6:end -->
 
 
-- [ ] 6.1 Build a synthetic fixture warehouse (context→knowledge, skill→context, skill own-folder asset, agent→partial, knowledge→knowledge) + a negative fixture with a broken link
+- [x] 6.1 Build a synthetic fixture warehouse (context→knowledge, skill→context, skill own-folder asset, agent→partial, knowledge→knowledge) + a negative fixture with a broken link
 <!-- opsx:tdd:6.1:begin -->
   - **Input**: Construct tmp warehouse dirs/files in a pytest fixture under tests/integration
   - **Expected Output**: Fixture warehouse with all canonical link kinds plus one negative-fixture broken link
   - **Validation**: Fixture builds deterministically; positive links canonical, negative link malformed
   - **Note**: Coverage mix must include: context→knowledge, skill→context, skill own-folder asset, agent→agent-partial, knowledge→knowledge.
 <!-- opsx:tdd:6.1:end -->
-- [ ] 6.2 Stand up tmp project, connect, declare artifacts, run real `abc sync` (real symlinks)
+- [x] 6.2 Stand up tmp project, connect, declare artifacts, run real `abc sync` (real symlinks)
 <!-- opsx:tdd:6.2:begin -->
   - **Input**: abc connect + beacon.yaml declaring the fixture artifacts, then abc sync against the synthetic warehouse
   - **Expected Output**: Real symlink tree under .agentic-beacon/artifacts/ plus agent symlinks under .claude/.opencode; agent-partials mirrored
   - **Validation**: Symlinks resolve to warehouse files; sync exits 0; agent-partials present in mirror, absent from tool dirs
 <!-- opsx:tdd:6.2:end -->
-- [ ] 6.3 Walk every distributed artifact under `.agentic-beacon/artifacts/` and the agent files in `.claude/agents/`/`.opencode/agents/`; assert each canonical link resolves as `(project_root / target).exists()` + anchor resolves
+- [x] 6.3 Walk every distributed artifact under `.agentic-beacon/artifacts/` and the agent files in `.claude/agents/`/`.opencode/agents/`; assert each canonical link resolves as `(project_root / target).exists()` + anchor resolves
 <!-- opsx:tdd:6.3:begin -->
   - **Input**: pytest tests/integration/test_link_resolution.py -v
   - **Expected Output**: Every canonical link in every distributed artifact resolves via (project_root / target).exists(); anchors match a heading slug
@@ -332,7 +332,7 @@ pytest tests/ -v --tb=short
     - TC5: canonical link with anchor → anchor matches a heading slug in the target
     - TC6: skill own-folder asset link → resolves relative to the skill dir (not flagged)
 <!-- opsx:tdd:6.3:end -->
-- [ ] 6.4 Assert the negative fixture is caught by `abc warehouse lint` (exit 1, correct finding)
+- [x] 6.4 Assert the negative fixture is caught by `abc warehouse lint` (exit 1, correct finding)
 <!-- opsx:tdd:6.4:begin -->
   - **Input**: abc warehouse lint <synthetic-warehouse-with-negative-fixture>
   - **Expected Output**: Exit code 1 with a finding scoped to the negative-fixture file naming the malformed/broken link
@@ -342,7 +342,7 @@ pytest tests/ -v --tb=short
     - TC2: negative fixture with canonical link to missing target → exit 1, missing-target finding
     - TC3: after lint --fix on the fixable defect → exit 0
 <!-- opsx:tdd:6.4:end -->
-- [ ] 6.5 Mark integration test appropriately (`tests/integration/`, its own conftest) so it runs in CI
+- [x] 6.5 Mark integration test appropriately (`tests/integration/`, its own conftest) so it runs in CI
 
 ## 7. Docs
 
@@ -354,8 +354,8 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:7:end -->
 
 
-- [ ] 7.1 Document the canonical-link convention + resolution rule in `CONTRIBUTING.md` and the authoring guide
-- [ ] 7.2 Document the `abc warehouse lint` / `--fix` workflow and the contribute-time gate
+- [x] 7.1 Document the canonical-link convention + resolution rule in `CONTRIBUTING.md` and the authoring guide
+- [x] 7.2 Document the `abc warehouse lint` / `--fix` workflow and the contribute-time gate
 
 ## 8. Release & warehouse migration (post-merge)
 

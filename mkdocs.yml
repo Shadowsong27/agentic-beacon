@@ -88,6 +88,7 @@ nav:
     - Day-to-Day Workflow: guides/day-to-day-workflow.md
     - Contributing Back:
       - Overview: guides/contributing-back.md
+      - Canonical Links: guides/canonical-links.md
       - Creating Skills: guides/creating-skills.md
       - Creating Knowledge and Contexts: guides/creating-knowledge-and-contexts.md
       - Creating an Agent: guides/creating-agents.md

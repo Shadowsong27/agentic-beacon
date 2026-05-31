@@ -30,7 +30,7 @@ The skill walks you through the full flow interactively.
 The skill runs these steps in order:
 
 1. **Resolve warehouse** — locate `.agentic-beacon/config.toml` and extract the warehouse path
-2. **Lint pre-flight gate** — run `abc warehouse lint <warehouse>`; abort on any error
+2. **Lint pre-flight gate** — run `abc warehouse lint <warehouse>`; abort on any error and suggest `abc warehouse lint --fix <warehouse>` for fixable malformed cross-artifact-relative links
 3. **Summarize dirty paths** — call `summarize_changes.py` to get a structured JSON view of what has changed
 4. **Intent triage** — ask you which files to include or leave for later
 5. **Dedup scan** (knowledge/ files only) — scan sibling files for overlapping content
@@ -52,6 +52,7 @@ abc warehouse lint <warehouse-path>
 This is a **hard gate** — if lint reports any error, the skill aborts. This applies
 even to files outside your intended contribution scope. Resolve lint failures first:
 
+- Run `abc warehouse lint --fix <warehouse-path>` when the failure is a fixable malformed cross-artifact-relative link. The rewrite is idempotent, preserves anchors, and leaves warehouse-escape or missing-target findings for manual repair.
 - Fix the failing files
 - Or discard them: `git -C <warehouse> checkout -- <file>`
 
