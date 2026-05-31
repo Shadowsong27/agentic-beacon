@@ -436,8 +436,16 @@ def _lint_artifact_links(warehouse_path: Path) -> list[LintFinding]:
     return sorted(findings, key=lambda f: (f.artifact_path, f.message))
 
 
+_INLINE_LINK_RE = re.compile(r"(?<!\\)(?<!!)\[([^\]]*)\]\(([^)]+)\)")
+
+
 def _fix_artifact_links(warehouse_path: Path) -> tuple[int, int]:
-    """Rewrite fixable cross-artifact links in place and report counts."""
+    """Rewrite fixable cross-artifact links in place and report counts.
+
+    Mirrors ``extract_markdown_links`` exactly so ``--fix`` only ever touches
+    links that the lint would actually flag: links inside fenced code blocks
+    (``` / ~~~) and inline code spans (backticks) are left untouched.
+    """
     rewritten_links = 0
     files_touched = 0
 
@@ -470,16 +478,44 @@ def _fix_artifact_links(warehouse_path: Path) -> tuple[int, int]:
                 1,
             )
 
-        updated = re.sub(
-            r"(?<!\\)(?<!!)\[([^\]]*)\]\(([^)]+)\)", replace_link, original
-        )
+        out_lines: list[str] = []
+        in_code_fence = False
+        fence_char: str | None = None
+        for line in original.splitlines(keepends=True):
+            stripped = line.lstrip()
+
+            # Toggle fenced code block state on ``` or ~~~ at line start.
+            if not in_code_fence and (
+                stripped.startswith("```") or stripped.startswith("~~~")
+            ):
+                in_code_fence = True
+                fence_char = stripped[:3]
+                out_lines.append(line)
+                continue
+            if (
+                in_code_fence
+                and fence_char is not None
+                and stripped.startswith(fence_char)
+            ):
+                in_code_fence = False
+                fence_char = None
+                out_lines.append(line)
+                continue
+            if in_code_fence:
+                out_lines.append(line)
+                continue
+
+            # Outside fences: rewrite only the segments outside inline code
+            # spans (odd-indexed backtick splits are inside inline code).
+            parts = line.split("`")
+            for i, part in enumerate(parts):
+                if i % 2 == 0:
+                    parts[i] = _INLINE_LINK_RE.sub(replace_link, part)
+            out_lines.append("`".join(parts))
+
+        updated = "".join(out_lines)
         if changed and updated != original:
             file_path.write_text(updated, encoding="utf-8")
             files_touched += 1
 
     return rewritten_links, files_touched
-
-
-def _lint_knowledge_links(warehouse_path: Path) -> list[LintFinding]:
-    """Backward-compat shim to preserve direct test imports during the change."""
-    return _lint_artifact_links(warehouse_path)
