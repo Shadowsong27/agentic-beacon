@@ -66,3 +66,18 @@ def test_classify_link_context_relative_is_not_own_folder(tmp_path: Path) -> Non
         classify_link("references/api.md", source, tmp_path)
         == "cross-artifact-relative"
     )
+
+
+def test_classify_link_canonical_with_traversal_escape_is_warehouse_escape(
+    tmp_path: Path,
+) -> None:
+    """A canonical-shaped link that .. -escapes the warehouse classifies as
+    warehouse-escape, not canonical. PR #159 round-3 review (HIGH severity).
+    """
+    source = tmp_path / "contexts" / "foo.md"
+    source.parent.mkdir(parents=True, exist_ok=True)
+
+    assert (
+        classify_link(".agentic-beacon/artifacts/../../outside.md", source, tmp_path)
+        == "warehouse-escape"
+    )

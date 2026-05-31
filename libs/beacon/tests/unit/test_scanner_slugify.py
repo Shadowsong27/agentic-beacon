@@ -56,3 +56,18 @@ def test_heading_dedup_counter_resets_per_file(tmp_path: Path) -> None:
 
     assert extract_markdown_headings(first) == ["setup", "setup-1"]
     assert extract_markdown_headings(second) == ["setup"]
+
+
+def test_extract_headings_strips_atx_closing_hashes(tmp_path: Path) -> None:
+    """ATX headings with optional closing hashes (``## Setup ##``) slugify
+    to ``setup``, not ``setup-``.
+
+    PR #159 round-3 review (medium severity). Without the closing-hash
+    strip the captured heading text was ``Setup ##`` and slugified to
+    ``setup-`` because the # characters are filtered but the surrounding
+    space-then-hash sequence collapsed into a trailing hyphen.
+    """
+    path = tmp_path / "with-closing-hashes.md"
+    path.write_text("## Setup ##\n## Reference ###\n## Notes\n", encoding="utf-8")
+
+    assert extract_markdown_headings(path) == ["setup", "reference", "notes"]

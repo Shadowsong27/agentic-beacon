@@ -173,7 +173,14 @@ def extract_markdown_headings(path: Path) -> list[str]:
         if match is None:
             continue
 
-        slug = slugify_heading(match.group(2))
+        heading_text = match.group(2)
+        # Strip optional ATX "closing hash" suffix (e.g. ``## Setup ##``).
+        # CommonMark/GFM allow a trailing ``\s+#+\s*$`` after the heading
+        # body; without stripping it, ``## Setup ##`` slugifies to
+        # ``setup-`` instead of ``setup`` and breaks anchor resolution.
+        heading_text = re.sub(r"\s+#+\s*$", "", heading_text)
+
+        slug = slugify_heading(heading_text)
         duplicate_count = seen_counts.get(slug, 0)
         seen_counts[slug] = duplicate_count + 1
         if duplicate_count:
@@ -191,14 +198,28 @@ def is_absolute_url(target: str) -> bool:
 def resolve_canonical_link(
     link_target: str, warehouse_root: Path
 ) -> tuple[Path, str | None] | None:
-    """Resolve a canonical artifact link to a warehouse path and optional anchor."""
+    """Resolve a canonical artifact link to a warehouse path and optional anchor.
+
+    Returns ``None`` for non-canonical input AND for canonical-shaped input
+    whose path component escapes ``warehouse_root`` via ``..`` traversal —
+    e.g. ``.agentic-beacon/artifacts/../../outside.md`` is rejected.
+    Treating a path-traversal payload as canonical would let an attacker
+    smuggle a warehouse-escape link past the canonical-vs-relative
+    classifier; the classifier reroutes such links to
+    ``LINK_WAREHOUSE_ESCAPE`` instead.
+    """
     if not link_target.startswith(CANONICAL_PREFIX):
         return None
 
     path_part, separator, anchor = link_target.partition("#")
     warehouse_relative = path_part.removeprefix(CANONICAL_PREFIX)
+    target_path = (warehouse_root / warehouse_relative).resolve(strict=False)
+    try:
+        target_path.relative_to(warehouse_root.resolve())
+    except ValueError:
+        return None
     resolved_anchor = unquote(anchor) if separator else None
-    return warehouse_root / warehouse_relative, resolved_anchor
+    return target_path, resolved_anchor
 
 
 def classify_link(link_target: str, source_file: Path, warehouse_root: Path) -> str:
@@ -206,6 +227,13 @@ def classify_link(link_target: str, source_file: Path, warehouse_root: Path) -> 
     if is_absolute_url(link_target):
         return LINK_ABSOLUTE_URL
     if link_target.startswith(CANONICAL_PREFIX):
+        # Reject canonical-shaped input that escapes the warehouse via
+        # ``..`` traversal — e.g. ``.agentic-beacon/artifacts/../../x.md``.
+        # A naive prefix-strip would treat this as a valid canonical
+        # reference; reroute it to the warehouse-escape category so the
+        # lint emits a finding instead of silently passing.
+        if resolve_canonical_link(link_target, warehouse_root) is None:
+            return LINK_WAREHOUSE_ESCAPE
         return LINK_CANONICAL
 
     path_part = link_target.split("#", 1)[0]
@@ -229,14 +257,28 @@ def classify_link(link_target: str, source_file: Path, warehouse_root: Path) -> 
 
 
 def to_canonical(link_target: str, source_file: Path, warehouse_root: Path) -> str:
-    """Convert a relative cross-artifact link into canonical artifact form."""
+    """Convert a relative cross-artifact link into canonical artifact form.
+
+    Special-cases the legacy ``agents/_partials/...`` location: any
+    relative reference that resolves there is canonicalised to the
+    Phase-4 ``agent-partials/...`` top-level location instead. After the
+    warehouse migration moves partials out of ``agents/_partials/`` and
+    Beacon's distribution glob retargets to ``agent-partials/**``, a link
+    rewritten to ``.agentic-beacon/artifacts/agents/_partials/x.md``
+    would pass lint shape-wise but never resolve in a synced project
+    because sync no longer mirrors that path. Rewriting straight to the
+    new location keeps ``--fix`` safe during and after the migration.
+    """
     if link_target.startswith(CANONICAL_PREFIX):
         return link_target
 
     path_part, separator, anchor = link_target.partition("#")
     resolved = (source_file.parent / path_part).resolve()
     warehouse_relative = resolved.relative_to(warehouse_root.resolve())
-    canonical = f"{CANONICAL_PREFIX}{warehouse_relative.as_posix()}"
+    rel_posix = warehouse_relative.as_posix()
+    if rel_posix.startswith("agents/_partials/"):
+        rel_posix = "agent-partials/" + rel_posix[len("agents/_partials/") :]
+    canonical = f"{CANONICAL_PREFIX}{rel_posix}"
     if separator:
         return f"{canonical}#{anchor}"
     return canonical
