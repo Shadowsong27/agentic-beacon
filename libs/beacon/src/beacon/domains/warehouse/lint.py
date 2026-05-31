@@ -51,6 +51,7 @@ class LintReport:
     findings: tuple[LintFinding, ...]
     rewritten_links: int = 0
     files_touched: int = 0
+    fix_requested: bool = False
 
     def __bool__(self) -> bool:
         return bool(self.findings)
@@ -77,6 +78,7 @@ def lint_warehouse(warehouse_path: Path, *, fix: bool = False) -> LintReport:
         findings=tuple(sorted_findings),
         rewritten_links=rewritten_links,
         files_touched=files_touched,
+        fix_requested=fix,
     )
 
 

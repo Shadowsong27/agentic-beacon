@@ -578,6 +578,16 @@ def wire_agents_atomically(
         operates at a tighter atomic boundary (single session commit) where
         any partial restore is itself a correctness concern worth raising.
     """
+    # Stale-partial prune runs FIRST, intentionally outside the rollback
+    # snapshot. Rationale: prune deletes ONLY Beacon-owned wrappers (gated by
+    # _is_beacon_owned_partial_wrapper's exact-prefix check) and stale
+    # symlinks; user-authored regular files at partial paths are preserved
+    # with a warning. The prune is therefore (a) non-destructive of user
+    # content and (b) idempotent — the next sync re-runs the same prune as a
+    # no-op. Including it in the rollback transaction would force re-creating
+    # Beacon-owned wrappers we just deleted intentionally; on a wire failure,
+    # the next successful sync converges to the same end state. Reviewed in
+    # PR #159 (gate-artifact-reference-paths phase 4).
     _prune_stale_tool_dir_partials(project_root, detected_tools)
 
     # Pre-flight: collect ALL regular-file conflicts before touching anything.

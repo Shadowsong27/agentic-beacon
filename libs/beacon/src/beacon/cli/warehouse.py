@@ -594,7 +594,7 @@ def _print_lint_report(report: LintReport, _console: Console | None = None) -> N
     from rich.markup import escape
 
     c = _console if _console is not None else console
-    if report.rewritten_links or report.files_touched or "--fix" in " ".join(sys.argv):
+    if report.fix_requested or report.rewritten_links or report.files_touched:
         c.print(
             f"[cyan]Rewrote {report.rewritten_links} link(s) across {report.files_touched} file(s).[/cyan]"
         )
