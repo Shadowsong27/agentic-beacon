@@ -78,7 +78,7 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:1:end -->
 
 
-- [ ] 1.1 Add `slugify_heading()` (GitHub-exact: lowercase, strip non-alnum/space/hyphen, spaces→hyphen, preserve punctuation double-hyphens, dedup `-1/-2`) and a heading-extractor for a markdown file
+- [x] 1.1 Add `slugify_heading()` (GitHub-exact: lowercase, strip non-alnum/space/hyphen, spaces→hyphen, preserve punctuation double-hyphens, dedup `-1/-2`) and a heading-extractor for a markdown file
 <!-- opsx:tdd:1.1:begin -->
   - **Input**: pytest tests/unit/test_scanner_slugify.py -v
   - **Expected Output**: All slugify cases pass; slugs match GitHub for ASCII, emoji, em-dash, and duplicate-heading inputs
@@ -92,7 +92,7 @@ pytest tests/ -v --tb=short
     - TC6: heading with inline code `## Use `foo()`` → backticks stripped, slug `use-foo`
     - TC7: non-heading lines and fenced ``` blocks → not extracted as headings
 <!-- opsx:tdd:1.1:end -->
-- [ ] 1.2 Add `CANONICAL_PREFIX = ".agentic-beacon/artifacts/"` and `resolve_canonical_link()` (strip prefix → warehouse-root path; optional anchor)
+- [x] 1.2 Add `CANONICAL_PREFIX = ".agentic-beacon/artifacts/"` and `resolve_canonical_link()` (strip prefix → warehouse-root path; optional anchor)
 <!-- opsx:tdd:1.2:begin -->
   - **Input**: pytest tests/unit/test_scanner_resolve.py -v
   - **Expected Output**: Canonical links resolve to <warehouse>/<rel>; anchor split out; non-canonical input returns None/unresolved
@@ -104,7 +104,7 @@ pytest tests/ -v --tb=short
     - TC4: input without the canonical prefix → not treated as canonical
     - TC5: URL-encoded anchor (`#%EF%B8%8F-...`) → decoded before comparison
 <!-- opsx:tdd:1.2:end -->
-- [ ] 1.3 Add `classify_link()` returning one of: absolute-url / canonical / own-skill-folder / cross-artifact-relative / warehouse-escape (own-folder applies only to skills)
+- [x] 1.3 Add `classify_link()` returning one of: absolute-url / canonical / own-skill-folder / cross-artifact-relative / warehouse-escape (own-folder applies only to skills)
 <!-- opsx:tdd:1.3:begin -->
   - **Input**: pytest tests/unit/test_scanner_classify.py -v
   - **Expected Output**: Each link classified into exactly one of the five categories given the linking file path + warehouse root
@@ -119,7 +119,7 @@ pytest tests/ -v --tb=short
     - TC7: `../../../apps/backtest/docs/schema.md` resolving outside warehouse → warehouse-escape
     - TC8: `references/api.md` from contexts/foo.md → cross-artifact-relative (own-folder is skills-only)
 <!-- opsx:tdd:1.3:end -->
-- [ ] 1.4 Add `to_canonical()` helper: given a cross-artifact relative link + linking file, compute the canonical form (preserve anchor) — shared by lint and `--fix`
+- [x] 1.4 Add `to_canonical()` helper: given a cross-artifact relative link + linking file, compute the canonical form (preserve anchor) — shared by lint and `--fix`
 <!-- opsx:tdd:1.4:begin -->
   - **Input**: pytest tests/unit/test_scanner_to_canonical.py -v
   - **Expected Output**: Cross-artifact relative link rewritten to `.agentic-beacon/artifacts/<warehouse-rel>` with anchor preserved
@@ -130,7 +130,7 @@ pytest tests/ -v --tb=short
     - TC3: `_partials/deep-review-checklist.md` from agents/sup.md → `.agentic-beacon/artifacts/agents/_partials/deep-review-checklist.md` (pre-move) round-trips
     - TC4: idempotency — passing an already-canonical link is a no-op
 <!-- opsx:tdd:1.4:end -->
-- [ ] 1.5 Unit tests: slugifier table seeded from real warehouse anchors (emoji, `---`, dup headings); classifier table covering all five categories; resolver happy/missing/anchor cases
+- [x] 1.5 Unit tests: slugifier table seeded from real warehouse anchors (emoji, `---`, dup headings); classifier table covering all five categories; resolver happy/missing/anchor cases
 <!-- opsx:tdd:1.5:begin -->
   - **Input**: pytest tests/unit -k 'scanner' -v
   - **Expected Output**: All scanner unit tests pass with real-anchor-seeded slugifier table
