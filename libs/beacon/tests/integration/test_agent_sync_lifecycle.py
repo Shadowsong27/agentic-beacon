@@ -968,24 +968,23 @@ def test_readme_filtered_from_warehouse_agent_catalog(
 
 
 # ---------------------------------------------------------------------------
-# PER-164: agent partials co-distribution
+# Agent partials co-distribution
 # ---------------------------------------------------------------------------
 
 
 def test_sync_with_agent_partials(project_dir: Path, warehouse: Path, monkeypatch):
-    """Warehouse with agents/_partials/ — partials are synced and wired but NOT adoptable.
+    """Warehouse with agent-partials/ mirrors partials but does not wire them.
 
-    Covers PER-164 Layer A (filter partials from agent listings) and
-    Layer B (co-distribute partials alongside declared agents).
+    Covers partial mirror distribution and non-adoptability after Phase 4.
     """
     # Plant a partial file and an agent that references it.
-    (warehouse / "agents" / "_partials").mkdir()
-    (warehouse / "agents" / "_partials" / "deep-review-checklist.md").write_text(
+    (warehouse / "agent-partials").mkdir()
+    (warehouse / "agent-partials" / "deep-review-checklist.md").write_text(
         "## Deep Review Checklist\n- [ ] Item 1\n"
     )
     (warehouse / "agents" / "implementation-supervisor.md").write_text(
         "---\nname: implementation-supervisor\n---\n"
-        "[`_partials/deep-review-checklist.md`](_partials/deep-review-checklist.md)\n"
+        "[`.agentic-beacon/artifacts/agent-partials/deep-review-checklist.md`](.agentic-beacon/artifacts/agent-partials/deep-review-checklist.md)\n"
     )
     manifest_path = warehouse / "agents" / "agents.yaml"
     manifest = yaml.safe_load(manifest_path.read_text()) or {}
@@ -1008,13 +1007,12 @@ def test_sync_with_agent_partials(project_dir: Path, warehouse: Path, monkeypatc
     r = runner.invoke(main, ["sync", "--skip-git-check"])
     assert r.exit_code == 0, f"sync failed: {r.output}"
 
-    # Partial must appear under .agentic-beacon/artifacts/agents/_partials/
+    # Partial must appear under .agentic-beacon/artifacts/agent-partials/
     artifact_partial = (
         project_dir
         / ".agentic-beacon"
         / "artifacts"
-        / "agents"
-        / "_partials"
+        / "agent-partials"
         / "deep-review-checklist.md"
     )
     assert artifact_partial.is_symlink(), (
@@ -1024,26 +1022,15 @@ def test_sync_with_agent_partials(project_dir: Path, warehouse: Path, monkeypatc
         f"Artifact partial symlink is broken: {artifact_partial}"
     )
 
-    # Partial must be wired into .claude/agents/_partials/ as a wrapper
-    # (PER-238: regular file with `disable: true` frontmatter, not a raw
-    # symlink — so opencode/Claude Code don't expose it as a callable agent).
+    # Partial must not be wired into tool agent directories.
     claude_partial = (
         project_dir / ".claude" / "agents" / "_partials" / "deep-review-checklist.md"
     )
-    assert claude_partial.is_file() and not claude_partial.is_symlink(), (
-        f"Expected .claude partial wrapper file at {claude_partial}"
+    opencode_partial = (
+        project_dir / ".opencode" / "agents" / "_partials" / "deep-review-checklist.md"
     )
-    wrapper_content = claude_partial.read_text()
-    assert wrapper_content.startswith("---\n"), (
-        f"Wrapper at {claude_partial} missing frontmatter fence"
-    )
-    assert "disable: true" in wrapper_content.split("\n---\n", 1)[0], (
-        f"Wrapper at {claude_partial} missing disable: true"
-    )
-    # Original partial body must be inlined for relative-link resolution.
-    assert "Deep Review Checklist" in wrapper_content, (
-        f"Wrapper at {claude_partial} missing original partial body"
-    )
+    assert not claude_partial.exists()
+    assert not opencode_partial.exists()
 
     # Partial must NOT be discoverable as an adoptable agent.
     from beacon.domains.distribution.distributor import WarehouseDistributor
