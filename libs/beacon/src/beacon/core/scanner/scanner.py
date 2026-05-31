@@ -14,6 +14,13 @@ from loguru import logger
 
 from beacon.core.manifest.beacon import BeaconManifest
 
+CANONICAL_PREFIX = ".agentic-beacon/artifacts/"
+LINK_ABSOLUTE_URL = "absolute-url"
+LINK_CANONICAL = "canonical"
+LINK_OWN_SKILL_FOLDER = "own-skill-folder"
+LINK_CROSS_ARTIFACT_RELATIVE = "cross-artifact-relative"
+LINK_WAREHOUSE_ESCAPE = "warehouse-escape"
+
 
 @dataclass(frozen=True)
 class LinkRef:
@@ -122,9 +129,130 @@ def normalize_link_target(target: str) -> str:
     return target
 
 
+def slugify_heading(heading: str) -> str:
+    """Convert a markdown heading to GitHub-compatible anchor text."""
+    heading = heading.replace("`", "").strip().lower()
+
+    filtered_chars: list[str] = []
+    for char in heading:
+        if char.isalnum() or char in {" ", "-"}:
+            filtered_chars.append(char)
+
+    return "".join(filtered_chars).replace(" ", "-")
+
+
+def extract_markdown_headings(path: Path) -> list[str]:
+    """Extract ATX heading slugs from a markdown file in document order."""
+    try:
+        content = path.read_text(encoding="utf-8")
+    except OSError:
+        return []
+
+    in_code_fence = False
+    fence_char = None
+    seen_counts: dict[str, int] = {}
+    headings: list[str] = []
+
+    for line in content.splitlines():
+        stripped = line.lstrip()
+
+        if not in_code_fence and (
+            stripped.startswith("```") or stripped.startswith("~~~")
+        ):
+            in_code_fence = True
+            fence_char = stripped[:3]
+            continue
+        if in_code_fence and fence_char is not None and stripped.startswith(fence_char):
+            in_code_fence = False
+            fence_char = None
+            continue
+        if in_code_fence:
+            continue
+
+        match = re.match(r"^\s{0,3}(#{1,6})\s+(.*?)\s*$", line)
+        if match is None:
+            continue
+
+        slug = slugify_heading(match.group(2))
+        duplicate_count = seen_counts.get(slug, 0)
+        seen_counts[slug] = duplicate_count + 1
+        if duplicate_count:
+            slug = f"{slug}-{duplicate_count}"
+        headings.append(slug)
+
+    return headings
+
+
 def is_absolute_url(target: str) -> bool:
     """Return True if target is an absolute URL (has a scheme)."""
     return "://" in target or target.startswith("mailto:") or target.startswith("ftp:")
+
+
+def resolve_canonical_link(
+    link_target: str, warehouse_root: Path
+) -> tuple[Path, str | None] | None:
+    """Resolve a canonical artifact link to a warehouse path and optional anchor."""
+    if not link_target.startswith(CANONICAL_PREFIX):
+        return None
+
+    path_part, separator, anchor = link_target.partition("#")
+    warehouse_relative = path_part.removeprefix(CANONICAL_PREFIX)
+    resolved_anchor = unquote(anchor) if separator else None
+    return warehouse_root / warehouse_relative, resolved_anchor
+
+
+def classify_link(link_target: str, source_file: Path, warehouse_root: Path) -> str:
+    """Classify a markdown link target for canonical artifact linting."""
+    if is_absolute_url(link_target):
+        return LINK_ABSOLUTE_URL
+    if link_target.startswith(CANONICAL_PREFIX):
+        return LINK_CANONICAL
+
+    path_part = link_target.split("#", 1)[0]
+    resolved = (source_file.parent / path_part).resolve()
+    warehouse_root = warehouse_root.resolve()
+
+    try:
+        resolved.relative_to(warehouse_root)
+    except ValueError:
+        return LINK_WAREHOUSE_ESCAPE
+
+    skill_dir = _skill_dir_for_source(source_file, warehouse_root)
+    if skill_dir is not None:
+        try:
+            resolved.relative_to(skill_dir)
+            return LINK_OWN_SKILL_FOLDER
+        except ValueError:
+            pass
+
+    return LINK_CROSS_ARTIFACT_RELATIVE
+
+
+def to_canonical(link_target: str, source_file: Path, warehouse_root: Path) -> str:
+    """Convert a relative cross-artifact link into canonical artifact form."""
+    if link_target.startswith(CANONICAL_PREFIX):
+        return link_target
+
+    path_part, separator, anchor = link_target.partition("#")
+    resolved = (source_file.parent / path_part).resolve()
+    warehouse_relative = resolved.relative_to(warehouse_root.resolve())
+    canonical = f"{CANONICAL_PREFIX}{warehouse_relative.as_posix()}"
+    if separator:
+        return f"{canonical}#{anchor}"
+    return canonical
+
+
+def _skill_dir_for_source(source_file: Path, warehouse_root: Path) -> Path | None:
+    """Return the owning skill directory when the source lives under skills/<name>/."""
+    try:
+        relative = source_file.resolve().relative_to(warehouse_root.resolve())
+    except ValueError:
+        return None
+
+    parts = relative.parts
+    if len(parts) >= 3 and parts[0] == "skills":
+        return warehouse_root.resolve() / parts[0] / parts[1]
+    return None
 
 
 @dataclass(frozen=True)
