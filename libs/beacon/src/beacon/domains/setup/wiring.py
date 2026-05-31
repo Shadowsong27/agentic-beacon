@@ -490,11 +490,60 @@ def _is_beacon_owned_partial_wrapper(dest: Path) -> bool:
         return False
 
 
+def _is_beacon_owned_partial_symlink(path: Path, project_root: Path) -> bool:
+    """Return True if ``path`` is a symlink Beacon previously created.
+
+    Beacon-owned partial symlinks (pre-PER-238 layout) always pointed at a
+    location inside the project's ``.agentic-beacon/artifacts/`` mirror.
+    A symlink whose target resolves anywhere else is treated as
+    user-owned: a contributor may have legitimately hand-symlinked their
+    own partial into the tool dir, and sync must not silently delete it.
+
+    Returns False on any read error (defensively treat as user-owned).
+    """
+    try:
+        target = path.readlink()
+    except OSError:
+        return False
+
+    # Resolve the symlink's target relative to the symlink's parent dir
+    # so a relative target (the common Beacon shape) is judged correctly.
+    if target.is_absolute():
+        resolved = target
+    else:
+        resolved = (path.parent / target).resolve(strict=False)
+
+    artifacts_root = (project_root / ".agentic-beacon" / "artifacts").resolve()
+    try:
+        resolved.relative_to(artifacts_root)
+    except ValueError:
+        return False
+    return True
+
+
 def _prune_stale_tool_dir_partials(
     project_root: Path,
     detected_tools: Iterable[str],
 ) -> list[Path]:
-    """Prune Beacon-owned partials from legacy and transitional tool dirs."""
+    """Prune Beacon-owned partials from legacy and transitional tool dirs.
+
+    For each candidate path under ``.<tool>/agents/_partials/`` and
+    ``.<tool>/agents/agent-partials/``:
+
+    - Symlink whose target resolves inside ``.agentic-beacon/artifacts/``
+      → Beacon-owned (legacy PER-164/PER-238 layout); unlink.
+    - Symlink whose target resolves elsewhere → user-owned; preserve with a
+      warning. Sync must not silently delete a contributor's own symlinked
+      partial.
+    - Regular file matching the legacy wrapper-frontmatter prefix (via
+      ``_is_beacon_owned_partial_wrapper``) → Beacon-owned; unlink.
+    - Any other regular file → user-owned; preserve with a warning.
+
+    The ownership-aware policy mirrors the conflict-detection used by
+    ``wire_agents_atomically`` for top-level agent paths and addresses the
+    PR #159 round-2 review finding that symlinks were being deleted
+    unconditionally.
+    """
     pruned: list[Path] = []
     tool_roots = {
         "claudecode": project_root / ".claude" / "agents",
@@ -511,8 +560,14 @@ def _prune_stale_tool_dir_partials(
                 continue
             for path in sorted(partial_root.rglob("*"), reverse=True):
                 if path.is_symlink():
-                    path.unlink()
-                    pruned.append(path)
+                    if _is_beacon_owned_partial_symlink(path, project_root):
+                        path.unlink()
+                        pruned.append(path)
+                    else:
+                        logger.warning(
+                            "Preserving user-owned partial symlink {} during sync prune.",
+                            path,
+                        )
                 elif path.is_file():
                     if _is_beacon_owned_partial_wrapper(path):
                         path.unlink()

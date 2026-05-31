@@ -119,6 +119,20 @@ def _iter_artifact_markdown_files(warehouse_path: Path) -> list[tuple[Path, str]
                     (file_path, file_path.relative_to(warehouse_path).as_posix())
                 )
 
+    # agent-partials/ is a first-class artifact family in the Phase 4 layout
+    # — partial bodies (e.g. agent-partials/deep-review-checklist.md) are
+    # mirrored into projects and may themselves contain canonical links
+    # back to other artifacts. Scan them under the same rules so a malformed
+    # cross-artifact link inside a shared partial does not slip past lint
+    # and get distributed to every project that pulls the partial.
+    agent_partials_dir = warehouse_path / "agent-partials"
+    if agent_partials_dir.exists() and agent_partials_dir.is_dir():
+        for file_path in sorted(agent_partials_dir.rglob("*.md")):
+            if file_path.is_file():
+                files_to_scan.append(
+                    (file_path, file_path.relative_to(warehouse_path).as_posix())
+                )
+
     return files_to_scan
 
 
@@ -474,11 +488,17 @@ def _fix_artifact_links(warehouse_path: Path) -> tuple[int, int]:
 
             changed = True
             rewritten_links += 1
-            return full_text.replace(
-                match.group(2),
-                to_canonical(target, current_file_path, warehouse_path),
-                1,
-            )
+            # Rebuild the link from regex spans so we only ever rewrite the
+            # target (group 2), never the label (group 1). A naive
+            # ``full_text.replace(group(2), ..., 1)`` corrupts links of the
+            # form ``[../../contexts/a.md](../../contexts/a.md)`` — `replace`
+            # finds the label text first and rewrites it instead of the
+            # destination. Using span slicing relative to the match keeps the
+            # label byte-for-byte and only replaces the parenthesised target.
+            target_start = match.start(2) - match.start(0)
+            target_end = match.end(2) - match.start(0)
+            new_target = to_canonical(target, current_file_path, warehouse_path)
+            return full_text[:target_start] + new_target + full_text[target_end:]
 
         out_lines: list[str] = []
         in_code_fence = False

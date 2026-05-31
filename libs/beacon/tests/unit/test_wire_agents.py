@@ -947,3 +947,68 @@ class TestWireAgentsAtomicallyPartials:
         assert not (project / ".claude" / "agents" / "agent-a.md").exists()
         assert not (project / ".claude" / "agents" / "_partials").exists()
         assert blocker.read_text() == "user content"
+
+    def test_user_owned_symlink_under_partials_dir_is_preserved(
+        self, tmp_path, loguru_caplog
+    ):
+        """Sync prune must not delete a symlink whose target lives outside the
+        Beacon-owned ``.agentic-beacon/artifacts/`` mirror.
+
+        Pre-PER-238 Beacon-owned symlinks always pointed into the artifacts
+        mirror; a contributor's hand-symlinked partial pointing somewhere else
+        (e.g. an external notes file) is user content and must survive sync.
+        Addresses PR #159 round-2 review (medium severity).
+        """
+        project = tmp_path / "proj"
+        project.mkdir()
+        artifact = _make_artifact(tmp_path / "warehouse", "spec-planner.md")
+        # Materialise an artifacts/ tree so the prune helper can resolve it.
+        _make_partial(
+            project / ".agentic-beacon" / "artifacts", "deep-review-checklist.md"
+        )
+
+        # User's own external file + symlink under the tool partials dir.
+        external = tmp_path / "external" / "my-notes.md"
+        external.parent.mkdir(parents=True, exist_ok=True)
+        external.write_text("# my notes\n")
+
+        user_symlink = project / ".opencode" / "agents" / "_partials" / "mine.md"
+        user_symlink.parent.mkdir(parents=True, exist_ok=True)
+        user_symlink.symlink_to(external)
+
+        wire_agents_atomically(project, [artifact], {"opencode"})
+
+        assert user_symlink.is_symlink(), (
+            "user-owned symlink must be preserved by sync prune"
+        )
+        assert user_symlink.resolve() == external.resolve()
+        warnings = [
+            r.getMessage() for r in loguru_caplog.records if r.levelname == "WARNING"
+        ]
+        assert any("Preserving user-owned partial symlink" in m for m in warnings), (
+            f"expected preservation warning; got warnings={warnings!r}"
+        )
+
+    def test_legacy_beacon_owned_symlink_under_partials_is_pruned(self, tmp_path):
+        """A symlink under ``.<tool>/agents/_partials/`` that points INTO the
+        ``.agentic-beacon/artifacts/`` mirror is the pre-PER-238 Beacon-owned
+        layout; sync MUST remove it during prune.
+        """
+        project = tmp_path / "proj"
+        project.mkdir()
+        artifact = _make_artifact(tmp_path / "warehouse", "spec-planner.md")
+        target = _make_partial(
+            project / ".agentic-beacon" / "artifacts", "legacy-checklist.md"
+        )
+
+        legacy_symlink = (
+            project / ".opencode" / "agents" / "_partials" / "legacy-checklist.md"
+        )
+        legacy_symlink.parent.mkdir(parents=True, exist_ok=True)
+        legacy_symlink.symlink_to(target)
+
+        wire_agents_atomically(project, [artifact], {"opencode"})
+
+        assert not legacy_symlink.exists(), (
+            "Beacon-owned legacy partial symlink must be pruned"
+        )

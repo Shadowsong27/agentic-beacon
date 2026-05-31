@@ -224,3 +224,76 @@ class TestLintFix:
         assert report.rewritten_links == 0
         assert report.files_touched == 0
         assert "warehouse-escape link" in result.output
+
+    def test_fix_does_not_rewrite_label_when_label_matches_target(self, tmp_path):
+        """Regression: rewrite must touch the link target only, never the label.
+
+        A naive ``full_text.replace(group(2), ..., 1)`` finds the first
+        occurrence anywhere inside ``[label](target)``, so for
+        ``[../../contexts/bar.md](../../contexts/bar.md)`` it rewrites the
+        label and leaves the target malformed. PR #159 round-2 review
+        (medium severity) — fix uses span-based slicing.
+        """
+        wh = _build_clean_warehouse(tmp_path)
+        (wh / "contexts" / "bar.md").write_text("# Bar\n")
+        skill_file = _add_valid_skill(wh, "foo")
+        skill_file.write_text(
+            "---\nrequires:\n  contexts: []\n---\n"
+            "[../../contexts/bar.md](../../contexts/bar.md)\n"
+        )
+
+        report = lint_warehouse(wh, fix=True)
+
+        assert report.rewritten_links == 1
+        assert report.files_touched == 1
+        # Label is byte-preserved; only the target is rewritten to canonical.
+        assert (
+            skill_file.read_text() == "---\nrequires:\n  contexts: []\n---\n"
+            "[../../contexts/bar.md](.agentic-beacon/artifacts/contexts/bar.md)\n"
+        )
+        # Re-lint must be clean — the rewritten link classifies as canonical.
+        relint = lint_warehouse(wh)
+        assert relint.findings == ()
+
+    def test_lint_scans_agent_partials_directory(self, tmp_path):
+        """``agent-partials/**/*.md`` must be covered by the artifact-link rule.
+
+        Phase 4 made ``agent-partials/`` a first-class artifact family
+        mirrored into projects. A malformed cross-artifact link inside a
+        shared partial would otherwise pass lint and ship to every
+        downstream project. PR #159 round-2 review (medium severity).
+        """
+        wh = _build_clean_warehouse(tmp_path)
+        (wh / "contexts" / "bar.md").write_text("# Bar\n")
+        partials_dir = wh / "agent-partials"
+        partials_dir.mkdir()
+        (partials_dir / "shared-checklist.md").write_text(
+            "# Shared Checklist\n\n[ctx](../contexts/bar.md)\n"
+        )
+
+        report = lint_warehouse(wh)
+
+        relevant = [f for f in report.findings if "agent-partials" in f.artifact_path]
+        assert len(relevant) == 1, (
+            f"expected one finding scoped to agent-partials/, got {report.findings}"
+        )
+        assert relevant[0].artifact_path == "agent-partials/shared-checklist.md"
+        assert "malformed cross-artifact link" in relevant[0].message
+
+    def test_fix_rewrites_links_inside_agent_partials(self, tmp_path):
+        """``--fix`` must rewrite cross-artifact links inside agent-partials/."""
+        wh = _build_clean_warehouse(tmp_path)
+        (wh / "contexts" / "bar.md").write_text("# Bar\n")
+        partials_dir = wh / "agent-partials"
+        partials_dir.mkdir()
+        partial_file = partials_dir / "shared-checklist.md"
+        partial_file.write_text("# Shared Checklist\n\n[ctx](../contexts/bar.md)\n")
+
+        report = lint_warehouse(wh, fix=True)
+
+        assert report.rewritten_links == 1
+        assert report.files_touched == 1
+        assert (
+            partial_file.read_text()
+            == "# Shared Checklist\n\n[ctx](.agentic-beacon/artifacts/contexts/bar.md)\n"
+        )
