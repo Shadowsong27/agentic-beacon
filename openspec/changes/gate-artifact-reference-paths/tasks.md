@@ -78,7 +78,7 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:1:end -->
 
 
-- [ ] 1.1 Add `slugify_heading()` (GitHub-exact: lowercase, strip non-alnum/space/hyphen, spaces→hyphen, preserve punctuation double-hyphens, dedup `-1/-2`) and a heading-extractor for a markdown file
+- [x] 1.1 Add `slugify_heading()` (GitHub-exact: lowercase, strip non-alnum/space/hyphen, spaces→hyphen, preserve punctuation double-hyphens, dedup `-1/-2`) and a heading-extractor for a markdown file
 <!-- opsx:tdd:1.1:begin -->
   - **Input**: pytest tests/unit/test_scanner_slugify.py -v
   - **Expected Output**: All slugify cases pass; slugs match GitHub for ASCII, emoji, em-dash, and duplicate-heading inputs
@@ -92,7 +92,7 @@ pytest tests/ -v --tb=short
     - TC6: heading with inline code `## Use `foo()`` → backticks stripped, slug `use-foo`
     - TC7: non-heading lines and fenced ``` blocks → not extracted as headings
 <!-- opsx:tdd:1.1:end -->
-- [ ] 1.2 Add `CANONICAL_PREFIX = ".agentic-beacon/artifacts/"` and `resolve_canonical_link()` (strip prefix → warehouse-root path; optional anchor)
+- [x] 1.2 Add `CANONICAL_PREFIX = ".agentic-beacon/artifacts/"` and `resolve_canonical_link()` (strip prefix → warehouse-root path; optional anchor)
 <!-- opsx:tdd:1.2:begin -->
   - **Input**: pytest tests/unit/test_scanner_resolve.py -v
   - **Expected Output**: Canonical links resolve to <warehouse>/<rel>; anchor split out; non-canonical input returns None/unresolved
@@ -104,7 +104,7 @@ pytest tests/ -v --tb=short
     - TC4: input without the canonical prefix → not treated as canonical
     - TC5: URL-encoded anchor (`#%EF%B8%8F-...`) → decoded before comparison
 <!-- opsx:tdd:1.2:end -->
-- [ ] 1.3 Add `classify_link()` returning one of: absolute-url / canonical / own-skill-folder / cross-artifact-relative / warehouse-escape (own-folder applies only to skills)
+- [x] 1.3 Add `classify_link()` returning one of: absolute-url / canonical / own-skill-folder / cross-artifact-relative / warehouse-escape (own-folder applies only to skills)
 <!-- opsx:tdd:1.3:begin -->
   - **Input**: pytest tests/unit/test_scanner_classify.py -v
   - **Expected Output**: Each link classified into exactly one of the five categories given the linking file path + warehouse root
@@ -119,7 +119,7 @@ pytest tests/ -v --tb=short
     - TC7: `../../../apps/backtest/docs/schema.md` resolving outside warehouse → warehouse-escape
     - TC8: `references/api.md` from contexts/foo.md → cross-artifact-relative (own-folder is skills-only)
 <!-- opsx:tdd:1.3:end -->
-- [ ] 1.4 Add `to_canonical()` helper: given a cross-artifact relative link + linking file, compute the canonical form (preserve anchor) — shared by lint and `--fix`
+- [x] 1.4 Add `to_canonical()` helper: given a cross-artifact relative link + linking file, compute the canonical form (preserve anchor) — shared by lint and `--fix`
 <!-- opsx:tdd:1.4:begin -->
   - **Input**: pytest tests/unit/test_scanner_to_canonical.py -v
   - **Expected Output**: Cross-artifact relative link rewritten to `.agentic-beacon/artifacts/<warehouse-rel>` with anchor preserved
@@ -130,7 +130,7 @@ pytest tests/ -v --tb=short
     - TC3: `_partials/deep-review-checklist.md` from agents/sup.md → `.agentic-beacon/artifacts/agents/_partials/deep-review-checklist.md` (pre-move) round-trips
     - TC4: idempotency — passing an already-canonical link is a no-op
 <!-- opsx:tdd:1.4:end -->
-- [ ] 1.5 Unit tests: slugifier table seeded from real warehouse anchors (emoji, `---`, dup headings); classifier table covering all five categories; resolver happy/missing/anchor cases
+- [x] 1.5 Unit tests: slugifier table seeded from real warehouse anchors (emoji, `---`, dup headings); classifier table covering all five categories; resolver happy/missing/anchor cases
 <!-- opsx:tdd:1.5:begin -->
   - **Input**: pytest tests/unit -k 'scanner' -v
   - **Expected Output**: All scanner unit tests pass with real-anchor-seeded slugifier table
@@ -147,13 +147,13 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:2:end -->
 
 
-- [ ] 2.1 Replace `_lint_knowledge_links` with `_lint_artifact_links` scanning `contexts/*.md`, `skills/*/SKILL.md`, `agents/*.md`, `knowledge/**/*.md`
+- [x] 2.1 Replace `_lint_knowledge_links` with `_lint_artifact_links` scanning `contexts/*.md`, `skills/*/SKILL.md`, `agents/*.md`, `knowledge/**/*.md`
 <!-- opsx:tdd:2.1:begin -->
   - **Input**: pytest tests/unit/test_lint.py -k artifact_links -v
   - **Expected Output**: All four artifact families scanned; findings sorted stably by (artifact_path, message)
   - **Validation**: Each family contributes findings; ordering deterministic cross-platform
 <!-- opsx:tdd:2.1:end -->
-- [ ] 2.2 Emit distinct error findings: malformed-cross-artifact, missing-target, unresolved-anchor, warehouse-escape; allow own-folder + absolute-url
+- [x] 2.2 Emit distinct error findings: malformed-cross-artifact, missing-target, unresolved-anchor, warehouse-escape; allow own-folder + absolute-url
 <!-- opsx:tdd:2.2:begin -->
   - **Input**: pytest tests/unit/test_lint.py -k findings -v
   - **Expected Output**: One LintFinding per defect with a category-specific message scoped to the artifact path
@@ -167,7 +167,7 @@ pytest tests/ -v --tb=short
     - TC6: absolute URL → no finding
     - TC7: valid canonical link with valid anchor → no finding
 <!-- opsx:tdd:2.2:end -->
-- [ ] 2.3 Validate same-file bare anchors (`#section`) against the file's own headings
+- [x] 2.3 Validate same-file bare anchors (`#section`) against the file's own headings
 <!-- opsx:tdd:2.3:begin -->
   - **Input**: pytest tests/unit/test_lint.py -k same_file_anchor -v
   - **Expected Output**: Bare `#slug` resolves against the linking file's own headings
@@ -177,14 +177,14 @@ pytest tests/ -v --tb=short
     - TC2: `#missing-heading` absent in same file → unresolved-anchor error
     - TC3: `#setup-1` resolves to the second duplicate `## Setup`
 <!-- opsx:tdd:2.3:end -->
-- [ ] 2.4 Keep `scan_file_for_knowledge` untouched (sync stays warning-only)
+- [x] 2.4 Keep `scan_file_for_knowledge` untouched (sync stays warning-only)
 <!-- opsx:tdd:2.4:begin -->
   - **Input**: pytest tests/unit -k 'scan_file_for_knowledge or sync_warning' -v
   - **Expected Output**: scan_file_for_knowledge signature/behaviour unchanged; abc sync logs warning and exits 0 on a broken link
   - **Validation**: No regression in the warning-only sync path; lint errors do not leak into sync
   - **Note**: Guard task: the lint-side error promotion must NOT modify scan_file_for_knowledge — verify by diff and by the sync-unchanged scenario.
 <!-- opsx:tdd:2.4:end -->
-- [ ] 2.5 Unit tests: fixture warehouses asserting each finding type + clean-pass + exit codes
+- [x] 2.5 Unit tests: fixture warehouses asserting each finding type + clean-pass + exit codes
 <!-- opsx:tdd:2.5:begin -->
   - **Input**: pytest tests/unit/test_lint.py -v
   - **Expected Output**: All lint finding-type tests pass; clean warehouse exits 0; any defect exits 1
@@ -201,8 +201,8 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:3:end -->
 
 
-- [ ] 3.1 Add `--fix` flag to `abc warehouse lint`; default remains read-only
-- [ ] 3.2 Implement in-place rewrite of cross-artifact-relative links via `to_canonical()`, preserving anchors; never touch own-folder/absolute/canonical/warehouse-escape links
+- [x] 3.1 Add `--fix` flag to `abc warehouse lint`; default remains read-only
+- [x] 3.2 Implement in-place rewrite of cross-artifact-relative links via `to_canonical()`, preserving anchors; never touch own-folder/absolute/canonical/warehouse-escape links
 <!-- opsx:tdd:3.2:begin -->
   - **Input**: pytest tests/unit/test_lint_fix.py -k rewrite -v
   - **Expected Output**: Only cross-artifact-relative links rewritten in place; anchors preserved; other categories untouched byte-for-byte
@@ -215,13 +215,13 @@ pytest tests/ -v --tb=short
     - TC5: warehouse-escape link → unchanged (not rewritten)
     - TC6: multiple links on one line → each rewritten independently, surrounding prose intact
 <!-- opsx:tdd:3.2:end -->
-- [ ] 3.3 Report rewritten-count + files touched; warehouse-escape links remain errors (exit 1)
+- [x] 3.3 Report rewritten-count + files touched; warehouse-escape links remain errors (exit 1)
 <!-- opsx:tdd:3.3:begin -->
   - **Input**: abc warehouse lint --fix <fixture-warehouse>
   - **Expected Output**: Summary lists N rewritten links across M files; remaining warehouse-escape errors printed; exit 1 if any error remains, else 0
   - **Validation**: Exit code reflects residual errors; counts match actual file edits
 <!-- opsx:tdd:3.3:end -->
-- [ ] 3.4 Unit tests: fix rewrites fixable link, leaves escape link, idempotency (second run no-ops), read-only without `--fix`
+- [x] 3.4 Unit tests: fix rewrites fixable link, leaves escape link, idempotency (second run no-ops), read-only without `--fix`
 <!-- opsx:tdd:3.4:begin -->
   - **Input**: pytest tests/unit/test_lint_fix.py -v
   - **Expected Output**: All fix tests pass including idempotency and read-only guarantees
@@ -243,13 +243,13 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:4:end -->
 
 
-- [ ] 4.1 Retarget partial dependency glob `agents/_partials/**` → `agent-partials/**` in `orchestrator.py` (still gated on ≥1 declared agent)
+- [x] 4.1 Retarget partial dependency glob `agents/_partials/**` → `agent-partials/**` in `orchestrator.py` (still gated on ≥1 declared agent)
 <!-- opsx:tdd:4.1:begin -->
   - **Input**: pytest tests/unit -k 'orchestrator and partial' -v
   - **Expected Output**: Partials pulled from agent-partials/** only when ≥1 agent declared; mirrored to .agentic-beacon/artifacts/agent-partials/**
   - **Validation**: No agents declared → no partials pulled; agents declared → agent-partials/ files in artifact_paths
 <!-- opsx:tdd:4.1:end -->
-- [ ] 4.2 Update `is_partial_path()` in `distributor.py` and stale-partial handling in `delta.py` for the new `agent-partials/` location
+- [x] 4.2 Update `is_partial_path()` in `distributor.py` and stale-partial handling in `delta.py` for the new `agent-partials/` location
 <!-- opsx:tdd:4.2:begin -->
   - **Input**: pytest tests/unit -k 'is_partial_path or delta' -v
   - **Expected Output**: is_partial_path matches agent-partials/ paths; delta prunes stale agent-partials and legacy _partials symlinks
@@ -260,7 +260,7 @@ pytest tests/ -v --tb=short
     - TC3: legacy `agents/_partials/x.md` → recognized as stale for prune
     - TC4: nested `agent-partials/sub/x.md` → is_partial_path True
 <!-- opsx:tdd:4.2:end -->
-- [ ] 4.3 Remove partial co-distribution + `disable: true` stopgap wrapper in `setup/wiring.py`; prune stale Beacon-owned tool-dir partials on sync
+- [x] 4.3 Remove partial co-distribution + `disable: true` stopgap wrapper in `setup/wiring.py`; prune stale Beacon-owned tool-dir partials on sync
 <!-- opsx:tdd:4.3:begin -->
   - **Input**: pytest tests/unit -k 'wiring and partial' -v
   - **Expected Output**: No partial wrapper emitted into .claude/.opencode; Beacon-owned stale tool-dir partials pruned; user-owned files preserved
@@ -271,7 +271,7 @@ pytest tests/ -v --tb=short
     - TC3: user-created file at the partial path → preserved with warning
     - TC4: disable:true wrapper builder no longer invoked anywhere
 <!-- opsx:tdd:4.3:end -->
-- [ ] 4.4 Unit tests: partial materialized at `.agentic-beacon/artifacts/agent-partials/`, absent from `.claude/`/`.opencode/`, stale tool-dir partial pruned, no-op when no agents declared
+- [x] 4.4 Unit tests: partial materialized at `.agentic-beacon/artifacts/agent-partials/`, absent from `.claude/`/`.opencode/`, stale tool-dir partial pruned, no-op when no agents declared
 <!-- opsx:tdd:4.4:begin -->
   - **Input**: pytest tests/unit -k 'partial' -v
   - **Expected Output**: All partial-restructure unit tests pass
@@ -288,8 +288,8 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:5:end -->
 
 
-- [ ] 5.1 Add a pre-commit step to `data/skills/contribute-warehouse/SKILL.md`: run `abc warehouse lint`, block on error findings, suggest `--fix`
-- [ ] 5.2 Verify the gate flow end-to-end against a dirty fixture warehouse
+- [x] 5.1 Add a pre-commit step to `data/skills/contribute-warehouse/SKILL.md`: run `abc warehouse lint`, block on error findings, suggest `--fix`
+- [x] 5.2 Verify the gate flow end-to-end against a dirty fixture warehouse
 <!-- opsx:tdd:5.2:begin -->
   - **Input**: Follow the contribute-warehouse skill against a fixture warehouse containing one planted cross-artifact-relative link, then re-run after `abc warehouse lint --fix`
   - **Expected Output**: First run blocks at the lint gate citing the malformed link; after --fix the gate passes and contribute proceeds
@@ -306,20 +306,20 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:6:end -->
 
 
-- [ ] 6.1 Build a synthetic fixture warehouse (context→knowledge, skill→context, skill own-folder asset, agent→partial, knowledge→knowledge) + a negative fixture with a broken link
+- [x] 6.1 Build a synthetic fixture warehouse (context→knowledge, skill→context, skill own-folder asset, agent→partial, knowledge→knowledge) + a negative fixture with a broken link
 <!-- opsx:tdd:6.1:begin -->
   - **Input**: Construct tmp warehouse dirs/files in a pytest fixture under tests/integration
   - **Expected Output**: Fixture warehouse with all canonical link kinds plus one negative-fixture broken link
   - **Validation**: Fixture builds deterministically; positive links canonical, negative link malformed
   - **Note**: Coverage mix must include: context→knowledge, skill→context, skill own-folder asset, agent→agent-partial, knowledge→knowledge.
 <!-- opsx:tdd:6.1:end -->
-- [ ] 6.2 Stand up tmp project, connect, declare artifacts, run real `abc sync` (real symlinks)
+- [x] 6.2 Stand up tmp project, connect, declare artifacts, run real `abc sync` (real symlinks)
 <!-- opsx:tdd:6.2:begin -->
   - **Input**: abc connect + beacon.yaml declaring the fixture artifacts, then abc sync against the synthetic warehouse
   - **Expected Output**: Real symlink tree under .agentic-beacon/artifacts/ plus agent symlinks under .claude/.opencode; agent-partials mirrored
   - **Validation**: Symlinks resolve to warehouse files; sync exits 0; agent-partials present in mirror, absent from tool dirs
 <!-- opsx:tdd:6.2:end -->
-- [ ] 6.3 Walk every distributed artifact under `.agentic-beacon/artifacts/` and the agent files in `.claude/agents/`/`.opencode/agents/`; assert each canonical link resolves as `(project_root / target).exists()` + anchor resolves
+- [x] 6.3 Walk every distributed artifact under `.agentic-beacon/artifacts/` and the agent files in `.claude/agents/`/`.opencode/agents/`; assert each canonical link resolves as `(project_root / target).exists()` + anchor resolves
 <!-- opsx:tdd:6.3:begin -->
   - **Input**: pytest tests/integration/test_link_resolution.py -v
   - **Expected Output**: Every canonical link in every distributed artifact resolves via (project_root / target).exists(); anchors match a heading slug
@@ -332,7 +332,7 @@ pytest tests/ -v --tb=short
     - TC5: canonical link with anchor → anchor matches a heading slug in the target
     - TC6: skill own-folder asset link → resolves relative to the skill dir (not flagged)
 <!-- opsx:tdd:6.3:end -->
-- [ ] 6.4 Assert the negative fixture is caught by `abc warehouse lint` (exit 1, correct finding)
+- [x] 6.4 Assert the negative fixture is caught by `abc warehouse lint` (exit 1, correct finding)
 <!-- opsx:tdd:6.4:begin -->
   - **Input**: abc warehouse lint <synthetic-warehouse-with-negative-fixture>
   - **Expected Output**: Exit code 1 with a finding scoped to the negative-fixture file naming the malformed/broken link
@@ -342,7 +342,7 @@ pytest tests/ -v --tb=short
     - TC2: negative fixture with canonical link to missing target → exit 1, missing-target finding
     - TC3: after lint --fix on the fixable defect → exit 0
 <!-- opsx:tdd:6.4:end -->
-- [ ] 6.5 Mark integration test appropriately (`tests/integration/`, its own conftest) so it runs in CI
+- [x] 6.5 Mark integration test appropriately (`tests/integration/`, its own conftest) so it runs in CI
 
 ## 7. Docs
 
@@ -354,8 +354,8 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:7:end -->
 
 
-- [ ] 7.1 Document the canonical-link convention + resolution rule in `CONTRIBUTING.md` and the authoring guide
-- [ ] 7.2 Document the `abc warehouse lint` / `--fix` workflow and the contribute-time gate
+- [x] 7.1 Document the canonical-link convention + resolution rule in `CONTRIBUTING.md` and the authoring guide
+- [x] 7.2 Document the `abc warehouse lint` / `--fix` workflow and the contribute-time gate
 
 ## 8. Release & warehouse migration (post-merge)
 

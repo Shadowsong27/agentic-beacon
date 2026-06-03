@@ -26,7 +26,7 @@ From an OpenCode or Claude Code session inside a connected project:
 The skill walks you through the contribution interactively:
 
 1. **Resolves the warehouse** from `.agentic-beacon/config.toml`.
-2. **Runs `abc warehouse lint`** as a hard gate — aborts if the warehouse has any integrity errors.
+2. **Runs `abc warehouse lint`** as a hard gate — aborts if the warehouse has any integrity errors. When the failure is a fixable malformed cross-artifact-relative link, the skill suggests `abc warehouse lint --fix <warehouse>` as the local rewrite path before you retry.
 3. **Summarises dirty paths** and asks you which to include and which to leave for later.
 4. **Scans `knowledge/` files for semantic duplicates** so you don't ship the same lesson twice under different names.
 5. **Splits the included files into cohesive commits** with drafted Conventional Commits messages.

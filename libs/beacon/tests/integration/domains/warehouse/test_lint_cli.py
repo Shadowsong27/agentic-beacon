@@ -47,7 +47,10 @@ def _build_defective_warehouse(root: Path) -> tuple[Path, dict]:
 
     Defects:
       - skills/no-fm/SKILL.md: no frontmatter
-      - contexts/ctx-with-broken-link.md: broken knowledge link
+      - contexts/ctx-with-broken-link.md: cross-artifact-relative link
+        to a missing knowledge target (post-Phase-2 lint classifies the
+        link form as malformed regardless of target existence; pre-Phase-2
+        this fixture verified the broken-knowledge-link rule)
       - agents/no-name.md: missing `name` key in frontmatter (registered in agents.yaml)
 
     Returns:
@@ -79,7 +82,7 @@ def _build_defective_warehouse(root: Path) -> tuple[Path, dict]:
 
     expected = {
         "skills/no-fm/SKILL.md": ["YAML frontmatter"],
-        "contexts/ctx-with-broken-link.md": ["broken knowledge link"],
+        "contexts/ctx-with-broken-link.md": ["malformed cross-artifact link"],
         "agents/no-name.md": ["`name`"],
     }
     return wh, expected

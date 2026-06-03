@@ -76,6 +76,44 @@ def _add_valid_context(wh: Path, name: str, content: str | None = None) -> Path:
     return ctx_file
 
 
+def _add_valid_knowledge(
+    wh: Path, relative_path: str, content: str | None = None
+) -> Path:
+    """Add a knowledge markdown file at the given warehouse-relative path."""
+    knowledge_file = wh / "knowledge" / relative_path
+    knowledge_file.parent.mkdir(parents=True, exist_ok=True)
+    knowledge_file.write_text(content or f"# {knowledge_file.stem}\n")
+    return knowledge_file
+
+
+def _artifact_families_fixture(root: Path) -> Path:
+    """Build a warehouse with one malformed link in each artifact family."""
+    wh = _build_clean_warehouse(root)
+    (wh / "knowledge").mkdir(exist_ok=True)
+    _add_valid_context(wh, "shared")
+    _add_valid_knowledge(wh, "notes/topic.md")
+
+    (wh / "contexts" / "alpha.md").write_text("[skill](../skills/foo/SKILL.md)\n")
+
+    skill_dir = wh / "skills" / "foo"
+    skill_dir.mkdir(parents=True, exist_ok=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nrequires:\n  contexts: []\n---\n[ctx](../../contexts/shared.md)\n"
+    )
+
+    _add_valid_agent(wh, "assistant")
+    (wh / "agents" / "assistant.md").write_text(
+        "---\nname: assistant\ndescription: Test agent\n---\n"
+        "[ctx](../contexts/shared.md)\n"
+    )
+
+    (wh / "knowledge" / "notes" / "topic.md").write_text(
+        "[ctx](../../contexts/shared.md)\n"
+    )
+
+    return wh
+
+
 # ---------------------------------------------------------------------------
 # Phase 2: Data model
 # ---------------------------------------------------------------------------
@@ -676,98 +714,206 @@ class TestLintAgentFrontmatter:
 
 
 # ---------------------------------------------------------------------------
-# Phase 8: Knowledge link integrity rule
+# Phase 8: Artifact link integrity rule
 # ---------------------------------------------------------------------------
 
 
-class TestLintKnowledgeLinks:
-    """Tests for _lint_knowledge_links."""
+class TestLintArtifactLinks:
+    """Tests for _lint_artifact_links and the phase-2 lint contract."""
 
     def _call(self, path):
-        from beacon.domains.warehouse.lint import _lint_knowledge_links
+        from beacon.domains.warehouse.lint import _lint_artifact_links
 
-        return _lint_knowledge_links(path)
+        return _lint_artifact_links(path)
 
-    def test_valid_knowledge_link_no_finding(self, tmp_path):
-        """TC1/TC7: context with valid knowledge link → no finding."""
+    def test_artifact_links_scans_all_four_families(self, tmp_path):
+        """Task 2.1: contexts, skills, agents, and knowledge are all scanned."""
+        wh = _artifact_families_fixture(tmp_path)
+        findings = self._call(wh)
+
+        assert [f.artifact_path for f in findings] == [
+            "agents/assistant.md",
+            "contexts/alpha.md",
+            "knowledge/notes/topic.md",
+            "skills/foo/SKILL.md",
+        ]
+
+    def test_artifact_links_findings_are_sorted_stably(self, tmp_path):
+        """Task 2.1: findings are deterministic by artifact_path and message."""
+        wh = _artifact_families_fixture(tmp_path)
+        findings = self._call(wh)
+        ordered = [(f.artifact_path, f.message) for f in findings]
+        assert ordered == sorted(ordered)
+
+    def test_cross_artifact_relative_link_reports_malformed_error(self, tmp_path):
+        """TC1: cross-artifact relative link → malformed-link error scoped to source."""
         wh = _build_clean_warehouse(tmp_path)
-        (wh / "knowledge").mkdir()
-        (wh / "knowledge" / "foo").mkdir()
-        (wh / "knowledge" / "foo" / "bar.md").write_text("# Bar\n")
-        ctx = wh / "contexts" / "ctx.md"
-        ctx.write_text("[X](../knowledge/foo/bar.md)\n")
-        result = self._call(wh)
-        assert result == []
-
-    def test_broken_context_knowledge_link_produces_finding(self, tmp_path):
-        """TC2/8.3: context with broken knowledge link → 1 finding."""
-        wh = _build_clean_warehouse(tmp_path)
-        (wh / "knowledge").mkdir()
-        ctx = wh / "contexts" / "foo.md"
-        ctx.write_text("[X](../knowledge/foo/bar.md)\n")
-        result = self._call(wh)
-        assert len(result) == 1
-        assert result[0].artifact_path == "contexts/foo.md"
-
-    def test_broken_skill_knowledge_link_produces_finding(self, tmp_path):
-        """TC4/8.4: skill with broken knowledge link → 1 finding scoped to skill."""
-        wh = _build_clean_warehouse(tmp_path)
-        skill_dir = wh / "skills" / "foo"
-        skill_dir.mkdir()
-        (skill_dir / "SKILL.md").write_text(
-            "---\nrequires:\n  contexts: []\n---\n[X](../../knowledge/foo/bar.md)\n"
+        _add_valid_context(wh, "bar")
+        _add_valid_skill(wh, "foo", contexts=[])
+        skill_file = wh / "skills" / "foo" / "SKILL.md"
+        skill_file.write_text(
+            "---\nrequires:\n  contexts: []\n---\n[ctx](../../contexts/bar.md)\n"
         )
-        result = self._call(wh)
-        assert len(result) == 1
-        assert result[0].artifact_path == "skills/foo/SKILL.md"
 
-    def test_absolute_url_no_finding(self, tmp_path):
-        """TC5/8.5: context with absolute URL → no finding."""
+        findings = self._call(wh)
+
+        assert len(findings) == 1
+        assert findings[0].artifact_path == "skills/foo/SKILL.md"
+        assert "malformed cross-artifact link" in findings[0].message
+        assert ".agentic-beacon/artifacts/contexts/bar.md" in findings[0].message
+        assert lint_warehouse(wh).findings == tuple(findings)
+
+    def test_canonical_missing_target_reports_missing_target_error(self, tmp_path):
+        """TC2: canonical link to a missing target → missing-target error."""
+        wh = _build_clean_warehouse(tmp_path)
+        (wh / "knowledge").mkdir()
+        ctx = wh / "contexts" / "foo.md"
+        ctx.write_text("[X](.agentic-beacon/artifacts/knowledge/foo/bar.md)\n")
+
+        findings = self._call(wh)
+
+        assert len(findings) == 1
+        assert findings[0].artifact_path == "contexts/foo.md"
+        assert "missing canonical target" in findings[0].message
+        assert "knowledge/foo/bar.md" in findings[0].message
+
+    def test_canonical_bad_anchor_reports_unresolved_anchor_error(self, tmp_path):
+        """TC3: canonical link with bad anchor → unresolved-anchor error."""
+        wh = _build_clean_warehouse(tmp_path)
+        _add_valid_context(wh, "bar", "# Existing Heading\n")
+        _add_valid_skill(wh, "foo", contexts=[])
+        skill_file = wh / "skills" / "foo" / "SKILL.md"
+        skill_file.write_text(
+            "---\nrequires:\n  contexts: []\n---\n"
+            "[X](.agentic-beacon/artifacts/contexts/bar.md#no-such-heading)\n"
+        )
+
+        findings = self._call(wh)
+
+        assert len(findings) == 1
+        assert findings[0].artifact_path == "skills/foo/SKILL.md"
+        assert "unresolved anchor" in findings[0].message
+        assert "no-such-heading" in findings[0].message
+
+    def test_warehouse_escape_reports_escape_error(self, tmp_path):
+        """TC4: relative link escaping warehouse → warehouse-escape error."""
+        wh = _build_clean_warehouse(tmp_path)
+        _add_valid_skill(wh, "foo", contexts=[])
+        skill_file = wh / "skills" / "foo" / "SKILL.md"
+        skill_file.write_text(
+            "---\nrequires:\n  contexts: []\n---\n"
+            "[X](../../../apps/backtest/docs/schema.md)\n"
+        )
+
+        findings = self._call(wh)
+
+        assert len(findings) == 1
+        assert findings[0].artifact_path == "skills/foo/SKILL.md"
+        assert "warehouse-escape link" in findings[0].message
+
+    def test_own_folder_skill_link_is_allowed(self, tmp_path):
+        """TC5: own-folder skill asset link → no finding."""
+        wh = _build_clean_warehouse(tmp_path)
+        _add_valid_skill(wh, "foo", contexts=[])
+        ref_dir = wh / "skills" / "foo" / "references"
+        ref_dir.mkdir(parents=True)
+        (ref_dir / "api.md").write_text("# API\n")
+        (wh / "skills" / "foo" / "SKILL.md").write_text(
+            "---\nrequires:\n  contexts: []\n---\n[api](references/api.md)\n"
+        )
+
+        assert self._call(wh) == []
+
+    def test_absolute_url_is_allowed(self, tmp_path):
+        """TC6: absolute URL → no finding."""
         wh = _build_clean_warehouse(tmp_path)
         ctx = wh / "contexts" / "foo.md"
-        ctx.write_text("[X](https://example.com)\n")
-        result = self._call(wh)
-        assert result == []
+        ctx.write_text("[X](https://example.com/docs)\n")
 
-    def test_non_knowledge_link_no_finding(self, tmp_path):
-        """TC6/8.6: context with non-knowledge link → no finding."""
+        assert self._call(wh) == []
+
+    def test_valid_canonical_link_with_valid_anchor_is_allowed(self, tmp_path):
+        """TC7: valid canonical link with valid anchor → no finding."""
+        wh = _build_clean_warehouse(tmp_path)
+        _add_valid_context(wh, "bar", "# Multi Repo\n")
+        _add_valid_skill(wh, "foo", contexts=[])
+        (wh / "skills" / "foo" / "SKILL.md").write_text(
+            "---\nrequires:\n  contexts: []\n---\n"
+            "[ctx](.agentic-beacon/artifacts/contexts/bar.md#multi-repo)\n"
+        )
+
+        assert self._call(wh) == []
+
+    def test_same_file_anchor_existing_heading_is_allowed(self, tmp_path):
+        """TC1: bare anchor resolves against the linking file's own headings."""
         wh = _build_clean_warehouse(tmp_path)
         ctx = wh / "contexts" / "foo.md"
-        ctx.write_text("[X](./other.md)\n")
-        result = self._call(wh)
-        assert result == []
+        ctx.write_text("# Existing Heading\n\n[Jump](#existing-heading)\n")
 
-    def test_two_broken_links_produce_two_findings(self, tmp_path):
-        """TC3: context with two broken knowledge links → 2 findings."""
+        assert self._call(wh) == []
+
+    def test_same_file_anchor_missing_heading_reports_error(self, tmp_path):
+        """TC2: missing same-file anchor → unresolved-anchor error."""
         wh = _build_clean_warehouse(tmp_path)
         ctx = wh / "contexts" / "foo.md"
-        ctx.write_text("[X](../knowledge/a.md)\n[Y](../knowledge/b.md)\n")
-        result = self._call(wh)
-        assert len(result) == 2
+        ctx.write_text("# Existing Heading\n\n[Jump](#missing-heading)\n")
 
-    def test_finding_message_names_broken_target(self, tmp_path):
-        """TC8.2: finding message contains raw link, resolved path, and file not found."""
+        findings = self._call(wh)
+
+        assert len(findings) == 1
+        assert findings[0].artifact_path == "contexts/foo.md"
+        assert "unresolved anchor" in findings[0].message
+        assert "missing-heading" in findings[0].message
+
+    def test_same_file_anchor_duplicate_slug_resolves_second_heading(self, tmp_path):
+        """TC3: #setup-1 resolves to the second duplicate heading."""
         wh = _build_clean_warehouse(tmp_path)
         ctx = wh / "contexts" / "foo.md"
-        ctx.write_text("[X](../knowledge/foo/bar.md)\n")
-        result = self._call(wh)
-        assert len(result) == 1
-        msg = result[0].message
-        assert "../knowledge/foo/bar.md" in msg
-        assert "knowledge/foo/bar.md" in msg
-        assert "file not found" in msg
+        ctx.write_text("## Setup\n\n## Setup\n\n[Jump](#setup-1)\n")
+
+        assert self._call(wh) == []
 
     def test_scan_file_for_knowledge_unchanged(self, tmp_path):
-        """TC8.7: regression — scan_file_for_knowledge returns a set and does not raise."""
+        """Task 2.4: sync-side scanner stays warning-only and unchanged."""
         from beacon.core.scanner.scanner import scan_file_for_knowledge
 
         wh = _build_clean_warehouse(tmp_path)
+        (wh / "knowledge").mkdir()
         ctx = wh / "contexts" / "foo.md"
         ctx.write_text("[X](../knowledge/foo/bar.md)\n")
+
         result = scan_file_for_knowledge(ctx, wh)
+
         assert isinstance(result, set)
-        # Broken target is still in the returned set
         assert "knowledge/foo/bar.md" in result
+
+    def test_clean_warehouse_has_no_artifact_link_findings(self, tmp_path):
+        """Task 2.5: clean warehouse exits with no artifact-link findings."""
+        wh = _build_clean_warehouse(tmp_path)
+        (wh / "knowledge").mkdir(exist_ok=True)
+        _add_valid_context(wh, "bar", "# Multi Repo\n")
+        _add_valid_knowledge(wh, "notes/topic.md", "# Topic\n")
+        _add_valid_skill(wh, "foo", contexts=[])
+        ref_dir = wh / "skills" / "foo" / "references"
+        ref_dir.mkdir(parents=True)
+        (ref_dir / "api.md").write_text("# API\n")
+        (wh / "skills" / "foo" / "SKILL.md").write_text(
+            "---\nrequires:\n  contexts: []\n---\n"
+            "[ctx](.agentic-beacon/artifacts/contexts/bar.md#multi-repo)\n"
+            "[api](references/api.md)\n"
+        )
+        _add_valid_agent(wh, "assistant")
+        (wh / "agents" / "assistant.md").write_text(
+            "---\nname: assistant\ndescription: Test agent\n---\n"
+            "[topic](.agentic-beacon/artifacts/knowledge/notes/topic.md)\n"
+        )
+        (wh / "knowledge" / "notes" / "topic.md").write_text(
+            "# Topic\n\n[ctx](.agentic-beacon/artifacts/contexts/bar.md)\n"
+        )
+
+        report = lint_warehouse(wh)
+
+        assert report.findings == ()
 
 
 # ---------------------------------------------------------------------------

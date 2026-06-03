@@ -162,6 +162,7 @@ abc warehouse lint [WAREHOUSE_PATH]
 | Option | Description |
 |--------|-------------|
 | `WAREHOUSE_PATH` | Path to warehouse directory (defaults to current directory) |
+| `--fix` | Rewrite fixable cross-artifact-relative links to canonical `.agentic-beacon/artifacts/...` form before reporting remaining findings |
 
 **Validation rules:**
 
@@ -170,7 +171,7 @@ abc warehouse lint [WAREHOUSE_PATH]
 3. **Skill context references** — every context name in `requires.contexts` exists as `contexts/<name>.md`.
 4. **Agent manifest** — `agents.yaml` is valid YAML; every `agents/*.md` file has a matching entry and vice versa; no legacy `requires:` keys in agent frontmatter; every declared skill exists under `skills/`.
 5. **Agent frontmatter** — every `agents/*.md` (excluding `README.md`) has both a `name:` and `description:` YAML frontmatter key.
-6. **Knowledge link integrity** — every inline Markdown link in `contexts/*.md` and `skills/*/SKILL.md` that resolves to a `knowledge/…/*.md` path exists on disk. This rule is **lint-only**: `abc sync` retains its current warning-only behaviour for broken knowledge links.
+6. **Artifact link integrity** — every inline Markdown link in `contexts/*.md`, `skills/*/SKILL.md`, `agents/*.md`, and `knowledge/**/*.md` must satisfy the canonical artifact-link contract. Lint emits one finding per defect across four error categories: malformed cross-artifact-relative links, missing canonical targets, unresolved anchors, and warehouse-escape links. This rule is **lint-only**: `abc sync` retains its current warning-only behaviour for broken knowledge links.
 
 **Exit codes:**
 
@@ -185,7 +186,16 @@ abc warehouse lint
 
 # Lint a specific path
 abc warehouse lint ~/my-org-warehouse
+
+# Auto-rewrite fixable malformed links, then report any remaining errors
+abc warehouse lint ~/my-org-warehouse --fix
 ```
+
+With `--fix`, lint rewrites only cross-artifact-relative links into canonical
+`.agentic-beacon/artifacts/<warehouse-relative-path>` form. Anchors are preserved,
+the rewrite is idempotent, and running `--fix` on an already-clean file is a no-op.
+It does not rewrite warehouse-escape links or invent missing targets; those remain
+errors for a human to resolve.
 
 > **Note:** `abc warehouse lint` is designed for warehouse-side CI. A freshly
 > `abc warehouse init`-ed warehouse passes lint with exit code 0. The

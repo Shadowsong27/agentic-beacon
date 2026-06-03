@@ -2,6 +2,10 @@
 
 A skill is a packaged, reusable workflow that an agent can invoke as a slash command. In Agentic Beacon, a skill is a directory under `<warehouse>/skills/<name>/` containing a `SKILL.md` entry point (with required frontmatter) plus optional supporting files.
 
+For cross-artifact references from a skill to a context, knowledge file, agent partial,
+or another warehouse artifact, use the [canonical link convention](canonical-links.md).
+Only skill-local bundled files stay relative to the skill directory.
+
 There are two equally valid ways to author one. Pick the path that fits the situation.
 
 ---
