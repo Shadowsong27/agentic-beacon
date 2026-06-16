@@ -16,13 +16,19 @@ requires:
 Capture decisions, lessons, and facts into the connected warehouse knowledge base.
 Knowledge files are written **directly to the warehouse** by the bundled
 `write_knowledge.py` script — never to the project. Knowledge files are
-auto-derived during `abc sync` / `abc adopt`; only optional context pointer edits
-are queued in `.agentic-beacon/pending.yaml` for project wiring.
+auto-derived during `abc sync` / `abc adopt`; only optional context edits
+(a pointer into an existing context, or a brand-new context file) are queued in
+`.agentic-beacon/pending.yaml` for project wiring.
 
 > **Important:** Do NOT write knowledge files using your editor tools directly.
 > Always go through `write_knowledge.py`. The script enforces that the file
 > lands inside the warehouse and refuses to write into the project's symlink
 > mirror at `.agentic-beacon/artifacts/knowledge/`.
+>
+> Likewise, when creating a **new** context file, go through `write_context.py`
+> — it enforces the same warehouse-only guarantee for `contexts/`. (Appending a
+> pointer to an *existing* context is an in-place edit and uses your editor's
+> edit tool, since the path is fully qualified to the warehouse.)
 
 ---
 
@@ -248,7 +254,8 @@ List the available warehouse context files:
 ls "$WAREHOUSE_ROOT/contexts/"*.md 2>/dev/null
 ```
 
-Present options to the user — **only warehouse context files plus "skip"**:
+Present options to the user — **warehouse context files, "create a new context
+file", plus "skip"**:
 
 ```
 Where should I add a pointer to this knowledge?
@@ -257,15 +264,70 @@ Options:
 1. contexts/development-guidelines.md
 2. contexts/architecture.md
 ...
-N. Skip — don't add a pointer yet
+N. Create a new context file
+N+1. Skip — don't add a pointer yet
 
 Default: Skip
 ```
 
 **Constraints:**
-- Only offer files found under `$WAREHOUSE_ROOT/contexts/`.
+- Only offer existing files found under `$WAREHOUSE_ROOT/contexts/`.
 - Do NOT offer any project-local files as pointer targets.
-- If no context files exist in the warehouse, skip this step automatically.
+- Always offer "Create a new context file" — even when no context files exist
+  yet. If none exist, this option and "Skip" are the only choices.
+
+If the user picks an existing context file, proceed to Step 6 (pointer edit).
+If the user picks "Create a new context file", go to **Step 5a** first.
+If the user picks "Skip", go straight to Step 8.
+
+### Step 5a: Create a New Context File (only if chosen in Step 5)
+
+Gather the new context's identity from the user (infer sensible defaults from the
+knowledge subject and confirm):
+
+- **Name** (`--name`): kebab-case stem, no `.md` — e.g. `linear-ops`.
+- **Title:** Title-case heading — e.g. `Linear Operations`.
+- **Load when:** one line describing when an agent should load this context.
+
+Render the new context body using this template:
+
+```markdown
+# [Title]
+
+**Load when:** [one-line trigger]
+**Last Updated:** YYYY-MM-DD
+
+---
+
+## [Section relevant to the knowledge]
+
+[Optional prose introducing the topic.]
+```
+
+Show the rendered body and the target path (`contexts/<name>.md`) to the user and
+get explicit confirmation. Then write it via `write_context.py` — **this is the
+only way a new context file is created**; do not use your editor's write tool:
+
+```bash
+NEW_CONTEXT_PATH=$(uv run ${SKILL_DIR}/scripts/write_context.py \
+  --name <kebab-name> <<'CONTEXT_EOF'
+<rendered context body>
+CONTEXT_EOF
+)
+```
+
+The script resolves the warehouse, refuses to write outside `<warehouse>/contexts/`,
+refuses to overwrite an existing file unless `--overwrite` is passed, and prints
+the warehouse-relative path (e.g. `contexts/linear-ops.md`) on stdout. If it
+exits non-zero, surface stderr and stop.
+
+If the warehouse has a `contexts/README.md` index, add a one-line index row for
+the new file under the appropriate section (in-place edit of the README — the
+path is fully qualified to `$WAREHOUSE_ROOT`). Do not create a README if none
+exists.
+
+Then continue to Step 6 to add the knowledge pointer **into the newly created
+context file** (it now exists, so it is a valid pointer target).
 
 ### Step 6: Diff-Confirm Before Writing Pointer
 
@@ -297,13 +359,15 @@ auto-derived from context and skill references during `abc sync` / `abc adopt`
 and does not require beacon.yaml or symlink adoption.
 
 If the user confirmed a context pointer write in Step 6, append only that
-context entry:
+context entry. Use `--action created` when the context file was newly authored in
+Step 5a, or `--action modified` when you appended a pointer to a pre-existing
+context:
 
 ```bash
 uv run ${SKILL_DIR}/scripts/append_pending.py \
   --path contexts/<file>.md \
   --type context \
-  --action modified \
+  --action {created|modified} \
   --source record-knowledge
 ```
 
@@ -314,10 +378,10 @@ uv run ${SKILL_DIR}/scripts/append_pending.py \
 
 Type:            [Decision|Lesson|Fact]
 Warehouse file:  $WAREHOUSE_ROOT/<written-path>
-Context pointer: [contexts/<file>.md | Skipped]
-Pending entries: [1 if context pointer written, otherwise 0]
+Context pointer: [contexts/<file>.md (new) | contexts/<file>.md | Skipped]
+Pending entries: [1 if context written/modified, otherwise 0]
 
-Run 'abc adopt' to wire the context pointer if one was queued.
+Run 'abc adopt' to wire the context if one was queued.
 ```
 
 ---
@@ -358,6 +422,23 @@ Run 'abc adopt' to wire the context pointer if one was queued.
 6. Does not call `append_pending.py` (knowledge is auto-derived).
 7. Reports completion with no `abc adopt` reminder.
 
+### Example 3: Recording a Fact + creating a new context
+
+**User:**
+```
+/record-knowledge The Linear GraphQL API authenticates with a raw $LINEAR_PAT header (no Bearer prefix) and priority is an inverted int
+```
+
+**Agent:**
+1. Analyzes: this is a **fact**.
+2. Resolves warehouse; picks `--topic linear` (or omits if none fits).
+3. Renders the fact body; writes via `write_knowledge.py` → `knowledge/linear/facts/linear-graphql-auth.md`.
+4. Lists warehouse contexts → none fit. User picks "Create a new context file".
+5. **Step 5a:** confirms name `linear-ops`, title `Linear Operations`, Load-when line; renders the context template and writes it via `write_context.py` → `contexts/linear-ops.md`. Adds an index row to `contexts/README.md` if one exists.
+6. Adds the knowledge pointer into the new `contexts/linear-ops.md` under its section; user confirms the diff.
+7. Runs `append_pending.py --path contexts/linear-ops.md --type context --action created --source record-knowledge`.
+8. Reports completion with an `abc adopt` reminder to wire the new context.
+
 ---
 
 ## Checklist for Agent
@@ -368,13 +449,14 @@ Run 'abc adopt' to wire the context pointer if one was queued.
 - [ ] Inspect `$WAREHOUSE_ROOT/knowledge/` to pick a topic that matches existing convention (or omit for flat layout)
 - [ ] Render the markdown body using the type-specific template
 - [ ] Write the file by piping the body into `write_knowledge.py` — do NOT write the file with your editor's write tool
-- [ ] Ask user which warehouse `contexts/` file for the pointer — or skip
+- [ ] Ask user which warehouse `contexts/` file for the pointer — an existing one, a new one, or skip
+- [ ] If creating a new context: confirm name/title/Load-when, write via `write_context.py` (NOT your editor's write tool), and add a `contexts/README.md` index row if a README exists
 - [ ] Show diff before writing the pointer; wait for explicit confirmation
 - [ ] Do NOT run `append_pending.py` for the knowledge file
-- [ ] Run `append_pending.py` for the context file if a pointer was written
-- [ ] Confirm completion; remind user to run `abc adopt` only if a context pointer was queued
+- [ ] Run `append_pending.py` for the context file if a pointer was written — `--action created` for a new context, `--action modified` for an existing one
+- [ ] Confirm completion; remind user to run `abc adopt` only if a context was queued
 
 ---
 
-**Skill Version:** 2.1.0
-**Last Updated:** 2026-05-07
+**Skill Version:** 2.2.0
+**Last Updated:** 2026-06-16
