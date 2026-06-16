@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.6.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v3.5.1...agentic-beacon@v3.6.0) (2026-06-16)
+
+
+### Features
+
+* canonical artifact-link convention with lint integrity, autofix, and partials restructure ([#159](https://github.com/Shadowsong27/agentic-beacon/issues/159)) ([21fae96](https://github.com/Shadowsong27/agentic-beacon/commit/21fae962ebfa79c6924a01f332baee9a87edf62c))
+* **record-knowledge:** support authoring new context files ([#161](https://github.com/Shadowsong27/agentic-beacon/issues/161)) ([2829443](https://github.com/Shadowsong27/agentic-beacon/commit/28294436ebe6d89d98e26f8a6b83dbf8e704a14d))
+
 ## [3.5.1](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v3.5.0...agentic-beacon@v3.5.1) (2026-05-30)
 
 
