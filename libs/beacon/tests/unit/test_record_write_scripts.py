@@ -244,6 +244,150 @@ class TestWriteKnowledge:
 
 
 # ─────────────────────────────────────────────────────────────
+# write_context.py
+# ─────────────────────────────────────────────────────────────
+
+
+@pytest.fixture
+def write_context():
+    return _load_script("record-knowledge", "write_context.py")
+
+
+class TestWriteContext:
+    def test_writes_to_warehouse_contexts(
+        self, write_context, tmp_path, monkeypatch, capsys
+    ):
+        project, warehouse = _make_project_with_warehouse(tmp_path)
+        monkeypatch.chdir(project)
+        monkeypatch.setattr(
+            "sys.argv",
+            ["write_context.py", "--name", "linear-ops"],
+        )
+        monkeypatch.setattr("sys.stdin", _StringStream("# Linear Operations\nbody\n"))
+
+        write_context.main()
+
+        target = warehouse / "contexts" / "linear-ops.md"
+        assert target.is_file()
+        assert target.read_text() == "# Linear Operations\nbody\n"
+        out = capsys.readouterr().out.strip()
+        assert out == "contexts/linear-ops.md"
+
+    def test_does_not_write_to_project_artifacts(
+        self, write_context, tmp_path, monkeypatch
+    ):
+        """Regression: must never create files under project/.agentic-beacon/artifacts/."""
+        project, warehouse = _make_project_with_warehouse(tmp_path)
+        artifacts = project / ".agentic-beacon" / "artifacts"
+        artifacts.mkdir()
+
+        monkeypatch.chdir(project)
+        monkeypatch.setattr(
+            "sys.argv",
+            ["write_context.py", "--name", "x"],
+        )
+        monkeypatch.setattr("sys.stdin", _StringStream("# X\n"))
+
+        write_context.main()
+
+        assert list(artifacts.rglob("*")) == []
+        assert (warehouse / "contexts" / "x.md").is_file()
+
+    def test_refuses_to_overwrite_without_flag(
+        self, write_context, tmp_path, monkeypatch, capsys
+    ):
+        project, warehouse = _make_project_with_warehouse(tmp_path)
+        target = warehouse / "contexts" / "exists.md"
+        target.parent.mkdir(parents=True)
+        target.write_text("OLD")
+
+        monkeypatch.chdir(project)
+        monkeypatch.setattr(
+            "sys.argv",
+            ["write_context.py", "--name", "exists"],
+        )
+        monkeypatch.setattr("sys.stdin", _StringStream("NEW"))
+
+        with pytest.raises(SystemExit) as exc:
+            write_context.main()
+        assert exc.value.code == 3
+        assert target.read_text() == "OLD"
+        assert "already exists" in capsys.readouterr().err
+
+    def test_overwrite_flag_replaces_existing(
+        self, write_context, tmp_path, monkeypatch
+    ):
+        project, warehouse = _make_project_with_warehouse(tmp_path)
+        target = warehouse / "contexts" / "exists.md"
+        target.parent.mkdir(parents=True)
+        target.write_text("OLD")
+
+        monkeypatch.chdir(project)
+        monkeypatch.setattr(
+            "sys.argv",
+            ["write_context.py", "--name", "exists", "--overwrite"],
+        )
+        monkeypatch.setattr("sys.stdin", _StringStream("NEW"))
+
+        write_context.main()
+        assert target.read_text() == "NEW"
+
+    def test_rejects_non_kebab_name(self, write_context, tmp_path, monkeypatch, capsys):
+        project, _ = _make_project_with_warehouse(tmp_path)
+        monkeypatch.chdir(project)
+        monkeypatch.setattr(
+            "sys.argv",
+            ["write_context.py", "--name", "Bad_Name"],
+        )
+        with pytest.raises(SystemExit) as exc:
+            write_context.main()
+        assert exc.value.code == 2
+        assert "kebab-case" in capsys.readouterr().err
+
+    def test_rejects_empty_content(self, write_context, tmp_path, monkeypatch, capsys):
+        project, _ = _make_project_with_warehouse(tmp_path)
+        monkeypatch.chdir(project)
+        monkeypatch.setattr(
+            "sys.argv",
+            ["write_context.py", "--name", "x"],
+        )
+        monkeypatch.setattr("sys.stdin", _StringStream("   \n"))
+        with pytest.raises(SystemExit) as exc:
+            write_context.main()
+        assert exc.value.code == 2
+        assert "empty" in capsys.readouterr().err.lower()
+
+    def test_no_warehouse_exits_nonzero(
+        self, write_context, tmp_path, monkeypatch, capsys
+    ):
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.setattr(
+            "sys.argv",
+            ["write_context.py", "--name", "x"],
+        )
+        monkeypatch.setattr("sys.stdin", _StringStream("# X\n"))
+        with pytest.raises(SystemExit) as exc:
+            write_context.main()
+        assert exc.value.code == 1
+        assert "no warehouse connected" in capsys.readouterr().err
+
+    def test_content_file_argument_works(self, write_context, tmp_path, monkeypatch):
+        project, warehouse = _make_project_with_warehouse(tmp_path)
+        body = tmp_path / "body.md"
+        body.write_text("# From file\n")
+
+        monkeypatch.chdir(project)
+        monkeypatch.setattr(
+            "sys.argv",
+            ["write_context.py", "--name", "y", "--content-file", str(body)],
+        )
+
+        write_context.main()
+        target = warehouse / "contexts" / "y.md"
+        assert target.read_text() == "# From file\n"
+
+
+# ─────────────────────────────────────────────────────────────
 # write_skill.py
 # ─────────────────────────────────────────────────────────────
 
