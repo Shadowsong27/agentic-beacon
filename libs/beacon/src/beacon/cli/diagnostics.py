@@ -153,7 +153,8 @@ def doctor(*, fix: bool) -> None:
             _err(issue.message, issue.detail)
 
     # Gitignore drift check + fix (AB-94: managed-block gitignore engine)
-    if fix:
+    # Gate on beacon.yaml — never touch .gitignore in non-Beacon projects
+    if fix and beacon_yaml.exists():
         drifts = diff_gitignores(project_root)
         managed_kinds = {
             "tier_a_missing",

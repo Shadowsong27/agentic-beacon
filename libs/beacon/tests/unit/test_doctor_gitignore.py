@@ -176,3 +176,43 @@ class TestDoctorFix:
         apply_all_gitignores(tmp_path)
         drifts_first = diff_gitignores(tmp_path)
         assert len(drifts_first) == 0
+
+    # ── FIX F: doctor --fix gated to wired projects ──
+
+    def test_unwired_project_fix_does_not_touch_gitignore(self, tmp_path, monkeypatch):
+        """doctor --fix on unwired project must not create/modify .gitignore."""
+        import beacon.cli.diagnostics
+        from beacon.core.gitignore import MANAGED_BLOCK_BEGIN
+
+        (tmp_path / ".agentic-beacon").mkdir()
+        gitignore = tmp_path / ".gitignore"
+        gitignore.write_text("my-custom-entry/\n")
+        mtime_before = gitignore.stat().st_mtime
+        content_before = gitignore.read_bytes()
+
+        monkeypatch.setattr(
+            beacon.cli.diagnostics, "find_project_root", lambda: tmp_path
+        )
+        beacon.cli.diagnostics.doctor.callback(fix=True)
+
+        assert gitignore.stat().st_mtime == mtime_before
+        assert gitignore.read_bytes() == content_before
+        assert MANAGED_BLOCK_BEGIN not in gitignore.read_text()
+
+    def test_wired_project_fix_repairs_drift(self, tmp_path, monkeypatch):
+        """doctor --fix on wired project with drift repairs .gitignore."""
+        import beacon.cli.diagnostics
+        from beacon.core.gitignore import MANAGED_BLOCK_BEGIN
+
+        _make_wired(tmp_path)
+        gitignore = tmp_path / ".gitignore"
+        gitignore.write_text("user-entry/\n")
+
+        monkeypatch.setattr(
+            beacon.cli.diagnostics, "find_project_root", lambda: tmp_path
+        )
+        beacon.cli.diagnostics.doctor.callback(fix=True)
+
+        content = gitignore.read_text()
+        assert MANAGED_BLOCK_BEGIN in content
+        assert "user-entry/" in content

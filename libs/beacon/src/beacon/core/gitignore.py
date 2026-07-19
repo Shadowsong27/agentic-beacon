@@ -262,18 +262,23 @@ def diff_gitignores(project_root: Path) -> list[GitignoreDrift]:
                 message="Tier A managed block missing from root .gitignore",
             )
         )
-    else:
-        tier_a_set = set(tier_a_entries)
-        expected_a = set(TIER_A_ENTRIES)
-        missing = expected_a - tier_a_set
+    elif tier_a_entries != TIER_A_ENTRIES:
+        missing = set(TIER_A_ENTRIES) - set(tier_a_entries)
+        extra = set(tier_a_entries) - set(TIER_A_ENTRIES)
+        detail_parts = []
         if missing:
-            drifts.append(
-                GitignoreDrift(
-                    kind="tier_a_incomplete",
-                    message="Tier A managed block incomplete in root .gitignore",
-                    detail=f"Missing entries: {', '.join(sorted(missing))}",
-                )
+            detail_parts.append(f"Missing entries: {', '.join(sorted(missing))}")
+        if extra:
+            detail_parts.append(f"Extra entries: {', '.join(sorted(extra))}")
+        if not missing and not extra:
+            detail_parts.append("Entries reordered")
+        drifts.append(
+            GitignoreDrift(
+                kind="tier_a_incomplete",
+                message="Tier A managed block incomplete in root .gitignore",
+                detail="; ".join(detail_parts),
             )
+        )
 
     # Check Tier B
     claude_dir = project_root / ".claude"
@@ -287,17 +292,23 @@ def diff_gitignores(project_root: Path) -> list[GitignoreDrift]:
                     message="Tier B managed block missing from .claude/.gitignore",
                 )
             )
-        else:
-            expected_b = set(TIER_B_CLAUDE_ENTRIES)
-            missing_b = expected_b - set(b_entries)
+        elif b_entries != TIER_B_CLAUDE_ENTRIES:
+            missing_b = set(TIER_B_CLAUDE_ENTRIES) - set(b_entries)
+            extra_b = set(b_entries) - set(TIER_B_CLAUDE_ENTRIES)
+            detail_parts = []
             if missing_b:
-                drifts.append(
-                    GitignoreDrift(
-                        kind="tier_b_incomplete",
-                        message="Tier B managed block incomplete in .claude/.gitignore",
-                        detail=f"Missing entries: {', '.join(sorted(missing_b))}",
-                    )
+                detail_parts.append(f"Missing entries: {', '.join(sorted(missing_b))}")
+            if extra_b:
+                detail_parts.append(f"Extra entries: {', '.join(sorted(extra_b))}")
+            if not missing_b and not extra_b:
+                detail_parts.append("Entries reordered")
+            drifts.append(
+                GitignoreDrift(
+                    kind="tier_b_incomplete",
+                    message="Tier B managed block incomplete in .claude/.gitignore",
+                    detail="; ".join(detail_parts),
                 )
+            )
 
     opencode_dir = project_root / ".opencode"
     if opencode_dir.is_dir():
@@ -310,17 +321,23 @@ def diff_gitignores(project_root: Path) -> list[GitignoreDrift]:
                     message="Tier B managed block missing from .opencode/.gitignore",
                 )
             )
-        else:
-            expected_b = set(TIER_B_OPENCODE_ENTRIES)
-            missing_b = expected_b - set(b_entries)
+        elif b_entries != TIER_B_OPENCODE_ENTRIES:
+            missing_b = set(TIER_B_OPENCODE_ENTRIES) - set(b_entries)
+            extra_b = set(b_entries) - set(TIER_B_OPENCODE_ENTRIES)
+            detail_parts = []
             if missing_b:
-                drifts.append(
-                    GitignoreDrift(
-                        kind="tier_b_incomplete",
-                        message="Tier B managed block incomplete in .opencode/.gitignore",
-                        detail=f"Missing entries: {', '.join(sorted(missing_b))}",
-                    )
+                detail_parts.append(f"Missing entries: {', '.join(sorted(missing_b))}")
+            if extra_b:
+                detail_parts.append(f"Extra entries: {', '.join(sorted(extra_b))}")
+            if not missing_b and not extra_b:
+                detail_parts.append("Entries reordered")
+            drifts.append(
+                GitignoreDrift(
+                    kind="tier_b_incomplete",
+                    message="Tier B managed block incomplete in .opencode/.gitignore",
+                    detail="; ".join(detail_parts),
                 )
+            )
 
     # Check tracked-set — any tracked-on-purpose file currently git-ignored.
     # Uses real git ignore evaluation so glob/prefix/directory patterns

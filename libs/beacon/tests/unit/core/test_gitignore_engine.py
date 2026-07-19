@@ -365,6 +365,55 @@ class TestDiffGitignores:
             f"Expected zero drifts in healthy project, got: {[d.message for d in drifts]}"
         )
 
+    # ── FIX G: order-sensitive comparison, extra/reordered detection ──
+
+    def test_extra_line_in_managed_block_detected(self, tmp_path):
+        """A managed block with an extra obsolete line reports tier_a_incomplete."""
+        entries = TIER_A_ENTRIES + [".deprecated/"]
+        apply_managed_block(tmp_path / ".gitignore", entries)
+        drifts = diff_gitignores(tmp_path)
+        incomplete = [d for d in drifts if d.kind == "tier_a_incomplete"]
+        assert len(incomplete) == 1
+        assert "Extra" in incomplete[0].detail
+
+    def test_reordered_entries_detected(self, tmp_path):
+        """Canonical entries in different order report drift."""
+        entries = list(reversed(TIER_A_ENTRIES))
+        apply_managed_block(tmp_path / ".gitignore", entries)
+        drifts = diff_gitignores(tmp_path)
+        incomplete = [d for d in drifts if d.kind == "tier_a_incomplete"]
+        assert len(incomplete) == 1
+        assert "reordered" in incomplete[0].detail
+
+    def test_extra_line_healed_by_apply(self, tmp_path):
+        """apply_all_gitignores repairs extra-line drift, then re-run is clean."""
+        entries = TIER_A_ENTRIES + [".deprecated/"]
+        apply_managed_block(tmp_path / ".gitignore", entries)
+        assert diff_gitignores(tmp_path)
+        apply_all_gitignores(tmp_path)
+        assert diff_gitignores(tmp_path) == []
+
+    def test_reorder_healed_by_apply(self, tmp_path):
+        """apply_all_gitignores repairs reorder drift, then re-run is clean."""
+        apply_managed_block(tmp_path / ".gitignore", list(reversed(TIER_A_ENTRIES)))
+        assert diff_gitignores(tmp_path)
+        apply_all_gitignores(tmp_path)
+        assert diff_gitignores(tmp_path) == []
+
+    def test_missing_entry_still_detected(self, tmp_path):
+        """Subset entries still report tier_a_incomplete."""
+        subset = TIER_A_ENTRIES[:-1]
+        apply_managed_block(tmp_path / ".gitignore", subset)
+        drifts = diff_gitignores(tmp_path)
+        incomplete = [d for d in drifts if d.kind == "tier_a_incomplete"]
+        assert len(incomplete) == 1
+        assert "Missing" in incomplete[0].detail
+
+    def test_healthy_still_clean(self, tmp_path):
+        """Fully populated managed block reports zero drift."""
+        apply_all_gitignores(tmp_path)
+        assert diff_gitignores(tmp_path) == []
+
     def test_tracked_file_shows_drift_with_no_index(self, tmp_path):
         """ALREADY-TRACKED files ignored by .gitignore are detected with --no-index.
 
