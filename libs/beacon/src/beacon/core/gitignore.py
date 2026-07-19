@@ -88,7 +88,15 @@ def _git_would_ignore(project_root: Path, rel_path: str) -> bool:
     """True if git's ignore rules would exclude rel_path. False if not, or not a git repo."""
     try:
         result = subprocess.run(
-            ["git", "-C", str(project_root), "check-ignore", "-q", rel_path],
+            [
+                "git",
+                "-C",
+                str(project_root),
+                "check-ignore",
+                "--no-index",
+                "-q",
+                rel_path,
+            ],
             capture_output=True,
         )
     except (OSError, ValueError):

@@ -371,6 +371,9 @@ def _check_warehouse_git(warehouse_path: Path) -> list[DoctorIssue]:
 
 
 def _check_gitignore_drift(project_root: Path) -> list[DoctorIssue]:
+    if not (project_root / ".agentic-beacon" / "beacon.yaml").exists():
+        return []
+
     issues: list[DoctorIssue] = []
     drifts = diff_gitignores(project_root)
     for drift in drifts:

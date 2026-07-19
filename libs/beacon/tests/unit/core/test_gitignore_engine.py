@@ -365,6 +365,37 @@ class TestDiffGitignores:
             f"Expected zero drifts in healthy project, got: {[d.message for d in drifts]}"
         )
 
+    def test_tracked_file_shows_drift_with_no_index(self, tmp_path):
+        """ALREADY-TRACKED files ignored by .gitignore are detected with --no-index.
+
+        Without --no-index, git check-ignore silently exits 1 for tracked
+        files even when a .gitignore pattern matches them.
+        """
+        _git_init(tmp_path)
+        beacon_dir = tmp_path / ".agentic-beacon"
+        beacon_dir.mkdir()
+        beacon_yaml = beacon_dir / "beacon.yaml"
+        beacon_yaml.write_text("")
+        root_gitignore = tmp_path / ".gitignore"
+        root_gitignore.write_text(".agentic-beacon/\n")
+        subprocess.run(
+            ["git", "add", "-f", str(beacon_yaml), str(root_gitignore)],
+            cwd=tmp_path,
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "commit", "-q", "-m", "init"],
+            cwd=tmp_path,
+            check=True,
+            capture_output=True,
+        )
+        drifts = diff_gitignores(tmp_path)
+        tracked = [d for d in drifts if d.kind == "tracked_set_ignored"]
+        assert any(".agentic-beacon/beacon.yaml" in d.message for d in tracked), (
+            f"Expected tracked_set_ignored drift for beacon.yaml, got: {[d.message for d in tracked]}"
+        )
+
 
 # ═════════════════════════════════════════════════════════════
 # 4.3 Tier B regression lock

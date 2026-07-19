@@ -46,8 +46,18 @@ def _write_tier_b(tmp_path: Path, tool_dir: str, entries: list[str]) -> None:
     apply_managed_block(d / ".gitignore", entries)
 
 
+def _make_wired(project_root):
+    """Create .agentic-beacon/beacon.yaml so the project appears Beacon-wired."""
+    d = project_root / ".agentic-beacon"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "beacon.yaml").write_text(
+        "artifacts:\n  contexts: []\n  skills: []\n  agents: []\n"
+    )
+
+
 class TestDoctorGitignoreDetection:
     def test_tc1_drifted_project_returns_error(self, tmp_path):
+        _make_wired(tmp_path)
         _write_tier_b(tmp_path, ".opencode", TIER_B_OPENCODE_ENTRIES)
         issues = run_project_health_checks(tmp_path, None, None)
         gitignore_issues = [i for i in issues if "gitignore" in i.message.lower()]
@@ -62,6 +72,7 @@ class TestDoctorGitignoreDetection:
         assert len(gitignore_issues) == 0
 
     def test_tc3_tracked_set_ignored_error(self, tmp_path):
+        _make_wired(tmp_path)
         _git_init(tmp_path)
         root = tmp_path / ".gitignore"
         root.write_text("beacon.yaml\n")
@@ -73,6 +84,7 @@ class TestDoctorGitignoreDetection:
             assert i.severity == "error"
 
     def test_tier_a_missing_while_tier_b_present(self, tmp_path):
+        _make_wired(tmp_path)
         (tmp_path / ".opencode").mkdir()
         apply_managed_block(
             tmp_path / ".opencode" / ".gitignore", TIER_B_OPENCODE_ENTRIES
@@ -82,6 +94,30 @@ class TestDoctorGitignoreDetection:
         tier_a_issues = [i for i in gitignore_issues if "Tier A" in i.message]
         assert len(tier_a_issues) >= 1
         assert tier_a_issues[0].severity == "error"
+
+    def test_unwired_project_returns_no_drift(self, tmp_path):
+        """No .agentic-beacon/beacon.yaml → _check_gitignore_drift returns [].
+
+        Even if the project's .gitignore lacks a managed block.
+        """
+        issues = run_project_health_checks(tmp_path, None, None)
+        gitignore_issues = [i for i in issues if "gitignore" in i.message.lower()]
+        assert len(gitignore_issues) == 0, (
+            f"Expected no gitignore issues for unwired project, got: {gitignore_issues}"
+        )
+
+    def test_wired_project_still_reports_drift(self, tmp_path):
+        """Wired project with drift still reports gitignore issues."""
+        _make_wired(tmp_path)
+        (tmp_path / ".opencode").mkdir()
+        apply_managed_block(
+            tmp_path / ".opencode" / ".gitignore", TIER_B_OPENCODE_ENTRIES
+        )
+        issues = run_project_health_checks(tmp_path, None, None)
+        gitignore_issues = [i for i in issues if "gitignore" in i.message.lower()]
+        assert len(gitignore_issues) >= 1, (
+            "Expected gitignore drift for wired project with missing Tier A"
+        )
 
 
 class TestDoctorFix:
@@ -120,6 +156,7 @@ class TestDoctorFix:
 
     def test_tracked_set_ignored_not_repaired(self, tmp_path):
         """tracked_set_ignored drift must NOT be repaired by apply_all_gitignores."""
+        _make_wired(tmp_path)
         _git_init(tmp_path)
         root = tmp_path / ".gitignore"
         root.write_text(".agentic-beacon/beacon.yaml\n")
