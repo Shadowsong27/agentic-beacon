@@ -8,6 +8,8 @@ Covers:
 - diff_gitignores (task 4.5)
 """
 
+import subprocess
+
 from beacon.core.gitignore import (
     MANAGED_BLOCK_BEGIN,
     MANAGED_BLOCK_END,
@@ -19,6 +21,23 @@ from beacon.core.gitignore import (
     diff_gitignores,
     read_managed_block,
 )
+
+
+def _git_init(path):
+    subprocess.run(["git", "init", "-q", str(path)], check=False)
+    subprocess.run(
+        ["git", "config", "user.email", "test@test.com"],
+        cwd=path,
+        check=False,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test"],
+        cwd=path,
+        check=False,
+        capture_output=True,
+    )
+
 
 # ═════════════════════════════════════════════════════════════
 # 1.2 apply_managed_block — fresh, regen, idempotent
@@ -299,6 +318,7 @@ class TestDiffGitignores:
         assert "tier_b_missing" in kinds
 
     def test_tc5_tracked_set_ignored(self, tmp_path):
+        _git_init(tmp_path)
         path = tmp_path / ".gitignore"
         path.write_text("beacon.yaml\n")
         apply_managed_block(path, TIER_A_ENTRIES)
@@ -322,6 +342,28 @@ class TestDiffGitignores:
         drifts = diff_gitignores(tmp_path)
         kinds = {d.kind for d in drifts}
         assert "tier_a_missing" in kinds
+
+    # ── FIX C: tracked-set detection with git check-ignore ──
+
+    def test_glob_prefix_pattern_detected(self, tmp_path):
+        """A directory glob pattern that would ignore a tracked-on-purpose file is detected."""
+        _git_init(tmp_path)
+        root = tmp_path / ".gitignore"
+        root.write_text(".agentic-beacon/\n")
+        drifts = diff_gitignores(tmp_path)
+        tracked = [d for d in drifts if d.kind == "tracked_set_ignored"]
+        assert any(".agentic-beacon/beacon.yaml" in d.message for d in tracked), (
+            f"Expected tracked_set_ignored drift for beacon.yaml, got: {[d.message for d in tracked]}"
+        )
+
+    def test_healthy_project_zero_tracked_drift(self, tmp_path):
+        """A properly-configured project with managed blocks must have zero tracked-set drift."""
+        _git_init(tmp_path)
+        apply_all_gitignores(tmp_path)
+        drifts = diff_gitignores(tmp_path)
+        assert len(drifts) == 0, (
+            f"Expected zero drifts in healthy project, got: {[d.message for d in drifts]}"
+        )
 
 
 # ═════════════════════════════════════════════════════════════

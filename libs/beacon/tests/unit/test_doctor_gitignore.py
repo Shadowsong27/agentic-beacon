@@ -4,8 +4,10 @@ Covers:
 - Drifted project → DoctorIssue with severity 'error'
 - Healthy project → no gitignore DoctorIssue
 - Tracked-set file ignored → error
+- --fix correctly splits managed vs tracked-set drifts
 """
 
+import subprocess
 from pathlib import Path
 
 from beacon.core.gitignore import (
@@ -16,6 +18,22 @@ from beacon.core.gitignore import (
 from beacon.domains.setup.diagnostics import (
     run_project_health_checks,
 )
+
+
+def _git_init(path):
+    subprocess.run(["git", "init", "-q", str(path)], check=False)
+    subprocess.run(
+        ["git", "config", "user.email", "test@test.com"],
+        cwd=path,
+        check=False,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "config", "user.name", "Test"],
+        cwd=path,
+        check=False,
+        capture_output=True,
+    )
 
 
 def _write_tier_a(tmp_path: Path, entries: list[str] | None = None) -> None:
@@ -44,6 +62,7 @@ class TestDoctorGitignoreDetection:
         assert len(gitignore_issues) == 0
 
     def test_tc3_tracked_set_ignored_error(self, tmp_path):
+        _git_init(tmp_path)
         root = tmp_path / ".gitignore"
         root.write_text("beacon.yaml\n")
         _write_tier_a(tmp_path)
@@ -98,3 +117,25 @@ class TestDoctorFix:
         apply_all_gitignores(tmp_path)
         drifts = diff_gitignores(tmp_path)
         assert len(drifts) == 0
+
+    def test_tracked_set_ignored_not_repaired(self, tmp_path):
+        """tracked_set_ignored drift must NOT be repaired by apply_all_gitignores."""
+        _git_init(tmp_path)
+        root = tmp_path / ".gitignore"
+        root.write_text(".agentic-beacon/beacon.yaml\n")
+        from beacon.core.gitignore import apply_all_gitignores, diff_gitignores
+
+        apply_all_gitignores(tmp_path)
+        drifts = diff_gitignores(tmp_path)
+        kinds = {d.kind for d in drifts}
+        assert "tracked_set_ignored" in kinds, (
+            "tracked_set_ignored drift must persist after fix"
+        )
+
+    def test_managed_only_fix_is_clean(self, tmp_path):
+        """Managed-block-only drift IS repaired by apply_all_gitignores."""
+        from beacon.core.gitignore import apply_all_gitignores, diff_gitignores
+
+        apply_all_gitignores(tmp_path)
+        drifts_first = diff_gitignores(tmp_path)
+        assert len(drifts_first) == 0

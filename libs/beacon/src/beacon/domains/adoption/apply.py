@@ -287,13 +287,6 @@ def commit_session(
                     "    mkdir .opencode  [dim]# for OpenCode[/dim]"
                 )
 
-        # Apply both tiers of gitignore managed blocks — Tier A is unconditional,
-        # Tier B is written per tool-dir existence. Fixes the bug where adopt
-        # skipped Tier A (the root .gitignore block).
-        from beacon.core.gitignore import apply_all_gitignores
-
-        apply_all_gitignores(project_root)
-
         # Wire bundled skills into the project's agent directories
         from beacon.domains.artifact.skill import wire_bundled_skills_per_project
 
@@ -310,6 +303,15 @@ def commit_session(
             wiring_notes.append(
                 f"  [yellow]warning[/yellow] Bundled skill wiring: {err}"
             )
+
+        # Apply both tiers of gitignore managed blocks — Tier A is unconditional,
+        # Tier B is written per tool-dir existence. MUST run after every other
+        # wiring step so tool directories created by the upstream wiring (e.g.
+        # bundled-skill wiring into .opencode/command/, .claude/skills/) are
+        # covered by Tier B nested .gitignore files.
+        from beacon.core.gitignore import apply_all_gitignores
+
+        apply_all_gitignores(project_root)
 
     post_sync_wiring_fn = _post_sync_wiring_fn or _default_post_sync_wiring
 

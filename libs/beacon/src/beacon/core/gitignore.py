@@ -8,6 +8,7 @@ loose-line blocks.
 Architecture boundary: core/ must not import from domains/ or cli/.
 """
 
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -77,6 +78,23 @@ TRACKED_ON_PURPOSE = [
     "opencode.json",
     ".worktreeinclude",
 ]
+
+# ─────────────────────────────────────────────────────────────
+# Git ignore evaluation helper
+# ─────────────────────────────────────────────────────────────
+
+
+def _git_would_ignore(project_root: Path, rel_path: str) -> bool:
+    """True if git's ignore rules would exclude rel_path. False if not, or not a git repo."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(project_root), "check-ignore", "-q", rel_path],
+            capture_output=True,
+        )
+    except (OSError, ValueError):
+        return False
+    return result.returncode == 0  # 0 = ignored, 1 = not ignored, 128 = not a git repo
+
 
 # ─────────────────────────────────────────────────────────────
 # Drift record
@@ -296,22 +314,17 @@ def diff_gitignores(project_root: Path) -> list[GitignoreDrift]:
                     )
                 )
 
-    # Check tracked-set — any tracked-on-purpose file currently git-ignored
-    if root_gitignore.exists():
-        content = root_gitignore.read_text(encoding="utf-8")
-        for tracked in TRACKED_ON_PURPOSE:
-            tracked_short = Path(tracked).name
-            for line in content.splitlines():
-                stripped = line.strip()
-                if stripped == tracked_short or stripped == tracked:
-                    if not stripped.startswith("!"):
-                        drifts.append(
-                            GitignoreDrift(
-                                kind="tracked_set_ignored",
-                                message=f"Tracked-on-purpose file would be ignored: {tracked}",
-                            )
-                        )
-                        break
+    # Check tracked-set — any tracked-on-purpose file currently git-ignored.
+    # Uses real git ignore evaluation so glob/prefix/directory patterns
+    # (.agentic-beacon/, *.yaml, .claude/) are correctly detected.
+    for tracked in TRACKED_ON_PURPOSE:
+        if _git_would_ignore(project_root, tracked):
+            drifts.append(
+                GitignoreDrift(
+                    kind="tracked_set_ignored",
+                    message=f"Tracked-on-purpose file would be ignored: {tracked}",
+                )
+            )
 
     return drifts
 

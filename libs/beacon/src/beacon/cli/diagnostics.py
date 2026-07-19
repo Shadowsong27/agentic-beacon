@@ -155,11 +155,21 @@ def doctor(*, fix: bool) -> None:
     # Gitignore drift check + fix (AB-94: managed-block gitignore engine)
     if fix:
         drifts = diff_gitignores(project_root)
-        if drifts:
+        managed_kinds = {
+            "tier_a_missing",
+            "tier_a_incomplete",
+            "tier_b_missing",
+            "tier_b_incomplete",
+        }
+        managed = [d for d in drifts if d.kind in managed_kinds]
+        tracked = [d for d in drifts if d.kind == "tracked_set_ignored"]
+        if managed:
             apply_all_gitignores(project_root)
             fixes_applied.append("Repaired gitignore managed blocks (Tier A / Tier B)")
+            console.print("  [green]✓[/green] Gitignore managed blocks repaired")
+        for d in tracked:
             console.print(
-                "  [green]✓[/green] Gitignore drift repaired via managed-block engine"
+                f"  [red]✗[/red] Cannot auto-fix: {d.message} — remove or negate the offending .gitignore pattern manually"
             )
 
     print_doctor_summary(issues, fixes_applied)
