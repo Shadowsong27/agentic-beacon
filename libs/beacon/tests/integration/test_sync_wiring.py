@@ -15,7 +15,11 @@ from unittest.mock import patch
 
 import pytest
 from beacon.cli.main import main
-from beacon.domains.artifact.agent import ensure_agent_dirs_gitignored
+from beacon.core.gitignore import (
+    TIER_A_ENTRIES,
+    apply_all_gitignores,
+    read_managed_block,
+)
 from beacon.domains.artifact.skill import (
     normalize_skill_entry,
     skill_name_from_entry,
@@ -308,44 +312,48 @@ def test_wire_skills_post_sync_reinstalls_when_content_changes(project_with_skil
 
 
 # ---------------------------------------------------------------------------
-# Unit tests: ensure_agent_dirs_gitignored
+# Unit tests: apply_all_gitignores (supersedes ensure_agent_dirs_gitignored)
 # ---------------------------------------------------------------------------
 
 
-def test_ensure_agent_dirs_gitignored_creates_claude_gitignore(tmp_path):
-    """PER-113: ensure_agent_dirs_gitignored writes to project root .gitignore."""
-    ensure_agent_dirs_gitignored(tmp_path)
-    content = (tmp_path / ".gitignore").read_text()
-    assert ".claude/agents/" in content
+def test_apply_all_gitignores_writes_tier_a_block(tmp_path):
+    """apply_all_gitignores writes Tier A block with agent dirs to root .gitignore."""
+    apply_all_gitignores(tmp_path)
+    body = read_managed_block(tmp_path / ".gitignore")
+    assert body is not None
+    assert ".claude/agents/" in body
+    assert ".opencode/agents/" in body
+    assert set(body) == set(TIER_A_ENTRIES)
 
 
-def test_ensure_agent_dirs_gitignored_creates_opencode_gitignore(tmp_path):
-    """PER-113: project .gitignore gets .opencode/agents/ entry."""
-    ensure_agent_dirs_gitignored(tmp_path)
-    content = (tmp_path / ".gitignore").read_text()
-    assert ".opencode/agents/" in content
+def test_apply_all_gitignores_writes_tier_b_when_dir_exists(tmp_path):
+    """apply_all_gitignores writes nested .gitignore when tool dir exists."""
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / ".opencode").mkdir()
+    apply_all_gitignores(tmp_path)
+    claude_body = read_managed_block(tmp_path / ".claude" / ".gitignore")
+    assert claude_body is not None
+    assert "skills/" in claude_body
+    opencode_body = read_managed_block(tmp_path / ".opencode" / ".gitignore")
+    assert opencode_body is not None
+    assert "skills/" in opencode_body
 
 
-def test_ensure_agent_dirs_gitignored_skips_when_no_agent_dirs(tmp_path):
-    """ensure_agent_dirs_gitignored always writes to project root .gitignore."""
-    ensure_agent_dirs_gitignored(tmp_path)
-    # Now writes to root .gitignore regardless of whether .claude/ / .opencode/ exist
-    assert (tmp_path / ".gitignore").exists()
+def test_apply_all_gitignores_idempotent(tmp_path):
+    """apply_all_gitignores is idempotent on repeated calls."""
+    apply_all_gitignores(tmp_path)
+    body = read_managed_block(tmp_path / ".gitignore")
+    assert body is not None
+
+    apply_all_gitignores(tmp_path)
+    body2 = read_managed_block(tmp_path / ".gitignore")
+    assert body2 == body
 
 
-def test_ensure_agent_dirs_gitignored_idempotent(tmp_path):
-    """ensure_agent_dirs_gitignored is idempotent on repeated calls."""
-    ensure_agent_dirs_gitignored(tmp_path)
-    ensure_agent_dirs_gitignored(tmp_path)
-    content = (tmp_path / ".gitignore").read_text()
-    assert content.count(".claude/agents/") == 1
-    assert content.count(".opencode/agents/") == 1
-
-
-def test_ensure_agent_dirs_gitignored_appends_to_existing_gitignore(tmp_path):
-    """ensure_agent_dirs_gitignored appends to an existing project .gitignore."""
+def test_apply_all_gitignores_preserves_existing_content(tmp_path):
+    """apply_all_gitignores appends to an existing .gitignore."""
     (tmp_path / ".gitignore").write_text("settings.local.json\n")
-    ensure_agent_dirs_gitignored(tmp_path)
+    apply_all_gitignores(tmp_path)
     content = (tmp_path / ".gitignore").read_text()
     assert "settings.local.json" in content
     assert ".claude/agents/" in content

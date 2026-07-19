@@ -16,6 +16,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from beacon.core.gitignore import apply_all_gitignores, diff_gitignores
 from beacon.core.manifest.beacon import BeaconManifest
 from beacon.domains.distribution.sync_engine import SyncEngine
 
@@ -27,6 +28,47 @@ class DoctorIssue:
     message: str
     detail: str = ""
     severity: str = "error"  # "error" or "warn"
+
+
+def run_project_diagnostics(
+    project_root: Path,
+    warehouse_path: Path | None,
+    beacon_manifest: BeaconManifest | None,
+    fix: bool,
+) -> tuple[list[DoctorIssue], list[str]]:
+    """Optionally repair gitignore drift, then run all project-side health checks.
+
+    Returns (issues, applied_fixes). Repair runs first so the returned issues
+    reflect the post-repair state.
+    """
+    applied_fixes: list[str] = []
+    if fix:
+        applied_fixes = repair_gitignore_drift(project_root)
+    issues = run_project_health_checks(project_root, warehouse_path, beacon_manifest)
+    return issues, applied_fixes
+
+
+def repair_gitignore_drift(project_root: Path) -> list[str]:
+    """Repair managed-block gitignore drift in place (Tier A / Tier B).
+
+    Returns human-readable descriptions of the fixes applied (empty if none).
+    Non-fixable drift (tracked_set_ignored — a user pattern ignoring a
+    tracked-on-purpose file) is NOT touched here; it is left for
+    _check_gitignore_drift to report as remaining drift.
+    """
+    if not (project_root / ".agentic-beacon" / "beacon.yaml").exists():
+        return []
+    drifts = diff_gitignores(project_root)
+    managed_kinds = {
+        "tier_a_missing",
+        "tier_a_incomplete",
+        "tier_b_missing",
+        "tier_b_incomplete",
+    }
+    if any(d.kind in managed_kinds for d in drifts):
+        apply_all_gitignores(project_root)
+        return ["Repaired gitignore managed blocks (Tier A / Tier B)"]
+    return []
 
 
 def run_project_health_checks(
@@ -47,6 +89,7 @@ def run_project_health_checks(
         issues.extend(_check_warehouse_git(warehouse_path))
 
     issues.extend(_check_path_references(project_root, beacon_manifest))
+    issues.extend(_check_gitignore_drift(project_root))
     issues.extend(_check_platform())
 
     return issues
@@ -358,6 +401,28 @@ def _check_warehouse_git(warehouse_path: Path) -> list[DoctorIssue]:
                 message="Warehouse is not a git working tree",
                 detail=f"{warehouse_path} missing .git directory",
                 severity="warn",
+            )
+        )
+    return issues
+
+
+# ---------------------------------------------------------------------------
+# Check 5: Gitignore drift
+# ---------------------------------------------------------------------------
+
+
+def _check_gitignore_drift(project_root: Path) -> list[DoctorIssue]:
+    if not (project_root / ".agentic-beacon" / "beacon.yaml").exists():
+        return []
+
+    issues: list[DoctorIssue] = []
+    drifts = diff_gitignores(project_root)
+    for drift in drifts:
+        issues.append(
+            DoctorIssue(
+                message=drift.message,
+                detail=drift.detail,
+                severity="error",
             )
         )
     return issues

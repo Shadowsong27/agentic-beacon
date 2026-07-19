@@ -25,14 +25,10 @@ from beacon.core.dependencies.resolver import (
     compute_effective_set,
 )
 from beacon.core.exceptions import BeaconSyncError, DependencyError
-from beacon.core.gitignore import GitignoreManager
+from beacon.core.gitignore import apply_all_gitignores
 from beacon.core.manifest.beacon import BeaconManifest
 from beacon.domains.adoption.discovery import count_unadopted_since
-from beacon.domains.artifact.agent import (
-    detect_agent_targets,
-    ensure_agent_dirs_gitignored,
-    prune_agent_dirs_gitignore_entries,
-)
+from beacon.domains.artifact.agent import detect_agent_targets
 from beacon.domains.artifact.skill import (
     install_bundled_skills_globally,
     normalize_skill_entry,
@@ -67,25 +63,6 @@ from beacon.domains.warehouse.preconditions import ensure_sync_ready
 from beacon.utils.git import find_project_root
 
 MIGRATION_DOC_URL = "docs/archive/migrations/artifact-dependencies-frontmatter.md"
-
-# Per-tool entries written into agent-folder .gitignore files during sync.
-# Covers Beacon-owned subdirs (skills/, command/) plus tool-runtime byproducts
-# (lockfiles, package manifests, local-only state) created by opencode / Claude
-# Code when running inside those folders. Distribution-domain policy — not a
-# cross-domain primitive, so kept here rather than in core/gitignore.
-CLAUDE_DIR_GITIGNORE_ENTRIES = [
-    "skills/",
-    "scheduled_tasks.lock",
-    "worktrees/",
-]
-OPENCODE_DIR_GITIGNORE_ENTRIES = [
-    "skills/",
-    "command/",
-    "bun.lock",
-    "package.json",
-    "package-lock.json",
-    "node_modules/",
-]
 
 
 @dataclass
@@ -458,10 +435,6 @@ def run_sync(
             f"See {MIGRATION_DOC_URL} for details."
         ) from e
 
-    if not dry_run:
-        gitignore_mgr = GitignoreManager(project_root)
-        gitignore_mgr.ensure_entries()
-
     # Post-sync wiring
     oc_added: list[str] = []
     cc_added: list[str] = []
@@ -537,29 +510,8 @@ def run_sync(
             skill_conflict_callback=skill_conflict_callback,
         )
 
-    # Per-tool gitignore entries — gated on directory existence only (PER-136).
-    # Covers Beacon-owned subdirs (skills/, command/) plus tool-runtime
-    # byproducts (bun.lock, node_modules/, scheduled_tasks.lock, …) that
-    # opencode / Claude Code create inside their agent folders.
-    # Wrapped in `if not dry_run:` to match the rest of run_sync — no
-    # mutations during dry-run.
-    if not dry_run:
-        claude_dir = project_root / ".claude"
-        if claude_dir.is_dir():
-            GitignoreManager(claude_dir).ensure_entries(CLAUDE_DIR_GITIGNORE_ENTRIES)
-        opencode_dir = project_root / ".opencode"
-        if opencode_dir.is_dir():
-            GitignoreManager(opencode_dir).ensure_entries(
-                OPENCODE_DIR_GITIGNORE_ENTRIES
-            )
-
-    # PER-113 / PER-135: keep root .gitignore in sync with declared agents —
-    # ensure entries are present when agents are declared, pruned otherwise.
-    if not dry_run:
-        if beacon_settings.artifacts.agents:
-            ensure_agent_dirs_gitignored(project_root)
-        else:
-            prune_agent_dirs_gitignore_entries(project_root)
+    # Gitignore managed blocks are applied unconditionally above (Tier A always,
+    # Tier B per tool-dir existence) — no per-tool or per-agent gating needed.
 
     if not dry_run:
         bundled_installed, bundled_skipped = install_bundled_skills_globally()
@@ -592,6 +544,10 @@ def run_sync(
                 )
         except Exception:
             pass
+
+    # Apply gitignore managed blocks after all wiring so tool dirs exist.
+    if not dry_run:
+        apply_all_gitignores(project_root)
 
     return SyncOrchestrationResult(
         dry_run=dry_run,

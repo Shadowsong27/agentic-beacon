@@ -1,53 +1,371 @@
 """Gitignore management for Agentic Beacon.
 
-Automatically manages .gitignore entries to ensure:
-- .agentic-beacon/config.toml is excluded (local config)
-- .agentic-beacon/artifacts/ is excluded (warehouse symlinks)
-- .agentic-beacon/beacon.yaml is NOT excluded (team config)
+Managed-block gitignore engine — the single cross-domain source of truth for
+Beacon's .gitignore ownership.  Applies a marker-delimited managed block that
+is regenerated wholesale on every run, with surgical migration of legacy
+loose-line blocks.
+
+Architecture boundary: core/ must not import from domains/ or cli/.
 """
 
+import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 
 from loguru import logger
 
-# Entries that should be in .gitignore
+# ─────────────────────────────────────────────────────────────
+# Managed-block markers
+# ─────────────────────────────────────────────────────────────
+
+MANAGED_BLOCK_BEGIN = "# >>> Agentic Beacon (managed) >>>"
+MANAGED_BLOCK_END = "# <<< Agentic Beacon (managed) <<<"
+
+# Minimal set for the old-style GitignoreManager (backward compat)
 GITIGNORE_ENTRIES = [
     ".agentic-beacon/config.toml",
     ".agentic-beacon/artifacts/",
     ".agentic-beacon/pending.yaml",
 ]
 
-# Section header for our entries
 SECTION_HEADER = "# Agentic Beacon"
+
+# ─────────────────────────────────────────────────────────────
+# Tier A — unconditional root .gitignore entries
+# ─────────────────────────────────────────────────────────────
+
+TIER_A_ENTRIES = [
+    ".agentic-beacon/config.toml",
+    ".agentic-beacon/artifacts/",
+    ".agentic-beacon/warehouse-catalog.md",
+    ".agentic-beacon/pending.yaml",
+    ".claude/skills/",
+    ".claude/commands/",
+    ".claude/agents/",
+    ".opencode/skills/",
+    ".opencode/command/",
+    ".opencode/agents/",
+]
+
+# ─────────────────────────────────────────────────────────────
+# Tier B — nested tool-dir .gitignore entries
+# ─────────────────────────────────────────────────────────────
+
+TIER_B_CLAUDE_ENTRIES = [
+    "skills/",
+    "scheduled_tasks.lock",
+    "worktrees/",
+]
+
+TIER_B_OPENCODE_ENTRIES = [
+    "skills/",
+    "command/",
+    "bun.lock",
+    "package.json",
+    "package-lock.json",
+    "node_modules/",
+]
+
+# ─────────────────────────────────────────────────────────────
+# Tracked-on-purpose — files that must never be git-ignored
+# ─────────────────────────────────────────────────────────────
+
+TRACKED_ON_PURPOSE = [
+    ".agentic-beacon/beacon.yaml",
+    ".claude/.gitignore",
+    ".opencode/.gitignore",
+    "CLAUDE.md",
+    "opencode.json",
+    ".worktreeinclude",
+]
+
+# ─────────────────────────────────────────────────────────────
+# Git ignore evaluation helper
+# ─────────────────────────────────────────────────────────────
+
+
+def _git_would_ignore(project_root: Path, rel_path: str) -> bool:
+    """True if git's ignore rules would exclude rel_path. False if not, or not a git repo."""
+    try:
+        result = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(project_root),
+                "check-ignore",
+                "--no-index",
+                "-q",
+                rel_path,
+            ],
+            capture_output=True,
+        )
+    except (OSError, ValueError):
+        return False
+    return result.returncode == 0  # 0 = ignored, 1 = not ignored, 128 = not a git repo
+
+
+# ─────────────────────────────────────────────────────────────
+# Drift record
+# ─────────────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class GitignoreDrift:
+    kind: str  # "tier_a_missing", "tier_a_incomplete", "tier_b_missing", "tier_b_incomplete", "tracked_set_ignored"
+    message: str
+    detail: str = ""
+
+
+_LEGACY_HEADER = "# Agentic Beacon"
+
+
+def _build_block_text(entries: list[str]) -> str:
+    lines = [MANAGED_BLOCK_BEGIN]
+    lines.extend(entries)
+    lines.append(MANAGED_BLOCK_END)
+    return "\n".join(lines) + "\n"
+
+
+def _find_managed_block(lines: list[str]) -> tuple[int, int] | None:
+    i = 0
+    n = len(lines)
+    while i < n:
+        if lines[i].rstrip("\n").rstrip("\r") == MANAGED_BLOCK_BEGIN:
+            j = i + 1
+            while j < n:
+                stripped = lines[j].rstrip("\n").rstrip("\r")
+                if stripped == MANAGED_BLOCK_BEGIN:
+                    break
+                if stripped == MANAGED_BLOCK_END:
+                    return (i, j)
+                j += 1
+        i += 1
+    return None
+
+
+def apply_managed_block(gitignore_path: Path, entries: list[str]) -> bool:
+    """Create or regenerate the marker-delimited managed block in *gitignore_path*.
+
+    If the file already contains a managed block (bounded by MANAGED_BLOCK_BEGIN /
+    MANAGED_BLOCK_END), the body between the markers is replaced wholesale.
+
+    If no managed block exists, performs surgical migration: removes any loose
+    line that exactly matches an entry, drops an emptied bare legacy header
+    (``# Agentic Beacon``), then appends the managed block.
+
+    Returns True if the file was modified, False if it was already current.
+    Idempotent when re-applied with the same entries.
+    """
+    existing_content = ""
+    if gitignore_path.exists():
+        existing_content = gitignore_path.read_text(encoding="utf-8")
+
+    existing_lines = existing_content.splitlines(keepends=True)
+    found = _find_managed_block(existing_lines)
+    if found is not None:
+        begin_i, end_i = found
+        before = "".join(existing_lines[:begin_i])
+        after = "".join(existing_lines[end_i + 1 :])
+        after = after.lstrip("\n")
+        new_block = _build_block_text(entries)
+        new_content = before + new_block + after
+        if new_content == existing_content:
+            return False
+        gitignore_path.write_text(new_content, encoding="utf-8")
+        return True
+
+    # No managed block — surgical migration of legacy block
+    # Single pass over ORIGINAL lines: drop owned entries + legacy block header
+    # iff the ORIGINAL next line is owned.
+    existing_lines = existing_content.splitlines(keepends=True)
+    entry_set = set(entries)
+
+    kept: list[str] = []
+    for i, line in enumerate(existing_lines):
+        stripped = line.rstrip("\n").rstrip("\r")
+        if stripped in entry_set:
+            continue
+        if stripped == _LEGACY_HEADER:
+            nxt = ""
+            if i + 1 < len(existing_lines):
+                nxt = existing_lines[i + 1].rstrip("\n").rstrip("\r")
+            if nxt in entry_set:
+                continue
+        kept.append(line)
+
+    raw = "".join(kept)
+    block_text = _build_block_text(entries)
+
+    stripped_raw = raw.rstrip("\n")
+    new_content = (stripped_raw + "\n" + block_text) if stripped_raw else block_text
+    if new_content == existing_content:
+        return False
+    gitignore_path.write_text(new_content, encoding="utf-8")
+    return True
+
+
+def read_managed_block(gitignore_path: Path) -> list[str] | None:
+    """Return the entry lines of the managed block, or None if absent."""
+    if not gitignore_path.exists():
+        return None
+    lines = gitignore_path.read_text(encoding="utf-8").splitlines(keepends=True)
+    found = _find_managed_block(lines)
+    if found is None:
+        return None
+    begin_i, end_i = found
+    return [
+        ln.rstrip("\n").rstrip("\r") for ln in lines[begin_i + 1 : end_i] if ln.strip()
+    ]
+
+
+def apply_all_gitignores(project_root: Path) -> bool:
+    """Apply both tiers of gitignore managed blocks.
+
+    Tier A is always written to the project root ``.gitignore``.
+    Tier B nested files are written only when their tool directory exists:
+    - ``.claude/.gitignore`` iff ``.claude/`` is a directory
+    - ``.opencode/.gitignore`` iff ``.opencode/`` is a directory
+
+    Returns True if any file was modified.
+    """
+    root_gitignore = project_root / ".gitignore"
+    modified = apply_managed_block(root_gitignore, TIER_A_ENTRIES)
+
+    claude_dir = project_root / ".claude"
+    if claude_dir.is_dir():
+        if apply_managed_block(claude_dir / ".gitignore", TIER_B_CLAUDE_ENTRIES):
+            modified = True
+
+    opencode_dir = project_root / ".opencode"
+    if opencode_dir.is_dir():
+        if apply_managed_block(opencode_dir / ".gitignore", TIER_B_OPENCODE_ENTRIES):
+            modified = True
+
+    return modified
+
+
+def diff_gitignores(project_root: Path) -> list[GitignoreDrift]:
+    """Return drift records comparing expected vs actual gitignore state.
+
+    Read-only: does not write to any file.
+    """
+    drifts: list[GitignoreDrift] = []
+    root_gitignore = project_root / ".gitignore"
+
+    # Check Tier A
+    tier_a_entries = read_managed_block(root_gitignore)
+    if tier_a_entries is None:
+        drifts.append(
+            GitignoreDrift(
+                kind="tier_a_missing",
+                message="Tier A managed block missing from root .gitignore",
+            )
+        )
+    elif tier_a_entries != TIER_A_ENTRIES:
+        missing = set(TIER_A_ENTRIES) - set(tier_a_entries)
+        extra = set(tier_a_entries) - set(TIER_A_ENTRIES)
+        detail_parts = []
+        if missing:
+            detail_parts.append(f"Missing entries: {', '.join(sorted(missing))}")
+        if extra:
+            detail_parts.append(f"Extra entries: {', '.join(sorted(extra))}")
+        if not missing and not extra:
+            detail_parts.append("Entries reordered")
+        drifts.append(
+            GitignoreDrift(
+                kind="tier_a_incomplete",
+                message="Tier A managed block incomplete in root .gitignore",
+                detail="; ".join(detail_parts),
+            )
+        )
+
+    # Check Tier B
+    claude_dir = project_root / ".claude"
+    if claude_dir.is_dir():
+        claude_gitignore = claude_dir / ".gitignore"
+        b_entries = read_managed_block(claude_gitignore)
+        if b_entries is None:
+            drifts.append(
+                GitignoreDrift(
+                    kind="tier_b_missing",
+                    message="Tier B managed block missing from .claude/.gitignore",
+                )
+            )
+        elif b_entries != TIER_B_CLAUDE_ENTRIES:
+            missing_b = set(TIER_B_CLAUDE_ENTRIES) - set(b_entries)
+            extra_b = set(b_entries) - set(TIER_B_CLAUDE_ENTRIES)
+            detail_parts = []
+            if missing_b:
+                detail_parts.append(f"Missing entries: {', '.join(sorted(missing_b))}")
+            if extra_b:
+                detail_parts.append(f"Extra entries: {', '.join(sorted(extra_b))}")
+            if not missing_b and not extra_b:
+                detail_parts.append("Entries reordered")
+            drifts.append(
+                GitignoreDrift(
+                    kind="tier_b_incomplete",
+                    message="Tier B managed block incomplete in .claude/.gitignore",
+                    detail="; ".join(detail_parts),
+                )
+            )
+
+    opencode_dir = project_root / ".opencode"
+    if opencode_dir.is_dir():
+        opencode_gitignore = opencode_dir / ".gitignore"
+        b_entries = read_managed_block(opencode_gitignore)
+        if b_entries is None:
+            drifts.append(
+                GitignoreDrift(
+                    kind="tier_b_missing",
+                    message="Tier B managed block missing from .opencode/.gitignore",
+                )
+            )
+        elif b_entries != TIER_B_OPENCODE_ENTRIES:
+            missing_b = set(TIER_B_OPENCODE_ENTRIES) - set(b_entries)
+            extra_b = set(b_entries) - set(TIER_B_OPENCODE_ENTRIES)
+            detail_parts = []
+            if missing_b:
+                detail_parts.append(f"Missing entries: {', '.join(sorted(missing_b))}")
+            if extra_b:
+                detail_parts.append(f"Extra entries: {', '.join(sorted(extra_b))}")
+            if not missing_b and not extra_b:
+                detail_parts.append("Entries reordered")
+            drifts.append(
+                GitignoreDrift(
+                    kind="tier_b_incomplete",
+                    message="Tier B managed block incomplete in .opencode/.gitignore",
+                    detail="; ".join(detail_parts),
+                )
+            )
+
+    # Check tracked-set — any tracked-on-purpose file currently git-ignored.
+    # Uses real git ignore evaluation so glob/prefix/directory patterns
+    # (.agentic-beacon/, *.yaml, .claude/) are correctly detected.
+    for tracked in TRACKED_ON_PURPOSE:
+        if _git_would_ignore(project_root, tracked):
+            drifts.append(
+                GitignoreDrift(
+                    kind="tracked_set_ignored",
+                    message=f"Tracked-on-purpose file would be ignored: {tracked}",
+                )
+            )
+
+    return drifts
+
+
+# ═════════════════════════════════════════════════════════════
+# Legacy GitignoreManager (backward compat — used by connect)
+# ═════════════════════════════════════════════════════════════
 
 
 class GitignoreManager:
     """Manages .gitignore entries for agentic-beacon files."""
 
     def __init__(self, project_root: Path | str = "."):
-        """Initialize with project root directory.
-
-        Args:
-            project_root: Path to project root containing .gitignore
-        """
         self.project_root = Path(project_root).resolve()
         self.gitignore_path = self.project_root / ".gitignore"
 
     def ensure_entries(self, entries: list[str] | None = None) -> bool:
-        """Ensure all required entries are in .gitignore.
-
-        Creates .gitignore if it doesn't exist.
-        Appends entries only if they're missing.
-
-        Args:
-            entries: Specific entries to add. Defaults to GITIGNORE_ENTRIES.
-
-        Returns:
-            True if .gitignore was modified, False if no changes needed
-
-        Raises:
-            PermissionError: If cannot write to .gitignore
-        """
         entries = entries or GITIGNORE_ENTRIES
 
         if self.gitignore_path.exists():
@@ -57,24 +375,20 @@ class GitignoreManager:
             existing_content = ""
             existing_lines = set()
 
-        # Find missing entries
         missing_entries = [e for e in entries if e not in existing_lines]
 
         if not missing_entries:
             logger.debug("No .gitignore entries to add")
-            return False  # No changes needed
+            return False
 
-        # Build new content to append
         new_lines = []
 
-        # Add section header if not present
         if SECTION_HEADER not in existing_lines:
             new_lines.append(SECTION_HEADER)
 
         for entry in missing_entries:
             new_lines.append(entry)
 
-        # Append to existing content
         if existing_content and not existing_content.endswith("\n"):
             prefix = "\n\n"
         elif existing_content:
@@ -97,24 +411,6 @@ class GitignoreManager:
         return True
 
     def remove_entries(self, entries: list[str]) -> bool:
-        """Remove specific entries from .gitignore.
-
-        Reads the .gitignore, drops any line that exactly matches one of the
-        given entries, and writes the result back. The `# Agentic Beacon`
-        section header is preserved (other Beacon entries may still be using it).
-
-        Args:
-            entries: Lines to remove. Each is matched against `.gitignore`
-                lines via exact-string equality (after splitting on newlines).
-                Comments and unrelated entries are preserved.
-
-        Returns:
-            True if .gitignore was modified, False otherwise (file missing or
-            no matching entries).
-
-        Raises:
-            PermissionError: If cannot write to .gitignore.
-        """
         if not self.gitignore_path.exists():
             return False
 
@@ -125,9 +421,8 @@ class GitignoreManager:
         filtered = [line for line in existing_lines if line not in to_remove]
 
         if len(filtered) == len(existing_lines):
-            return False  # nothing matched
+            return False
 
-        # Preserve trailing-newline state to match the original file's shape.
         new_content = "\n".join(filtered)
         if existing_content.endswith("\n") and filtered:
             new_content += "\n"
@@ -147,14 +442,6 @@ class GitignoreManager:
         return True
 
     def has_entry(self, entry: str) -> bool:
-        """Check if a specific entry exists in .gitignore.
-
-        Args:
-            entry: The gitignore entry to check for
-
-        Returns:
-            True if entry exists in .gitignore
-        """
         if not self.gitignore_path.exists():
             return False
 
@@ -163,13 +450,8 @@ class GitignoreManager:
         return entry in existing_lines
 
     def verify_beacon_yaml_not_ignored(self) -> bool:
-        """Verify that beacon.yaml is NOT being ignored.
-
-        Returns:
-            True if beacon.yaml is safe (not ignored), False if it's being ignored
-        """
         if not self.gitignore_path.exists():
-            return True  # No .gitignore means nothing is ignored
+            return True
 
         content = self.gitignore_path.read_text(encoding="utf-8")
         lines = content.splitlines()
@@ -184,6 +466,6 @@ class GitignoreManager:
         for line in lines:
             stripped = line.strip()
             if stripped in beacon_patterns and not stripped.startswith("!"):
-                return False  # beacon.yaml might be ignored
+                return False
 
         return True

@@ -249,3 +249,137 @@ def test_mixed_warehouse_and_pending(tmp_path: Path, warehouse: Path):
 
     manifest = PendingManifest.from_yaml(ab / "pending.yaml")
     assert manifest.pending == []  # ctx-b accepted = removed
+
+
+# ═════════════════════════════════════════════════════════════
+# FIX A: adopt with no tool dirs → bundled-skills wiring creates them
+#   → apply_all_gitignores runs LAST and writes Tier B
+# ═════════════════════════════════════════════════════════════
+
+
+def test_adopt_with_no_tool_dirs_creates_tier_b(tmp_path: Path, warehouse: Path):
+    """Adopt-accept on a project with NO pre-existing .claude//.opencode/
+    must end with BOTH Tier A root block AND Tier B nested .gitignore."""
+    # Add a skill to the warehouse
+    skill_dir = warehouse / "skills" / "my-test-skill"
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: my-test-skill\ndescription: Test skill\n"
+        "requires:\n  contexts: []\n---\n# Test\n"
+    )
+    _git_commit(warehouse, "add skill")
+
+    p = tmp_path / "fix-a-project"
+    p.mkdir()
+    ab = p / ".agentic-beacon"
+    ab.mkdir()
+    artifacts = ab / "artifacts"
+    artifacts.mkdir()
+    beacon_yaml = ab / "beacon.yaml"
+    beacon_yaml.write_text("artifacts:\n  contexts: []\n  skills: []\n  agents: []\n")
+
+    commit_session(
+        to_adopt=["skills/my-test-skill/"],
+        to_unadopt=[],
+        pending_accept=[],
+        pending_reject=[],
+        candidates=[
+            AdoptCandidate(artifact_type="skills", path="skills/my-test-skill/")
+        ],
+        pending_entries=[],
+        project_root=p,
+        warehouse_path=warehouse,
+        artifacts_path=artifacts,
+        beacon_yaml_path=beacon_yaml,
+    )
+
+    # Tier A root block must be present
+    root_gitignore = p / ".gitignore"
+    assert root_gitignore.exists(), "Tier A .gitignore must exist"
+    root_content = root_gitignore.read_text()
+    assert ">>> Agentic Beacon (managed) >>>" in root_content, (
+        "Root managed block must exist"
+    )
+
+    # Tier B .gitignore must exist for any tool dir that was created
+    claude_gitignore = p / ".claude" / ".gitignore"
+    opencode_gitignore = p / ".opencode" / ".gitignore"
+    assert claude_gitignore.exists(), (
+        "Tier B .claude/.gitignore must exist after adopt with skill wiring"
+    )
+    assert opencode_gitignore.exists(), (
+        "Tier B .opencode/.gitignore must exist after adopt with skill wiring"
+    )
+    for tb in (claude_gitignore, opencode_gitignore):
+        tb_content = tb.read_text()
+        assert ">>> Agentic Beacon (managed) >>>" in tb_content, (
+            f"Tier B managed block must exist in {tb}"
+        )
+
+
+# ═════════════════════════════════════════════════════════════
+# FIX L: gitignore rollback
+# ═════════════════════════════════════════════════════════════
+
+
+def test_rollback_restores_gitignore_after_post_sync_failure(
+    project: dict, warehouse: Path, monkeypatch
+):
+    """Injected failure in apply_all_gitignores → gitignore files restored on rollback.
+
+    Uses monkeypatch so that apply_all_gitignores writes its real content (via
+    the original implementation) and THEN raises. The snapshots captured by the
+    new gitignore_snapshots code in _default_post_sync_writing fire before the
+    write, so _rollback() must restore pre-state bytes (or remove files that
+    didn't exist before).
+    """
+    pre = _snapshot(project)
+
+    root_gi = project["root"] / ".gitignore"
+    claude_gi = project["root"] / ".claude" / ".gitignore"
+    opencode_gi = project["root"] / ".opencode" / ".gitignore"
+
+    def _gi_state(path: Path) -> bytes | None:
+        return path.read_bytes() if path.exists() else None
+
+    pre_root_gi = _gi_state(root_gi)
+    pre_claude_gi = _gi_state(claude_gi)
+    pre_opencode_gi = _gi_state(opencode_gi)
+
+    from beacon.core.gitignore import apply_all_gitignores as _real_apply
+
+    def _failing_apply(project_root):
+        _real_apply(project_root)
+        raise RuntimeError("forced post-gitignore failure")
+
+    monkeypatch.setattr(
+        "beacon.core.gitignore.apply_all_gitignores",
+        _failing_apply,
+    )
+
+    with pytest.raises(CommitError):
+        commit_session(
+            to_adopt=[],
+            to_unadopt=[],
+            pending_accept=["contexts/ctx-a.md", "contexts/ctx-b.md"],
+            pending_reject=["contexts/ctx-reject.md"],
+            candidates=[],
+            pending_entries=project["pending_entries"],
+            project_root=project["root"],
+            warehouse_path=warehouse,
+            artifacts_path=project["artifacts"],
+            beacon_yaml_path=project["beacon_yaml"],
+        )
+
+    # beacon.yaml and pending.yaml restored
+    post = _snapshot(project)
+    assert pre == post, (
+        "beacon.yaml and pending.yaml must be byte-identical after rollback"
+    )
+
+    # gitignore files restored to pre-state
+    assert _gi_state(root_gi) == pre_root_gi, "root .gitignore must be restored"
+    assert _gi_state(claude_gi) == pre_claude_gi, ".claude/.gitignore must be restored"
+    assert _gi_state(opencode_gi) == pre_opencode_gi, (
+        ".opencode/.gitignore must be restored"
+    )

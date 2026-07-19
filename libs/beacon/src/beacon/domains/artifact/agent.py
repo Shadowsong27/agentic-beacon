@@ -2,8 +2,6 @@
 
 from pathlib import Path
 
-from beacon.core.gitignore import GitignoreManager
-
 _ALL_KNOWN_AGENTS = ["opencode", "claudecode"]
 
 
@@ -72,50 +70,6 @@ def detect_agent_targets(project_root: Path) -> list[str]:
     if (project_root / ".opencode").is_dir():
         targets.append("opencode")
     return targets
-
-
-def ensure_agent_dirs_gitignored(project_root: Path) -> None:
-    """Ensure `.claude/agents/` and `.opencode/agents/` are in the project root .gitignore.
-
-    Idempotent. Creates the .gitignore file if it does not exist. Delegates
-    to `GitignoreManager.ensure_entries` so the agent-dir entries are
-    consistent with the rest of Beacon's gitignore management (skill dirs,
-    `.agentic-beacon/artifacts/`, etc.).
-
-    Args:
-        project_root: Project root directory (must be a directory).
-
-    Raises:
-        FileNotFoundError: If project_root is not a directory.
-    """
-    if not project_root.is_dir():
-        raise FileNotFoundError(f"project_root is not a directory: {project_root}")
-
-    GitignoreManager(project_root).ensure_entries(
-        [".claude/agents/", ".opencode/agents/"]
-    )
-
-
-def prune_agent_dirs_gitignore_entries(project_root: Path) -> None:
-    """Remove `.claude/agents/` and `.opencode/agents/` entries from the project root .gitignore.
-
-    Used when all agents are removed from beacon.yaml — the entries are
-    pruned so the project's .gitignore stays in sync with the declared
-    artifact set. Idempotent: a no-op if .gitignore is missing or the
-    entries are not present.
-
-    Args:
-        project_root: Project root directory (must be a directory).
-
-    Raises:
-        FileNotFoundError: If project_root is not a directory.
-    """
-    if not project_root.is_dir():
-        raise FileNotFoundError(f"project_root is not a directory: {project_root}")
-
-    GitignoreManager(project_root).remove_entries(
-        [".claude/agents/", ".opencode/agents/"]
-    )
 
 
 def snapshot_agent_path(p: Path) -> tuple[str, Path | None]:
