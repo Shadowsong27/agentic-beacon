@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.7.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v3.6.0...agentic-beacon@v3.7.0) (2026-07-19)
+
+
+### Features
+
+* **gitignore:** managed-block gitignore engine + doctor drift check/--fix (AB-94) ([d0daa5a](https://github.com/Shadowsong27/agentic-beacon/commit/d0daa5a66cb333bcbd12534917107cdb2c3d9697))
+
 ## [3.6.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v3.5.1...agentic-beacon@v3.6.0) (2026-06-16)
 
 
