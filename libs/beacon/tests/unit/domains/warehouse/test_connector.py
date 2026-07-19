@@ -68,15 +68,15 @@ class TestConnectToWarehouseSuccess:
             patch(
                 "beacon.domains.warehouse.connector.WorkspaceConfig.from_path"
             ) as mock_from_path,
-            patch("beacon.domains.warehouse.connector.GitignoreManager") as mock_gi_cls,
+            patch("beacon.domains.warehouse.connector.apply_all_gitignores") as mock_gi,
         ):
             mock_validator_cls.return_value.validate.return_value = _make_valid_result()
             mock_from_path.return_value = MagicMock()
-            mock_gi_cls.return_value.ensure_entries.return_value = True
 
             connect_to_warehouse(project, warehouse)
 
         assert (project / ".agentic-beacon").is_dir()
+        mock_gi.assert_called_once_with(project)
 
     def test_persists_config_with_project_root(
         self, project: Path, warehouse: Path
@@ -88,11 +88,10 @@ class TestConnectToWarehouseSuccess:
             patch(
                 "beacon.domains.warehouse.connector.WorkspaceConfig.from_path"
             ) as mock_from_path,
-            patch("beacon.domains.warehouse.connector.GitignoreManager") as mock_gi_cls,
+            patch("beacon.domains.warehouse.connector.apply_all_gitignores"),
         ):
             mock_validator_cls.return_value.validate.return_value = _make_valid_result()
             mock_from_path.return_value = MagicMock()
-            mock_gi_cls.return_value.ensure_entries.return_value = False
 
             connect_to_warehouse(project, warehouse)
 
@@ -108,16 +107,13 @@ class TestConnectToWarehouseSuccess:
             patch(
                 "beacon.domains.warehouse.connector.WorkspaceConfig.from_path"
             ) as mock_from_path,
-            patch("beacon.domains.warehouse.connector.GitignoreManager") as mock_gi_cls,
+            patch("beacon.domains.warehouse.connector.apply_all_gitignores"),
         ):
             mock_validator_cls.return_value.validate.return_value = _make_valid_result()
             mock_from_path.return_value = MagicMock()
-            mock_gi_cls.return_value.ensure_entries.return_value = True
 
             result = connect_to_warehouse(project, warehouse)
 
-        mock_gi_cls.assert_called_once_with(project)
-        mock_gi_cls.return_value.ensure_entries.assert_called_once()
         assert result.gitignore_updated is True
 
     def test_returns_connect_result_shape(self, project: Path, warehouse: Path) -> None:
@@ -128,15 +124,14 @@ class TestConnectToWarehouseSuccess:
             patch(
                 "beacon.domains.warehouse.connector.WorkspaceConfig.from_path"
             ) as mock_from_path,
-            patch("beacon.domains.warehouse.connector.GitignoreManager") as mock_gi_cls,
+            patch("beacon.domains.warehouse.connector.apply_all_gitignores"),
         ):
             mock_validator_cls.return_value.validate.return_value = _make_valid_result()
             mock_from_path.return_value = MagicMock()
-            mock_gi_cls.return_value.ensure_entries.return_value = False
 
             result = connect_to_warehouse(project, warehouse)
 
         assert isinstance(result, ConnectResult)
         assert result.valid is True
         assert result.errors == []
-        assert result.gitignore_updated is False
+        assert result.gitignore_updated is True

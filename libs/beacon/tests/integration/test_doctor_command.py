@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 from beacon.cli.main import main
+from beacon.core.gitignore import apply_all_gitignores
 from beacon.core.manifest.beacon import BeaconManifest
 from click.testing import CliRunner
 
@@ -43,6 +44,9 @@ def _setup_project(
     )
     # Write beacon.yaml
     (beacon_dir / "beacon.yaml").write_text(beacon_yaml_content)
+
+    # Apply Tier A gitignore managed block so doctor doesn't flag it as drift
+    apply_all_gitignores(project)
 
     return project, warehouse
 

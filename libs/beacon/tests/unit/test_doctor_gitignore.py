@@ -1,0 +1,100 @@
+"""Tests for gitignore-drift check in abc doctor (task 3.1, 4.5).
+
+Covers:
+- Drifted project → DoctorIssue with severity 'error'
+- Healthy project → no gitignore DoctorIssue
+- Tracked-set file ignored → error
+"""
+
+from pathlib import Path
+
+from beacon.core.gitignore import (
+    TIER_A_ENTRIES,
+    TIER_B_OPENCODE_ENTRIES,
+    apply_managed_block,
+)
+from beacon.domains.setup.diagnostics import (
+    run_project_health_checks,
+)
+
+
+def _write_tier_a(tmp_path: Path, entries: list[str] | None = None) -> None:
+    apply_managed_block(tmp_path / ".gitignore", entries or TIER_A_ENTRIES)
+
+
+def _write_tier_b(tmp_path: Path, tool_dir: str, entries: list[str]) -> None:
+    d = tmp_path / tool_dir
+    d.mkdir(exist_ok=True)
+    apply_managed_block(d / ".gitignore", entries)
+
+
+class TestDoctorGitignoreDetection:
+    def test_tc1_drifted_project_returns_error(self, tmp_path):
+        _write_tier_b(tmp_path, ".opencode", TIER_B_OPENCODE_ENTRIES)
+        issues = run_project_health_checks(tmp_path, None, None)
+        gitignore_issues = [i for i in issues if "gitignore" in i.message.lower()]
+        assert len(gitignore_issues) >= 1
+        for i in gitignore_issues:
+            assert i.severity == "error"
+
+    def test_tc2_healthy_project_no_gitignore_issues(self, tmp_path):
+        _write_tier_a(tmp_path)
+        issues = run_project_health_checks(tmp_path, None, None)
+        gitignore_issues = [i for i in issues if "gitignore" in i.message.lower()]
+        assert len(gitignore_issues) == 0
+
+    def test_tc3_tracked_set_ignored_error(self, tmp_path):
+        root = tmp_path / ".gitignore"
+        root.write_text("beacon.yaml\n")
+        _write_tier_a(tmp_path)
+        issues = run_project_health_checks(tmp_path, None, None)
+        tracked_issues = [i for i in issues if "tracked" in i.message.lower()]
+        assert len(tracked_issues) >= 1
+        for i in tracked_issues:
+            assert i.severity == "error"
+
+    def test_tier_a_missing_while_tier_b_present(self, tmp_path):
+        (tmp_path / ".opencode").mkdir()
+        apply_managed_block(
+            tmp_path / ".opencode" / ".gitignore", TIER_B_OPENCODE_ENTRIES
+        )
+        issues = run_project_health_checks(tmp_path, None, None)
+        gitignore_issues = [i for i in issues if "gitignore" in i.message.lower()]
+        tier_a_issues = [i for i in gitignore_issues if "Tier A" in i.message]
+        assert len(tier_a_issues) >= 1
+        assert tier_a_issues[0].severity == "error"
+
+
+class TestDoctorFix:
+    def test_tc1_fix_repairs_drift(self, tmp_path):
+        (tmp_path / ".opencode").mkdir()
+        apply_managed_block(
+            tmp_path / ".opencode" / ".gitignore", TIER_B_OPENCODE_ENTRIES
+        )
+
+        from beacon.core.gitignore import apply_all_gitignores
+
+        apply_all_gitignores(tmp_path)
+
+        drifts_before = len(
+            [
+                i
+                for i in run_project_health_checks(tmp_path, None, None)
+                if "gitignore" in i.message.lower()
+            ]
+        )
+        assert drifts_before == 0, "apply_all_gitignores should fix drift"
+
+    def test_tc2_healthy_no_spurious_fix(self, tmp_path):
+        from beacon.core.gitignore import apply_all_gitignores, diff_gitignores
+
+        apply_all_gitignores(tmp_path)
+        drifts = diff_gitignores(tmp_path)
+        assert len(drifts) == 0
+
+    def test_tc3_fix_then_clean(self, tmp_path):
+        from beacon.core.gitignore import apply_all_gitignores, diff_gitignores
+
+        apply_all_gitignores(tmp_path)
+        drifts = diff_gitignores(tmp_path)
+        assert len(drifts) == 0

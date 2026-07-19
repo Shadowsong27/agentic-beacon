@@ -80,8 +80,8 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:1:end -->
 
 
-- [ ] 1.1 Add managed-block markers and entry-set constants: `TIER_A_ENTRIES` (10 unconditional lines), `TIER_B_CLAUDE_ENTRIES`, `TIER_B_OPENCODE_ENTRIES`, `TRACKED_ON_PURPOSE`.
-- [ ] 1.2 Implement `apply_managed_block(gitignore_path, entries)`: create/regenerate the marker-delimited block wholesale; idempotent; preserve trailing-newline shape.
+- [x] 1.1 Add managed-block markers and entry-set constants: `TIER_A_ENTRIES` (10 unconditional lines), `TIER_B_CLAUDE_ENTRIES`, `TIER_B_OPENCODE_ENTRIES`, `TRACKED_ON_PURPOSE`.
+- [x] 1.2 Implement `apply_managed_block(gitignore_path, entries)`: create/regenerate the marker-delimited block wholesale; idempotent; preserve trailing-newline shape.
 <!-- opsx:tdd:1.2:begin -->
   - **Input**: pytest tests/unit/test_gitignore.py -k apply_managed_block -v
   - **Expected Output**: Exit code 0; block written between '# >>> Agentic Beacon (managed) >>>' and '# <<< Agentic Beacon (managed) <<<'; second apply with same entries leaves bytes unchanged.
@@ -93,7 +93,7 @@ pytest tests/ -v --tb=short
     - TC4: file ends without trailing newline → block appended without corrupting the preceding line; newline shape preserved
     - TC5: entries empty list → block contains only the two markers (no orphan lines)
 <!-- opsx:tdd:1.2:end -->
-- [ ] 1.3 Implement surgical migration inside `apply_managed_block`: dedup exact managed lines from a legacy `# Agentic Beacon` region, drop the emptied bare legacy header, preserve all non-managed lines.
+- [x] 1.3 Implement surgical migration inside `apply_managed_block`: dedup exact managed lines from a legacy `# Agentic Beacon` region, drop the emptied bare legacy header, preserve all non-managed lines.
 <!-- opsx:tdd:1.3:begin -->
   - **Input**: pytest tests/unit/test_gitignore.py -k migration -v
   - **Expected Output**: Legacy loose managed lines removed; bare '# Agentic Beacon' header dropped; non-managed lines (.legacy-migrated, sample-warehouse/, user lines) retained; managed block appended once.
@@ -105,7 +105,7 @@ pytest tests/ -v --tb=short
     - TC4: already-migrated file → second run makes no change (idempotent)
     - TC5: unknown line equals a managed value only as a substring (not exact) → preserved (exact-match only)
 <!-- opsx:tdd:1.3:end -->
-- [ ] 1.4 Implement `read_managed_block(gitignore_path)` and `apply_all_gitignores(project_root)` (Tier A always; Tier B per tool-dir existence).
+- [x] 1.4 Implement `read_managed_block(gitignore_path)` and `apply_all_gitignores(project_root)` (Tier A always; Tier B per tool-dir existence).
 <!-- opsx:tdd:1.4:begin -->
   - **Input**: pytest tests/unit/test_gitignore.py -k apply_all -v
   - **Expected Output**: Root .gitignore always gets Tier A; .claude/.gitignore written iff .claude/ exists; .opencode/.gitignore written iff .opencode/ exists; read_managed_block returns the parsed entry list or None.
@@ -116,7 +116,7 @@ pytest tests/ -v --tb=short
     - TC3: project with both tool dirs → root + both nested blocks
     - TC4: read_managed_block on a file with no markers → returns None
 <!-- opsx:tdd:1.4:end -->
-- [ ] 1.5 Implement `diff_gitignores(project_root)` returning drift records (Tier A missing/incomplete, Tier B missing/incomplete when dir exists, tracked-on-purpose file ignored); extend the tracked-set assertion to `TRACKED_ON_PURPOSE`.
+- [x] 1.5 Implement `diff_gitignores(project_root)` returning drift records (Tier A missing/incomplete, Tier B missing/incomplete when dir exists, tracked-on-purpose file ignored); extend the tracked-set assertion to `TRACKED_ON_PURPOSE`.
 <!-- opsx:tdd:1.5:begin -->
   - **Input**: pytest tests/unit/test_gitignore.py -k diff -v
   - **Expected Output**: Returns [] for a healthy project; returns drift records identifying the specific tier/file for each defect; flags any TRACKED_ON_PURPOSE path that git would ignore.
@@ -140,8 +140,8 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:2:end -->
 
 
-- [ ] 2.1 `domains/distribution/orchestrator.py::run_sync` — replace the `ensure_entries()` + conditional agent-dir + per-tool nested-gitignore blocks with a single `apply_all_gitignores(project_root)` call; delete `CLAUDE_DIR_GITIGNORE_ENTRIES` / `OPENCODE_DIR_GITIGNORE_ENTRIES`.
-- [ ] 2.2 `domains/adoption/apply.py` — call `apply_all_gitignores(project_root)` on the accept path (fixes the Tier-A-skipped bug); remove the conditional `ensure_agent_dirs_gitignored` call.
+- [x] 2.1 `domains/distribution/orchestrator.py::run_sync` — replace the `ensure_entries()` + conditional agent-dir + per-tool nested-gitignore blocks with a single `apply_all_gitignores(project_root)` call; delete `CLAUDE_DIR_GITIGNORE_ENTRIES` / `OPENCODE_DIR_GITIGNORE_ENTRIES`.
+- [x] 2.2 `domains/adoption/apply.py` — call `apply_all_gitignores(project_root)` on the accept path (fixes the Tier-A-skipped bug); remove the conditional `ensure_agent_dirs_gitignored` call.
 <!-- opsx:tdd:2.2:begin -->
   - **Input**: pytest tests/unit -k adopt_gitignore -v (or the integration adopt test)
   - **Expected Output**: After adopt-accept that materializes .claude/ and/or .opencode/, the root .gitignore contains the Tier A managed block AND nested Tier B blocks exist.
@@ -150,8 +150,8 @@ pytest tests/ -v --tb=short
     - TC1: adopt-accept on a project with no prior .gitignore → Tier A block present after accept
     - TC2: adopt-accept that creates .opencode/ → both Tier A and .opencode/.gitignore present (no Tier-B-without-Tier-A drift)
 <!-- opsx:tdd:2.2:end -->
-- [ ] 2.3 `domains/warehouse/connector.py` — route `connect` through `apply_all_gitignores`.
-- [ ] 2.4 `domains/artifact/agent.py` — remove `ensure_agent_dirs_gitignored` and `prune_agent_dirs_gitignore_entries`; update/remove their callers and imports.
+- [x] 2.3 `domains/warehouse/connector.py` — route `connect` through `apply_all_gitignores`.
+- [x] 2.4 `domains/artifact/agent.py` — remove `ensure_agent_dirs_gitignored` and `prune_agent_dirs_gitignore_entries`; update/remove their callers and imports.
 
 ## 3. Doctor check + real `--fix`
 
@@ -163,7 +163,7 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:3:end -->
 
 
-- [ ] 3.1 `domains/setup/diagnostics.py` — add a gitignore-drift check (error severity) using `diff_gitignores`; surface Tier A, Tier B, and tracked-set findings via `DoctorIssue`.
+- [x] 3.1 `domains/setup/diagnostics.py` — add a gitignore-drift check (error severity) using `diff_gitignores`; surface Tier A, Tier B, and tracked-set findings via `DoctorIssue`.
 <!-- opsx:tdd:3.1:begin -->
   - **Input**: pytest tests/unit -k doctor_gitignore -v
   - **Expected Output**: run_project_health_checks returns DoctorIssue(severity='err', ...) for each drift; none for a healthy project.
@@ -173,7 +173,7 @@ pytest tests/ -v --tb=short
     - TC2: healthy project → no gitignore DoctorIssue emitted
     - TC3: tracked-set file ignored → error-severity DoctorIssue naming the file
 <!-- opsx:tdd:3.1:end -->
-- [ ] 3.2 `cli/diagnostics.py` — implement real `--fix`: when drift is found and `--fix` is set, call `apply_all_gitignores` and append to `fixes_applied`.
+- [x] 3.2 `cli/diagnostics.py` — implement real `--fix`: when drift is found and `--fix` is set, call `apply_all_gitignores` and append to `fixes_applied`.
 <!-- opsx:tdd:3.2:begin -->
   - **Input**: abc doctor --fix in a drifted scratch project, then abc doctor
   - **Expected Output**: First run reports drift and prints a fix in the applied-fixes summary; second run reports no gitignore drift.
@@ -194,37 +194,37 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:4:end -->
 
 
-- [ ] 4.1 Engine unit tests: fresh-file, wholesale regen of stale body, idempotent re-apply (byte-equal), unconditional Tier A set (no tool dirs / no declared agents).
+- [x] 4.1 Engine unit tests: fresh-file, wholesale regen of stale body, idempotent re-apply (byte-equal), unconditional Tier A set (no tool dirs / no declared agents).
 <!-- opsx:tdd:4.1:begin -->
   - **Input**: pytest tests/unit/test_gitignore.py -v
   - **Expected Output**: All engine cases pass; Tier A block contains all 10 entries even with no .claude//.opencode/ and empty agents.
   - **Validation**: Zero failures; unconditional Tier A explicitly asserted.
 <!-- opsx:tdd:4.1:end -->
-- [ ] 4.2 Migration unit tests: dedup managed + preserve unknowns + drop bare legacy header; no-op on 2nd run; realistic mixed legacy block.
+- [x] 4.2 Migration unit tests: dedup managed + preserve unknowns + drop bare legacy header; no-op on 2nd run; realistic mixed legacy block.
 <!-- opsx:tdd:4.2:begin -->
   - **Input**: pytest tests/unit/test_gitignore.py -k migration -v
   - **Expected Output**: Realistic legacy block (like this repo's) migrates: managed lines deduped, .legacy-migrated / sample-warehouse/ preserved, header dropped; second run byte-identical.
   - **Validation**: No non-managed line lost; idempotent.
 <!-- opsx:tdd:4.2:end -->
-- [ ] 4.3 Tier B regression lock: exact `.claude/.gitignore` / `.opencode/.gitignore` entry sets + dir-gating unchanged.
+- [x] 4.3 Tier B regression lock: exact `.claude/.gitignore` / `.opencode/.gitignore` entry sets + dir-gating unchanged.
 <!-- opsx:tdd:4.3:begin -->
   - **Input**: pytest tests/unit -k tier_b -v
   - **Expected Output**: .claude/.gitignore == {skills/, scheduled_tasks.lock, worktrees/}; .opencode/.gitignore == {skills/, command/, bun.lock, package.json, package-lock.json, node_modules/}; nested files only when dir exists.
   - **Validation**: Entry sets match the pre-change constants exactly (guards the fold-into-engine risk).
 <!-- opsx:tdd:4.3:end -->
-- [ ] 4.4 Path coverage: adopt-accept writes Tier A + Tier B; sync writes both; connect routes through engine.
+- [x] 4.4 Path coverage: adopt-accept writes Tier A + Tier B; sync writes both; connect routes through engine.
 <!-- opsx:tdd:4.4:begin -->
   - **Input**: pytest tests/ -k 'gitignore and (adopt or sync or connect)' -v
   - **Expected Output**: Each of the three paths produces the correct Tier A + Tier B blocks; no path emits one tier without the other.
   - **Validation**: adopt path asserts Tier A present (the original bug); all three paths converge to identical block output.
 <!-- opsx:tdd:4.4:end -->
-- [ ] 4.5 Doctor tests: Tier-A-missing-while-Tier-B-present flagged; healthy → clean; tracked-set-ignored → error; `--fix` repairs and re-run is clean.
+- [x] 4.5 Doctor tests: Tier-A-missing-while-Tier-B-present flagged; healthy → clean; tracked-set-ignored → error; `--fix` repairs and re-run is clean.
 <!-- opsx:tdd:4.5:begin -->
   - **Input**: pytest tests/ -k doctor -v
   - **Expected Output**: Drift detected at error severity for each defect; healthy project clean; --fix repairs and the re-run is clean.
   - **Validation**: Covers detection, severity, tracked-set, and the real --fix repair loop.
 <!-- opsx:tdd:4.5:end -->
-- [ ] 4.6 `tests/unit/test_architecture.py` still passes (core imports no domains).
+- [x] 4.6 `tests/unit/test_architecture.py` still passes (core imports no domains).
 <!-- opsx:tdd:4.6:begin -->
   - **Input**: pytest tests/unit/test_architecture.py -v
   - **Expected Output**: Exit code 0 — core/gitignore.py (and the rest of core/) import nothing from domains/ or cli/.
@@ -242,7 +242,7 @@ pytest tests/ -v --tb=short
 
 
 - [ ] 5.1 Update `beacon-ops.md` two-tier gitignore section: managed-block markers, unconditional Tier A, doctor `--fix`.
-- [ ] 5.2 Update `AGENTS.md` if it references the old per-line / conditional agent-dir behavior.
+- [x] 5.2 Update `AGENTS.md` if it references the old per-line / conditional agent-dir behavior.
 
 ## 6. Validate & verify
 
@@ -254,7 +254,7 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:6:end -->
 
 
-- [ ] 6.1 `pytest` green (unit + integration).
+- [x] 6.1 `pytest` green (unit + integration).
 <!-- opsx:tdd:6.1:begin -->
   - **Input**: pytest (from repo root); BEACON_OFFLINE=1 pytest -m integration when offline
   - **Expected Output**: All tests pass; no regressions in existing sync/adopt/connect/doctor suites.

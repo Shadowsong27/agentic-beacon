@@ -5,6 +5,7 @@ from pathlib import Path
 import click
 from rich.console import Console
 
+from beacon.core.gitignore import apply_all_gitignores, diff_gitignores
 from beacon.core.manifest.beacon import BeaconManifest
 from beacon.core.manifest.workspace import WorkspaceConfig
 from beacon.domains.setup.diagnostics import run_project_health_checks
@@ -150,5 +151,15 @@ def doctor(*, fix: bool) -> None:
             _warn(issue.message, issue.detail)
         else:
             _err(issue.message, issue.detail)
+
+    # Gitignore drift check + fix (AB-94: managed-block gitignore engine)
+    if fix:
+        drifts = diff_gitignores(project_root)
+        if drifts:
+            apply_all_gitignores(project_root)
+            fixes_applied.append("Repaired gitignore managed blocks (Tier A / Tier B)")
+            console.print(
+                "  [green]✓[/green] Gitignore drift repaired via managed-block engine"
+            )
 
     print_doctor_summary(issues, fixes_applied)

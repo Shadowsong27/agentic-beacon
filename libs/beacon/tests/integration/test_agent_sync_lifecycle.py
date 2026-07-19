@@ -305,14 +305,13 @@ def test_sync_with_only_agents_updates_gitignore(
     )
 
 
-def test_sync_with_no_agents_declared_does_not_mutate_gitignore(
+def test_sync_with_no_agents_declared_writes_agent_dir_entries(
     project_dir: Path, warehouse: Path, monkeypatch
 ):
-    """A sync with zero declared agents must NOT add agent entries to .gitignore.
+    """A sync with zero declared agents MUST still include agent dirs in Tier A block.
 
-    Regression guard for the round-5 over-correction where ensure_agent_dirs_gitignored
-    was hoisted to run on every real sync, dirtying contexts-only and skills-only
-    repos with unused .claude/agents/ / .opencode/agents/ entries.
+    Agent dirs are now unconditional in the Tier A managed block — the old
+    gated behavior (ensure_agent_dirs_gitignored) is retired.
     """
     runner = CliRunner()
     monkeypatch.chdir(project_dir)
@@ -320,9 +319,7 @@ def test_sync_with_no_agents_declared_does_not_mutate_gitignore(
     beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
     beacon_yaml.write_text("artifacts:\n  contexts: []\n  skills: []\n  agents: []\n")
 
-    # Reset .gitignore to a clean state with no agent dir entries so we can
-    # detect whether sync mutates it. (The fixture's default .gitignore may
-    # already contain agent entries from a prior setup step.)
+    # Reset .gitignore to a clean state so we can detect what sync writes.
     gitignore_path = project_dir / ".gitignore"
     clean_content = "# Test fixture — clean gitignore for regression check\n"
     gitignore_path.write_text(clean_content)
@@ -331,32 +328,26 @@ def test_sync_with_no_agents_declared_does_not_mutate_gitignore(
     assert r.exit_code == 0, f"sync failed: {r.output}"
 
     post_state = gitignore_path.read_text()
-    # The orchestrator's broader gitignore manager may append unrelated
-    # .agentic-beacon/* entries; we only assert that THE AGENT-DIR entries
-    # weren't added, since ensure_agent_dirs_gitignored is the gated function.
-    assert ".claude/agents/" not in post_state, (
-        f"sync with agents=[] must not add .claude/agents/ to .gitignore: {post_state!r}"
+    # Agent dirs are now unconditional Tier A entries — always present.
+    assert ".claude/agents/" in post_state, (
+        f"sync with agents=[] must add .claude/agents/ to .gitignore: {post_state!r}"
     )
-    assert ".opencode/agents/" not in post_state, (
-        f"sync with agents=[] must not add .opencode/agents/ to .gitignore: {post_state!r}"
+    assert ".opencode/agents/" in post_state, (
+        f"sync with agents=[] must add .opencode/agents/ to .gitignore: {post_state!r}"
     )
 
 
-def test_sync_with_emptied_agents_prunes_gitignore_entries(
+def test_sync_with_emptied_agents_keeps_agent_dir_entries(
     project_dir: Path, warehouse: Path, monkeypatch
 ):
-    """When agents are removed from beacon.yaml, the prior .gitignore entries are pruned.
+    """When agents are removed from beacon.yaml, agent dir entries persist (unconditional).
 
-    Regression guard for PER-135: previously the .claude/agents/ and
-    .opencode/agents/ entries were never removed once added. Now the
-    orchestrator's prune-on-empty path removes them when artifacts.agents
-    becomes empty.
+    The old prune-on-remove behavior (PER-135) is retired — agent dirs are
+    unconditional Tier A entries that are never pruned.
     """
     runner = CliRunner()
     monkeypatch.chdir(project_dir)
 
-    # Pre-populate the .gitignore with the agent-dir entries (as if a prior
-    # sync with agents declared had added them).
     gitignore_path = project_dir / ".gitignore"
     gitignore_path.write_text(
         "# Existing project content\n__pycache__/\n.claude/agents/\n.opencode/agents/\n"
@@ -369,14 +360,15 @@ def test_sync_with_emptied_agents_prunes_gitignore_entries(
     assert r.exit_code == 0, f"sync failed: {r.output}"
 
     post = gitignore_path.read_text()
-    assert ".claude/agents/" not in post, (
-        f"sync with agents=[] must prune .claude/agents/: {post!r}"
+    # Agent dirs are unconditional — they must survive even when agents=[].
+    assert ".claude/agents/" in post, (
+        f"sync with agents=[] must keep .claude/agents/: {post!r}"
     )
-    assert ".opencode/agents/" not in post, (
-        f"sync with agents=[] must prune .opencode/agents/: {post!r}"
+    assert ".opencode/agents/" in post, (
+        f"sync with agents=[] must keep .opencode/agents/: {post!r}"
     )
     # User's other content must be preserved.
-    assert "__pycache__/" in post, "pre-existing user entries must survive prune"
+    assert "__pycache__/" in post, "pre-existing user entries must survive"
 
 
 def test_sync_with_no_skills_declared_writes_skill_gitignore_entries(
@@ -438,13 +430,13 @@ def test_sync_with_no_skills_declared_writes_skill_gitignore_entries(
 def test_sync_appends_missing_entries_to_existing_per_tool_gitignore(
     project_dir: Path, warehouse: Path, monkeypatch
 ):
-    """Sync must extend an existing per-tool .gitignore without duplicating lines.
+    """Sync migrates a legacy per-tool .gitignore to the managed block without dupes.
 
     Projects upgrading from an older Beacon may already have `.opencode/.gitignore`
-    with the original `skills/` + `command/` entries. Re-syncing must:
-      - leave the existing entries untouched (no duplicates)
-      - preserve any user-added lines
-      - append the newly-tracked entries (bun.lock, node_modules/, …)
+    with a legacy `# Agentic Beacon` header. The managed-block engine:
+      - deduplicates managed entries into the block
+      - preserves user-added lines
+      - drops the bare legacy header in favor of managed block markers
     """
     runner = CliRunner()
     monkeypatch.chdir(project_dir)
@@ -462,16 +454,18 @@ def test_sync_appends_missing_entries_to_existing_per_tool_gitignore(
     r = runner.invoke(main, ["sync", "--skip-git-check"])
     assert r.exit_code == 0, f"sync failed: {r.output}"
 
-    lines = opencode_gitignore.read_text().splitlines()
-    # No duplicates of pre-existing entries.
+    content = opencode_gitignore.read_text()
+    lines = content.splitlines()
+    # No duplicates of pre-existing entries — the managed block has them once.
     assert lines.count("skills/") == 1, f"duplicate 'skills/': {lines!r}"
     assert lines.count("command/") == 1, f"duplicate 'command/': {lines!r}"
-    assert lines.count("# Agentic Beacon") == 1, f"duplicate section header: {lines!r}"
+    # Legacy bare header replaced by managed block markers.
+    assert "(managed)" in content, f"managed block markers missing: {content!r}"
     # User content preserved.
     assert "my-local-notes.md" in lines, f"user entry dropped: {lines!r}"
-    # New entries appended.
+    # The managed block contains ALL Tier B opencode entries.
     for entry in ("bun.lock", "package.json", "package-lock.json", "node_modules/"):
-        assert entry in lines, f"missing newly-tracked entry {entry!r}: {lines!r}"
+        assert entry in lines, f"missing entry {entry!r}: {lines!r}"
 
 
 def test_sync_dry_run_does_not_write_skill_gitignore_entries(

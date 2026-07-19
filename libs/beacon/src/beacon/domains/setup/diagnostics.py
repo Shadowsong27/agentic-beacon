@@ -16,6 +16,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from beacon.core.gitignore import diff_gitignores
 from beacon.core.manifest.beacon import BeaconManifest
 from beacon.domains.distribution.sync_engine import SyncEngine
 
@@ -47,6 +48,7 @@ def run_project_health_checks(
         issues.extend(_check_warehouse_git(warehouse_path))
 
     issues.extend(_check_path_references(project_root, beacon_manifest))
+    issues.extend(_check_gitignore_drift(project_root))
     issues.extend(_check_platform())
 
     return issues
@@ -358,6 +360,25 @@ def _check_warehouse_git(warehouse_path: Path) -> list[DoctorIssue]:
                 message="Warehouse is not a git working tree",
                 detail=f"{warehouse_path} missing .git directory",
                 severity="warn",
+            )
+        )
+    return issues
+
+
+# ---------------------------------------------------------------------------
+# Check 5: Gitignore drift
+# ---------------------------------------------------------------------------
+
+
+def _check_gitignore_drift(project_root: Path) -> list[DoctorIssue]:
+    issues: list[DoctorIssue] = []
+    drifts = diff_gitignores(project_root)
+    for drift in drifts:
+        issues.append(
+            DoctorIssue(
+                message=drift.message,
+                detail=drift.detail,
+                severity="error",
             )
         )
     return issues

@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from beacon.core.gitignore import GitignoreManager
+from beacon.core.gitignore import apply_all_gitignores
 from beacon.core.manifest.workspace import WorkspaceConfig
 from beacon.domains.warehouse.validator import WarehouseValidator
 
@@ -44,7 +44,7 @@ def connect_to_warehouse(
         main_branch=main_branch,
     )
 
-    gitignore_mgr = GitignoreManager(project_root)
-    updated = gitignore_mgr.ensure_entries()
+    apply_all_gitignores(project_root)
+    updated = True
 
     return ConnectResult(valid=True, gitignore_updated=updated)

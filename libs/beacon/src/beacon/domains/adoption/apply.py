@@ -255,10 +255,7 @@ def commit_session(
             wire_skills_post_sync(project_root, artifacts_path)
 
         if agent_candidates:
-            from beacon.domains.artifact.agent import (
-                detect_agent_targets,
-                ensure_agent_dirs_gitignored,
-            )
+            from beacon.domains.artifact.agent import detect_agent_targets
             from beacon.domains.setup.wiring import (
                 wire_agent_claudecode,
                 wire_agent_opencode,
@@ -290,8 +287,12 @@ def commit_session(
                     "    mkdir .opencode  [dim]# for OpenCode[/dim]"
                 )
 
-            # PER-113 (Finding 2): ensure root .gitignore has agent dir entries
-            ensure_agent_dirs_gitignored(project_root)
+        # Apply both tiers of gitignore managed blocks — Tier A is unconditional,
+        # Tier B is written per tool-dir existence. Fixes the bug where adopt
+        # skipped Tier A (the root .gitignore block).
+        from beacon.core.gitignore import apply_all_gitignores
+
+        apply_all_gitignores(project_root)
 
         # Wire bundled skills into the project's agent directories
         from beacon.domains.artifact.skill import wire_bundled_skills_per_project
