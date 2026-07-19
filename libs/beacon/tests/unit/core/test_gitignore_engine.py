@@ -143,12 +143,12 @@ class TestMigration:
     def test_tc3_mixed_block_with_scattered_agent_dir(self, tmp_path):
         path = tmp_path / ".gitignore"
         path.write_text(
-            "# Agentic Beacon\n.claude/agents/\n.opencode/agents/\ncustom-entry/\n"
+            "# Agentic Beacon\n.claude/agents/\nkeep-me/\n.opencode/agents/\n"
         )
         apply_managed_block(path, TIER_A_ENTRIES)
         content = path.read_text()
         assert "# Agentic Beacon" not in content
-        assert "custom-entry/" in content
+        assert "keep-me/" in content
         assert content.count(".claude/agents/") == 1
         assert content.count(".opencode/agents/") == 1
 
@@ -169,6 +169,41 @@ class TestMigration:
         apply_managed_block(path, TIER_A_ENTRIES)
         content = path.read_text()
         assert ".agentic-beacon/config.toml.extra" in content
+
+    def test_tc6_real_scattered_fixture(self, tmp_path):
+        path = tmp_path / ".gitignore"
+        path.write_text(
+            "# Editor and IDE\n"
+            ".vscode/\n"
+            "\n"
+            "# Agentic Beacon\n"
+            ".claude/scheduled_tasks.lock\n"
+            "\n"
+            ".agentic-beacon/config.toml\n"
+            ".agentic-beacon/artifacts/\n"
+            ".agentic-beacon/warehouse-catalog.md\n"
+            ".agentic-beacon/pending.yaml\n"
+            ".agentic-beacon/.legacy-migrated\n"
+            "\n"
+            "# Local sample-warehouse checkout (developer convenience; never a submodule)\n"
+            "sample-warehouse/\n"
+            ".claude/agents/\n"
+            ".opencode/agents/\n"
+        )
+        apply_managed_block(path, TIER_A_ENTRIES)
+        content = path.read_text()
+        for entry in TIER_A_ENTRIES:
+            assert content.splitlines().count(entry) == 1, (
+                f"{entry} should appear exactly once"
+            )
+        assert ".claude/scheduled_tasks.lock" in content
+        assert ".agentic-beacon/.legacy-migrated" in content
+        assert "sample-warehouse/" in content
+        assert ".vscode/" in content
+        assert "# Editor and IDE" in content
+        assert "Local sample-warehouse" in content
+        apply_managed_block(path, TIER_A_ENTRIES)
+        assert path.read_bytes() == content.encode("utf-8")
 
 
 # ═════════════════════════════════════════════════════════════
@@ -221,6 +256,10 @@ class TestApplyAllGitignores:
         apply_managed_block(path, TIER_B_CLAUDE_ENTRIES)
         body = read_managed_block(path)
         assert body == TIER_B_CLAUDE_ENTRIES
+
+    def test_returns_true_on_fresh_write_false_on_idempotent(self, tmp_path):
+        assert apply_all_gitignores(tmp_path) is True
+        assert apply_all_gitignores(tmp_path) is False
 
 
 # ═════════════════════════════════════════════════════════════

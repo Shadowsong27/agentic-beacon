@@ -135,37 +135,39 @@ def apply_managed_block(gitignore_path: Path, entries: list[str]) -> bool:
     # No managed block — surgical migration of legacy block
     existing_lines = existing_content.splitlines(keepends=True)
     entry_set = set(entries)
+
+    # Step 1: Remove every loose line that exactly matches an entry
     filtered_lines: list[str] = []
-    skip_until: int | None = None
-    for i, line in enumerate(existing_lines):
-        if skip_until is not None:
-            if i < skip_until:
-                continue
-            skip_until = None
+    for line in existing_lines:
         stripped = line.rstrip("\n").rstrip("\r")
-        if stripped != _LEGACY_HEADER:
-            filtered_lines.append(line)
-            continue
-        j = i + 1
-        owned_removed = False
-        while j < len(existing_lines):
-            s = existing_lines[j].rstrip("\n").rstrip("\r")
-            if not s or s.startswith("#"):
-                break
-            if s in entry_set:
-                owned_removed = True
-                j += 1
-            else:
-                break
-        if owned_removed:
-            skip_until = j
+        if stripped in entry_set:
             continue
         filtered_lines.append(line)
-        for k in range(i + 1, j):
-            filtered_lines.append(existing_lines[k])
-        skip_until = j
 
-    raw = "".join(filtered_lines)
+    # Step 2: Drop orphaned legacy headers (no owned line beneath them)
+    result_lines: list[str] = []
+    i = 0
+    while i < len(filtered_lines):
+        line = filtered_lines[i]
+        stripped = line.rstrip("\n").rstrip("\r")
+        if stripped == _LEGACY_HEADER:
+            j = i + 1
+            has_owned_below = False
+            while j < len(filtered_lines):
+                s = filtered_lines[j].rstrip("\n").rstrip("\r")
+                if not s or s.startswith("#"):
+                    break
+                if s in entry_set:
+                    has_owned_below = True
+                    break
+                j += 1
+            if not has_owned_below:
+                i += 1
+                continue
+        result_lines.append(line)
+        i += 1
+
+    raw = "".join(result_lines)
     block_text = _build_block_text(entries)
 
     new_content = raw.rstrip("\n") + "\n" + block_text
@@ -191,24 +193,30 @@ def read_managed_block(gitignore_path: Path) -> list[str] | None:
     return entries
 
 
-def apply_all_gitignores(project_root: Path) -> None:
+def apply_all_gitignores(project_root: Path) -> bool:
     """Apply both tiers of gitignore managed blocks.
 
     Tier A is always written to the project root ``.gitignore``.
     Tier B nested files are written only when their tool directory exists:
     - ``.claude/.gitignore`` iff ``.claude/`` is a directory
     - ``.opencode/.gitignore`` iff ``.opencode/`` is a directory
+
+    Returns True if any file was modified.
     """
     root_gitignore = project_root / ".gitignore"
-    apply_managed_block(root_gitignore, TIER_A_ENTRIES)
+    modified = apply_managed_block(root_gitignore, TIER_A_ENTRIES)
 
     claude_dir = project_root / ".claude"
     if claude_dir.is_dir():
-        apply_managed_block(claude_dir / ".gitignore", TIER_B_CLAUDE_ENTRIES)
+        if apply_managed_block(claude_dir / ".gitignore", TIER_B_CLAUDE_ENTRIES):
+            modified = True
 
     opencode_dir = project_root / ".opencode"
     if opencode_dir.is_dir():
-        apply_managed_block(opencode_dir / ".gitignore", TIER_B_OPENCODE_ENTRIES)
+        if apply_managed_block(opencode_dir / ".gitignore", TIER_B_OPENCODE_ENTRIES):
+            modified = True
+
+    return modified
 
 
 def diff_gitignores(project_root: Path) -> list[GitignoreDrift]:

@@ -44,7 +44,6 @@ def connect_to_warehouse(
         main_branch=main_branch,
     )
 
-    apply_all_gitignores(project_root)
-    updated = True
+    updated = apply_all_gitignores(project_root)
 
     return ConnectResult(valid=True, gitignore_updated=updated)

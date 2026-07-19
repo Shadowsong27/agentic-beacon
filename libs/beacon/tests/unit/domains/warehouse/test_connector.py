@@ -107,7 +107,10 @@ class TestConnectToWarehouseSuccess:
             patch(
                 "beacon.domains.warehouse.connector.WorkspaceConfig.from_path"
             ) as mock_from_path,
-            patch("beacon.domains.warehouse.connector.apply_all_gitignores"),
+            patch(
+                "beacon.domains.warehouse.connector.apply_all_gitignores",
+                return_value=True,
+            ),
         ):
             mock_validator_cls.return_value.validate.return_value = _make_valid_result()
             mock_from_path.return_value = MagicMock()
@@ -124,7 +127,10 @@ class TestConnectToWarehouseSuccess:
             patch(
                 "beacon.domains.warehouse.connector.WorkspaceConfig.from_path"
             ) as mock_from_path,
-            patch("beacon.domains.warehouse.connector.apply_all_gitignores"),
+            patch(
+                "beacon.domains.warehouse.connector.apply_all_gitignores",
+                return_value=True,
+            ),
         ):
             mock_validator_cls.return_value.validate.return_value = _make_valid_result()
             mock_from_path.return_value = MagicMock()
