@@ -223,6 +223,8 @@ def commit_session(
     # Per-path pre-state snapshot for tool symlinks; reconciled on rollback.
     # Each entry: (path, kind, prior_target) where kind is "missing"/"symlink"/"regular_file".
     tool_snapshots: list[tuple[Path, str, Path | None]] = []
+    # Pre-commit snapshots of gitignore files written by _default_post_sync_wiring.
+    gitignore_snapshots: list[tuple[Path, bytes | None]] = []
 
     def _snapshot_path(p: Path) -> tuple[str, Path | None]:
         """Capture pre-state of a path for rollback restoration."""
@@ -304,6 +306,15 @@ def commit_session(
                 f"  [yellow]warning[/yellow] Bundled skill wiring: {err}"
             )
 
+        # Snapshot gitignore files BEFORE writing so _rollback() can restore them.
+        for _gi_path in (
+            project_root / ".gitignore",
+            project_root / ".claude" / ".gitignore",
+            project_root / ".opencode" / ".gitignore",
+        ):
+            _prior = _gi_path.read_bytes() if _gi_path.exists() else None
+            gitignore_snapshots.append((_gi_path, _prior))
+
         # Apply both tiers of gitignore managed blocks — Tier A is unconditional,
         # Tier B is written per tool-dir existence. MUST run after every other
         # wiring step so tool directories created by the upstream wiring (e.g.
@@ -345,6 +356,12 @@ def commit_session(
                         path.unlink()
                     path.parent.mkdir(parents=True, exist_ok=True)
                     path.symlink_to(prior_target)
+        for gi_path, prior in gitignore_snapshots:
+            if prior is None:
+                if gi_path.exists():
+                    gi_path.unlink()
+            else:
+                gi_path.write_bytes(prior)
 
     try:
         # 1. Update beacon.yaml — add adopts + pending accepts, remove unadopts.

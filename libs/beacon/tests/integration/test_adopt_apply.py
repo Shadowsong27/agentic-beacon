@@ -315,3 +315,71 @@ def test_adopt_with_no_tool_dirs_creates_tier_b(tmp_path: Path, warehouse: Path)
         assert ">>> Agentic Beacon (managed) >>>" in tb_content, (
             f"Tier B managed block must exist in {tb}"
         )
+
+
+# ═════════════════════════════════════════════════════════════
+# FIX L: gitignore rollback
+# ═════════════════════════════════════════════════════════════
+
+
+def test_rollback_restores_gitignore_after_post_sync_failure(
+    project: dict, warehouse: Path, monkeypatch
+):
+    """Injected failure in apply_all_gitignores → gitignore files restored on rollback.
+
+    Uses monkeypatch so that apply_all_gitignores writes its real content (via
+    the original implementation) and THEN raises. The snapshots captured by the
+    new gitignore_snapshots code in _default_post_sync_writing fire before the
+    write, so _rollback() must restore pre-state bytes (or remove files that
+    didn't exist before).
+    """
+    pre = _snapshot(project)
+
+    root_gi = project["root"] / ".gitignore"
+    claude_gi = project["root"] / ".claude" / ".gitignore"
+    opencode_gi = project["root"] / ".opencode" / ".gitignore"
+
+    def _gi_state(path: Path) -> bytes | None:
+        return path.read_bytes() if path.exists() else None
+
+    pre_root_gi = _gi_state(root_gi)
+    pre_claude_gi = _gi_state(claude_gi)
+    pre_opencode_gi = _gi_state(opencode_gi)
+
+    from beacon.core.gitignore import apply_all_gitignores as _real_apply
+
+    def _failing_apply(project_root):
+        _real_apply(project_root)
+        raise RuntimeError("forced post-gitignore failure")
+
+    monkeypatch.setattr(
+        "beacon.core.gitignore.apply_all_gitignores",
+        _failing_apply,
+    )
+
+    with pytest.raises(CommitError):
+        commit_session(
+            to_adopt=[],
+            to_unadopt=[],
+            pending_accept=["contexts/ctx-a.md", "contexts/ctx-b.md"],
+            pending_reject=["contexts/ctx-reject.md"],
+            candidates=[],
+            pending_entries=project["pending_entries"],
+            project_root=project["root"],
+            warehouse_path=warehouse,
+            artifacts_path=project["artifacts"],
+            beacon_yaml_path=project["beacon_yaml"],
+        )
+
+    # beacon.yaml and pending.yaml restored
+    post = _snapshot(project)
+    assert pre == post, (
+        "beacon.yaml and pending.yaml must be byte-identical after rollback"
+    )
+
+    # gitignore files restored to pre-state
+    assert _gi_state(root_gi) == pre_root_gi, "root .gitignore must be restored"
+    assert _gi_state(claude_gi) == pre_claude_gi, ".claude/.gitignore must be restored"
+    assert _gi_state(opencode_gi) == pre_opencode_gi, (
+        ".opencode/.gitignore must be restored"
+    )
