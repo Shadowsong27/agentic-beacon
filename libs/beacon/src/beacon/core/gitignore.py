@@ -159,41 +159,25 @@ def apply_managed_block(gitignore_path: Path, entries: list[str]) -> bool:
         return True
 
     # No managed block — surgical migration of legacy block
+    # Single pass over ORIGINAL lines: drop owned entries + legacy block header
+    # iff the ORIGINAL next line is owned.
     existing_lines = existing_content.splitlines(keepends=True)
     entry_set = set(entries)
 
-    # Step 1: Remove every loose line that exactly matches an entry
-    filtered_lines: list[str] = []
-    for line in existing_lines:
+    kept: list[str] = []
+    for i, line in enumerate(existing_lines):
         stripped = line.rstrip("\n").rstrip("\r")
         if stripped in entry_set:
             continue
-        filtered_lines.append(line)
-
-    # Step 2: Drop orphaned legacy headers (no owned line beneath them)
-    result_lines: list[str] = []
-    i = 0
-    while i < len(filtered_lines):
-        line = filtered_lines[i]
-        stripped = line.rstrip("\n").rstrip("\r")
         if stripped == _LEGACY_HEADER:
-            j = i + 1
-            has_owned_below = False
-            while j < len(filtered_lines):
-                s = filtered_lines[j].rstrip("\n").rstrip("\r")
-                if not s or s.startswith("#"):
-                    break
-                if s in entry_set:
-                    has_owned_below = True
-                    break
-                j += 1
-            if not has_owned_below:
-                i += 1
+            nxt = ""
+            if i + 1 < len(existing_lines):
+                nxt = existing_lines[i + 1].rstrip("\n").rstrip("\r")
+            if nxt in entry_set:
                 continue
-        result_lines.append(line)
-        i += 1
+        kept.append(line)
 
-    raw = "".join(result_lines)
+    raw = "".join(kept)
     block_text = _build_block_text(entries)
 
     stripped_raw = raw.rstrip("\n")

@@ -243,8 +243,63 @@ class TestMigration:
         assert ".vscode/" in content
         assert "# Editor and IDE" in content
         assert "Local sample-warehouse" in content
+        # Header is followed by .claude/scheduled_tasks.lock (non-owned) → preserved
+        assert "# Agentic Beacon" in content, (
+            "Header preserved because .claude/scheduled_tasks.lock is not a managed entry"
+        )
         apply_managed_block(path, TIER_A_ENTRIES)
         assert path.read_bytes() == content.encode("utf-8")
+
+    # ── FIX J: preserve user '# Agentic Beacon' comment when followed by non-owned lines ──
+
+    def test_user_agentic_beacon_comment_preserved(self, tmp_path):
+        """User '# Agentic Beacon' comment followed by NON-owned lines is preserved."""
+        entries = [".agentic-beacon/config.toml", ".agentic-beacon/artifacts/"]
+        path = tmp_path / ".gitignore"
+        path.write_text(
+            "# my build ignores\n"
+            "build/\n"
+            "\n"
+            "# Agentic Beacon\n"
+            "some-user-artifact/\n"
+            "notes.txt\n"
+        )
+        apply_managed_block(path, entries)
+        content = path.read_text()
+        lines = content.splitlines()
+        assert "# Agentic Beacon" in lines, (
+            "User 'Agentic Beacon' comment must be preserved when followed by non-owned lines"
+        )
+        assert "build/" in lines
+        assert "some-user-artifact/" in lines
+        assert "notes.txt" in lines
+        assert content.count("some-user-artifact/") == 1
+        body = read_managed_block(path)
+        assert ".agentic-beacon/config.toml" in body
+        assert ".agentic-beacon/artifacts/" in body
+
+    def test_user_comment_idempotent_reapply(self, tmp_path):
+        """Reapplying preserves the user comment unchanged."""
+        entries = [".agentic-beacon/config.toml", ".agentic-beacon/artifacts/"]
+        path = tmp_path / ".gitignore"
+        path.write_text("# Agentic Beacon\nsome-user-artifact/\n")
+        apply_managed_block(path, entries)
+        first = path.read_bytes()
+        apply_managed_block(path, entries)
+        second = path.read_bytes()
+        assert first == second
+
+    def test_genuine_legacy_block_header_dropped(self, tmp_path):
+        """Genuine legacy '# Agentic Beacon' header followed by owned line is dropped."""
+        entries = [".agentic-beacon/config.toml", ".agentic-beacon/artifacts/"]
+        path = tmp_path / ".gitignore"
+        path.write_text("# Agentic Beacon\n.agentic-beacon/config.toml\n")
+        apply_managed_block(path, entries)
+        content = path.read_text()
+        assert "# Agentic Beacon" not in content.splitlines(), (
+            "Legacy block header followed by owned entry must be dropped"
+        )
+        assert content.count(".agentic-beacon/config.toml") == 1
 
 
 # ═════════════════════════════════════════════════════════════

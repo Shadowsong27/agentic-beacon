@@ -462,9 +462,6 @@ _TC9B_WAIVERS: set[tuple[str, str]] = {
     ("sync.py", "status"),
     # TODO: wrap discovery + commit + cleanup into a single adopt domain function
     ("adoption.py", "adopt"),
-    # doctor calls repair_gitignore_drift (if --fix) + run_project_health_checks;
-    # these are semantically distinct and must run in separate phases.
-    ("diagnostics.py", "doctor"),
 }
 
 

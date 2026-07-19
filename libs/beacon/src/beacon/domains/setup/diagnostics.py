@@ -30,6 +30,24 @@ class DoctorIssue:
     severity: str = "error"  # "error" or "warn"
 
 
+def run_project_diagnostics(
+    project_root: Path,
+    warehouse_path: Path | None,
+    beacon_manifest: BeaconManifest | None,
+    fix: bool,
+) -> tuple[list[DoctorIssue], list[str]]:
+    """Optionally repair gitignore drift, then run all project-side health checks.
+
+    Returns (issues, applied_fixes). Repair runs first so the returned issues
+    reflect the post-repair state.
+    """
+    applied_fixes: list[str] = []
+    if fix:
+        applied_fixes = repair_gitignore_drift(project_root)
+    issues = run_project_health_checks(project_root, warehouse_path, beacon_manifest)
+    return issues, applied_fixes
+
+
 def repair_gitignore_drift(project_root: Path) -> list[str]:
     """Repair managed-block gitignore drift in place (Tier A / Tier B).
 

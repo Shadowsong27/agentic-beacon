@@ -10,6 +10,7 @@ from beacon.domains.setup.diagnostics import (
     _check_symlink_hygiene,
     _check_warehouse_git,
     _is_glob_pattern,
+    run_project_diagnostics,
     run_project_health_checks,
 )
 
@@ -417,3 +418,40 @@ class TestRunProjectHealthChecks:
         issues = run_project_health_checks(tmp_path, warehouse, None)
         messages = {i.message for i in issues}
         assert "Stale glob" not in messages
+
+
+# ---------------------------------------------------------------------------
+# run_project_diagnostics
+# ---------------------------------------------------------------------------
+
+
+class TestRunProjectDiagnostics:
+    def test_fix_true_repairs_drift(self, tmp_path):
+        warehouse = tmp_path / "warehouse"
+        warehouse.mkdir()
+        (warehouse / ".git").mkdir()
+        (tmp_path / ".agentic-beacon" / "beacon.yaml").parent.mkdir(parents=True)
+        (tmp_path / ".agentic-beacon" / "beacon.yaml").write_text(
+            "artifacts:\n  contexts: []\n  skills: []\n  agents: []\n"
+        )
+        beacon_dir = tmp_path / ".agentic-beacon"
+        beacon_yaml = beacon_dir / "beacon.yaml"
+        from beacon.core.manifest.beacon import BeaconManifest
+
+        manifest = BeaconManifest.from_yaml(beacon_yaml)
+        issues, fixes = run_project_diagnostics(tmp_path, warehouse, manifest, fix=True)
+        assert len(fixes) > 0, "Expected non-empty fixes on drifted project"
+        managed_issues = [
+            i
+            for i in issues
+            if "gitignore" in i.message.lower()
+            and ("Tier A" in i.message or "Tier B" in i.message)
+        ]
+        assert len(managed_issues) == 0, (
+            f"After repair, managed-block drift must not appear: {[i.message for i in managed_issues]}"
+        )
+
+    def test_fix_false_returns_no_fixes(self, tmp_path):
+        issues, fixes = run_project_diagnostics(tmp_path, None, None, fix=False)
+        assert fixes == []
+        assert isinstance(issues, list)

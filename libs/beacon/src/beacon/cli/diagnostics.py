@@ -7,7 +7,7 @@ from rich.console import Console
 
 from beacon.core.manifest.beacon import BeaconManifest
 from beacon.core.manifest.workspace import WorkspaceConfig
-from beacon.domains.setup.diagnostics import run_project_health_checks
+from beacon.domains.setup.diagnostics import run_project_diagnostics
 from beacon.utils.display import print_doctor_summary
 from beacon.utils.git import find_project_root
 
@@ -141,18 +141,13 @@ def doctor(*, fix: bool) -> None:
                 f"Context entries: all {len(context_entries)} context(s) exist in warehouse"
             )
 
-    # Repair gitignore drift BEFORE health checks so the summary is accurate
-    if fix:
-        from beacon.domains.setup.diagnostics import repair_gitignore_drift
-
-        for msg in repair_gitignore_drift(project_root):
-            fixes_applied.append(msg)
-            console.print(f"  [green]✓[/green] {msg}")
-
-    # Project-side checks (PER-193)
-    project_issues = run_project_health_checks(
-        project_root, warehouse_path, beacon_settings
+    # Single domain call: repair + checks
+    project_issues, gitignore_fixes = run_project_diagnostics(
+        project_root, warehouse_path, beacon_settings, fix
     )
+    for msg in gitignore_fixes:
+        fixes_applied.append(msg)
+        console.print(f"  [green]✓[/green] {msg}")
     for issue in project_issues:
         if issue.severity == "warn":
             _warn(issue.message, issue.detail)
