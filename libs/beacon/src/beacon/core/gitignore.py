@@ -196,7 +196,8 @@ def apply_managed_block(gitignore_path: Path, entries: list[str]) -> bool:
     raw = "".join(result_lines)
     block_text = _build_block_text(entries)
 
-    new_content = raw.rstrip("\n") + "\n" + block_text
+    stripped_raw = raw.rstrip("\n")
+    new_content = (stripped_raw + "\n" + block_text) if stripped_raw else block_text
     if new_content == existing_content:
         return False
     gitignore_path.write_text(new_content, encoding="utf-8")

@@ -106,6 +106,28 @@ class TestApplyManagedBlock:
         body = read_managed_block(path)
         assert body == []
 
+    # ── FIX I: fresh file must not start with leading blank line ──
+
+    def test_non_existent_file_no_leading_newline(self, tmp_path):
+        path = tmp_path / ".gitignore"
+        entries = ["entry-a", "entry-b"]
+        apply_managed_block(path, entries)
+        content = path.read_text()
+        assert not content.startswith("\n"), (
+            f"Fresh file must not start with leading newline; got: {repr(content[:20])}"
+        )
+        block_text = f"{MANAGED_BLOCK_BEGIN}\nentry-a\nentry-b\n{MANAGED_BLOCK_END}\n"
+        assert content == block_text, f"Expected exact block text, got: {repr(content)}"
+
+    def test_non_existent_file_idempotent_reapply(self, tmp_path):
+        path = tmp_path / ".gitignore"
+        entries = ["entry-a", "entry-b"]
+        apply_managed_block(path, entries)
+        first = path.read_bytes()
+        apply_managed_block(path, entries)
+        second = path.read_bytes()
+        assert first == second
+
 
 # ═════════════════════════════════════════════════════════════
 # 1.3 Surgical migration tests

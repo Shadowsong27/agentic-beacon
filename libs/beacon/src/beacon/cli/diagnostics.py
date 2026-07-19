@@ -5,7 +5,6 @@ from pathlib import Path
 import click
 from rich.console import Console
 
-from beacon.core.gitignore import apply_all_gitignores, diff_gitignores
 from beacon.core.manifest.beacon import BeaconManifest
 from beacon.core.manifest.workspace import WorkspaceConfig
 from beacon.domains.setup.diagnostics import run_project_health_checks
@@ -142,6 +141,14 @@ def doctor(*, fix: bool) -> None:
                 f"Context entries: all {len(context_entries)} context(s) exist in warehouse"
             )
 
+    # Repair gitignore drift BEFORE health checks so the summary is accurate
+    if fix:
+        from beacon.domains.setup.diagnostics import repair_gitignore_drift
+
+        for msg in repair_gitignore_drift(project_root):
+            fixes_applied.append(msg)
+            console.print(f"  [green]✓[/green] {msg}")
+
     # Project-side checks (PER-193)
     project_issues = run_project_health_checks(
         project_root, warehouse_path, beacon_settings
@@ -151,26 +158,5 @@ def doctor(*, fix: bool) -> None:
             _warn(issue.message, issue.detail)
         else:
             _err(issue.message, issue.detail)
-
-    # Gitignore drift check + fix (AB-94: managed-block gitignore engine)
-    # Gate on beacon.yaml — never touch .gitignore in non-Beacon projects
-    if fix and beacon_yaml.exists():
-        drifts = diff_gitignores(project_root)
-        managed_kinds = {
-            "tier_a_missing",
-            "tier_a_incomplete",
-            "tier_b_missing",
-            "tier_b_incomplete",
-        }
-        managed = [d for d in drifts if d.kind in managed_kinds]
-        tracked = [d for d in drifts if d.kind == "tracked_set_ignored"]
-        if managed:
-            apply_all_gitignores(project_root)
-            fixes_applied.append("Repaired gitignore managed blocks (Tier A / Tier B)")
-            console.print("  [green]✓[/green] Gitignore managed blocks repaired")
-        for d in tracked:
-            console.print(
-                f"  [red]✗[/red] Cannot auto-fix: {d.message} — remove or negate the offending .gitignore pattern manually"
-            )
 
     print_doctor_summary(issues, fixes_applied)

@@ -16,7 +16,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from beacon.core.gitignore import diff_gitignores
+from beacon.core.gitignore import apply_all_gitignores, diff_gitignores
 from beacon.core.manifest.beacon import BeaconManifest
 from beacon.domains.distribution.sync_engine import SyncEngine
 
@@ -28,6 +28,29 @@ class DoctorIssue:
     message: str
     detail: str = ""
     severity: str = "error"  # "error" or "warn"
+
+
+def repair_gitignore_drift(project_root: Path) -> list[str]:
+    """Repair managed-block gitignore drift in place (Tier A / Tier B).
+
+    Returns human-readable descriptions of the fixes applied (empty if none).
+    Non-fixable drift (tracked_set_ignored — a user pattern ignoring a
+    tracked-on-purpose file) is NOT touched here; it is left for
+    _check_gitignore_drift to report as remaining drift.
+    """
+    if not (project_root / ".agentic-beacon" / "beacon.yaml").exists():
+        return []
+    drifts = diff_gitignores(project_root)
+    managed_kinds = {
+        "tier_a_missing",
+        "tier_a_incomplete",
+        "tier_b_missing",
+        "tier_b_incomplete",
+    }
+    if any(d.kind in managed_kinds for d in drifts):
+        apply_all_gitignores(project_root)
+        return ["Repaired gitignore managed blocks (Tier A / Tier B)"]
+    return []
 
 
 def run_project_health_checks(

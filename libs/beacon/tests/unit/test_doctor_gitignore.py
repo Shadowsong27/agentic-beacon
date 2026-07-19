@@ -16,6 +16,7 @@ from beacon.core.gitignore import (
     apply_managed_block,
 )
 from beacon.domains.setup.diagnostics import (
+    repair_gitignore_drift,
     run_project_health_checks,
 )
 
@@ -216,3 +217,75 @@ class TestDoctorFix:
         content = gitignore.read_text()
         assert MANAGED_BLOCK_BEGIN in content
         assert "user-entry/" in content
+
+
+# ── FIX H: repair_gitignore_drift (extracted domain op) ──
+
+
+class TestRepairGitignoreDrift:
+    def test_wired_drifted_project_repairs_and_returns_msgs(self, tmp_path):
+        _make_wired(tmp_path)
+        (tmp_path / ".opencode").mkdir()
+        apply_managed_block(
+            tmp_path / ".opencode" / ".gitignore", TIER_B_OPENCODE_ENTRIES
+        )
+        msgs = repair_gitignore_drift(tmp_path)
+        assert len(msgs) >= 1
+        assert "Repaired" in msgs[0]
+        from beacon.core.gitignore import diff_gitignores
+
+        remaining = diff_gitignores(tmp_path)
+        managed = [
+            d
+            for d in remaining
+            if d.kind
+            in {
+                "tier_a_missing",
+                "tier_a_incomplete",
+                "tier_b_missing",
+                "tier_b_incomplete",
+            }
+        ]
+        assert len(managed) == 0, (
+            f"Managed-block drift should be repaired, got: {[d.message for d in managed]}"
+        )
+
+    def test_wired_healthy_returns_empty(self, tmp_path):
+        from beacon.core.gitignore import apply_all_gitignores
+
+        _make_wired(tmp_path)
+        apply_all_gitignores(tmp_path)
+        msgs = repair_gitignore_drift(tmp_path)
+        assert msgs == []
+
+    def test_unwired_returns_empty_no_write(self, tmp_path):
+        msgs = repair_gitignore_drift(tmp_path)
+        assert msgs == []
+        gitignore = tmp_path / ".gitignore"
+        assert not gitignore.exists()
+
+    def test_stale_summary_regression(self, tmp_path):
+        _make_wired(tmp_path)
+        repair_gitignore_drift(tmp_path)
+        issues = run_project_health_checks(tmp_path, None, None)
+        managed_issues = [
+            i
+            for i in issues
+            if "gitignore" in i.message.lower()
+            and ("Tier A" in i.message or "Tier B" in i.message)
+        ]
+        assert len(managed_issues) == 0, (
+            f"After repair, managed-block drift must not appear in health checks: "
+            f"{[i.message for i in managed_issues]}"
+        )
+
+    def test_tracked_set_ignored_not_repaired_by_domain_op(self, tmp_path):
+        _make_wired(tmp_path)
+        _git_init(tmp_path)
+        root = tmp_path / ".gitignore"
+        root.write_text(".agentic-beacon/beacon.yaml\n")
+        from beacon.core.gitignore import apply_all_gitignores
+
+        apply_all_gitignores(tmp_path)
+        msgs = repair_gitignore_drift(tmp_path)
+        assert msgs == [], "tracked_set_ignored alone must not trigger repair"
