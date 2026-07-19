@@ -126,6 +126,23 @@ def _build_block_text(entries: list[str]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _find_managed_block(lines: list[str]) -> tuple[int, int] | None:
+    i = 0
+    n = len(lines)
+    while i < n:
+        if lines[i].rstrip("\n").rstrip("\r") == MANAGED_BLOCK_BEGIN:
+            j = i + 1
+            while j < n:
+                stripped = lines[j].rstrip("\n").rstrip("\r")
+                if stripped == MANAGED_BLOCK_BEGIN:
+                    break
+                if stripped == MANAGED_BLOCK_END:
+                    return (i, j)
+                j += 1
+        i += 1
+    return None
+
+
 def apply_managed_block(gitignore_path: Path, entries: list[str]) -> bool:
     """Create or regenerate the marker-delimited managed block in *gitignore_path*.
 
@@ -143,16 +160,15 @@ def apply_managed_block(gitignore_path: Path, entries: list[str]) -> bool:
     if gitignore_path.exists():
         existing_content = gitignore_path.read_text(encoding="utf-8")
 
-    # Check for existing managed block
-    begin_idx = existing_content.find(MANAGED_BLOCK_BEGIN)
-    end_idx = existing_content.find(MANAGED_BLOCK_END)
-
-    if begin_idx != -1 and end_idx != -1 and end_idx > begin_idx:
-        content_before = existing_content[:begin_idx]
-        content_after = existing_content[end_idx + len(MANAGED_BLOCK_END) :]
-        content_after = content_after.lstrip("\n")
+    existing_lines = existing_content.splitlines(keepends=True)
+    found = _find_managed_block(existing_lines)
+    if found is not None:
+        begin_i, end_i = found
+        before = "".join(existing_lines[:begin_i])
+        after = "".join(existing_lines[end_i + 1 :])
+        after = after.lstrip("\n")
         new_block = _build_block_text(entries)
-        new_content = content_before + new_block + content_after
+        new_content = before + new_block + after
         if new_content == existing_content:
             return False
         gitignore_path.write_text(new_content, encoding="utf-8")
@@ -192,16 +208,14 @@ def read_managed_block(gitignore_path: Path) -> list[str] | None:
     """Return the entry lines of the managed block, or None if absent."""
     if not gitignore_path.exists():
         return None
-    content = gitignore_path.read_text(encoding="utf-8")
-    begin_idx = content.find(MANAGED_BLOCK_BEGIN)
-    end_idx = content.find(MANAGED_BLOCK_END)
-    if begin_idx == -1 or end_idx == -1 or end_idx <= begin_idx:
+    lines = gitignore_path.read_text(encoding="utf-8").splitlines(keepends=True)
+    found = _find_managed_block(lines)
+    if found is None:
         return None
-    body = content[begin_idx + len(MANAGED_BLOCK_BEGIN) : end_idx]
-    entries = [
-        line.rstrip("\n").rstrip("\r") for line in body.splitlines() if line.strip()
+    begin_i, end_i = found
+    return [
+        ln.rstrip("\n").rstrip("\r") for ln in lines[begin_i + 1 : end_i] if ln.strip()
     ]
-    return entries
 
 
 def apply_all_gitignores(project_root: Path) -> bool:

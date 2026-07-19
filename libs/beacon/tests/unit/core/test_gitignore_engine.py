@@ -572,3 +572,78 @@ class TestUnconditionalTierA:
         assert body is not None
         assert ".claude/agents/" in body
         assert ".opencode/agents/" in body
+
+
+# ═════════════════════════════════════════════════════════════
+# FIX M: well-formed managed-block detection (stray marker)
+# ═════════════════════════════════════════════════════════════
+
+
+class TestStrayMarker:
+    """Stray unmatched BEGIN markers must not cause user content deletion."""
+
+    def test_stray_begin_preserves_user_lines_and_regenerates_block(self, tmp_path):
+        path = tmp_path / ".gitignore"
+        path.write_text(
+            f"{MANAGED_BLOCK_BEGIN}\n"
+            "user-line-1\n"
+            "user-line-2\n"
+            f"{MANAGED_BLOCK_BEGIN}\n"
+            "stale-entry\n"
+            f"{MANAGED_BLOCK_END}\n"
+        )
+        apply_managed_block(path, ["entry-a", "entry-b"])
+        content = path.read_text()
+        lines = content.splitlines()
+        assert lines.count(MANAGED_BLOCK_BEGIN) == 2
+        assert lines.count(MANAGED_BLOCK_END) == 1
+        assert "user-line-1" in lines
+        assert "user-line-2" in lines
+        assert "stale-entry" not in content, (
+            "Stale entry inside real block must be replaced"
+        )
+        assert "entry-a" in lines
+        assert "entry-b" in lines
+        body = read_managed_block(path)
+        assert body == ["entry-a", "entry-b"]
+
+    def test_stray_begin_idempotent_with_user_lines(self, tmp_path):
+        path = tmp_path / ".gitignore"
+        path.write_text(
+            f"{MANAGED_BLOCK_BEGIN}\n"
+            "user-line\n"
+            f"{MANAGED_BLOCK_BEGIN}\n"
+            "entry-a\n"
+            f"{MANAGED_BLOCK_END}\n"
+        )
+        apply_managed_block(path, ["entry-a"])
+        first = path.read_bytes()
+        apply_managed_block(path, ["entry-a"])
+        second = path.read_bytes()
+        assert first == second
+        content = path.read_text()
+        assert "user-line" in content
+        assert content.count(MANAGED_BLOCK_BEGIN) == 2
+
+    def test_stray_begin_no_real_block_uses_migration(self, tmp_path):
+        path = tmp_path / ".gitignore"
+        path.write_text(f"{MANAGED_BLOCK_BEGIN}\nuser-data/\n")
+        apply_managed_block(path, ["entry-a"])
+        content = path.read_text()
+        lines = content.splitlines()
+        assert MANAGED_BLOCK_BEGIN in lines
+        assert "user-data/" in lines
+        assert "entry-a" in lines
+        assert MANAGED_BLOCK_END in lines
+
+    def test_read_with_stray_begin_returns_real_block(self, tmp_path):
+        path = tmp_path / ".gitignore"
+        path.write_text(
+            f"{MANAGED_BLOCK_BEGIN}\n"
+            "noise\n"
+            f"{MANAGED_BLOCK_BEGIN}\n"
+            "real-entry\n"
+            f"{MANAGED_BLOCK_END}\n"
+        )
+        body = read_managed_block(path)
+        assert body == ["real-entry"]
