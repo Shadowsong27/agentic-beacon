@@ -241,7 +241,7 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:5:end -->
 
 
-- [ ] 5.1 Update `beacon-ops.md` two-tier gitignore section: managed-block markers, unconditional Tier A, doctor `--fix`.
+- [x] 5.1 Update `beacon-ops.md` two-tier gitignore section: managed-block markers, unconditional Tier A, doctor `--fix`. _(Done post-merge in the warehouse: hl-knowledge-market `contexts/beacon-ops.md` @ 30e3c3a — delivered via the beacon per-project model, so it is not in this repo's diff.)_
 - [x] 5.2 Update `AGENTS.md` if it references the old per-line / conditional agent-dir behavior.
 
 ## 6. Validate & verify
@@ -260,7 +260,7 @@ pytest tests/ -v --tb=short
   - **Expected Output**: All tests pass; no regressions in existing sync/adopt/connect/doctor suites.
   - **Validation**: Zero failures, zero errors from repo root.
 <!-- opsx:tdd:6.1:end -->
-- [ ] 6.2 **[OPS]** Happy-path check: `abc adopt` / `abc sync` on a scratch project yields correct Tier A + Tier B blocks; `abc doctor` clean; introduce drift → `abc doctor` errors → `abc doctor --fix` repairs.
+- [ ] 6.2 **[OPS]** Happy-path check: `abc adopt` / `abc sync` on a scratch project yields correct Tier A + Tier B blocks; `abc doctor` clean; introduce drift → `abc doctor` errors → `abc doctor --fix` repairs. _(Post-merge note: the real code paths are covered by integration tests — `tests/integration/test_adopt_apply.py`, `test_sync_wiring.py`, `tests/unit/test_doctor_gitignore.py` (all green, 1592 tests). Live scratch-CLI walkthrough deferred; shipped in 3.7.0 with the flow documented in the release notes.)_
 <!-- opsx:tdd:6.2:begin -->
   - **Input**: abc warehouse init /tmp/ab94-scratch-wh && abc sync in a scratch project; then delete the Tier A block and run abc doctor / abc doctor --fix
   - **Expected Output**: Correct managed blocks after sync; abc doctor reports an error after the block is deleted; abc doctor --fix restores it and the re-run is clean.

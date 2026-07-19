@@ -2,9 +2,7 @@
 
 ## Purpose
 Defines how `abc sync` and `abc adopt` create and remove project-local agent symlinks under `.claude/agents/` and `.opencode/agents/`, plus the related `.gitignore` and `abc list` behavior introduced by PER-113. Created by archiving change `unify-agent-distribution`.
-
 ## Requirements
-
 ### Requirement: Sync wires declared agents into project-local tool directories
 
 During `abc sync`, after symlinking declared agents from `<warehouse>/agents/<name>.md` into `.agentic-beacon/artifacts/agents/<name>.md`, the system SHALL create symlinks at `.claude/agents/<name>.md` and `.opencode/agents/<name>.md` pointing at the corresponding `.agentic-beacon/artifacts/agents/<name>.md` file. Wiring SHALL be gated by `detect_agent_targets()` — only the tool directories that the project has configured (`.claude/` and/or `.opencode/`) receive symlinks.
@@ -82,26 +80,6 @@ When `abc adopt` defers an agent (action: `defer`, the default), the system SHAL
 #### Scenario: Defer leaves state untouched
 - **WHEN** the user marks `agents/spec-planner.md` as `defer` in `abc adopt`
 - **THEN** the entry remains in `pending.yaml`; no symlinks are created or removed
-
-### Requirement: abc setup adds agent directories to .gitignore
-
-`abc setup` (or, post-PR-109 round 6, `abc sync` and `abc adopt` accept whenever agents are first declared) SHALL ensure the project's root `.gitignore` contains `.claude/agents/` and `.opencode/agents/` entries, creating the file if it does not exist and appending entries idempotently. The `update_agent_gitignores` helper SHALL be gated on declared/accepted agents so contexts-only or skills-only projects are not modified.
-
-#### Scenario: Fresh project — .gitignore created
-- **WHEN** `abc sync` runs against a project that declares one or more agents and has no `.gitignore`
-- **THEN** a `.gitignore` is created containing `.claude/agents/` and `.opencode/agents/`
-
-#### Scenario: Existing .gitignore — entries appended
-- **WHEN** `abc sync` runs in a project with an existing `.gitignore` that does not include the agent entries AND agents are declared
-- **THEN** `.claude/agents/` and `.opencode/agents/` are appended to the file; existing entries are preserved
-
-#### Scenario: Idempotent re-run
-- **WHEN** `abc sync` runs twice in sequence with agents declared
-- **THEN** the agent entries appear exactly once in `.gitignore`
-
-#### Scenario: Skills-only or contexts-only sync does not touch .gitignore
-- **WHEN** `abc sync` runs in a project with `beacon.yaml.artifacts.agents: []`
-- **THEN** the project root `.gitignore` is not modified by the agent-gitignore helper
 
 ### Requirement: abc list agents reads project-declared agents
 
