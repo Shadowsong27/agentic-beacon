@@ -26,10 +26,10 @@ from beacon.domains.distribution.reset import (
     reset_artifacts,
 )
 from beacon.domains.setup.wiring import (
+    desired_context_refs,
     init_claude_md,
     init_opencode_json,
-    wire_contexts_claudecode,
-    wire_contexts_opencode,
+    reconcile_context_references,
 )
 from beacon.utils.display import format_regular_file_conflict, is_interactive
 from beacon.utils.git import find_project_root
@@ -247,19 +247,23 @@ def sync(
 
     if result.agent_config_init_needed and not result.dry_run:
         init_opencode_json(result.project_root)
-        oc_init = wire_contexts_opencode(result.project_root, result.artifacts_dir)
-        if oc_init:
-            console.print(
-                f"[green]✓[/green] Created opencode.json and "
-                f"wired {len(oc_init)} context(s)"
-            )
         init_claude_md(result.project_root)
-        cc_init = wire_contexts_claudecode(result.project_root, result.artifacts_dir)
-        if cc_init:
-            console.print(
-                f"[green]✓[/green] Created CLAUDE.md and "
-                f"wired {len(cc_init)} context(s)"
-            )
+        beacon_yaml = result.project_root / ".agentic-beacon" / "beacon.yaml"
+        if beacon_yaml.exists():
+            from beacon.core.manifest.beacon import BeaconManifest
+
+            settings = BeaconManifest.from_yaml(beacon_yaml)
+            effective_names: set[str] = set()
+            for c in settings.artifacts.contexts:
+                name = c.removeprefix("contexts/").removesuffix(".md")
+                effective_names.add(name)
+            desired_refs = desired_context_refs(effective_names)
+            ref_result = reconcile_context_references(result.project_root, desired_refs)
+            if ref_result.added:
+                console.print(
+                    f"[green]✓[/green] Created and wired {len(ref_result.added)} "
+                    f"context(s) into agent config files"
+                )
 
     print_bundled_install_result(result.bundled_installed, result.bundled_skipped)
 

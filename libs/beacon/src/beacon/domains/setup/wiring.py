@@ -1,6 +1,7 @@
 """Wiring functions for Beacon CLI setup and sync flows."""
 
 import json
+import re
 import shutil
 from collections.abc import Callable, Iterable
 from pathlib import Path
@@ -17,6 +18,179 @@ from beacon.core.exceptions import (
 from beacon.domains.artifact.agent import snapshot_agent_path
 
 console = Console()
+
+# ---------------------------------------------------------------------------
+# Context-reference reconciler (AB-96)
+# ---------------------------------------------------------------------------
+
+ARTIFACT_REF_PREFIX = ".agentic-beacon/artifacts/"
+
+_ATPATH_LINE_RE = re.compile(r"^@(.+)$")
+
+
+class ReferenceReconcileResult(NamedTuple):
+    """Outcome of reconciling references in a single config file."""
+
+    added: list[str]
+    removed: list[str]
+
+    def __bool__(self) -> bool:
+        return bool(self.added or self.removed)
+
+
+def desired_context_refs(effective_contexts: set[str]) -> list[str]:
+    """Build the sorted list of desired artifact-context references.
+
+    Each effective-context name is mapped to
+    ``.agentic-beacon/artifacts/contexts/{name}.md``, preserving any subpath
+    (slashes in the name).
+    """
+    return sorted(
+        f"{ARTIFACT_REF_PREFIX}contexts/{name}.md" for name in effective_contexts
+    )
+
+
+def _resolve_opencode_json(project_root: Path) -> Path | None:
+    """Resolve opencode.json (root preferred; .opencode/ fallback)."""
+    for candidate in (
+        project_root / "opencode.json",
+        project_root / ".opencode" / "opencode.json",
+    ):
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def _resolve_claude_md(project_root: Path) -> Path | None:
+    """Resolve CLAUDE.md (.claude/CLAUDE.md preferred, then root)."""
+    for candidate in (
+        project_root / ".claude" / "CLAUDE.md",
+        project_root / "CLAUDE.md",
+    ):
+        if candidate.exists():
+            return candidate
+    return None
+
+
+def _reconcile_opencode_json(
+    project_root: Path,
+    desired_refs: list[str],
+    *,
+    dry_run: bool = False,
+) -> ReferenceReconcileResult:
+    """Reconcile opencode.json ``instructions`` to the desired reference set.
+
+    Only entries starting with ``ARTIFACT_REF_PREFIX`` are managed.  The
+    ``$schema`` key and user-authored entries are preserved in their original
+    relative order.  Writes only when content changes.
+    """
+    opencode_json = _resolve_opencode_json(project_root)
+    if opencode_json is None:
+        return ReferenceReconcileResult(added=[], removed=[])
+
+    try:
+        data = json.loads(opencode_json.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return ReferenceReconcileResult(added=[], removed=[])
+
+    instructions: list[str] = data.get("instructions", [])
+    if not isinstance(instructions, list):
+        return ReferenceReconcileResult(added=[], removed=[])
+
+    owned: list[str] = [x for x in instructions if x.startswith(ARTIFACT_REF_PREFIX)]
+    kept: list[str] = [x for x in instructions if not x.startswith(ARTIFACT_REF_PREFIX)]
+
+    desired_set = set(desired_refs)
+    owned_set = set(owned)
+
+    added = sorted(desired_set - owned_set)
+    removed = sorted(owned_set - desired_set)
+
+    if not added and not removed:
+        return ReferenceReconcileResult(added=[], removed=[])
+
+    if dry_run:
+        return ReferenceReconcileResult(added=added, removed=removed)
+
+    new_instructions = kept + desired_refs
+    data["instructions"] = new_instructions
+    opencode_json.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+    return ReferenceReconcileResult(added=added, removed=removed)
+
+
+def _reconcile_claude_md(
+    project_root: Path,
+    desired_refs: list[str],
+    *,
+    dry_run: bool = False,
+) -> ReferenceReconcileResult:
+    """Reconcile CLAUDE.md ``@``-includes to the desired reference set.
+
+    Only lines whose stripped form starts with ``@ARTIFACT_REF_PREFIX`` are
+    managed.  Non-artifact lines (``@AGENTS.md``, etc.) are preserved
+    verbatim.  Writes only when content changes.
+    """
+    claude_md = _resolve_claude_md(project_root)
+    if claude_md is None:
+        return ReferenceReconcileResult(added=[], removed=[])
+
+    content = claude_md.read_text(encoding="utf-8")
+    lines = content.splitlines(keepends=True)
+
+    owned_refs: set[str] = set()
+    new_lines: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        m = _ATPATH_LINE_RE.match(stripped)
+        if m:
+            path = m.group(1).strip()
+            if path.startswith(ARTIFACT_REF_PREFIX):
+                owned_refs.add(path)
+                continue
+        new_lines.append(line)
+
+    desired_set = set(desired_refs)
+    added = sorted(desired_set - owned_refs)
+    removed = sorted(owned_refs - desired_set)
+
+    if not added and not removed:
+        return ReferenceReconcileResult(added=[], removed=[])
+
+    if dry_run:
+        return ReferenceReconcileResult(added=added, removed=removed)
+
+    for ref in added:
+        new_lines.append(f"@{ref}\n")
+
+    new_content = "".join(new_lines)
+
+    claude_md.write_text(new_content, encoding="utf-8")
+
+    return ReferenceReconcileResult(added=added, removed=removed)
+
+
+def reconcile_context_references(
+    project_root: Path,
+    desired_refs: list[str],
+    *,
+    dry_run: bool = False,
+) -> ReferenceReconcileResult:
+    """Reconcile context references in both ``opencode.json`` and ``CLAUDE.md``.
+
+    Aggregates the add/remove result across both files.  Under ``dry_run``
+    the delta is computed but no files are written.
+    """
+    oc_result = _reconcile_opencode_json(project_root, desired_refs, dry_run=dry_run)
+    cl_result = _reconcile_claude_md(project_root, desired_refs, dry_run=dry_run)
+
+    total_added = list(set(oc_result.added) | set(cl_result.added))
+    total_removed = list(set(oc_result.removed) | set(cl_result.removed))
+
+    return ReferenceReconcileResult(
+        added=sorted(total_added),
+        removed=sorted(total_removed),
+    )
 
 
 def create_beacon_template(path: Path) -> None:
@@ -283,11 +457,7 @@ def unwire_pruned_artifacts(
         artifact_type = parts[0]
 
         if artifact_type == "contexts":
-            # Path inside artifacts_dir
-            artifact_abs = artifacts_dir / rel_path
-            rel_to_project = str(artifact_abs.relative_to(project_root))
-            unwire_context_opencode(project_root, rel_to_project)
-            unwire_context_claudecode(project_root, rel_to_project)
+            pass
 
         elif artifact_type == "agents" and len(parts) >= 2:
             agent_filename = parts[1]  # e.g. "spec-planner.md"
