@@ -814,3 +814,322 @@ class TestRegressionReferenceDrift:
 
         # Non-artifact lines intact
         assert "@AGENTS.md" in claude_content
+
+
+# ---------------------------------------------------------------------------
+# AB-96 fix-up — Finding B regression: transitive skill-required contexts
+# preserved by commit_session
+# ---------------------------------------------------------------------------
+
+
+class TestTransitiveContextPreservedByCommitSession:
+    """Regression: adopt/reject a different context must NOT strip a transitive
+    skill-required context's reference from the config files (AB-96 fix-up, Finding B).
+
+    Setup:
+    - Warehouse has skill ``my-skill`` with SKILL.md that declares
+      ``requires.contexts: [transitive-ctx]``.
+    - beacon.yaml has ``skills/my-skill/`` and ``contexts/plane-ops.md`` (explicit)
+      but NOT ``contexts/transitive-ctx.md`` in artifacts.contexts.
+    - transitive-ctx is in the effective set due to the skill dependency.
+    - Both config files already contain ``@…/contexts/transitive-ctx.md``.
+    - A second context (``contexts/plane-ops.md``) is adopted / unadopted via
+      commit_session — the transitive reference must survive.
+    """
+
+    @pytest.fixture
+    def project_with_transitive_context(self, tmp_path):
+        """Build a warehouse+project where transitive-ctx is skill-required."""
+        wh = tmp_path / "warehouse"
+        for d in ("agents", "contexts", "knowledge", "skills"):
+            (wh / d).mkdir(parents=True)
+        (wh / "README.md").write_text("# Test Warehouse")
+
+        # Context files in warehouse
+        (wh / "contexts" / "plane-ops.md").write_text("# Plane Ops")
+        (wh / "contexts" / "transitive-ctx.md").write_text("# Transitive Context")
+
+        # Skill with frontmatter that requires transitive-ctx
+        skill_dir = wh / "skills" / "my-skill"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_text(
+            "---\nrequires:\n  contexts:\n    - transitive-ctx\n---\n\n# My Skill\n"
+        )
+
+        _git_init(wh)
+        _git_commit(wh, "initial warehouse with transitive skill dep")
+
+        # Project: explicit contexts = [plane-ops], skills = [my-skill/]
+        # transitive-ctx is NOT in artifacts.contexts but IS in effective set
+        project = tmp_path / "project"
+        project.mkdir()
+        ab = project / ".agentic-beacon"
+        ab.mkdir()
+        (ab / "config.toml").write_text(f'[warehouse]\nlocal_path = "{wh}"\n')
+        (ab / "beacon.yaml").write_text(
+            "artifacts:\n"
+            "  contexts:\n"
+            "    - contexts/plane-ops.md\n"
+            "  skills:\n"
+            "    - skills/my-skill/\n"
+            "  agents: []\n"
+        )
+
+        # Pre-create artifact symlinks (both contexts)
+        artifacts_ctx = ab / "artifacts" / "contexts"
+        artifacts_ctx.mkdir(parents=True)
+        (artifacts_ctx / "plane-ops.md").symlink_to(wh / "contexts" / "plane-ops.md")
+        (artifacts_ctx / "transitive-ctx.md").symlink_to(
+            wh / "contexts" / "transitive-ctx.md"
+        )
+
+        # Both config files already contain the transitive reference
+        transitive_ref = ".agentic-beacon/artifacts/contexts/transitive-ctx.md"
+        plane_ref = ".agentic-beacon/artifacts/contexts/plane-ops.md"
+        (project / "opencode.json").write_text(
+            json.dumps(
+                {
+                    "$schema": "https://opencode.ai/config.json",
+                    "instructions": [transitive_ref, plane_ref],
+                },
+                indent=2,
+            )
+            + "\n"
+        )
+        (project / "CLAUDE.md").write_text(
+            f"@AGENTS.md\n@{transitive_ref}\n@{plane_ref}\n"
+        )
+
+        return project, wh
+
+    def test_adopt_other_context_preserves_transitive_ref(
+        self, project_with_transitive_context
+    ):
+        """Adopting plane-ops (already present) via commit_session must keep transitive-ctx."""
+        from beacon.domains.adoption.apply import commit_session
+        from beacon.domains.adoption.models import AdoptCandidate
+
+        project, wh = project_with_transitive_context
+        transitive_ref = ".agentic-beacon/artifacts/contexts/transitive-ctx.md"
+
+        # Adopt plane-ops (it's already there; commit_session is idempotent for beacon.yaml)
+        commit_session(
+            to_adopt=["contexts/plane-ops.md"],
+            to_unadopt=[],
+            pending_accept=[],
+            pending_reject=[],
+            candidates=[
+                AdoptCandidate(artifact_type="contexts", path="contexts/plane-ops.md")
+            ],
+            pending_entries=[],
+            project_root=project,
+            warehouse_path=wh,
+            artifacts_path=project / ".agentic-beacon" / "artifacts",
+            beacon_yaml_path=project / ".agentic-beacon" / "beacon.yaml",
+        )
+
+        # transitive-ctx reference must still be in opencode.json
+        oc_data = json.loads((project / "opencode.json").read_text())
+        assert transitive_ref in oc_data["instructions"], (
+            f"transitive-ctx reference was stripped from opencode.json after adopt; "
+            f"instructions={oc_data['instructions']}"
+        )
+
+        # transitive-ctx reference must still be in CLAUDE.md
+        claude_content = (project / "CLAUDE.md").read_text()
+        assert f"@{transitive_ref}" in claude_content, (
+            f"transitive-ctx reference was stripped from CLAUDE.md after adopt; "
+            f"content={claude_content!r}"
+        )
+
+    def test_unadopt_other_context_preserves_transitive_ref(
+        self, project_with_transitive_context
+    ):
+        """Un-adopting plane-ops via commit_session must keep transitive-ctx reference."""
+        from beacon.domains.adoption.apply import commit_session
+
+        project, wh = project_with_transitive_context
+        transitive_ref = ".agentic-beacon/artifacts/contexts/transitive-ctx.md"
+
+        # Un-adopt plane-ops (remove from beacon.yaml and config files)
+        commit_session(
+            to_adopt=[],
+            to_unadopt=["contexts/plane-ops.md"],
+            pending_accept=[],
+            pending_reject=[],
+            candidates=[],
+            pending_entries=[],
+            project_root=project,
+            warehouse_path=wh,
+            artifacts_path=project / ".agentic-beacon" / "artifacts",
+            beacon_yaml_path=project / ".agentic-beacon" / "beacon.yaml",
+        )
+
+        # plane-ops reference should be gone from opencode.json
+        oc_data = json.loads((project / "opencode.json").read_text())
+        assert (
+            ".agentic-beacon/artifacts/contexts/plane-ops.md"
+            not in oc_data["instructions"]
+        ), "plane-ops reference should have been removed after unadopt"
+
+        # transitive-ctx reference must still be in opencode.json
+        assert transitive_ref in oc_data["instructions"], (
+            f"transitive-ctx reference was stripped from opencode.json after unadopt; "
+            f"instructions={oc_data['instructions']}"
+        )
+
+        # transitive-ctx reference must still be in CLAUDE.md
+        claude_content = (project / "CLAUDE.md").read_text()
+        assert f"@{transitive_ref}" in claude_content, (
+            f"transitive-ctx reference was stripped from CLAUDE.md after unadopt; "
+            f"content={claude_content!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# AB-96 fix-up — Finding A: de-adopt sync reports removal, not "Wired"
+# ---------------------------------------------------------------------------
+
+
+class TestDeAdoptSyncMessage:
+    """De-adopt sync reports a removal message, not 'Wired', (AB-96 fix-up, Finding A)."""
+
+    def test_de_adopt_sync_result_has_refs_removed_not_refs_added(
+        self, tmp_path, valid_warehouse, monkeypatch
+    ):
+        """SyncOrchestrationResult.refs_removed is non-empty and refs_added is empty
+        when a context is removed from beacon.yaml (de-adopt path)."""
+        import os
+
+        from beacon.domains.distribution.orchestrator import run_sync
+
+        (valid_warehouse / "contexts" / "global.md").write_text("# Global context")
+        env = {
+            **os.environ,
+            "GIT_AUTHOR_NAME": "Test",
+            "GIT_AUTHOR_EMAIL": "t@t.local",
+            "GIT_COMMITTER_NAME": "Test",
+            "GIT_COMMITTER_EMAIL": "t@t.local",
+        }
+        subprocess.run(
+            ["git", "add", "."],
+            cwd=valid_warehouse,
+            env=env,
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "commit", "-m", "add global context"],
+            cwd=valid_warehouse,
+            env=env,
+            check=True,
+            capture_output=True,
+        )
+
+        project = tmp_path / "proj"
+        project.mkdir()
+        ab = project / ".agentic-beacon"
+        ab.mkdir()
+        (ab / "config.toml").write_text(
+            f'[warehouse]\nlocal_path = "{valid_warehouse}"\n'
+        )
+        # beacon.yaml has NO contexts (de-adopted state)
+        (ab / "beacon.yaml").write_text(
+            "artifacts:\n  contexts: []\n  skills: []\n  agents: []\n"
+        )
+
+        # Both config files contain the stale reference that should be removed
+        stale_ref = ".agentic-beacon/artifacts/contexts/global.md"
+        (project / "opencode.json").write_text(
+            json.dumps(
+                {
+                    "$schema": "https://opencode.ai/config.json",
+                    "instructions": [stale_ref],
+                },
+                indent=2,
+            )
+            + "\n"
+        )
+        (project / "CLAUDE.md").write_text(f"@{stale_ref}\n")
+
+        monkeypatch.chdir(project)
+        result = run_sync(project_root=project, skip_git_check=True)
+
+        # refs_removed must contain the stale reference (one or both files)
+        assert result.refs_removed, (
+            f"Expected refs_removed to be non-empty; got refs_removed={result.refs_removed}"
+        )
+        # refs_added must be empty (nothing was added)
+        assert not result.refs_added, (
+            f"Expected refs_added to be empty; got refs_added={result.refs_added}"
+        )
+
+    def test_de_adopt_sync_cli_output_says_removed_not_wired(
+        self, tmp_path, valid_warehouse, monkeypatch
+    ):
+        """abc sync output on de-adopt says 'Removed … stale context reference(s)',
+        not 'Wired … context(s)' (AB-96 fix-up, Finding A)."""
+        import os
+
+        (valid_warehouse / "contexts" / "global.md").write_text("# Global context")
+        env = {
+            **os.environ,
+            "GIT_AUTHOR_NAME": "Test",
+            "GIT_AUTHOR_EMAIL": "t@t.local",
+            "GIT_COMMITTER_NAME": "Test",
+            "GIT_COMMITTER_EMAIL": "t@t.local",
+        }
+        subprocess.run(
+            ["git", "add", "."],
+            cwd=valid_warehouse,
+            env=env,
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            ["git", "commit", "-m", "add global context"],
+            cwd=valid_warehouse,
+            env=env,
+            check=True,
+            capture_output=True,
+        )
+
+        project = tmp_path / "proj2"
+        project.mkdir()
+        ab = project / ".agentic-beacon"
+        ab.mkdir()
+        (ab / "config.toml").write_text(
+            f'[warehouse]\nlocal_path = "{valid_warehouse}"\n'
+        )
+        (ab / "beacon.yaml").write_text(
+            "artifacts:\n  contexts: []\n  skills: []\n  agents: []\n"
+        )
+
+        stale_ref = ".agentic-beacon/artifacts/contexts/global.md"
+        (project / "opencode.json").write_text(
+            json.dumps(
+                {
+                    "$schema": "https://opencode.ai/config.json",
+                    "instructions": [stale_ref],
+                },
+                indent=2,
+            )
+            + "\n"
+        )
+        (project / "CLAUDE.md").write_text(f"@{stale_ref}\n")
+
+        monkeypatch.chdir(project)
+        runner = CliRunner()
+        result = runner.invoke(main, ["sync", "--skip-git-check"])
+
+        assert result.exit_code == 0, f"sync failed: {result.output}"
+        output = result.output
+
+        # Must mention removal, not wiring
+        assert "Removed" in output and "stale context reference" in output, (
+            f"Expected 'Removed … stale context reference(s)' in output; got: {output!r}"
+        )
+        # Must NOT say "Wired N context reference(s)" (that is the add path)
+        assert "Wired" not in output, (
+            f"Output still contains 'Wired' (old wording for removals): {output!r}"
+        )

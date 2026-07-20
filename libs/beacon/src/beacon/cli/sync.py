@@ -26,7 +26,6 @@ from beacon.domains.distribution.reset import (
     reset_artifacts,
 )
 from beacon.domains.setup.wiring import (
-    desired_context_refs,
     init_claude_md,
     init_opencode_json,
     reconcile_context_references,
@@ -222,13 +221,13 @@ def sync(
         return
 
     # ── Wiring output ──
-    if result.oc_added:
+    if result.refs_added:
         console.print(
-            f"\n[green]✓[/green] Wired {len(result.oc_added)} context(s) into opencode.json"
+            f"\n[green]✓[/green] Wired {len(result.refs_added)} context reference(s)"
         )
-    if result.cc_added:
+    if result.refs_removed:
         console.print(
-            f"[green]✓[/green] Wired {len(result.cc_added)} context(s) into CLAUDE.md"
+            f"[green]✓[/green] Removed {len(result.refs_removed)} stale context reference(s)"
         )
 
     if result.wired_skills:
@@ -251,19 +250,19 @@ def sync(
         beacon_yaml = result.project_root / ".agentic-beacon" / "beacon.yaml"
         if beacon_yaml.exists():
             from beacon.core.manifest.beacon import BeaconManifest
+            from beacon.domains.setup.diagnostics import effective_desired_refs
 
             settings = BeaconManifest.from_yaml(beacon_yaml)
-            effective_names: set[str] = set()
-            for c in settings.artifacts.contexts:
-                name = c.removeprefix("contexts/").removesuffix(".md")
-                effective_names.add(name)
-            desired_refs = desired_context_refs(effective_names)
-            ref_result = reconcile_context_references(result.project_root, desired_refs)
-            if ref_result.added:
-                console.print(
-                    f"[green]✓[/green] Created and wired {len(ref_result.added)} "
-                    f"context(s) into agent config files"
+            eff_desired_refs = effective_desired_refs(settings, result.warehouse_path)
+            if eff_desired_refs is not None:
+                ref_result = reconcile_context_references(
+                    result.project_root, eff_desired_refs
                 )
+                if ref_result.added:
+                    console.print(
+                        f"[green]✓[/green] Created and wired {len(ref_result.added)} "
+                        f"context reference(s) into agent config files"
+                    )
 
     print_bundled_install_result(result.bundled_installed, result.bundled_skipped)
 
