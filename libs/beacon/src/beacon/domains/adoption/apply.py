@@ -402,6 +402,31 @@ def commit_session(
         if beacon_adds:
             post_sync_wiring_fn(beacon_adds)
 
+        # 2c. If contexts were unadopted but no beacon_adds triggered wiring,
+        # we still need to reconcile references so stale owned @-includes and
+        # instructions entries are removed from CLAUDE.md / opencode.json.
+        context_unadoptions = [
+            p
+            for p in to_unadopt
+            if not p.startswith("agents/") and not p.startswith("skills/")
+        ]
+        if context_unadoptions and not beacon_adds:
+            from beacon.core.manifest.beacon import BeaconManifest
+            from beacon.domains.setup.wiring import (
+                desired_context_refs,
+                reconcile_context_references,
+            )
+
+            beacon_yaml = project_root / ".agentic-beacon" / "beacon.yaml"
+            if beacon_yaml.exists():
+                settings = BeaconManifest.from_yaml(beacon_yaml)
+                effective_names: set[str] = set()
+                for c in settings.artifacts.contexts:
+                    name = c.removeprefix("contexts/").removesuffix(".md")
+                    effective_names.add(name)
+                desired_refs = desired_context_refs(effective_names)
+                reconcile_context_references(project_root, desired_refs)
+
         # 2b. Unwire project-local tool symlinks for unadopted agents (Bug 1 + 2 fix).
         agent_unadoptions = [p for p in to_unadopt if p.startswith("agents/")]
         if agent_unadoptions:

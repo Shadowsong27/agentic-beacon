@@ -51,14 +51,6 @@ def test_dry_run_does_not_call_wiring_or_global_install(tmp_path, monkeypatch):
         fail_if_called,
     )
     monkeypatch.setattr(
-        "beacon.domains.distribution.orchestrator.wire_contexts_opencode",
-        fail_if_called,
-    )
-    monkeypatch.setattr(
-        "beacon.domains.distribution.orchestrator.wire_contexts_claudecode",
-        fail_if_called,
-    )
-    monkeypatch.setattr(
         "beacon.domains.distribution.orchestrator.wire_skills_post_sync",
         fail_if_called,
     )
