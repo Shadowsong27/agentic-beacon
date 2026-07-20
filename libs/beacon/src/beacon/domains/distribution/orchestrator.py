@@ -49,11 +49,11 @@ from beacon.domains.distribution.sync_engine import (
 )
 from beacon.domains.setup.wiring import (
     confirm_prune,
+    desired_context_refs,
     has_synced_contexts,
+    reconcile_context_references,
     unwire_pruned_artifacts,
     wire_agents_atomically,
-    wire_contexts_claudecode,
-    wire_contexts_opencode,
 )
 from beacon.domains.warehouse.git_health import (
     check_warehouse_git_clean,
@@ -465,42 +465,47 @@ def run_sync(
                 "    mkdir .opencode  [dim]# for OpenCode[/dim]"
             )
 
-    # Use effective set for wiring decisions
+    # Use effective set for wiring decisions — reconcile references wholesale
     has_contexts = bool(effective_set.contexts) and not dry_run
     has_skills = bool(effective_set.skills) and not dry_run
 
-    if has_contexts:
-        oc_added = wire_contexts_opencode(project_root, artifacts_dir)
-        cc_added = wire_contexts_claudecode(project_root, artifacts_dir)
-
-        has_opencode = (project_root / "opencode.json").exists()
-        has_claude = any(
-            p.exists()
-            for p in [
-                project_root / ".claude" / "CLAUDE.md",
-                project_root / "CLAUDE.md",
-            ]
+    if effective_set.contexts:
+        desired_refs = desired_context_refs(effective_set.contexts)
+        reconcile_result = reconcile_context_references(
+            project_root, desired_refs, dry_run=dry_run
         )
-        if not has_opencode and not has_claude:
-            if has_synced_contexts(artifacts_dir):
-                agent_config_init_needed = True
-            else:
+        oc_added = reconcile_result.added
+        cc_added = reconcile_result.removed
+
+        if not dry_run:
+            has_opencode = (project_root / "opencode.json").exists()
+            has_claude = any(
+                p.exists()
+                for p in [
+                    project_root / ".claude" / "CLAUDE.md",
+                    project_root / "CLAUDE.md",
+                ]
+            )
+            if not has_opencode and not has_claude:
+                if has_synced_contexts(artifacts_dir):
+                    agent_config_init_needed = True
+                else:
+                    wiring_notes.append(
+                        "  Contexts synced — wire them into your agent config:\n"
+                        '  [bold]opencode.json[/bold] → add to "instructions" array:\n'
+                        '    ".agentic-beacon/artifacts/contexts/<name>.md"\n'
+                        "  [bold]CLAUDE.md[/bold] → add a line per context:\n"
+                        "    @.agentic-beacon/artifacts/contexts/<name>.md"
+                    )
+        else:
+            if reconcile_result:
                 wiring_notes.append(
-                    "  Contexts synced — wire them into your agent config:\n"
+                    "  Contexts would be synced — wire them into your agent config if needed:\n"
                     '  [bold]opencode.json[/bold] → add to "instructions" array:\n'
                     '    ".agentic-beacon/artifacts/contexts/<name>.md"\n'
                     "  [bold]CLAUDE.md[/bold] → add a line per context:\n"
                     "    @.agentic-beacon/artifacts/contexts/<name>.md"
                 )
-
-    if effective_set.contexts and dry_run:
-        wiring_notes.append(
-            "  Contexts would be synced — wire them into your agent config if needed:\n"
-            '  [bold]opencode.json[/bold] → add to "instructions" array:\n'
-            '    ".agentic-beacon/artifacts/contexts/<name>.md"\n'
-            "  [bold]CLAUDE.md[/bold] → add a line per context:\n"
-            "    @.agentic-beacon/artifacts/contexts/<name>.md"
-        )
 
     if has_skills:
         wired_skills, wire_errors = wire_skills_post_sync(

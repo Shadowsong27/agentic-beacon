@@ -244,12 +244,21 @@ def commit_session(
 
         if has_contexts:
             from beacon.domains.setup.wiring import (
-                wire_contexts_claudecode,
-                wire_contexts_opencode,
+                desired_context_refs,
+                reconcile_context_references,
             )
 
-            wire_contexts_opencode(project_root, artifacts_path)
-            wire_contexts_claudecode(project_root, artifacts_path)
+            beacon_yaml = project_root / ".agentic-beacon" / "beacon.yaml"
+            if beacon_yaml.exists():
+                from beacon.core.manifest.beacon import BeaconManifest
+
+                settings = BeaconManifest.from_yaml(beacon_yaml)
+                effective_names: set[str] = set()
+                for c in settings.artifacts.contexts:
+                    name = c.removeprefix("contexts/").removesuffix(".md")
+                    effective_names.add(name)
+                desired_refs = desired_context_refs(effective_names)
+                reconcile_context_references(project_root, desired_refs)
 
         if has_skills:
             from beacon.domains.artifact.skill import wire_skills_post_sync
