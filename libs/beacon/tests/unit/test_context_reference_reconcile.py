@@ -571,9 +571,7 @@ class TestReconcileContextReferences:
         oc_instructions = oc_data["instructions"]
         for name in desired_names:
             assert f".agentic-beacon/artifacts/contexts/{name}.md" in oc_instructions
-        assert (
-            ".agentic-beacon/artifacts/contexts/linear-ops.md" not in oc_instructions
-        )
+        assert ".agentic-beacon/artifacts/contexts/linear-ops.md" not in oc_instructions
 
         # Second run is idempotent
         result2 = reconcile_context_references(tmp_path, desired)
