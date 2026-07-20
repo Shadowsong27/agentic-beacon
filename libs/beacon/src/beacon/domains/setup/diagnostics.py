@@ -99,7 +99,27 @@ def repair_reference_drift(
     if beacon_manifest is None or warehouse_path is None:
         return []
 
-    effective_result = compute_effective_set(beacon_manifest, warehouse_path)
+    # Normalize the manifest contexts to bare names (strip "contexts/" prefix and ".md"
+    # suffix) so compute_effective_set receives the same format as run_sync uses after
+    # _normalize_beacon_for_resolver.
+    normalized_contexts: list[str] = []
+    for c in beacon_manifest.artifacts.contexts:
+        name = c
+        if name.startswith("contexts/"):
+            name = name[len("contexts/") :]
+        if name.endswith(".md"):
+            name = name[: -len(".md")]
+        normalized_contexts.append(name)
+    normalized_manifest = BeaconManifest(
+        artifacts={
+            "contexts": normalized_contexts,
+            "skills": beacon_manifest.artifacts.skills,
+            "agents": beacon_manifest.artifacts.agents,
+        },
+        ignore=beacon_manifest.ignore,
+    )
+
+    effective_result = compute_effective_set(normalized_manifest, warehouse_path)
     if isinstance(effective_result, ResolutionFailure):
         return []
 
