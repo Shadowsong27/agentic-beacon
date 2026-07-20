@@ -130,6 +130,13 @@ def _reconcile_claude_md(
     Only lines whose stripped form starts with ``@ARTIFACT_REF_PREFIX`` are
     managed.  Non-artifact lines (``@AGENTS.md``, etc.) are preserved
     verbatim.  Writes only when content changes.
+
+    Algorithm:
+    1. Strip ALL owned artifact lines from the file.
+    2. Collapse any orphaned blank-line runs left behind by removals
+       (runs of 3+ consecutive newlines → 2 newlines).
+    3. Append the **full desired set** (sorted, deterministic) so that
+       refs in the intersection of owned ∩ desired are correctly re-added.
     """
     claude_md = _resolve_claude_md(project_root)
     if claude_md is None:
@@ -139,7 +146,7 @@ def _reconcile_claude_md(
     lines = content.splitlines(keepends=True)
 
     owned_refs: set[str] = set()
-    new_lines: list[str] = []
+    stripped_lines: list[str] = []
     for line in lines:
         stripped = line.strip()
         m = _ATPATH_LINE_RE.match(stripped)
@@ -148,7 +155,7 @@ def _reconcile_claude_md(
             if path.startswith(ARTIFACT_REF_PREFIX):
                 owned_refs.add(path)
                 continue
-        new_lines.append(line)
+        stripped_lines.append(line)
 
     desired_set = set(desired_refs)
     added = sorted(desired_set - owned_refs)
@@ -160,12 +167,18 @@ def _reconcile_claude_md(
     if dry_run:
         return ReferenceReconcileResult(added=added, removed=removed)
 
-    for ref in added:
-        new_lines.append(f"@{ref}\n")
+    # Collapse orphaned blank-line runs (3+ consecutive newlines → 2).
+    body = "".join(stripped_lines)
+    body = re.sub(r"\n{3,}", "\n\n", body)
 
-    new_content = "".join(new_lines)
+    # Append the full desired set (sorted for determinism / idempotency).
+    if desired_refs:
+        # Ensure the body ends with a newline before appending.
+        if body and not body.endswith("\n"):
+            body += "\n"
+        body += "\n".join(f"@{ref}" for ref in sorted(desired_refs)) + "\n"
 
-    claude_md.write_text(new_content, encoding="utf-8")
+    claude_md.write_text(body, encoding="utf-8")
 
     return ReferenceReconcileResult(added=added, removed=removed)
 

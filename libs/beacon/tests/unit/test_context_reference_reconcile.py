@@ -310,6 +310,109 @@ class TestReconcileClaudeMd:
         content = claude.read_text()
         assert "@.agentic-beacon/artifacts/contexts/beacon-ops.md" in content
 
+    def test_intersection_present_and_desired_preserved(self, tmp_path):
+        """BUG REGRESSION: refs in owned ∩ desired must NOT be dropped.
+
+        The bug: old code stripped all owned lines then re-appended only
+        ``added`` (desired − owned), so the intersection was silently wiped.
+        """
+        claude = tmp_path / "CLAUDE.md"
+        # python-standards is both currently owned AND desired (intersection).
+        # linear-ops is owned but NOT desired (should be removed).
+        claude.write_text(
+            "@AGENTS.md\n"
+            "@.agentic-beacon/artifacts/contexts/python-standards.md\n"
+            "@.agentic-beacon/artifacts/contexts/linear-ops.md\n"
+        )
+        desired = [
+            ".agentic-beacon/artifacts/contexts/python-standards.md",
+            ".agentic-beacon/artifacts/contexts/beacon-ops.md",
+        ]
+        result = _reconcile_claude_md(tmp_path, desired)
+        assert ".agentic-beacon/artifacts/contexts/linear-ops.md" in result.removed
+        assert ".agentic-beacon/artifacts/contexts/beacon-ops.md" in result.added
+
+        content = claude.read_text()
+        # Intersection ref must still be present
+        assert "@.agentic-beacon/artifacts/contexts/python-standards.md" in content
+        # Departed ref must be gone
+        assert "@.agentic-beacon/artifacts/contexts/linear-ops.md" not in content
+        # Added ref must be present
+        assert "@.agentic-beacon/artifacts/contexts/beacon-ops.md" in content
+        # Non-artifact line must be untouched
+        assert "@AGENTS.md" in content
+
+    def test_idempotent_after_partial_drift(self, tmp_path):
+        """After reconciling drift, a second run is a no-op (byte-identical output)."""
+        claude = tmp_path / "CLAUDE.md"
+        claude.write_text(
+            "@AGENTS.md\n"
+            "@.agentic-beacon/artifacts/contexts/python-standards.md\n"
+            "@.agentic-beacon/artifacts/contexts/linear-ops.md\n"
+        )
+        desired = [
+            ".agentic-beacon/artifacts/contexts/python-standards.md",
+            ".agentic-beacon/artifacts/contexts/beacon-ops.md",
+        ]
+        _reconcile_claude_md(tmp_path, desired)
+        content_after_run1 = claude.read_bytes()
+        mtime_after_run1 = claude.stat().st_mtime
+
+        result2 = _reconcile_claude_md(tmp_path, desired)
+        assert result2.added == []
+        assert result2.removed == []
+        assert claude.read_bytes() == content_after_run1
+        assert claude.stat().st_mtime == mtime_after_run1
+
+    def test_live_shape_regression(self, tmp_path):
+        """Live-shape regression: 7 owned refs (incl. departed linear-ops) → 6 desired remain.
+
+        Mirrors the exact repo condition that motivated AB-96:
+        linear-ops was renamed to plane-ops; cicd-flow was de-adopted.
+        """
+        owned_names = [
+            "python-standards",
+            "openspec-workflow",
+            "cicd-flow",
+            "agent-practices",
+            "linear-ops",
+            "beacon-ops",
+            "plane-ops",
+        ]
+        desired_names = [
+            "python-standards",
+            "openspec-workflow",
+            "agent-practices",
+            "beacon-ops",
+            "plane-ops",
+        ]
+        claude = tmp_path / "CLAUDE.md"
+        claude.write_text(
+            "# Project\n\n@AGENTS.md\n\n"
+            + "\n\n".join(
+                f"@.agentic-beacon/artifacts/contexts/{n}.md" for n in owned_names
+            )
+            + "\n"
+        )
+        desired = desired_context_refs(set(desired_names))
+        result = _reconcile_claude_md(tmp_path, desired)
+
+        assert ".agentic-beacon/artifacts/contexts/linear-ops.md" in result.removed
+        assert ".agentic-beacon/artifacts/contexts/cicd-flow.md" in result.removed
+
+        content = claude.read_text()
+        assert "@AGENTS.md" in content
+        assert "# Project" in content
+        for name in desired_names:
+            assert f"@.agentic-beacon/artifacts/contexts/{name}.md" in content
+        assert "@.agentic-beacon/artifacts/contexts/linear-ops.md" not in content
+        assert "@.agentic-beacon/artifacts/contexts/cicd-flow.md" not in content
+
+        # Second run must be idempotent
+        result2 = _reconcile_claude_md(tmp_path, desired)
+        assert result2.added == []
+        assert result2.removed == []
+
 
 # ---------------------------------------------------------------------------
 # Task 1.4: reconcile_context_references
@@ -369,7 +472,7 @@ class TestReconcileContextReferences:
         assert (tmp_path / "CLAUDE.md").read_bytes() == cl_before
 
     def test_tc3_idempotent(self, tmp_path):
-        """TC3: second call returns empty added/removed."""
+        """TC3: second call returns empty added/removed; byte-identical output."""
         self._setup_both(
             tmp_path,
             opencode_instructions=[
@@ -379,8 +482,10 @@ class TestReconcileContextReferences:
         )
         desired = [".agentic-beacon/artifacts/contexts/beacon-ops.md"]
         result1 = reconcile_context_references(tmp_path, desired)
+        # First run on already-matching files should be a no-op
+        assert result1.added == []
+        assert result1.removed == []
         result2 = reconcile_context_references(tmp_path, desired)
-        # First call could still report no change (already matches)
         assert result2.added == []
         assert result2.removed == []
 
@@ -402,6 +507,78 @@ class TestReconcileContextReferences:
         result = reconcile_context_references(tmp_path, desired)
         assert ".agentic-beacon/artifacts/contexts/linear-ops.md" in result.removed
         assert ".agentic-beacon/artifacts/contexts/plane-ops.md" in result.added
+
+    def test_live_shape_regression_both_files(self, tmp_path):
+        """Live-shape regression: 7 owned refs (incl. linear-ops) across both files → 6 desired.
+
+        Verifies the critical bug fix: present-and-desired intersection refs
+        must survive reconcile (not be silently wiped).
+        """
+        owned_names = [
+            "python-standards",
+            "openspec-workflow",
+            "cicd-flow",
+            "agent-practices",
+            "linear-ops",
+            "beacon-ops",
+            "plane-ops",
+        ]
+        desired_names = {
+            "python-standards",
+            "openspec-workflow",
+            "agent-practices",
+            "beacon-ops",
+            "plane-ops",
+        }
+        # Setup CLAUDE.md with 7 owned refs
+        (tmp_path / "CLAUDE.md").write_text(
+            "# Project\n\n@AGENTS.md\n\n"
+            + "\n\n".join(
+                f"@.agentic-beacon/artifacts/contexts/{n}.md" for n in owned_names
+            )
+            + "\n"
+        )
+        # Setup opencode.json with 7 owned refs
+        (tmp_path / "opencode.json").write_text(
+            json.dumps(
+                {
+                    "$schema": "https://opencode.ai/config.json",
+                    "instructions": [
+                        f".agentic-beacon/artifacts/contexts/{n}.md"
+                        for n in owned_names
+                    ],
+                },
+                indent=2,
+            )
+            + "\n"
+        )
+        desired = desired_context_refs(desired_names)
+        result = reconcile_context_references(tmp_path, desired)
+
+        # linear-ops and cicd-flow should be removed
+        assert ".agentic-beacon/artifacts/contexts/linear-ops.md" in result.removed
+        assert ".agentic-beacon/artifacts/contexts/cicd-flow.md" in result.removed
+
+        # All 5 desired should be present in CLAUDE.md
+        claude_content = (tmp_path / "CLAUDE.md").read_text()
+        for name in desired_names:
+            assert f"@.agentic-beacon/artifacts/contexts/{name}.md" in claude_content
+        assert "@.agentic-beacon/artifacts/contexts/linear-ops.md" not in claude_content
+        assert "@AGENTS.md" in claude_content
+
+        # All 5 desired should be present in opencode.json
+        oc_data = json.loads((tmp_path / "opencode.json").read_text())
+        oc_instructions = oc_data["instructions"]
+        for name in desired_names:
+            assert f".agentic-beacon/artifacts/contexts/{name}.md" in oc_instructions
+        assert (
+            ".agentic-beacon/artifacts/contexts/linear-ops.md" not in oc_instructions
+        )
+
+        # Second run is idempotent
+        result2 = reconcile_context_references(tmp_path, desired)
+        assert result2.added == []
+        assert result2.removed == []
 
 
 # ---------------------------------------------------------------------------
