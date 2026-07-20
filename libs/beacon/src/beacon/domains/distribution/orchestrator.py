@@ -466,7 +466,6 @@ def run_sync(
             )
 
     # Use effective set for wiring decisions — reconcile references wholesale
-    has_contexts = bool(effective_set.contexts) and not dry_run
     has_skills = bool(effective_set.skills) and not dry_run
 
     if effective_set.contexts:

@@ -16,9 +16,17 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from beacon.core.dependencies.resolver import (
+    ResolutionFailure,
+    compute_effective_set,
+)
 from beacon.core.gitignore import apply_all_gitignores, diff_gitignores
 from beacon.core.manifest.beacon import BeaconManifest
 from beacon.domains.distribution.sync_engine import SyncEngine
+from beacon.domains.setup.wiring import (
+    desired_context_refs,
+    reconcile_context_references,
+)
 
 
 @dataclass(frozen=True)
@@ -36,14 +44,17 @@ def run_project_diagnostics(
     beacon_manifest: BeaconManifest | None,
     fix: bool,
 ) -> tuple[list[DoctorIssue], list[str]]:
-    """Optionally repair gitignore drift, then run all project-side health checks.
+    """Optionally repair gitignore drift and reference drift, then run all project-side health checks.
 
     Returns (issues, applied_fixes). Repair runs first so the returned issues
     reflect the post-repair state.
     """
     applied_fixes: list[str] = []
     if fix:
-        applied_fixes = repair_gitignore_drift(project_root)
+        applied_fixes.extend(repair_gitignore_drift(project_root))
+        applied_fixes.extend(
+            repair_reference_drift(project_root, beacon_manifest, warehouse_path)
+        )
     issues = run_project_health_checks(project_root, warehouse_path, beacon_manifest)
     return issues, applied_fixes
 
@@ -69,6 +80,41 @@ def repair_gitignore_drift(project_root: Path) -> list[str]:
         apply_all_gitignores(project_root)
         return ["Repaired gitignore managed blocks (Tier A / Tier B)"]
     return []
+
+
+def repair_reference_drift(
+    project_root: Path,
+    beacon_manifest: BeaconManifest | None,
+    warehouse_path: Path | None,
+) -> list[str]:
+    """Repair context-reference drift in CLAUDE.md and opencode.json.
+
+    Computes the effective set (same normalization as run_sync), builds
+    desired_refs, and calls reconcile_context_references.  Returns a
+    human-readable fix line for each file that changed.
+
+    Returns [] immediately when either beacon_manifest or warehouse_path is
+    None, or when compute_effective_set returns a ResolutionFailure.
+    """
+    if beacon_manifest is None or warehouse_path is None:
+        return []
+
+    effective_result = compute_effective_set(beacon_manifest, warehouse_path)
+    if isinstance(effective_result, ResolutionFailure):
+        return []
+
+    desired_refs = desired_context_refs(effective_result.contexts)
+    result = reconcile_context_references(project_root, desired_refs)
+
+    fixes: list[str] = []
+    if result.added or result.removed:
+        parts: list[str] = []
+        if result.added:
+            parts.append(f"added {len(result.added)}")
+        if result.removed:
+            parts.append(f"removed {len(result.removed)}")
+        fixes.append(f"Repaired context references ({', '.join(parts)})")
+    return fixes
 
 
 def run_project_health_checks(
