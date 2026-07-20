@@ -71,7 +71,14 @@ jobs:
               const kind = (c.body || "").includes(marker) ? "prior pi review" : "reply / other review"
               return `#### @${who} — ${kind} (${c.created_at})\n\n${(c.body || "").trim()}`
             }).join("\n\n---\n\n")
-            fs.writeFileSync(out, rendered)
+            // Cap the rendered thread: the prompt is passed as a single argv, so an
+            // unbounded thread could exceed Linux MAX_ARG_STRLEN and make pi fail
+            // (falling back to an empty review — the exact failure we're avoiding).
+            const CAP = 24000
+            const capped = rendered.length > CAP
+              ? rendered.slice(0, CAP) + "\n\n_[prior thread truncated to bound prompt size]_"
+              : rendered
+            fs.writeFileSync(out, capped)
 
       - name: Scrub checkout credential before running the agent
         run: |
