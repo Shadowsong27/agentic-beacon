@@ -1,8 +1,9 @@
 name: opencode-review
 
-# Auto-run disabled (HARN-79): the terra-via-LiteLLM path produces empty reviews
-# here (mid-stream backend response.failed → preamble + token usage, no findings).
-# Replaced by pi-pr-review.yml. Kept for manual runs / easy revert.
+# Disabled (HARN-79): the terra-via-LiteLLM path produces empty reviews here
+# (mid-stream backend response.failed → preamble + token usage, no findings).
+# Replaced by pi-pr-review.yml. Kept only for easy revert — the PR-gated job below
+# is intentionally skipped on manual dispatch (no pull_request context).
 on:
   workflow_dispatch:
 

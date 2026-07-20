@@ -74,9 +74,11 @@ jobs:
             // Cap the rendered thread: the prompt is passed as a single argv, so an
             // unbounded thread could exceed Linux MAX_ARG_STRLEN and make pi fail
             // (falling back to an empty review — the exact failure we're avoiding).
+            // Keep the TAIL (newest comments) — recent triage/rebuttals are what
+            // convergence depends on; dropping them would re-raise settled findings.
             const CAP = 24000
             const capped = rendered.length > CAP
-              ? rendered.slice(0, CAP) + "\n\n_[prior thread truncated to bound prompt size]_"
+              ? "_[older prior-thread truncated to bound prompt size]_\n\n" + rendered.slice(-CAP)
               : rendered
             fs.writeFileSync(out, capped)
 

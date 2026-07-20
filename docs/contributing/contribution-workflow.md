@@ -89,23 +89,20 @@ Before opening a PR, verify:
 
 - Use a descriptive title following the Conventional Commits format.
 - Link the related issue in the PR description.
-- The CI bot (`opencode-review.yml`) will post an automated code review. Address its findings
-  before requesting human review.
+- The CI bot (`pi-pr-review.yml`) will post an automated code review (comment marked
+  `🧪 pi.dev Review`). Address its findings before requesting human review.
 - Integration tests run automatically on PRs targeting `main`.
 
 ---
 
-## Changing the OpenCode Review Bot Model
+## Review Bot
 
-```bash
-# Override the default model for the review bot
-gh variable set OPENCODE_REVIEW_MODEL \
-  -R Shadowsong27/agentic-beacon \
-  --body "anthropic/claude-3-7-sonnet"
+The PR reviewer is `pi-pr-review.yml` (pi.dev). The older `opencode-review.yml` is
+disabled (its terra-via-LiteLLM path produced empty reviews) but kept for easy revert.
 
-# Revert to workflow default
-gh variable delete OPENCODE_REVIEW_MODEL -R Shadowsong27/agentic-beacon
-```
+The review model is set by the `PI_MODEL` env in `pi-pr-review.yml` (default
+`litellm-responses/gpt-5.6-terra-medium`); the provider is configured in the runner's
+`~/.pi/agent/models.json`.
 
 ---
 
