@@ -83,8 +83,8 @@ class SyncOrchestrationResult:
     conflicts: list[str]
     orphans: list[Orphan]
     confirmed_prune: list[str]
-    oc_added: list[str]
-    cc_added: list[str]
+    refs_added: list[str]
+    refs_removed: list[str]
     wired_skills: list[str]
     wire_errors: list[str]
     bundled_installed: list[str]
@@ -436,8 +436,8 @@ def run_sync(
         ) from e
 
     # Post-sync wiring
-    oc_added: list[str] = []
-    cc_added: list[str] = []
+    refs_added: list[str] = []
+    refs_removed: list[str] = []
     wired_skills: list[str] = []
     wire_errors: list[str] = []
     wiring_notes: list[str] = []
@@ -474,8 +474,8 @@ def run_sync(
     reconcile_result = reconcile_context_references(
         project_root, desired_refs, dry_run=dry_run
     )
-    oc_added = reconcile_result.added
-    cc_added = reconcile_result.removed
+    refs_added = reconcile_result.added
+    refs_removed = reconcile_result.removed
 
     if effective_set.contexts and not dry_run:
         has_opencode = (project_root / "opencode.json").exists()
@@ -561,8 +561,8 @@ def run_sync(
         conflicts=[],
         orphans=orphans,
         confirmed_prune=confirmed_prune,
-        oc_added=oc_added,
-        cc_added=cc_added,
+        refs_added=refs_added,
+        refs_removed=refs_removed,
         wired_skills=wired_skills,
         wire_errors=wire_errors,
         bundled_installed=list(bundled_installed),

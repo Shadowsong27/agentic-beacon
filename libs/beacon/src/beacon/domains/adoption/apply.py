@@ -243,22 +243,16 @@ def commit_session(
         agent_candidates = [c for c in beacon_adds if c.artifact_type == "agents"]
 
         if has_contexts:
-            from beacon.domains.setup.wiring import (
-                desired_context_refs,
-                reconcile_context_references,
-            )
+            from beacon.core.manifest.beacon import BeaconManifest
+            from beacon.domains.setup.diagnostics import effective_desired_refs
+            from beacon.domains.setup.wiring import reconcile_context_references
 
             beacon_yaml = project_root / ".agentic-beacon" / "beacon.yaml"
             if beacon_yaml.exists():
-                from beacon.core.manifest.beacon import BeaconManifest
-
                 settings = BeaconManifest.from_yaml(beacon_yaml)
-                effective_names: set[str] = set()
-                for c in settings.artifacts.contexts:
-                    name = c.removeprefix("contexts/").removesuffix(".md")
-                    effective_names.add(name)
-                desired_refs = desired_context_refs(effective_names)
-                reconcile_context_references(project_root, desired_refs)
+                eff_desired_refs = effective_desired_refs(settings, warehouse_path)
+                if eff_desired_refs is not None:
+                    reconcile_context_references(project_root, eff_desired_refs)
 
         if has_skills:
             from beacon.domains.artifact.skill import wire_skills_post_sync
@@ -412,20 +406,15 @@ def commit_session(
         ]
         if context_unadoptions and not beacon_adds:
             from beacon.core.manifest.beacon import BeaconManifest
-            from beacon.domains.setup.wiring import (
-                desired_context_refs,
-                reconcile_context_references,
-            )
+            from beacon.domains.setup.diagnostics import effective_desired_refs
+            from beacon.domains.setup.wiring import reconcile_context_references
 
             beacon_yaml = project_root / ".agentic-beacon" / "beacon.yaml"
             if beacon_yaml.exists():
                 settings = BeaconManifest.from_yaml(beacon_yaml)
-                effective_names: set[str] = set()
-                for c in settings.artifacts.contexts:
-                    name = c.removeprefix("contexts/").removesuffix(".md")
-                    effective_names.add(name)
-                desired_refs = desired_context_refs(effective_names)
-                reconcile_context_references(project_root, desired_refs)
+                eff_desired_refs = effective_desired_refs(settings, warehouse_path)
+                if eff_desired_refs is not None:
+                    reconcile_context_references(project_root, eff_desired_refs)
 
         # 2b. Unwire project-local tool symlinks for unadopted agents (Bug 1 + 2 fix).
         agent_unadoptions = [p for p in to_unadopt if p.startswith("agents/")]
