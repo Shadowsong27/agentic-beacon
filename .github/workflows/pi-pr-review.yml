@@ -1,0 +1,173 @@
+name: pi PR Review (experimental)
+
+# Shadow reviewer running ALONGSIDE the opencode reviewer (HARN-79) so pi.dev's
+# review quality can be compared on real PRs before any harness swap. Posts a
+# separate, clearly-marked comment. Non-blocking (no required check).
+#
+# Security posture (pi's own self-review, HARN-79): the agentic step gets `bash`
+# and runs on the private self-hosted runner over attacker-influenceable diff
+# content, so it must NOT hold a write-scoped token. The `review` job therefore
+# has read-only permissions, scrubs the checkout credential from .git/config
+# before invoking the agent, and never exposes GITHUB_TOKEN to the pi step.
+# A separate, write-scoped `post` job (which runs no agent) publishes the comment.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: pi-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  PI_MODEL: litellm-responses/gpt-5.6-terra-medium
+
+jobs:
+  review:
+    # Same-repo, non-draft PRs only: keep fork PRs off the private self-hosted runner.
+    if: |
+      github.event.pull_request.draft == false &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: self-hosted
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate PR diff
+        run: |
+          git fetch origin "${{ github.base_ref }}"
+          git diff --merge-base "origin/${{ github.base_ref }}" HEAD > "$RUNNER_TEMP/pr.diff"
+          echo "diff lines: $(wc -l < "$RUNNER_TEMP/pr.diff")"
+
+      - name: Fetch prior review thread
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require("fs")
+            const out = process.env.RUNNER_TEMP + "/prior-thread.md"
+            const marker = "<!-- pi-pr-review -->"
+            const { owner, repo } = context.repo
+            const issue_number = context.payload.pull_request.number
+            let comments = []
+            try {
+              comments = await github.paginate(github.rest.issues.listComments, {
+                owner, repo, issue_number, per_page: 100,
+              })
+            } catch (e) {
+              core.warning(`Could not fetch prior comments: ${e.message}`)
+              fs.writeFileSync(out, "")
+              return
+            }
+            // Keep the most recent 30 to bound prompt size.
+            const rendered = comments.slice(-30).map(c => {
+              const who = (c.user && c.user.login) || "unknown"
+              const kind = (c.body || "").includes(marker) ? "prior pi review" : "reply / other review"
+              return `#### @${who} — ${kind} (${c.created_at})\n\n${(c.body || "").trim()}`
+            }).join("\n\n---\n\n")
+            // Cap the rendered thread: the prompt is passed as a single argv, so an
+            // unbounded thread could exceed Linux MAX_ARG_STRLEN and make pi fail
+            // (falling back to an empty review — the exact failure we're avoiding).
+            // Keep the TAIL (newest comments) — recent triage/rebuttals are what
+            // convergence depends on; dropping them would re-raise settled findings.
+            const CAP = 24000
+            const capped = rendered.length > CAP
+              ? "_[older prior-thread truncated to bound prompt size]_\n\n" + rendered.slice(-CAP)
+              : rendered
+            fs.writeFileSync(out, capped)
+
+      - name: Scrub checkout credential before running the agent
+        run: |
+          # Remove the persisted GitHub token so the bash-enabled agent cannot read
+          # it out of .git/config. (The job token is read-only anyway; belt + braces.)
+          git config --local --unset-all http.https://github.com/.extraheader 2>/dev/null || true
+          git submodule foreach --recursive 'git config --local --unset-all http.https://github.com/.extraheader 2>/dev/null || true' || true
+
+      - name: Build prompt
+        run: |
+          cat .github/pi-review-prompt.md > "$RUNNER_TEMP/prompt.md"
+          # Append the same repo-specific rules the opencode reviewer uses, for parity.
+          if [ -f .github/opencode-pr-review-prompt.md ]; then
+            printf '\n## Repository-specific rules\n\n' >> "$RUNNER_TEMP/prompt.md"
+            cat .github/opencode-pr-review-prompt.md >> "$RUNNER_TEMP/prompt.md"
+          fi
+          # Append the prior review thread so pi honors settled findings (no re-raising).
+          if [ -s "$RUNNER_TEMP/prior-thread.md" ]; then
+            printf '\n## Prior review thread\n\nThese are earlier comments on this PR — your own previous reviews and any replies. Apply the "Honor prior triage" rule: do not re-raise a finding already credibly rebutted or addressed unless the diff has since changed.\n\n' >> "$RUNNER_TEMP/prompt.md"
+            cat "$RUNNER_TEMP/prior-thread.md" >> "$RUNNER_TEMP/prompt.md"
+          fi
+
+      - name: Run pi review
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ""
+        run: |
+          set -o pipefail
+          # Agentic review over the repo checkout (read/bash/glob/grep) minus edit/write,
+          # matching how the opencode reviewer investigates. Diff is fed on stdin.
+          pi -p --mode json --no-session --exclude-tools edit,write \
+            --model "$PI_MODEL" \
+            "$(cat "$RUNNER_TEMP/prompt.md")" \
+            < "$RUNNER_TEMP/pr.diff" \
+            > "$RUNNER_TEMP/pi-events.jsonl" || echo "pi exited non-zero (see events)"
+          python3 .github/scripts/pi-extract-review.py "$RUNNER_TEMP/pi-events.jsonl" \
+            > "$RUNNER_TEMP/pi-review.md"
+          echo "review chars: $(wc -c < "$RUNNER_TEMP/pi-review.md")"
+
+      - name: Upload review artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pi-review-${{ github.event.pull_request.number }}
+          path: ${{ runner.temp }}/pi-review.md
+          retention-days: 3
+          if-no-files-found: warn
+
+  post:
+    needs: review
+    if: always() && needs.review.result != 'skipped'
+    runs-on: self-hosted
+    permissions:
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Download review artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pi-review-${{ github.event.pull_request.number }}
+          path: ${{ runner.temp }}/review
+        continue-on-error: true
+
+      - name: Post PR comment
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require("fs")
+            const marker = "<!-- pi-pr-review -->"
+            let review = "pi produced no review output."
+            try {
+              const t = fs.readFileSync(process.env.RUNNER_TEMP + "/review/pi-review.md", "utf8").trim()
+              if (t) review = t
+            } catch (e) {}
+            const body = [
+              marker,
+              "",
+              "## 🧪 pi.dev Review — experimental shadow",
+              "",
+              `_Comparison trial running alongside the opencode reviewer (HARN-79). Model: \`${process.env.PI_MODEL}\`. Non-blocking; here to compare review quality, not to gate merges._`,
+              "",
+              review,
+            ].join("\n")
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body,
+            })

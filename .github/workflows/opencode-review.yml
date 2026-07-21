@@ -1,8 +1,11 @@
 name: opencode-review
 
+# Disabled (HARN-79): the terra-via-LiteLLM path produces empty reviews here
+# (mid-stream backend response.failed → preamble + token usage, no findings).
+# Replaced by pi-pr-review.yml. Kept only for easy revert — the PR-gated job below
+# is intentionally skipped on manual dispatch (no pull_request context).
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
 
 concurrency:
   group: opencode-review-${{ github.event.pull_request.number }}
