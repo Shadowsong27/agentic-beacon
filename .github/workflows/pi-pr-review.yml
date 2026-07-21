@@ -10,7 +10,10 @@ name: pi PR Review
 # content, so it must NOT hold a write-scoped token. The `review` job therefore
 # has read-only permissions, scrubs the checkout credential from .git/config
 # before invoking the agent, and never exposes GITHUB_TOKEN to the pi step.
-# A separate, write-scoped `post` job (which runs no agent) publishes the comment.
+# `--no-approve` additionally stops pi from trusting PR-controlled project-local
+# `.pi` resources (extensions/skills) that would otherwise load before the
+# tool denylist applies. A separate, write-scoped `post` job (which runs no
+# agent) publishes the comment.
 
 on:
   pull_request:
@@ -66,8 +69,20 @@ jobs:
               fs.writeFileSync(out, "")
               return
             }
+            // Trust boundary (HARN-79): these comments are fed into the
+            // bash-capable agent's prompt. On a PUBLIC repo anyone can comment,
+            // so only ingest pi's own prior reviews (posted by github-actions[bot])
+            // and comments from repo members/owners/collaborators — drop untrusted
+            // external comments that could prompt-inject the agent. author_association
+            // is computed by GitHub and cannot be spoofed by an external commenter.
+            // (No-op on private repos, where every commenter already has repo access.)
+            const TRUSTED_ASSOC = new Set(["OWNER", "MEMBER", "COLLABORATOR"])
+            const trusted = comments.filter(c =>
+              (c.user && c.user.login === "github-actions[bot]") ||
+              TRUSTED_ASSOC.has(c.author_association)
+            )
             // Keep the most recent 30 to bound prompt size.
-            const rendered = comments.slice(-30).map(c => {
+            const rendered = trusted.slice(-30).map(c => {
               const who = (c.user && c.user.login) || "unknown"
               const kind = (c.body || "").includes(marker) ? "prior pi review" : "reply / other review"
               return `#### @${who} — ${kind} (${c.created_at})\n\n${(c.body || "").trim()}`
@@ -110,9 +125,10 @@ jobs:
           GITHUB_TOKEN: ""
         run: |
           set -o pipefail
-          # Agentic review over the repo checkout (read/bash/glob/grep) minus edit/write,
-          # matching how the opencode reviewer investigates. Diff is fed on stdin.
-          pi -p --mode json --no-session --exclude-tools edit,write \
+          # Agentic review over the repo checkout (pi's read + bash tools, minus
+          # edit/write). --no-approve ignores PR-controlled project-local pi
+          # resources. Diff is fed on stdin (verified consumed by `pi -p`).
+          pi -p --mode json --no-session --no-approve --exclude-tools edit,write \
             --model "$PI_MODEL" \
             "$(cat "$RUNNER_TEMP/prompt.md")" \
             < "$RUNNER_TEMP/pr.diff" \
