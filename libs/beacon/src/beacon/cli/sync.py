@@ -28,8 +28,7 @@ from beacon.domains.distribution.reset import (
 from beacon.domains.setup.wiring import (
     init_claude_md,
     init_opencode_json,
-    wire_contexts_claudecode,
-    wire_contexts_opencode,
+    reconcile_context_references,
 )
 from beacon.utils.display import format_regular_file_conflict, is_interactive
 from beacon.utils.git import find_project_root
@@ -222,13 +221,13 @@ def sync(
         return
 
     # ── Wiring output ──
-    if result.oc_added:
+    if result.refs_added:
         console.print(
-            f"\n[green]✓[/green] Wired {len(result.oc_added)} context(s) into opencode.json"
+            f"\n[green]✓[/green] Wired {len(result.refs_added)} context reference(s)"
         )
-    if result.cc_added:
+    if result.refs_removed:
         console.print(
-            f"[green]✓[/green] Wired {len(result.cc_added)} context(s) into CLAUDE.md"
+            f"[green]✓[/green] Removed {len(result.refs_removed)} stale context reference(s)"
         )
 
     if result.wired_skills:
@@ -247,19 +246,23 @@ def sync(
 
     if result.agent_config_init_needed and not result.dry_run:
         init_opencode_json(result.project_root)
-        oc_init = wire_contexts_opencode(result.project_root, result.artifacts_dir)
-        if oc_init:
-            console.print(
-                f"[green]✓[/green] Created opencode.json and "
-                f"wired {len(oc_init)} context(s)"
-            )
         init_claude_md(result.project_root)
-        cc_init = wire_contexts_claudecode(result.project_root, result.artifacts_dir)
-        if cc_init:
-            console.print(
-                f"[green]✓[/green] Created CLAUDE.md and "
-                f"wired {len(cc_init)} context(s)"
-            )
+        beacon_yaml = result.project_root / ".agentic-beacon" / "beacon.yaml"
+        if beacon_yaml.exists():
+            from beacon.core.manifest.beacon import BeaconManifest
+            from beacon.domains.setup.diagnostics import effective_desired_refs
+
+            settings = BeaconManifest.from_yaml(beacon_yaml)
+            eff_desired_refs = effective_desired_refs(settings, result.warehouse_path)
+            if eff_desired_refs is not None:
+                ref_result = reconcile_context_references(
+                    result.project_root, eff_desired_refs
+                )
+                if ref_result.added:
+                    console.print(
+                        f"[green]✓[/green] Created and wired {len(ref_result.added)} "
+                        f"context reference(s) into agent config files"
+                    )
 
     print_bundled_install_result(result.bundled_installed, result.bundled_skipped)
 

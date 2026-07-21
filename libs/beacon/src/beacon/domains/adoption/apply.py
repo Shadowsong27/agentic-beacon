@@ -243,13 +243,16 @@ def commit_session(
         agent_candidates = [c for c in beacon_adds if c.artifact_type == "agents"]
 
         if has_contexts:
-            from beacon.domains.setup.wiring import (
-                wire_contexts_claudecode,
-                wire_contexts_opencode,
-            )
+            from beacon.core.manifest.beacon import BeaconManifest
+            from beacon.domains.setup.diagnostics import effective_desired_refs
+            from beacon.domains.setup.wiring import reconcile_context_references
 
-            wire_contexts_opencode(project_root, artifacts_path)
-            wire_contexts_claudecode(project_root, artifacts_path)
+            beacon_yaml = project_root / ".agentic-beacon" / "beacon.yaml"
+            if beacon_yaml.exists():
+                settings = BeaconManifest.from_yaml(beacon_yaml)
+                eff_desired_refs = effective_desired_refs(settings, warehouse_path)
+                if eff_desired_refs is not None:
+                    reconcile_context_references(project_root, eff_desired_refs)
 
         if has_skills:
             from beacon.domains.artifact.skill import wire_skills_post_sync
@@ -392,6 +395,26 @@ def commit_session(
 
         if beacon_adds:
             post_sync_wiring_fn(beacon_adds)
+
+        # 2c. If contexts were unadopted but no beacon_adds triggered wiring,
+        # we still need to reconcile references so stale owned @-includes and
+        # instructions entries are removed from CLAUDE.md / opencode.json.
+        context_unadoptions = [
+            p
+            for p in to_unadopt
+            if not p.startswith("agents/") and not p.startswith("skills/")
+        ]
+        if context_unadoptions and not beacon_adds:
+            from beacon.core.manifest.beacon import BeaconManifest
+            from beacon.domains.setup.diagnostics import effective_desired_refs
+            from beacon.domains.setup.wiring import reconcile_context_references
+
+            beacon_yaml = project_root / ".agentic-beacon" / "beacon.yaml"
+            if beacon_yaml.exists():
+                settings = BeaconManifest.from_yaml(beacon_yaml)
+                eff_desired_refs = effective_desired_refs(settings, warehouse_path)
+                if eff_desired_refs is not None:
+                    reconcile_context_references(project_root, eff_desired_refs)
 
         # 2b. Unwire project-local tool symlinks for unadopted agents (Bug 1 + 2 fix).
         agent_unadoptions = [p for p in to_unadopt if p.startswith("agents/")]

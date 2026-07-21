@@ -49,11 +49,11 @@ from beacon.domains.distribution.sync_engine import (
 )
 from beacon.domains.setup.wiring import (
     confirm_prune,
+    desired_context_refs,
     has_synced_contexts,
+    reconcile_context_references,
     unwire_pruned_artifacts,
     wire_agents_atomically,
-    wire_contexts_claudecode,
-    wire_contexts_opencode,
 )
 from beacon.domains.warehouse.git_health import (
     check_warehouse_git_clean,
@@ -83,8 +83,8 @@ class SyncOrchestrationResult:
     conflicts: list[str]
     orphans: list[Orphan]
     confirmed_prune: list[str]
-    oc_added: list[str]
-    cc_added: list[str]
+    refs_added: list[str]
+    refs_removed: list[str]
     wired_skills: list[str]
     wire_errors: list[str]
     bundled_installed: list[str]
@@ -436,8 +436,8 @@ def run_sync(
         ) from e
 
     # Post-sync wiring
-    oc_added: list[str] = []
-    cc_added: list[str] = []
+    refs_added: list[str] = []
+    refs_removed: list[str] = []
     wired_skills: list[str] = []
     wire_errors: list[str] = []
     wiring_notes: list[str] = []
@@ -465,14 +465,19 @@ def run_sync(
                 "    mkdir .opencode  [dim]# for OpenCode[/dim]"
             )
 
-    # Use effective set for wiring decisions
-    has_contexts = bool(effective_set.contexts) and not dry_run
+    # Use effective set for wiring decisions — reconcile references wholesale.
+    # Always run reconcile_context_references (even when contexts is empty) so
+    # stale owned references from de-adopted contexts are removed from both files.
     has_skills = bool(effective_set.skills) and not dry_run
 
-    if has_contexts:
-        oc_added = wire_contexts_opencode(project_root, artifacts_dir)
-        cc_added = wire_contexts_claudecode(project_root, artifacts_dir)
+    desired_refs = desired_context_refs(effective_set.contexts)
+    reconcile_result = reconcile_context_references(
+        project_root, desired_refs, dry_run=dry_run
+    )
+    refs_added = reconcile_result.added
+    refs_removed = reconcile_result.removed
 
+    if effective_set.contexts and not dry_run:
         has_opencode = (project_root / "opencode.json").exists()
         has_claude = any(
             p.exists()
@@ -492,15 +497,15 @@ def run_sync(
                     "  [bold]CLAUDE.md[/bold] → add a line per context:\n"
                     "    @.agentic-beacon/artifacts/contexts/<name>.md"
                 )
-
-    if effective_set.contexts and dry_run:
-        wiring_notes.append(
-            "  Contexts would be synced — wire them into your agent config if needed:\n"
-            '  [bold]opencode.json[/bold] → add to "instructions" array:\n'
-            '    ".agentic-beacon/artifacts/contexts/<name>.md"\n'
-            "  [bold]CLAUDE.md[/bold] → add a line per context:\n"
-            "    @.agentic-beacon/artifacts/contexts/<name>.md"
-        )
+    elif dry_run:
+        if reconcile_result:
+            wiring_notes.append(
+                "  Contexts would be synced — wire them into your agent config if needed:\n"
+                '  [bold]opencode.json[/bold] → add to "instructions" array:\n'
+                '    ".agentic-beacon/artifacts/contexts/<name>.md"\n'
+                "  [bold]CLAUDE.md[/bold] → add a line per context:\n"
+                "    @.agentic-beacon/artifacts/contexts/<name>.md"
+            )
 
     if has_skills:
         wired_skills, wire_errors = wire_skills_post_sync(
@@ -556,8 +561,8 @@ def run_sync(
         conflicts=[],
         orphans=orphans,
         confirmed_prune=confirmed_prune,
-        oc_added=oc_added,
-        cc_added=cc_added,
+        refs_added=refs_added,
+        refs_removed=refs_removed,
         wired_skills=wired_skills,
         wire_errors=wire_errors,
         bundled_installed=list(bundled_installed),

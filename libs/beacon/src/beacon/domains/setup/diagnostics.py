@@ -16,9 +16,17 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from beacon.core.dependencies.resolver import (
+    ResolutionFailure,
+    compute_effective_set,
+)
 from beacon.core.gitignore import apply_all_gitignores, diff_gitignores
 from beacon.core.manifest.beacon import BeaconManifest
 from beacon.domains.distribution.sync_engine import SyncEngine
+from beacon.domains.setup.wiring import (
+    desired_context_refs,
+    reconcile_context_references,
+)
 
 
 @dataclass(frozen=True)
@@ -36,14 +44,17 @@ def run_project_diagnostics(
     beacon_manifest: BeaconManifest | None,
     fix: bool,
 ) -> tuple[list[DoctorIssue], list[str]]:
-    """Optionally repair gitignore drift, then run all project-side health checks.
+    """Optionally repair gitignore drift and reference drift, then run all project-side health checks.
 
     Returns (issues, applied_fixes). Repair runs first so the returned issues
     reflect the post-repair state.
     """
     applied_fixes: list[str] = []
     if fix:
-        applied_fixes = repair_gitignore_drift(project_root)
+        applied_fixes.extend(repair_gitignore_drift(project_root))
+        applied_fixes.extend(
+            repair_reference_drift(project_root, beacon_manifest, warehouse_path)
+        )
     issues = run_project_health_checks(project_root, warehouse_path, beacon_manifest)
     return issues, applied_fixes
 
@@ -69,6 +80,102 @@ def repair_gitignore_drift(project_root: Path) -> list[str]:
         apply_all_gitignores(project_root)
         return ["Repaired gitignore managed blocks (Tier A / Tier B)"]
     return []
+
+
+def effective_desired_refs(
+    beacon_manifest: BeaconManifest | None,
+    warehouse_path: Path | None,
+) -> list[str] | None:
+    """Compute the sorted list of desired context references for the effective set.
+
+    Normalizes manifest contexts to bare names, resolves transitive skill-required
+    contexts via compute_effective_set, and returns desired_context_refs for the
+    result.  Returns None when beacon_manifest or warehouse_path is None, or when
+    compute_effective_set returns a ResolutionFailure (callers should treat None as
+    "skip reconciliation" — do NOT pass None to reconcile_context_references).
+
+    Returns a list (possibly empty) on successful resolution.  An empty list means
+    the effective set has no contexts and reconciliation should remove all owned refs.
+
+    This is the shared helper used by repair_reference_drift and all three
+    call sites in cli/sync.py and domains/adoption/apply.py that previously
+    reconciled to only the explicit beacon.yaml context set.
+    """
+    if beacon_manifest is None or warehouse_path is None:
+        return None
+
+    # Normalize the manifest contexts to bare names (strip "contexts/" prefix and ".md"
+    # suffix) so compute_effective_set receives the same format as run_sync uses after
+    # _normalize_beacon_for_resolver.
+    normalized_contexts: list[str] = []
+    for c in beacon_manifest.artifacts.contexts:
+        name = c
+        if name.startswith("contexts/"):
+            name = name[len("contexts/") :]
+        if name.endswith(".md"):
+            name = name[: -len(".md")]
+        normalized_contexts.append(name)
+
+    # Normalize skills: strip "skills/" prefix, trailing "/" and any sub-path,
+    # keeping only the skill directory name — matching _normalize_beacon_for_resolver
+    # in orchestrator.py (non-glob path).
+    normalized_skills: list[str] = []
+    seen_skills: set[str] = set()
+    for s in beacon_manifest.artifacts.skills:
+        # Skip glob patterns — we can't expand them without SyncEngine here;
+        # fall back to ignoring them (they won't contribute unknown contexts
+        # since glob-based skills without frontmatter analysis are best-effort).
+        if any(ch in s for ch in "*?["):
+            continue
+        norm = s.replace("skills/", "", 1).rstrip("/").split("/")[0]
+        if norm and norm not in seen_skills:
+            normalized_skills.append(norm)
+            seen_skills.add(norm)
+
+    normalized_manifest = BeaconManifest(
+        artifacts={
+            "contexts": normalized_contexts,
+            "skills": normalized_skills,
+            "agents": beacon_manifest.artifacts.agents,
+        },
+        ignore=beacon_manifest.ignore,
+    )
+
+    effective_result = compute_effective_set(normalized_manifest, warehouse_path)
+    if isinstance(effective_result, ResolutionFailure):
+        return None
+
+    return desired_context_refs(effective_result.contexts)
+
+
+def repair_reference_drift(
+    project_root: Path,
+    beacon_manifest: BeaconManifest | None,
+    warehouse_path: Path | None,
+) -> list[str]:
+    """Repair context-reference drift in CLAUDE.md and opencode.json.
+
+    Computes the effective set (same normalization as run_sync), builds
+    desired_refs, and calls reconcile_context_references.  Returns a
+    human-readable fix line for each file that changed.
+
+    Returns [] immediately when either beacon_manifest or warehouse_path is
+    None, or when compute_effective_set returns a ResolutionFailure.
+    """
+    desired_refs = effective_desired_refs(beacon_manifest, warehouse_path)
+    if desired_refs is None:
+        return []
+    result = reconcile_context_references(project_root, desired_refs)
+
+    fixes: list[str] = []
+    if result.added or result.removed:
+        parts: list[str] = []
+        if result.added:
+            parts.append(f"added {len(result.added)}")
+        if result.removed:
+            parts.append(f"removed {len(result.removed)}")
+        fixes.append(f"Repaired context references ({', '.join(parts)})")
+    return fixes
 
 
 def run_project_health_checks(
