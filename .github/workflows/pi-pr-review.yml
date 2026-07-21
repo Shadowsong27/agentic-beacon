@@ -1,8 +1,9 @@
-name: pi PR Review (experimental)
+name: pi PR Review
 
-# Shadow reviewer running ALONGSIDE the opencode reviewer (HARN-79) so pi.dev's
-# review quality can be compared on real PRs before any harness swap. Posts a
-# separate, clearly-marked comment. Non-blocking (no required check).
+# The automated PR reviewer (HARN-79). pi.dev replaced the opencode reviewer,
+# which produced empty reviews on the terra-via-LiteLLM path (mid-stream backend
+# response.failed). Posts a single clearly-marked comment with token stats.
+# Advisory, not a required check.
 #
 # Security posture (pi's own self-review, HARN-79): the agentic step gets `bash`
 # and runs on the private self-hosted runner over attacker-influenceable diff
@@ -159,9 +160,9 @@ jobs:
             const body = [
               marker,
               "",
-              "## 🧪 pi.dev Review — experimental shadow",
+              "## 🧪 pi.dev Review",
               "",
-              `_Comparison trial running alongside the opencode reviewer (HARN-79). Model: \`${process.env.PI_MODEL}\`. Non-blocking; here to compare review quality, not to gate merges._`,
+              `_Automated review by pi.dev (HARN-79). Model: \`${process.env.PI_MODEL}\`. Advisory — address findings before merge._`,
               "",
               review,
             ].join("\n")
