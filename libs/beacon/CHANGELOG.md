@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.7.1](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v3.7.0...agentic-beacon@v3.7.1) (2026-07-23)
+
+
+### Bug Fixes
+
+* **beacon:** reconcile CLAUDE.md/opencode.json context references to the effective set (AB-96) ([#164](https://github.com/Shadowsong27/agentic-beacon/issues/164)) ([2734176](https://github.com/Shadowsong27/agentic-beacon/commit/27341760e56ea950f83ca1e60e4023a3518dddda))
+
 ## [3.7.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v3.6.0...agentic-beacon@v3.7.0) (2026-07-19)
 
 
