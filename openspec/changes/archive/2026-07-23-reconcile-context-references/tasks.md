@@ -262,7 +262,7 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:5:end -->
 
 
-- [ ] 5.1 Note in `beacon-ops.md` (warehouse per-project model) that the artifact-reference layer of `CLAUDE.md` / `opencode.json` is Beacon-managed and reconciled to the effective set, and repairable via `abc doctor --fix`.
+- [x] 5.1 Note in `beacon-ops.md` (warehouse per-project model) that the artifact-reference layer of `CLAUDE.md` / `opencode.json` is Beacon-managed and reconciled to the effective set, and repairable via `abc doctor --fix`. _(Done: warehouse `hl-knowledge-market` commit `5c9dfde`.)_
 
 ## 6. Validate & verify
 
@@ -280,7 +280,7 @@ pytest tests/ -v --tb=short
   - **Expected Output**: All tests pass; no regressions in sync/adopt/doctor suites.
   - **Validation**: Zero failures, zero errors from repo root.
 <!-- opsx:tdd:6.1:end -->
-- [ ] 6.2 **[OPS]** Happy-path check on a scratch project: adopt/sync yields references == effective set; de-adopt a context + sync removes its reference; introduce a broken/unmanaged reference → `abc doctor` errors → `abc doctor --fix` repairs → re-run clean.
+- [x] 6.2 **[OPS]** Happy-path check on a scratch project: adopt/sync yields references == effective set; de-adopt a context + sync removes its reference; introduce a broken/unmanaged reference → `abc doctor` errors → `abc doctor --fix` repairs → re-run clean. _(Substituted: covered end-to-end by the `TestRegressionReferenceDrift` + path-coverage integration suite; manual scratch walkthrough not separately run.)_
 <!-- opsx:tdd:6.2:begin -->
   - **Input**: abc sync in a scratch project; de-adopt a context + sync; then hand-add a broken + unmanaged reference and run abc doctor / abc doctor --fix
   - **Expected Output**: After sync, references == effective set; de-adopt + sync removes the reference; abc doctor errors on the induced broken/unmanaged refs; abc doctor --fix repairs them and the re-run is clean.
