@@ -82,6 +82,34 @@ def assert_under_warehouse(target: Path, warehouse: Path) -> None:
         sys.exit(2)
 
 
+def _yaml_double_quote(value: str) -> str:
+    """Return ``value`` as a YAML double-quoted scalar.
+
+    The description is user-supplied and frequently contains a colon (e.g.
+    "Bring X online: do Y"), which YAML parses as a mapping when left bare and
+    breaks ``abc warehouse lint``. Double-quoting with backslash-escaping makes
+    any string a valid single-line scalar.
+    """
+    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def _normalize_context(ctx: str) -> str:
+    """Reduce a context reference to the bare stem the linter expects.
+
+    The linter resolves ``requires.contexts`` entries as ``contexts/<stem>.md``,
+    so the frontmatter value must be a bare stem (e.g. ``glinet-router``). Callers
+    sometimes pass a warehouse-relative path (``contexts/glinet-router.md``);
+    strip the leading ``contexts/`` and trailing ``.md`` so both forms work.
+    """
+    ctx = ctx.strip()
+    if ctx.startswith("contexts/"):
+        ctx = ctx[len("contexts/") :]
+    if ctx.endswith(".md"):
+        ctx = ctx[: -len(".md")]
+    return ctx
+
+
 def render_skill_md(
     name: str,
     description: str,
@@ -92,7 +120,7 @@ def render_skill_md(
     if requires_contexts:
         contexts_yaml_lines = ["  contexts:"]
         for ctx in requires_contexts:
-            contexts_yaml_lines.append(f"    - {ctx}")
+            contexts_yaml_lines.append(f"    - {_normalize_context(ctx)}")
         contexts_yaml = "\n".join(contexts_yaml_lines)
     else:
         contexts_yaml = "  contexts: []"
@@ -101,7 +129,7 @@ def render_skill_md(
 
     return f"""---
 name: {name}
-description: {description}
+description: {_yaml_double_quote(description)}
 license: MIT
 compatibility: opencode
 requires:
