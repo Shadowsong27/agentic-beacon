@@ -420,9 +420,38 @@ class TestWriteSkill:
         assert skill_md.is_file()
         body = skill_md.read_text()
         assert "name: deploy-check" in body
-        assert "description: Validate deployment readiness" in body
+        # Description is emitted as a quoted YAML scalar (safe for colons/quotes).
+        assert 'description: "Validate deployment readiness"' in body
         assert "/deploy-check" in body
         assert capsys.readouterr().out.strip() == "skills/deploy-check/"
+
+    def test_description_with_colon_is_quoted_and_valid_yaml(
+        self, write_skill, tmp_path, monkeypatch
+    ):
+        # Regression: a colon in the description must not turn the frontmatter
+        # into an invalid YAML mapping (which breaks `abc warehouse lint`).
+        import yaml
+
+        project, warehouse = _make_project_with_warehouse(tmp_path)
+        monkeypatch.chdir(project)
+        desc = "Bring the sub online: paste a URL, filter SG"
+        monkeypatch.setattr(
+            "sys.argv",
+            [
+                "write_skill.py",
+                "--name",
+                "colon-check",
+                "--description",
+                desc,
+            ],
+        )
+
+        write_skill.main()
+
+        body = (warehouse / "skills" / "colon-check" / "SKILL.md").read_text()
+        frontmatter = body.split("---", 2)[1]
+        data = yaml.safe_load(frontmatter)
+        assert data["description"] == desc
 
     def test_does_not_write_to_project_artifacts(
         self, write_skill, tmp_path, monkeypatch
@@ -500,8 +529,11 @@ class TestWriteSkill:
 
         skill_md = (warehouse / "skills" / "x" / "SKILL.md").read_text()
         assert "contexts:" in skill_md
-        assert "- contexts/python-standards.md" in skill_md
-        assert "- contexts/testing.md" in skill_md
+        # A `contexts/<name>.md` path is normalized to the bare stem the linter
+        # expects (it resolves entries as `contexts/<stem>.md`).
+        assert "- python-standards" in skill_md
+        assert "- testing" in skill_md
+        assert "contexts/python-standards.md" not in skill_md
 
     def test_refuses_to_overwrite_without_flag(
         self, write_skill, tmp_path, monkeypatch, capsys
