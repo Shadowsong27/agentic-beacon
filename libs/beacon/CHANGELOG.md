@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.7.1](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v3.7.0...agentic-beacon@v3.7.1) (2026-09-07)
+
+
+### Bug Fixes
+
+* **beacon:** reconcile CLAUDE.md/opencode.json context references to the effective set (AB-96) ([#164](https://github.com/Shadowsong27/agentic-beacon/issues/164)) ([2734176](https://github.com/Shadowsong27/agentic-beacon/commit/27341760e56ea950f83ca1e60e4023a3518dddda))
+* **record-skill:** quote description and normalize contexts in write_skill.py ([#169](https://github.com/Shadowsong27/agentic-beacon/issues/169)) ([63853e4](https://github.com/Shadowsong27/agentic-beacon/commit/63853e45fe6c69956548a48673533c3d30ba97e5))
+
 ## [3.7.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v3.6.0...agentic-beacon@v3.7.0) (2026-07-19)
 
 
