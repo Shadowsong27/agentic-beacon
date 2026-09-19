@@ -17,6 +17,14 @@ pre-flight: a strict lint gate, file-level intent triage, semantic dedup scan
 (for `knowledge/` files), cohesion split into logical commits, and exactly one
 atomic `git push` at the end.
 
+> **Scope: flush the whole warehouse working tree.** A warehouse is one shared
+> tree, not a per-session scratchpad. This skill contributes **everything that is
+> uncommitted, regardless of which session, agent, or human authored it** — dirty
+> paths left behind by earlier sessions are in scope by default, not somebody
+> else's business. Uncommitted knowledge is knowledge nobody else can read, and a
+> backlog left in the tree is how it gets lost. Committing work you did not
+> author is the expected outcome here.
+>
 > **Design note:** This skill never calls `git add`, `git commit`, or `git push`
 > directly. All git operations are delegated to `abc warehouse contribute` (per
 > commit group) and `push_warehouse.py` (exactly once at the end). The skill's
@@ -24,12 +32,8 @@ atomic `git push` at the end.
 
 ## When to Use
 
-- After an agent session improved a context file, a skill, or a knowledge entry
-  and you want to share it back to the team warehouse
-- When you have multiple dirty warehouse files and want to split them into
-  logically cohesive commits
-- Whenever you need the lint pre-flight gate to catch warehouse-wide integrity
-  issues before committing
+- After any session touched a context, skill, or knowledge entry — and whenever
+  the warehouse tree has drifted dirty, whoever left it that way
 - As the standard contribution workflow replacing bare `abc warehouse contribute`
 
 ## Invocation
@@ -86,10 +90,9 @@ Warehouse lint failed. Resolve the following issues before contributing:
 Suggested recovery:
   - Run `abc warehouse lint --fix "$WAREHOUSE_ROOT"` for fixable malformed cross-artifact-relative links; it rewrites them to canonical form, preserves anchors, is idempotent, and is safe to run again. It does NOT fix warehouse-escape or missing-target findings — those stay manual.
   - Fix the failing files and re-run /contribute-warehouse
-  - Or move the failing edits to a separate branch and re-run on a clean tree
-  - As a last resort, you (the user) may discard the changes with
-    `git -C "$WAREHOUSE_ROOT" checkout -- <failing-file>` — the skill itself
-    will NEVER run this; destructive recovery stays with you
+  - As a last resort, you (the user) may discard changes with
+    `git -C "$WAREHOUSE_ROOT" checkout -- <file>` — the skill NEVER runs this;
+    destructive recovery stays with you
 ```
 
 Do NOT stash, do NOT skip lint, do NOT proceed on a lint failure.
@@ -119,24 +122,35 @@ nothing to contribute and stop cleanly.
 
 ### Step 4: Intent Triage
 
-Present the dirty warehouse paths to the user and ask them to classify each as:
+**The default is ALL dirty paths.** Triage is an opt-OUT for work that is
+genuinely mid-flight, not a filter for deciding which files "belong" to you.
 
-- **include** — commit this in the current session
-- **leave-for-later** — skip for now; do not stage, stash, or modify
+Present the dirty warehouse paths and ask only whether any should be held back:
+
+- **include** (default) — every dirty path, whoever wrote it
+- **leave-for-later** — only what the user explicitly defers; do not stage,
+  stash, or modify it
 
 Example presentation:
 ```
-Dirty warehouse paths (3 files):
+Dirty warehouse paths (3 files) — contributing all of them by default:
 
   1. contexts/python-standards.md   [M — 12 insertions, 3 deletions]
   2. knowledge/python/lessons/type-hints.md   [A — new file]
   3. skills/code-review/SKILL.md   [M — 2 insertions]
 
-Which files do you want to contribute now?
-(Reply with numbers, e.g. "1 2", or "all", or "none")
+Anything you want to hold back? (Reply with numbers to defer, or "go")
 ```
 
-Leave-for-later files are noted in the final summary but are not touched.
+**Do NOT narrow the set on your own judgement.** Specifically, these are *not*
+reasons to defer a file, and offering them as one wastes the user's turn:
+
+- "I did not write this / it is from an earlier session"
+- "I have not reviewed it"
+- "It is unrelated to what I was just working on"
+
+The user may still defer anything for their own reasons. Leave-for-later files
+are noted in the final summary but are not touched.
 
 ### Step 5: Semantic Dedup Scan (knowledge/ files only)
 
@@ -176,6 +190,22 @@ Confirm this split? (yes / edit)
 ```
 
 The user may accept the proposed split or adjust the groupings.
+
+**Group a context with the knowledge files its diff references.** A single
+`contexts/<x>.md` diff often carries pointers added by *several* sessions, and
+each pointer targets a `knowledge/**` file that may still be untracked.
+Committing the context without those targets publishes dangling links for
+everyone who pulls. Extract the targets from the diff and make sure they are in
+the same group:
+
+```bash
+git -C "$WAREHOUSE_ROOT" diff -- contexts/<x>.md \
+  | grep -E '^\+' | grep -oE 'knowledge/[a-z0-9/-]+\.md' | sort -u
+```
+
+This is the usual reason a "flush everything" run still needs a deliberate
+split: the groups are drawn along *subject* lines (a context plus the atoms it
+points at), never along authorship lines.
 
 ### Step 7: Draft Commit Message(s)
 
@@ -274,16 +304,11 @@ Contribution summary:
 **User:** `/contribute-warehouse`
 
 **Agent:**
-1. Resolves warehouse → `/home/user/my-warehouse`
-2. Runs `abc warehouse lint` → clean, proceeds
-3. Summarizes changes → 1 dirty file: `contexts/python-standards.md`
-4. Asks user: "Include this file?" → yes
-5. No `knowledge/` files → skips dedup scan
-6. Cohesion check: single file → one commit
-7. Drafts message: `docs(contexts): add loguru section to python standards`
-8. Calls `abc warehouse contribute -m "docs(contexts): add loguru section to python standards" --paths contexts/python-standards.md`
-9. Calls `push_warehouse.py` → push succeeds
-10. Reports: "Committed `a1b2c3d` — `docs(contexts): add loguru section`. Pushed."
+1. Resolves warehouse; lint clean; summarizes → 1 dirty file `contexts/python-standards.md`
+2. Confirms nothing is held back; no `knowledge/` files → skips dedup; single file → one commit
+3. `abc warehouse contribute -m "docs(contexts): add loguru section to python standards" --paths contexts/python-standards.md`
+4. `push_warehouse.py` → success
+5. Reports: "Committed `a1b2c3d`. Pushed."
 
 ---
 
@@ -292,22 +317,28 @@ Contribution summary:
 **User:** `/contribute-warehouse`
 
 **Agent:**
-1. Resolves warehouse → `/home/user/my-warehouse`
-2. Lint passes
-3. Summarizes → 3 dirty files: `contexts/python-standards.md`, `knowledge/python/lessons/type-hints.md`, `knowledge/cicd/lessons/deploy-via-git.md`
-4. User includes all 3
-5. Dedup scan: `knowledge/python/lessons/type-hints.md` — no overlaps with siblings; `knowledge/cicd/lessons/deploy-via-git.md` — no overlaps
-6. Cohesion check: python files are cohesive (group 1), CI lesson is independent (group 2)
-7. Proposes 2-commit split; user confirms
-8. Drafts `docs(python-standards): add type hints lesson` and `docs(cicd): add deploy-via-git lesson`
-9. Calls `abc warehouse contribute -m "docs(python-standards): add type hints lesson" --paths contexts/python-standards.md --paths knowledge/python/lessons/type-hints.md`
-   then `abc warehouse contribute -m "docs(cicd): add deploy-via-git lesson" --paths knowledge/cicd/lessons/deploy-via-git.md`
-10. Calls `push_warehouse.py` once → success
-11. Reports: "Committed 2 changes. Pushed."
+1. Lint clean; summarizes → `contexts/python-standards.md`, `knowledge/python/lessons/type-hints.md`, `knowledge/cicd/lessons/deploy-via-git.md`
+2. All 3 included by default; dedup scan finds no sibling overlaps
+3. Cohesion: the python pair is one subject, the CI lesson is independent → proposes a 2-commit split; user confirms
+4. One `abc warehouse contribute` per group, then `push_warehouse.py` **once**
+5. Reports: "Committed 2 changes. Pushed."
 
 ---
 
-### Example 3: Lint Failure Abort
+### Example 3: Flushing an Earlier Session's Backlog
+
+**User:** `/contribute-warehouse`
+
+**Agent:**
+1. Lint clean; summarizes → **31** dirty paths; only 9 came from this session
+2. Includes **all 31** — the other 22 are an earlier session's uncommitted work and are in scope by default. Does not ask the user to vouch for them.
+3. `contexts/cn-vpn.md`'s diff references 8 `knowledge/**` targets, 7 still untracked → groups the context WITH all 8 so no pointer dangles
+4. Splits by subject into 8 commits, pushes once
+5. Reports every SHA, including the ones covering work it did not author
+
+---
+
+### Example 4: Lint Failure Abort
 
 **User:** `/contribute-warehouse`
 
@@ -318,7 +349,7 @@ Contribution summary:
 
 ---
 
-### Example 4: Airgap Push Failure
+### Example 5: Airgap Push Failure
 
 **User:** `/contribute-warehouse`
 
@@ -340,9 +371,9 @@ Contribution summary:
 - [ ] Run `resolve_warehouse.py` — STOP if exits non-zero
 - [ ] Run `abc warehouse lint <warehouse>` — STOP and surface errors if non-zero; suggest `--fix` for fixable categories
 - [ ] Run `summarize_changes.py` — STOP if no dirty warehouse paths
-- [ ] Triage dirty files with the user (include / leave-for-later)
+- [ ] Triage dirty files with the user — ALL are included by default; defer only what the user explicitly holds back, never what you merely did not author
 - [ ] Dedup scan for `knowledge/` files — flag overlaps before proceeding
-- [ ] Cohesion check — propose split if multiple independent changes
+- [ ] Cohesion check — propose split if multiple independent changes; group each context with the `knowledge/**` targets its diff references
 - [ ] Draft commit message(s) via `draft_commit_message.py` (pass `--git-statuses`) — confirm with user
 - [ ] Call `abc warehouse contribute -m "<msg>" --paths <p1> --paths <p2> ...` per group — NO `--push` flag
 - [ ] Call `push_warehouse.py --warehouse <path>` exactly once
@@ -368,5 +399,5 @@ Contribution summary:
 
 ---
 
-**Skill Version:** 1.0.0
-**Last Updated:** 2026-05-17
+**Skill Version:** 1.1.0
+**Last Updated:** 2026-09-19
