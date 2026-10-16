@@ -14,8 +14,8 @@ The system SHALL derive knowledge references by scanning the warehouse source fi
 - **WHEN** `abc sync` executes
 - **THEN** the scanner completes and produces the full derived knowledge set before any new symlinks are created in `.agentic-beacon/artifacts/knowledge/`
 
-### Requirement: Scanner inspects adopted contexts and skills only
-The system SHALL scan for knowledge references only in files that are (1) adopted contexts listed in `beacon.yaml.artifacts.contexts`, and (2) adopted skill entrypoints (`SKILL.md` files) under directories listed in `beacon.yaml.artifacts.skills`.
+### Requirement: Scanner inspects adopted contexts, skills, and derived knowledge only
+The system SHALL scan for knowledge references only in files that are (1) adopted contexts listed in `beacon.yaml.artifacts.contexts`, (2) adopted skill entrypoints (`SKILL.md` files) under directories listed in `beacon.yaml.artifacts.skills`, and (3) knowledge files already in the derived knowledge set.
 
 The system SHALL NOT scan agent files for knowledge references. Agents reach knowledge only transitively through the skills they declare as dependencies in the warehouse-level `agents/agents.yaml` manifest. Agent dependency declarations SHALL NOT carry a `contexts:` list; agents do not natively require contexts, because contexts are a project-level concern declared via `beacon.yaml.artifacts.contexts`.
 
@@ -33,16 +33,28 @@ The system SHALL NOT scan files outside the warehouse (e.g., the project's own `
 - **WHEN** a skill directory contains helper files like `scripts/run.py` or `references/guide.md`
 - **THEN** the scanner does NOT inspect these files; only `SKILL.md` is scanned
 
+#### Scenario: Knowledge file linked from knowledge
+- **WHEN** an adopted context links to `knowledge/a.md`, and `knowledge/a.md` links to `knowledge/b.md`
+- **THEN** the derived set contains both files. The scanner repeats until no new knowledge file appears, so longer chains are followed too
+
+#### Scenario: Knowledge link cycle
+- **WHEN** `knowledge/a.md` links to `knowledge/b.md` and `knowledge/b.md` links back to `knowledge/a.md`
+- **THEN** the scanner scans each file once and terminates with both files in the derived set
+
 #### Scenario: Agent file not scanned for knowledge
 - **WHEN** an adopted agent file contains a markdown link into `knowledge/...`
 - **THEN** the scanner does not treat this as a knowledge reference; the link has no effect on derived knowledge
 
 ### Requirement: Markdown link resolution and classification
-The system SHALL parse every relative markdown link in a scanned file, resolve it relative to the file's own location, and classify it as a knowledge reference if and only if (1) the resolved path lies within the warehouse root, (2) the resolved path starts with `knowledge/` when expressed relative to the warehouse root, and (3) the resolved path ends in `.md`.
+The system SHALL parse every relative markdown link in a scanned file and resolve it. A canonical link (`.agentic-beacon/artifacts/<warehouse-relative-path>`) resolves by stripping the prefix, relative to the warehouse root. Any other link resolves relative to the file's own location. The system SHALL classify the resolved path as a knowledge reference if and only if (1) the resolved path lies within the warehouse root, (2) the resolved path starts with `knowledge/` when expressed relative to the warehouse root, and (3) the resolved path ends in `.md`.
 
 Links that resolve outside the warehouse (e.g., into the project or elsewhere on the filesystem) SHALL be silently ignored.
 
 Absolute URLs (starting with `http://`, `https://`, `mailto:`, etc.) SHALL be silently ignored.
+
+#### Scenario: Canonical knowledge link
+- **WHEN** a context at `contexts/python-standards.md` contains the link `[x](.agentic-beacon/artifacts/knowledge/python-standards/lessons/foo.md#usage)`
+- **THEN** the resolved warehouse-relative path is `knowledge/python-standards/lessons/foo.md` and the scanner classifies it as a knowledge reference
 
 #### Scenario: Valid knowledge link from context
 - **WHEN** a context at `contexts/python-standards.md` contains the link `[x](../knowledge/python-standards/lessons/foo.md)`
@@ -89,6 +101,10 @@ The system SHALL, on every `abc sync`, compute the derived knowledge set and rem
 #### Scenario: Last referrer unadopted
 - **WHEN** the user unadopts the only context that referenced `knowledge/python-standards/lessons/foo.md`, then runs `abc sync`
 - **THEN** the symlink `.agentic-beacon/artifacts/knowledge/python-standards/lessons/foo.md` is removed
+
+#### Scenario: Knowledge reached only through another knowledge file
+- **WHEN** `knowledge/b.md` is referenced only by `knowledge/a.md`, and `knowledge/a.md` is still in the derived set
+- **THEN** the symlink for `knowledge/b.md` remains in place after sync
 
 #### Scenario: One of several referrers unadopted
 - **WHEN** two contexts reference the same knowledge file and the user unadopts only one of them

@@ -154,7 +154,7 @@ abc status                           # check sync status
 **Common causes:**
 
 1. **Pattern doesn't match any files:** Check the actual warehouse directory structure
-2. **Knowledge not auto-derived:** Knowledge files are only synced when referenced by a markdown link from an adopted context or skill. Add a link like `[guide](knowledge/path/file.md)` to your context file.
+2. **Knowledge not auto-derived:** Knowledge files are only synced when referenced by a markdown link from an adopted context or skill, or from a knowledge file that is already synced. Add a link like `[guide](.agentic-beacon/artifacts/knowledge/path/file.md)` to your context file.
 3. **Skill dependency not satisfied:** Skills won't sync if their `requires:` context dependencies aren't available in the warehouse
 
 ### "0 files" on re-sync despite warehouse updates

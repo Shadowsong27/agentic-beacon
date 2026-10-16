@@ -79,6 +79,18 @@ class TestComputeEffectiveSet:
         assert isinstance(result, EffectiveSet)
         assert result.knowledge == frozenset({"knowledge/shared.md"})
 
+    def test_tc4b_knowledge_chain_followed(self, tmp_path):
+        """TC4b (AB-107): context → A → B pulls both knowledge files."""
+        wh = self._make_warehouse(tmp_path)
+        k = ".agentic-beacon/artifacts/knowledge"
+        self._write_context(wh, "py-std", f"[a]({k}/a.md)\n")
+        (wh / "knowledge" / "a.md").write_text(f"[b]({k}/b.md)\n")
+        (wh / "knowledge" / "b.md").write_text("# B\n")
+        beacon = BeaconManifest(artifacts={"contexts": ["py-std"]})
+        result = compute_effective_set(beacon, wh)
+        assert isinstance(result, EffectiveSet)
+        assert result.knowledge == frozenset({"knowledge/a.md", "knowledge/b.md"})
+
     def test_tc5_explicit_plus_transitive_context(self, tmp_path):
         """TC5: Explicit context plus skill requiring same context -> explicit wins."""
         wh = self._make_warehouse(tmp_path)
