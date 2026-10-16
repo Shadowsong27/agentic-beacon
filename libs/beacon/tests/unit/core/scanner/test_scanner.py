@@ -208,6 +208,27 @@ class TestResolveLink:
         assert result is not None
         assert result.warehouse_relative == "knowledge"
 
+    def test_tc8_canonical_link_strips_prefix(self, tmp_path):
+        """TC8 (AB-104): canonical link resolves from the warehouse root, not the file dir."""
+        wh = self._wh(tmp_path)
+        scanned = wh / "skills" / "s" / "SKILL.md"
+        scanned.parent.mkdir(parents=True)
+        scanned.write_text("# Skill")
+        result = resolve_link(
+            scanned, ".agentic-beacon/artifacts/knowledge/foo/bar.md", wh
+        )
+        assert result is not None
+        assert result.warehouse_relative == "knowledge/foo/bar.md"
+
+    def test_tc9_canonical_traversal_rejected(self, tmp_path):
+        """TC9 (AB-104): canonical-shaped link escaping the warehouse → None."""
+        wh = self._wh(tmp_path)
+        scanned = wh / "contexts" / "a.md"
+        scanned.parent.mkdir(parents=True)
+        scanned.write_text("# Context")
+        result = resolve_link(scanned, ".agentic-beacon/artifacts/../../x.md", wh)
+        assert result is None
+
 
 class TestClassifyKnowledgeRef:
     """Task 5.6: classify_knowledge_ref — TDD test cases."""
@@ -317,6 +338,28 @@ class TestScanFileForKnowledge:
         ctx.write_text("")
         result = scan_file_for_knowledge(ctx, wh)
         assert result == set()
+
+    def test_tc5_canonical_links_from_context(self, tmp_path):
+        """TC6 (AB-104): canonical knowledge links (with anchor) are picked up."""
+        wh = self._wh(tmp_path)
+        ctx = wh / "contexts" / "ctx.md"
+        ctx.parent.mkdir(parents=True)
+        ctx.write_text(
+            "**Read:** [a](.agentic-beacon/artifacts/knowledge/a/foo.md)\n"
+            "**Read:** [b](.agentic-beacon/artifacts/knowledge/b/bar.md#usage)\n"
+            "[c](.agentic-beacon/artifacts/contexts/other.md)\n"
+        )
+        result = scan_file_for_knowledge(ctx, wh)
+        assert result == {"knowledge/a/foo.md", "knowledge/b/bar.md"}
+
+    def test_tc6_canonical_link_from_skill(self, tmp_path):
+        """TC7 (AB-104): canonical link from a nested SKILL.md is picked up."""
+        wh = self._wh(tmp_path)
+        skill = wh / "skills" / "s" / "SKILL.md"
+        skill.parent.mkdir(parents=True)
+        skill.write_text("[k](.agentic-beacon/artifacts/knowledge/a/foo.md)\n")
+        result = scan_file_for_knowledge(skill, wh)
+        assert result == {"knowledge/a/foo.md"}
 
 
 class TestScanAdoptedArtifacts:
