@@ -10,6 +10,7 @@ from beacon.core.manifest.beacon import BeaconManifest
 from beacon.core.scanner.scanner import (
     LinkRef,
     classify_knowledge_ref,
+    expand_knowledge_closure,
     extract_markdown_links,
     is_absolute_url,
     normalize_link_target,
@@ -362,6 +363,56 @@ class TestScanFileForKnowledge:
         assert result == {"knowledge/a/foo.md"}
 
 
+K = ".agentic-beacon/artifacts/knowledge"
+
+
+class TestExpandKnowledgeClosure:
+    """AB-107: knowledge→knowledge links are followed transitively."""
+
+    def _wh(self, tmp_path: Path) -> Path:
+        wh = tmp_path / "warehouse"
+        (wh / "knowledge").mkdir(parents=True)
+        return wh
+
+    def test_chain_followed(self, tmp_path):
+        """Seed A → B → C yields {A, B, C}."""
+        wh = self._wh(tmp_path)
+        (wh / "knowledge" / "a.md").write_text(f"[b]({K}/b.md)\n")
+        (wh / "knowledge" / "b.md").write_text(f"[c]({K}/c.md#x)\n")
+        (wh / "knowledge" / "c.md").write_text("# C\n")
+        result = expand_knowledge_closure({"knowledge/a.md"}, wh)
+        assert result == {"knowledge/a.md", "knowledge/b.md", "knowledge/c.md"}
+
+    def test_cycle_terminates(self, tmp_path):
+        """A ↔ B cycle terminates with both files."""
+        wh = self._wh(tmp_path)
+        (wh / "knowledge" / "a.md").write_text(f"[b]({K}/b.md)\n")
+        (wh / "knowledge" / "b.md").write_text(f"[a]({K}/a.md)\n")
+        result = expand_knowledge_closure({"knowledge/a.md"}, wh)
+        assert result == {"knowledge/a.md", "knowledge/b.md"}
+
+    def test_missing_target_kept_and_walk_continues(self, tmp_path):
+        """A missing target stays in the set and does not stop the walk."""
+        wh = self._wh(tmp_path)
+        (wh / "knowledge" / "a.md").write_text(f"[gone]({K}/gone.md) [b](b.md)\n")
+        (wh / "knowledge" / "b.md").write_text("# B\n")
+        result = expand_knowledge_closure({"knowledge/a.md"}, wh)
+        assert result == {"knowledge/a.md", "knowledge/gone.md", "knowledge/b.md"}
+
+    def test_non_knowledge_links_ignored(self, tmp_path):
+        """Links from knowledge to contexts/skills add nothing."""
+        wh = self._wh(tmp_path)
+        (wh / "knowledge" / "a.md").write_text(
+            "[c](.agentic-beacon/artifacts/contexts/x.md)\n"
+        )
+        result = expand_knowledge_closure({"knowledge/a.md"}, wh)
+        assert result == {"knowledge/a.md"}
+
+    def test_empty_seed(self, tmp_path):
+        """No seeds → empty set."""
+        assert expand_knowledge_closure(set(), self._wh(tmp_path)) == set()
+
+
 class TestScanAdoptedArtifacts:
     """Task 5.8: scan_adopted_artifacts — TDD test cases."""
 
@@ -404,6 +455,16 @@ class TestScanAdoptedArtifacts:
         beacon = BeaconManifest(artifacts={})
         result = scan_adopted_artifacts(beacon, wh)
         assert result == set()
+
+    def test_tc6_knowledge_chain_followed(self, tmp_path):
+        """TC6 (AB-107): context → A → B yields {A, B}."""
+        wh = self._make_warehouse(tmp_path)
+        (wh / "contexts" / "a.md").write_text(f"[a]({K}/a.md)\n")
+        (wh / "knowledge" / "a.md").write_text(f"[b]({K}/b.md)\n")
+        (wh / "knowledge" / "b.md").write_text("# B\n")
+        beacon = BeaconManifest(artifacts={"contexts": ["a"]})
+        result = scan_adopted_artifacts(beacon, wh)
+        assert result == {"knowledge/a.md", "knowledge/b.md"}
 
     def test_tc5_no_knowledge_links(self, tmp_path):
         """TC5: Adopted context with no knowledge links → contributes zero."""

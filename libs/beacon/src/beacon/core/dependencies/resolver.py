@@ -18,7 +18,10 @@ from beacon.core.dependencies.manifest import (
 )
 from beacon.core.exceptions import ValidationError
 from beacon.core.manifest.beacon import BeaconManifest
-from beacon.core.scanner.scanner import scan_file_for_knowledge
+from beacon.core.scanner.scanner import (
+    expand_knowledge_closure,
+    scan_file_for_knowledge,
+)
 
 MIGRATION_DOC_URL = "docs/archive/migrations/artifact-dependencies-frontmatter.md"
 
@@ -235,6 +238,9 @@ def compute_effective_set(
     for skill_name in effective_skills:
         skill_path = warehouse / "skills" / skill_name / "SKILL.md"
         knowledge.update(scan_file_for_knowledge(skill_path, warehouse))
+
+    # Follow knowledge→knowledge links transitively (AB-107)
+    knowledge = expand_knowledge_closure(knowledge, warehouse)
 
     # Build frozen provenance dict
     frozen_provenance = {

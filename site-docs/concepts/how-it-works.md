@@ -141,7 +141,7 @@ artifacts:
     - agents/spec-planner.md
 ```
 
-Knowledge files are **not** declared — `abc sync` auto-derives them by scanning your adopted contexts and skills for markdown links into `knowledge/`.
+Knowledge files are **not** declared — `abc sync` auto-derives them by scanning your adopted contexts and skills for markdown links into `knowledge/`, then following links between knowledge files until no new file appears.
 
 `pending.yaml` and `.last-adopt` are working-state files managed by `abc adopt` — see [Pending & Adoption](pending-and-adoption.md) for the full lifecycle.
 

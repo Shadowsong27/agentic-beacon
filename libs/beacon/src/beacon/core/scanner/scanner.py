@@ -415,6 +415,30 @@ def scan_file_for_knowledge(path: Path, warehouse_root: Path) -> set[str]:
     return knowledge_refs
 
 
+def expand_knowledge_closure(refs: set[str], warehouse_root: Path) -> set[str]:
+    """Follow knowledge→knowledge links until no new references appear.
+
+    Args:
+        refs: Seed set of warehouse-relative knowledge paths.
+        warehouse_root: Absolute path to the warehouse root.
+
+    Returns:
+        The seeds plus every knowledge file reachable from them. Missing
+        targets stay in the set (as with ``scan_file_for_knowledge``) but are
+        not scanned further.
+    """
+    warehouse_root = warehouse_root.resolve()
+    closure = set(refs)
+    queue = list(refs)
+    while queue:
+        rel = queue.pop()
+        for found in scan_file_for_knowledge(warehouse_root / rel, warehouse_root):
+            if found not in closure:
+                closure.add(found)
+                queue.append(found)
+    return closure
+
+
 def scan_adopted_artifacts(beacon: BeaconManifest, warehouse_root: Path) -> set[str]:
     """Scan all adopted contexts and skills for knowledge references.
 
@@ -423,7 +447,8 @@ def scan_adopted_artifacts(beacon: BeaconManifest, warehouse_root: Path) -> set[
         warehouse_root: Absolute path to the warehouse root.
 
     Returns:
-        Union of knowledge refs across every adopted context and skill SKILL.md.
+        Union of knowledge refs across every adopted context and skill SKILL.md,
+        expanded through knowledge→knowledge links.
     """
     warehouse_root = warehouse_root.resolve()
     all_refs: set[str] = set()
@@ -436,4 +461,4 @@ def scan_adopted_artifacts(beacon: BeaconManifest, warehouse_root: Path) -> set[
         skill_path = warehouse_root / "skills" / skill_name / "SKILL.md"
         all_refs.update(scan_file_for_knowledge(skill_path, warehouse_root))
 
-    return all_refs
+    return expand_knowledge_closure(all_refs, warehouse_root)
