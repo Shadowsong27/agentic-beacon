@@ -307,7 +307,10 @@ class ResolvedLink:
 def resolve_link(
     scanned_file: Path, link: str, warehouse_root: Path
 ) -> ResolvedLink | None:
-    """Resolve a markdown link relative to the scanned file.
+    """Resolve a markdown link to a warehouse-relative path.
+
+    Canonical links (``.agentic-beacon/artifacts/...``) resolve from the
+    warehouse root. All other links resolve relative to the scanned file.
 
     Returns None for absolute URLs or links that resolve outside the warehouse.
 
@@ -321,6 +324,13 @@ def resolve_link(
     """
     if is_absolute_url(link):
         return None
+
+    if link.startswith(CANONICAL_PREFIX):
+        canonical = resolve_canonical_link(link, warehouse_root)
+        if canonical is None:
+            return None
+        rel = canonical[0].relative_to(warehouse_root.resolve())
+        return ResolvedLink(warehouse_relative=str(rel))
 
     # Resolve against the scanned file's directory
     scanned_dir = scanned_file.parent

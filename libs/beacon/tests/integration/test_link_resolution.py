@@ -87,6 +87,7 @@ def _populate_positive_warehouse(warehouse: Path) -> None:
         "# Team Context\n\n"
         "## Section A\n\n"
         "See [skill](.agentic-beacon/artifacts/skills/code-review/SKILL.md).\n"
+        "**Read:** [py](.agentic-beacon/artifacts/knowledge/python/standards.md#section-a)\n"
     )
 
     skill_dir = warehouse / "skills" / "code-review"
@@ -117,31 +118,18 @@ def _populate_positive_warehouse(warehouse: Path) -> None:
         "Use [checklist](.agentic-beacon/artifacts/agent-partials/deep-review-checklist.md).\n"
     )
 
-    # Knowledge files exist in the warehouse to support the warehouse-side
-    # canonical-link walk (TC2: context→knowledge canonical, TC4:
-    # knowledge→knowledge canonical) and to keep `abc warehouse lint` happy
-    # when validating the synthetic fixture. They are NOT pulled into the
-    # downstream project because:
-    #   1. beacon.yaml in this test does not declare any knowledge dir
-    #      (ArtifactsConfig has no `knowledge` field).
-    #   2. The auto-pull pathway in core/scanner/scanner.scan_file_for_knowledge
-    #      recognises legacy directory-relative `knowledge/...` links only,
-    #      not the new canonical form `.agentic-beacon/artifacts/knowledge/...`.
-    #      Filed as a follow-up: extending auto-pull to canonical links lives
-    #      outside this change's scope (per spec: scan_file_for_knowledge is
-    #      explicitly NOT modified — sync stays warning-only). See repo issue
-    #      tracker for the dedicated ticket.
-    # The project-side canonical-link walk therefore covers
-    # skill→context, agent→partial, skill own-folder, and context→skill;
-    # the warehouse-side walk additionally covers knowledge→knowledge.
+    # Knowledge is auto-pulled: team-context.md links to standards.md in
+    # canonical form, so sync must materialise it (AB-104). style-guide.md
+    # holds the knowledge→knowledge link. Auto-pull scans only contexts and
+    # skills, so style-guide.md is not synced and the warehouse-side walk
+    # covers it instead.
     (warehouse / "knowledge" / "python").mkdir(parents=True, exist_ok=True)
     (warehouse / "knowledge" / "python" / "standards.md").write_text(
-        "# Python Standards\n\n"
-        "## Section A\n\n"
-        "See [style](.agentic-beacon/artifacts/knowledge/python/style-guide.md).\n"
+        "# Python Standards\n\n## Section A\n\nKeep examples short.\n"
     )
     (warehouse / "knowledge" / "python" / "style-guide.md").write_text(
-        "# Style Guide\n\n## Usage\n\nKeep examples short.\n"
+        "# Style Guide\n\n"
+        "See [standards](.agentic-beacon/artifacts/knowledge/python/standards.md#section-a).\n"
     )
 
     _write_agents_manifest(warehouse)
@@ -315,18 +303,37 @@ def test_opencode_agent_links_resolve_from_project_root(
 def test_knowledge_anchor_resolves_in_distributed_target(
     synced_project: tuple[Path, Path],
 ):
-    """TC5: anchor on a canonical link matches a heading slug in the target.
-
-    Knowledge files aren't materialised under .agentic-beacon/artifacts/ in
-    this fixture (auto-pull doesn't recognise canonical-form links — see
-    follow-up note in _populate_positive_warehouse). Verify the anchor
-    resolution rule against the warehouse-side knowledge file instead;
-    that's the source the symlink would resolve to once auto-pull is
-    extended to canonical links.
-    """
-    _project_dir, warehouse = synced_project
-    target = warehouse / "knowledge" / "python" / "standards.md"
+    """TC5: anchor on a canonical link matches a heading slug in the target."""
+    project_dir, _warehouse = synced_project
+    target = (
+        project_dir
+        / ".agentic-beacon"
+        / "artifacts"
+        / "knowledge"
+        / "python"
+        / "standards.md"
+    )
     assert "section-a" in extract_markdown_headings(target)
+
+
+def test_sync_auto_pulls_canonically_linked_knowledge(
+    synced_project: tuple[Path, Path],
+):
+    """AB-104: a canonical knowledge link in a context is auto-pulled by sync."""
+    project_dir, warehouse = synced_project
+    link = (
+        project_dir
+        / ".agentic-beacon"
+        / "artifacts"
+        / "knowledge"
+        / "python"
+        / "standards.md"
+    )
+    assert link.is_symlink(), f"expected knowledge symlink at {link}"
+    assert (
+        link.resolve()
+        == (warehouse / "knowledge" / "python" / "standards.md").resolve()
+    )
 
 
 def test_warehouse_side_canonical_links_in_knowledge_resolve(
@@ -336,9 +343,8 @@ def test_warehouse_side_canonical_links_in_knowledge_resolve(
     points at an existing warehouse file.
 
     Mirrors the project-side resolution walk but rooted at the warehouse —
-    needed to exercise context→knowledge and knowledge→knowledge canonical
-    links because knowledge is not pulled into the project under the current
-    spec (see follow-up note in _populate_positive_warehouse).
+    needed to exercise knowledge→knowledge canonical links, because
+    auto-pull does not follow links between knowledge files.
     """
     for source_file in (synthetic_warehouse / "knowledge").rglob("*.md"):
         for link in extract_markdown_links(source_file.read_text(encoding="utf-8")):
