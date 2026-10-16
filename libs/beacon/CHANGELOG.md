@@ -1,5 +1,20 @@
 # Changelog
 
+## [3.8.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v3.7.0...agentic-beacon@v3.8.0) (2026-10-16)
+
+
+### Features
+
+* **scanner:** follow knowledge→knowledge links during auto-pull (AB-107) ([#172](https://github.com/Shadowsong27/agentic-beacon/issues/172)) ([71fc7fb](https://github.com/Shadowsong27/agentic-beacon/commit/71fc7fb48d4b326cf916a68a2db4bed764058a94))
+
+
+### Bug Fixes
+
+* **beacon:** reconcile CLAUDE.md/opencode.json context references to the effective set (AB-96) ([#164](https://github.com/Shadowsong27/agentic-beacon/issues/164)) ([2734176](https://github.com/Shadowsong27/agentic-beacon/commit/27341760e56ea950f83ca1e60e4023a3518dddda))
+* **record-skill:** quote description and normalize contexts in write_skill.py ([#169](https://github.com/Shadowsong27/agentic-beacon/issues/169)) ([63853e4](https://github.com/Shadowsong27/agentic-beacon/commit/63853e45fe6c69956548a48673533c3d30ba97e5))
+* **scanner:** resolve canonical knowledge links during auto-pull (AB-104) ([#171](https://github.com/Shadowsong27/agentic-beacon/issues/171)) ([471890f](https://github.com/Shadowsong27/agentic-beacon/commit/471890ff08359c22f6ed5d99931b4c85b6bd1063))
+* **skills:** contribute-warehouse flushes the whole tree, not just this session's files ([#170](https://github.com/Shadowsong27/agentic-beacon/issues/170)) ([cde3d43](https://github.com/Shadowsong27/agentic-beacon/commit/cde3d435182365564a1ed8b29994fb00755f2237))
+
 ## [3.7.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v3.6.0...agentic-beacon@v3.7.0) (2026-07-19)
 
 
