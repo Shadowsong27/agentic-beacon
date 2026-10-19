@@ -10,7 +10,10 @@ artifacts:
   - skills/delegate-to-oc/
   - skills/delegate-to-cc/
   - skills/file-linear-followup/
+  - skills/cdc-propose/
+  - skills/cdc-enhance/
+  - skills/plane-connect/
   agents:
-  - agents/spec-planner.md
+  - agents/planner.md
   - agents/implementation-supervisor.md
   - agents/diligent-supervisor.md
