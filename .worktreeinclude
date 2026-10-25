@@ -3,7 +3,6 @@
 #
 # These are abc-sync-distributed harness artifacts (symlinks/files under the
 # tool dirs) that are gitignored, so a fresh `git worktree` does not carry them.
-# Delegates need the project-local skills — notably openspec-apply-change, which
-# the --openspec fast-path requires — to resolve inside the worktree.
+# Delegates need the project-local skills to resolve inside the worktree.
 .opencode/skills/
 .claude/skills/
