@@ -60,9 +60,9 @@ def detect_agent_targets(project_root: Path) -> list[str]:
       ``abc sync`` flows.
 
     Net: spec-aligned over-wiring is acceptable. If a stronger signal is
-    needed in the future, the OpenSpec scenarios in
-    ``openspec/specs/project-agent-wiring/`` must be updated alongside the
-    implementation.
+    needed in the future, update this docstring and the tests alongside the
+    implementation. The original OpenSpec scenarios are frozen at
+    ``openspec/legacy-specs/specs/project-agent-wiring/``.
     """
     targets = []
     if (project_root / ".claude").is_dir():
