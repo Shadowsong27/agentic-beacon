@@ -1,10 +1,9 @@
 artifacts:
   contexts:
+  - contexts/cdc-workflow.md
   - contexts/python-standards.md
-  - contexts/openspec-workflow.md
   - contexts/agent-practices.md
   skills:
-  - skills/opsx-enhance-tasks/
   - skills/release-py-lib/
   - skills/linear-connect/
   - skills/delegate-to-oc/
