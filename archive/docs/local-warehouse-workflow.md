@@ -1,6 +1,6 @@
 # Local Warehouse Workflow Design
 
-> **Superseded by** the [`single-warehouse-write-entrypoint`](../../knowledge/decisions/single-warehouse-write-entrypoint.md) decision and `openspec/specs/symlink-based-sync/spec.md`. This document's central thesis — "pure copy over symlinks" — was inverted by the symlink-based sync change (2026-05). Retained for historical context: reading the "why pure copy" arguments side-by-side with the new decision clarifies which considerations held up in practice and which did not.
+> **Superseded by** the [`single-warehouse-write-entrypoint`](../../knowledge/decisions/single-warehouse-write-entrypoint.md) decision and `openspec/legacy-specs/specs/symlink-based-sync/spec.md`. This document's central thesis — "pure copy over symlinks" — was inverted by the symlink-based sync change (2026-05). Retained for historical context: reading the "why pure copy" arguments side-by-side with the new decision clarifies which considerations held up in practice and which did not.
 
 ---
 

@@ -67,13 +67,7 @@ PATTERNS=(
 ALLOWLIST_GLOBS=(
   '!archive/**'
   '!openspec/changes/**'
-  '!openspec/specs/snapshot-based-sync/**'        # superseded spec, slated for archival in task 10.4
-  '!openspec/specs/delta-contribution-workflow/**' # superseded spec, slated for archival in task 10.4
-  '!openspec/specs/contribute-noop/**'              # orphaned by abc contribute removal; archive in task 10.4
-  '!openspec/specs/global-agent-delta/**'           # orphaned by abc delta removal; archive in task 10.4
-  '!openspec/specs/global-agent-sync-state/**'      # rewritten in-place; historical-context note legitimately names removed commands
-  '!openspec/specs/sync-soft-block/**'              # rewritten in-place; historical-context note legitimately names removed commands
-  '!openspec/specs/install-flags/**'                # rewritten in-place; historical-context note legitimately names removed commands
+  '!openspec/legacy-specs/**'                     # frozen OpenSpec specs; historical text names removed commands
   # Test files: test names, fixtures, and assertions legitimately reference old behavior
   # when testing deprecation stubs or migration paths. Test authors own their comments.
   '!libs/beacon/tests/**'

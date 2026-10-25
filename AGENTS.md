@@ -90,7 +90,7 @@ Each in `libs/beacon/src/beacon/domains/<name>/`:
 | `distribution` | warehouse→project symlink sync, migration, upgrades |
 | `artifact` | agent / skill / rule artifact operations |
 
-**Read:** [Layered Architecture Spec](openspec/specs/layered-architecture/spec.md)
+**Read:** [Layered Architecture Spec](openspec/legacy-specs/specs/layered-architecture/spec.md) (frozen legacy spec, not maintained)
 
 ---
 
