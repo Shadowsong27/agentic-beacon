@@ -2,6 +2,7 @@ artifacts:
   contexts:
   - contexts/cdc-workflow.md
   - contexts/python-standards.md
+  - contexts/testing.md
   - contexts/agent-practices.md
   skills:
   - skills/release-py-lib/
