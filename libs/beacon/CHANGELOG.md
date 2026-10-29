@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.8.1](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v3.8.0...agentic-beacon@v3.8.1) (2026-10-29)
+
+
+### Miscellaneous Chores
+
+* **openspec:** move OpenSpec specs to legacy-specs, flatten archive (HARN-377) ([#174](https://github.com/Shadowsong27/agentic-beacon/issues/174)) ([8c5798c](https://github.com/Shadowsong27/agentic-beacon/commit/8c5798cb4561cc625ca78b9cbd8732b6dfd4b65d))
+
 ## [3.8.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v3.7.0...agentic-beacon@v3.8.0) (2026-10-16)
 
 
