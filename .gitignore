@@ -36,7 +36,6 @@ logs/
 # Claude Code ephemeral/user-local content (not project artifacts)
 .claude/worktrees/
 .claude/commands/opsx/
-.claude/skills/
 .claude/settings.json
 
 # Distributed warehouse content (project-specific)
@@ -47,13 +46,19 @@ uv.lock
 # Agentic Beacon
 .claude/scheduled_tasks.lock
 
-.agentic-beacon/config.toml
-.agentic-beacon/artifacts/
-.agentic-beacon/warehouse-catalog.md
-.agentic-beacon/pending.yaml
 .agentic-beacon/.legacy-migrated
 
 # Local sample-warehouse checkout (developer convenience; never a submodule)
 sample-warehouse/
+# >>> Agentic Beacon (managed) >>>
+.agentic-beacon/config.toml
+.agentic-beacon/artifacts/
+.agentic-beacon/warehouse-catalog.md
+.agentic-beacon/pending.yaml
+.claude/skills/
+.claude/commands/
 .claude/agents/
+.opencode/skills/
+.opencode/command/
 .opencode/agents/
+# <<< Agentic Beacon (managed) <<<
