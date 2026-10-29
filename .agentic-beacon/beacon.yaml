@@ -4,6 +4,7 @@ artifacts:
   - contexts/python-standards.md
   - contexts/testing.md
   - contexts/agent-practices.md
+  - contexts/plane-ops.md
   skills:
   - skills/release-py-lib/
   - skills/linear-connect/
@@ -17,3 +18,4 @@ artifacts:
   - agents/planner.md
   - agents/implementation-supervisor.md
   - agents/diligent-supervisor.md
+  - agents/generic-builder.md

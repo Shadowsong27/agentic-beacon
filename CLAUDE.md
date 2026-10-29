@@ -7,5 +7,6 @@
 @.agentic-beacon/artifacts/contexts/agent-practices.md
 @.agentic-beacon/artifacts/contexts/cdc-workflow.md
 @.agentic-beacon/artifacts/contexts/cicd-flow.md
+@.agentic-beacon/artifacts/contexts/plane-ops.md
 @.agentic-beacon/artifacts/contexts/python-standards.md
 @.agentic-beacon/artifacts/contexts/testing.md
