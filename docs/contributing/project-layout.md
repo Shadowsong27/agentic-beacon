@@ -56,7 +56,7 @@ src/beacon/
 │   ├── adoption/             # abc adopt flow: TUI, discovery, atomic commit
 │   ├── artifact/             # Skill and agent artifact operations
 │   ├── distribution/         # Symlink sync, migration, upgrade
-│   ├── setup/                # Warehouse init, opencode/CLAUDE.md wiring
+│   ├── setup/                # Warehouse init, opencode/AGENTS.md wiring
 │   └── warehouse/            # Connect, validate, catalog, status, contribute
 ├── core/                     # Layer 3: Cross-domain primitives
 │   ├── dependencies/         # Frontmatter parsing, dependency resolver, agent manifest

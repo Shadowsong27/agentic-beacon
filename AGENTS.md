@@ -85,7 +85,7 @@ Each in `libs/beacon/src/beacon/domains/<name>/`:
 | Domain | Responsibility |
 |---|---|
 | `warehouse` | connect / validate / catalog; git health; `abc warehouse status / contribute` |
-| `setup` | `abc warehouse init` / `abc setup`; CLAUDE.md / opencode wiring |
+| `setup` | `abc warehouse init` / `abc setup`; AGENTS.md / opencode wiring |
 | `adoption` | `abc adopt` flow: three-way (accept/reject/defer) TUI, confirm screen, atomic commit with rollback, `pending.yaml` + `.last-adopt` management |
 | `distribution` | warehouse→project symlink sync, migration, upgrades |
 | `artifact` | agent / skill / rule artifact operations |

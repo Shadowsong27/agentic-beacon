@@ -48,7 +48,7 @@ Each domain encapsulates a bounded context. New logic belongs in the domain that
 ```
 domains/
 ├── warehouse/      — warehouse connect/validate/catalog; git health; status/contribute
-├── setup/          — abc warehouse init; opencode.json and CLAUDE.md wiring
+├── setup/          — abc warehouse init; opencode.json and AGENTS.md wiring
 ├── adoption/       — abc adopt: TUI browser, three-way (accept/reject/defer), atomic commit
 ├── distribution/   — symlink sync engine, migration, upgrade, orphan pruning
 └── artifact/       — skill and agent artifact operations (wire/unwire, checksums)
@@ -87,7 +87,7 @@ cli/sync.py::sync()
         9. detect orphans               — symlinks not in beacon.yaml
        10. confirm_prune(orphans)       — ask user which orphans to remove
        11. sync_engine.sync_all()       — create/repair/prune symlinks
-       12. post-sync wiring             — .gitignore, opencode.json, CLAUDE.md,
+       12. post-sync wiring             — .gitignore, opencode.json, AGENTS.md,
                                           skills, agents, bundled skills, legacy cleanup
 ```
 
