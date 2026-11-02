@@ -48,7 +48,11 @@ jobs:
       # is named in the comment. Different PROVIDERS on purpose: the failure absorbed is
       # provider-side quota exhaustion. Every name must be registered in the runner's
       # ~/.pi/agent/models.json.
-      pi-models: litellm-responses/gpt-5.6-terra-medium,opencode-go/go-deepseek-v4.1-flash
+      # DeepSeek first: it is the model that answers here, and it is slow. A large PR
+      # (AB-106, #180: 33 files) needed more than the default 510s per attempt.
+      pi-models: opencode-go/go-deepseek-v4.1-flash,litellm-responses/gpt-5.6-terra-medium
+      timeout-minutes: 60
+      pi-attempt-timeout-minutes: 25
       # Rebuttal re-review: forwards the dispatch input; empty on every other trigger.
       pr-number: ${{ inputs.pr-number }}
 
