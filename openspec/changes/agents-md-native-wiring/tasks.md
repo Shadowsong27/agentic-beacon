@@ -231,7 +231,7 @@ pytest tests/ -v --tb=short
   - **Expected Output**: Exit 0 for both; no files modified by hooks
   - **Validation**: Zero failed tests; pre-commit reports all hooks Passed
 <!-- opsx:tdd:5.1:end -->
-- [ ] 5.2 Happy path in a scratch project: `abc setup` creates `AGENTS.md` and no `CLAUDE.md`;
+- [x] 5.2 Happy path in a scratch project: `abc setup` creates `AGENTS.md` and no `CLAUDE.md`;
       `abc sync` with one context writes its import into `AGENTS.md`; a pre-existing thin
       `CLAUDE.md` is deleted; `abc doctor` reports a `CLAUDE.md` placed in a parent directory.
 <!-- opsx:tdd:5.2:begin -->
