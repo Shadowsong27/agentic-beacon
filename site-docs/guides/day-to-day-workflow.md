@@ -45,7 +45,7 @@ Run `abc adopt` to open the TUI and selectively add them.
 
 Your agent reads at session start:
 
-- **Contexts** wired into `CLAUDE.md` / `opencode.json` — loaded automatically
+- **Contexts** wired into `AGENTS.md` / `opencode.json` — loaded automatically
 - **Knowledge** — markdown files symlinked into `artifacts/`
 - **Skills** — available as slash commands (`/code-review`, `/generate-tests`, etc.)
 

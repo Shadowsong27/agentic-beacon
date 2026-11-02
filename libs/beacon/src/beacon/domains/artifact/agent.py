@@ -24,7 +24,7 @@ def detect_agents(project_root: Path, *, fallback_to_all: bool = False) -> list[
     agents = []
     if (project_root / "opencode.json").exists():
         agents.append("opencode")
-    if (project_root / ".claude").exists() or (project_root / "CLAUDE.md").exists():
+    if (project_root / ".claude").exists() or (project_root / "AGENTS.md").exists():
         agents.append("claudecode")
     if not agents and fallback_to_all:
         return list(_ALL_KNOWN_AGENTS)
@@ -54,7 +54,7 @@ def detect_agent_targets(project_root: Path) -> list[str]:
       different wiring outcomes on different developer laptops. That kind
       of machine-local divergence is harder to debug than the current
       harmless over-wiring.
-    - Marker-file checks (``CLAUDE.md`` / ``opencode.json``) would create
+    - Marker-file checks (``AGENTS.md`` / ``opencode.json``) would create
       an asymmetric ordering dependency where agent wiring requires the
       tool to have run at least once first. That breaks fresh-clone-then-
       ``abc sync`` flows.

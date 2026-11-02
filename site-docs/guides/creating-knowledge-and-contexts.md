@@ -117,7 +117,7 @@ artifacts:
     - contexts/cicd-flow.md
 ```
 
-Then `abc sync` symlinks it into `.agentic-beacon/artifacts/contexts/` and wires it into your tool's config (`CLAUDE.md`, `opencode.json`).
+Then `abc sync` symlinks it into `.agentic-beacon/artifacts/contexts/` and wires it into your tool's config (`AGENTS.md`, `opencode.json`).
 
 You can also let `abc adopt` handle the wiring — write the context, append a pending entry, accept it in the TUI.
 

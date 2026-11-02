@@ -398,7 +398,7 @@ def commit_session(
 
         # 2c. If contexts were unadopted but no beacon_adds triggered wiring,
         # we still need to reconcile references so stale owned @-includes and
-        # instructions entries are removed from CLAUDE.md / opencode.json.
+        # instructions entries are removed from AGENTS.md / opencode.json.
         context_unadoptions = [
             p
             for p in to_unadopt

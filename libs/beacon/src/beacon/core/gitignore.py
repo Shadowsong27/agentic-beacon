@@ -74,7 +74,7 @@ TRACKED_ON_PURPOSE = [
     ".agentic-beacon/beacon.yaml",
     ".claude/.gitignore",
     ".opencode/.gitignore",
-    "CLAUDE.md",
+    "AGENTS.md",
     "opencode.json",
     ".worktreeinclude",
 ]

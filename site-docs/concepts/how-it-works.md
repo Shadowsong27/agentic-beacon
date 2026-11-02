@@ -153,7 +153,7 @@ Knowledge files are **not** declared — `abc sync` auto-derives them by scannin
 
 1. **Resolve** — reads `beacon.yaml`, follows skill `requires:` frontmatter and agent declarations, then walks markdown links from contexts and skills into `knowledge/` to auto-derive every transitive dependency.
 2. **Symlink** — creates per-file symlinks under `.agentic-beacon/artifacts/` pointing into the warehouse clone.
-3. **Wire** — installs skills and agents into your detected AI tools (Claude Code, OpenCode), and appends adopted contexts to your tool's config file (`CLAUDE.md`, `opencode.json`). Beacon is idempotent and non-destructive: re-running never duplicates entries, and only its own references are added or removed.
+3. **Wire** — installs skills and agents into your detected AI tools (Claude Code, OpenCode), and appends adopted contexts to your tool's config file (`AGENTS.md`, `opencode.json`). A `CLAUDE.md` in the project or an ancestor directory stops Claude Code from reading `AGENTS.md`, so Beacon migrates the imports out of any project `CLAUDE.md` and deletes it when nothing else is left in it. Beacon is idempotent and non-destructive: re-running never duplicates entries, and only its own references are added or removed.
 4. **Prune** — removes symlinks and config references for artifacts no longer declared.
 
 For the full pipeline, flags, and edge cases, see the [Adopting Artifacts guide](../guides/adopting-artifacts.md). For per-type details (what wiring each artifact gets), see [Artifact Types](artifact-types.md).

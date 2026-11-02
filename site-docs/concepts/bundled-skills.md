@@ -93,7 +93,7 @@ Two commands wire bundled skills:
 
 ```bash
 abc warehouse connect --path ~/my-org-warehouse
-abc setup          # auto-creates CLAUDE.md and opencode.json if missing
+abc setup          # auto-creates AGENTS.md and opencode.json if missing
 abc adopt          # select warehouse artifacts; bundled skills wired here too
 # → "Wired bundled skills: record-knowledge, record-skill, contribute-warehouse"
 ```

@@ -114,7 +114,7 @@ artifacts:
 
 **How contexts are wired:**
 
-- **Claude Code** — path appended to `CLAUDE.md` as `@.agentic-beacon/artifacts/contexts/...`
+- **Claude Code** — path appended to `AGENTS.md` as `@.agentic-beacon/artifacts/contexts/...`
 - **OpenCode** — path added as a file reference in `opencode.json`
 
 ---

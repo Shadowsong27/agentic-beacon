@@ -477,15 +477,22 @@ def run_sync(
     refs_added = reconcile_result.added
     refs_removed = reconcile_result.removed
 
+    for left_path in reconcile_result.claude_md_left:
+        wiring_notes.append(
+            f"  [bold]{left_path}[/bold] still exists — Claude Code does not read"
+            " AGENTS.md while it does.\n"
+            "  Move its remaining content into AGENTS.md and delete it, then run"
+            " [bold]abc doctor[/bold]."
+        )
+    if not dry_run:
+        for deleted_path in reconcile_result.claude_md_deleted:
+            logger.info(
+                "Deleted {} — context imports now live in AGENTS.md", deleted_path
+            )
+
     if effective_set.contexts and not dry_run:
         has_opencode = (project_root / "opencode.json").exists()
-        has_claude = any(
-            p.exists()
-            for p in [
-                project_root / ".claude" / "CLAUDE.md",
-                project_root / "CLAUDE.md",
-            ]
-        )
+        has_claude = (project_root / "AGENTS.md").exists()
         if not has_opencode and not has_claude:
             if has_synced_contexts(artifacts_dir):
                 agent_config_init_needed = True
@@ -494,7 +501,7 @@ def run_sync(
                     "  Contexts synced — wire them into your agent config:\n"
                     '  [bold]opencode.json[/bold] → add to "instructions" array:\n'
                     '    ".agentic-beacon/artifacts/contexts/<name>.md"\n'
-                    "  [bold]CLAUDE.md[/bold] → add a line per context:\n"
+                    "  [bold]AGENTS.md[/bold] → add a line per context:\n"
                     "    @.agentic-beacon/artifacts/contexts/<name>.md"
                 )
     elif dry_run:
@@ -503,7 +510,7 @@ def run_sync(
                 "  Contexts would be synced — wire them into your agent config if needed:\n"
                 '  [bold]opencode.json[/bold] → add to "instructions" array:\n'
                 '    ".agentic-beacon/artifacts/contexts/<name>.md"\n'
-                "  [bold]CLAUDE.md[/bold] → add a line per context:\n"
+                "  [bold]AGENTS.md[/bold] → add a line per context:\n"
                 "    @.agentic-beacon/artifacts/contexts/<name>.md"
             )
 

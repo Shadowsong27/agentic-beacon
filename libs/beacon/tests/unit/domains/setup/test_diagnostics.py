@@ -2,14 +2,18 @@
 
 import json
 
+import pytest
 from beacon.core.manifest.beacon import BeaconManifest
+from beacon.domains.setup import diagnostics as diagnostics_module
 from beacon.domains.setup.diagnostics import (
+    _check_claude_md_shadowing,
     _check_path_references,
     _check_platform,
     _check_stale_globs,
     _check_symlink_hygiene,
     _check_warehouse_git,
     _is_glob_pattern,
+    repair_reference_drift,
     run_project_diagnostics,
     run_project_health_checks,
 )
@@ -23,6 +27,18 @@ def _make_manifest(**kwargs) -> BeaconManifest:
     defaults = {"contexts": [], "skills": [], "agents": []}
     defaults.update(kwargs)
     return BeaconManifest(artifacts=defaults)
+
+
+@pytest.fixture(autouse=True)
+def _no_ancestor_shadowing(monkeypatch):
+    """Keep clean-run assertions independent of CLAUDE.md files above tmp_path (R2).
+
+    Shadowing tests call the real function through ``_check_claude_md_shadowing``
+    imported at module load, and pass ``home=`` explicitly.
+    """
+    monkeypatch.setattr(
+        diagnostics_module, "_check_claude_md_shadowing", lambda *_a, **_k: []
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -124,20 +140,20 @@ class TestSymlinkHygiene:
 
 
 class TestPathReferences:
-    def test_claude_md_broken_reference(self, tmp_path):
-        (tmp_path / "CLAUDE.md").write_text("@nonexistent.md\n")
+    def test_agents_md_broken_reference(self, tmp_path):
+        (tmp_path / "AGENTS.md").write_text("@nonexistent.md\n")
         manifest = _make_manifest()
         issues = _check_path_references(tmp_path, manifest)
         assert len(issues) == 1
         assert "Broken reference" in issues[0].message
         assert issues[0].severity == "error"
 
-    def test_claude_md_unmanaged_reference(self, tmp_path):
+    def test_agents_md_unmanaged_reference(self, tmp_path):
         (tmp_path / ".agentic-beacon" / "artifacts" / "contexts").mkdir(parents=True)
         (
             tmp_path / ".agentic-beacon" / "artifacts" / "contexts" / "team.md"
         ).write_text("# Team")
-        (tmp_path / "CLAUDE.md").write_text(
+        (tmp_path / "AGENTS.md").write_text(
             "@.agentic-beacon/artifacts/contexts/team.md\n"
         )
         manifest = _make_manifest(contexts=[])
@@ -146,20 +162,20 @@ class TestPathReferences:
         assert "Unmanaged reference" in issues[0].message
         assert issues[0].severity == "warn"
 
-    def test_claude_md_wired_reference_no_issue(self, tmp_path):
+    def test_agents_md_wired_reference_no_issue(self, tmp_path):
         (tmp_path / ".agentic-beacon" / "artifacts" / "contexts").mkdir(parents=True)
         (
             tmp_path / ".agentic-beacon" / "artifacts" / "contexts" / "team.md"
         ).write_text("# Team")
-        (tmp_path / "CLAUDE.md").write_text(
+        (tmp_path / "AGENTS.md").write_text(
             "@.agentic-beacon/artifacts/contexts/team.md\n"
         )
         manifest = _make_manifest(contexts=["contexts/team.md"])
         issues = _check_path_references(tmp_path, manifest)
         assert issues == []
 
-    def test_claude_md_absolute_path_flagged_as_non_portable(self, tmp_path):
-        (tmp_path / "CLAUDE.md").write_text(
+    def test_agents_md_absolute_path_flagged_as_non_portable(self, tmp_path):
+        (tmp_path / "AGENTS.md").write_text(
             "@/Users/someone/warehouse/contexts/team.md\n"
         )
         manifest = _make_manifest()
@@ -199,7 +215,7 @@ class TestPathReferences:
         (
             tmp_path / ".agentic-beacon" / "artifacts" / "contexts" / "team.md"
         ).write_text("# Team")
-        (tmp_path / "CLAUDE.md").write_text("@contexts/team.md\n")
+        (tmp_path / "AGENTS.md").write_text("@contexts/team.md\n")
         manifest = _make_manifest(contexts=["contexts/team.md"])
         issues = _check_path_references(tmp_path, manifest)
         assert issues == []
@@ -209,7 +225,7 @@ class TestPathReferences:
         (tmp_path / ".agentic-beacon" / "artifacts" / "contexts" / "foo.md").write_text(
             "# Foo"
         )
-        (tmp_path / "CLAUDE.md").write_text(
+        (tmp_path / "AGENTS.md").write_text(
             "@.agentic-beacon/artifacts/contexts/foo.md\n"
         )
         manifest = _make_manifest(contexts=["contexts/*.md"])
@@ -223,7 +239,7 @@ class TestPathReferences:
         (
             tmp_path / ".agentic-beacon" / "artifacts" / "skills" / "foo" / "SKILL.md"
         ).write_text("# Skill")
-        (tmp_path / "CLAUDE.md").write_text(
+        (tmp_path / "AGENTS.md").write_text(
             "@.agentic-beacon/artifacts/skills/foo/SKILL.md\n"
         )
         manifest = _make_manifest(contexts=["contexts/*.md"])
@@ -233,14 +249,20 @@ class TestPathReferences:
         assert issues[0].severity == "warn"
 
     def test_project_local_existing_reference_not_warned(self, tmp_path):
-        (tmp_path / "AGENTS.md").write_text("# Agents")
-        (tmp_path / "CLAUDE.md").write_text("@AGENTS.md\n")
+        (tmp_path / "docs").mkdir()
+        (tmp_path / "docs" / "guide.md").write_text("# Guide")
+        (tmp_path / "AGENTS.md").write_text("@docs/guide.md\n")
         manifest = _make_manifest()
         issues = _check_path_references(tmp_path, manifest)
         assert issues == []
 
+    def test_claude_md_imports_are_not_checked(self, tmp_path):
+        """CLAUDE.md is not read by Claude Code once it exists; only AGENTS.md is checked (D9)."""
+        (tmp_path / "CLAUDE.md").write_text("@nonexistent.md\n")
+        assert _check_path_references(tmp_path, _make_manifest()) == []
+
     def test_project_local_missing_reference_is_warned(self, tmp_path):
-        (tmp_path / "CLAUDE.md").write_text("@docs/missing.md\n")
+        (tmp_path / "AGENTS.md").write_text("@docs/missing.md\n")
         manifest = _make_manifest()
         issues = _check_path_references(tmp_path, manifest)
         assert len(issues) == 1
@@ -252,7 +274,7 @@ class TestPathReferences:
         (tmp_path / ".agentic-beacon" / "artifacts" / "contexts" / "foo.md").write_text(
             "# Foo"
         )
-        (tmp_path / "CLAUDE.md").write_text(
+        (tmp_path / "AGENTS.md").write_text(
             "@.agentic-beacon/artifacts/contexts/foo.md\n"
         )
         manifest = _make_manifest(contexts=[])
@@ -382,6 +404,16 @@ class TestPlatformCheck:
 
 
 class TestRunProjectHealthChecks:
+    def test_shadowing_check_runs_from_health_checks(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(
+            diagnostics_module,
+            "_check_claude_md_shadowing",
+            _check_claude_md_shadowing,
+        )
+        (tmp_path / "CLAUDE.md").write_text("# Mine\n")
+        messages = [i.message for i in run_project_health_checks(tmp_path, None, None)]
+        assert f"{tmp_path.resolve() / 'CLAUDE.md'} hides AGENTS.md" in messages
+
     def test_all_checks_combined(self, tmp_path):
         warehouse = tmp_path / "warehouse"
         warehouse.mkdir()
@@ -393,7 +425,7 @@ class TestRunProjectHealthChecks:
         bad_link.parent.mkdir(parents=True)
         bad_link.symlink_to(warehouse / "contexts" / "ghost.md")
 
-        (tmp_path / "CLAUDE.md").write_text("@nonexistent.md\n")
+        (tmp_path / "AGENTS.md").write_text("@nonexistent.md\n")
 
         manifest = _make_manifest(contexts=["contexts/*.md"])
         issues = run_project_health_checks(tmp_path, warehouse, manifest)
@@ -455,3 +487,89 @@ class TestRunProjectDiagnostics:
         issues, fixes = run_project_diagnostics(tmp_path, None, None, fix=False)
         assert fixes == []
         assert isinstance(issues, list)
+
+
+# ---------------------------------------------------------------------------
+# _check_claude_md_shadowing (D8)
+# ---------------------------------------------------------------------------
+
+
+def _shadow_messages(project_root, home=None) -> list[str]:
+    """Shadowing messages for files under tmp_path only (host ancestors excluded)."""
+    base = str(project_root.parent.parent.resolve())
+    issues = _check_claude_md_shadowing(project_root, home=home)
+    return [i.message for i in issues if i.message.startswith(base)]
+
+
+class TestClaudeMdShadowing:
+    @pytest.mark.parametrize(
+        ("levels_up", "name"),
+        [
+            (0, "CLAUDE.md"),
+            (1, "CLAUDE.local.md"),
+            (2, ".claude/CLAUDE.md"),
+        ],
+        ids=["project-root", "ancestor-local", "grandparent-dot-claude"],
+    )
+    def test_shadowing_file_in_project_or_ancestor_reported(
+        self, tmp_path, levels_up, name
+    ):
+        project = tmp_path / "work" / "project"
+        project.mkdir(parents=True)
+        target_dir = [project, project.parent, project.parent.parent][levels_up]
+        target = target_dir / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("# Mine\n")
+
+        issues = _check_claude_md_shadowing(project, home=tmp_path / "home")
+
+        mine = [i for i in issues if i.message.startswith(str(tmp_path.resolve()))]
+        assert [i.message for i in mine] == [f"{target.resolve()} hides AGENTS.md"]
+        assert mine[0].severity == "error"
+        assert "does not read AGENTS.md" in mine[0].detail
+
+    def test_user_claude_dir_under_home_not_reported(self, tmp_path):
+        home = tmp_path / "home"
+        project = home / "code" / "project"
+        project.mkdir(parents=True)
+        (home / ".claude").mkdir()
+        (home / ".claude" / "CLAUDE.md").write_text("# User\n")
+        (home / ".claude" / "CLAUDE.local.md").write_text("# User\n")
+
+        assert _shadow_messages(project, home=home) == []
+
+    def test_home_directory_claude_md_is_reported(self, tmp_path):
+        home = tmp_path / "home"
+        project = home / "code" / "project"
+        project.mkdir(parents=True)
+        (home / "CLAUDE.md").write_text("# Home\n")
+
+        assert _shadow_messages(project, home=home) == [
+            f"{(home / 'CLAUDE.md').resolve()} hides AGENTS.md"
+        ]
+
+    def test_clean_tree_reports_nothing(self, tmp_path):
+        project = tmp_path / "work" / "project"
+        project.mkdir(parents=True)
+        (project / "AGENTS.md").write_text("# Project\n")
+
+        assert _shadow_messages(project, home=tmp_path / "home") == []
+
+
+# ---------------------------------------------------------------------------
+# repair_reference_drift reports CLAUDE.md deletions (C6)
+# ---------------------------------------------------------------------------
+
+
+class TestRepairReferenceDriftClaudeMd:
+    def test_deleted_claude_md_reported_as_fix(self, tmp_path):
+        warehouse = tmp_path / "warehouse"
+        (warehouse / "contexts").mkdir(parents=True)
+        (tmp_path / "AGENTS.md").write_text("# Project\n")
+        (tmp_path / "CLAUDE.md").write_text("@AGENTS.md\n")
+        manifest = _make_manifest()
+
+        fixes = repair_reference_drift(tmp_path, manifest, warehouse)
+
+        assert not (tmp_path / "CLAUDE.md").exists()
+        assert "Deleted CLAUDE.md (its context imports moved to AGENTS.md)" in fixes

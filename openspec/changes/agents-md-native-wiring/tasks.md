@@ -77,13 +77,13 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:1:end -->
 
 
-- [ ] 1.1 In `domains/setup/wiring.py`, add two fields with empty-tuple defaults to
+- [x] 1.1 In `domains/setup/wiring.py`, add two fields with empty-tuple defaults to
       `ReferenceReconcileResult`: `claude_md_deleted` and `claude_md_left` (D7). Keep `__bool__`
       as `added or removed`.
-- [ ] 1.2 Rename `_reconcile_claude_md` to `_reconcile_agents_md` and target the root `AGENTS.md`
+- [x] 1.2 Rename `_reconcile_claude_md` to `_reconcile_agents_md` and target the root `AGENTS.md`
       (D1, D2). Remove `_resolve_claude_md`. Keep the ownership, blank-collapse and sorted-append
       logic unchanged.
-- [ ] 1.3 Add the migration step inside `_reconcile_agents_md` for `./CLAUDE.md` and
+- [x] 1.3 Add the migration step inside `_reconcile_agents_md` for `./CLAUDE.md` and
       `./.claude/CLAUDE.md` (D4): strip owned lines, apply the delete test (D5), delete or write
       back, record deleted/left paths. Skip a `CLAUDE.md` that resolves to the same file as
       `AGENTS.md` (D6). Create `AGENTS.md` when it is missing and owned lines were found (D3).
@@ -104,9 +104,9 @@ pytest tests/ -v --tb=short
     - TC9: second run after migration → result empty and AGENTS.md byte-identical (idempotent)
     - TC10: CLAUDE.md with no owned lines and other content → file byte-identical, reported as left
 <!-- opsx:tdd:1.3:end -->
-- [ ] 1.4 Make `reconcile_context_references` call `_reconcile_agents_md` and carry
+- [x] 1.4 Make `reconcile_context_references` call `_reconcile_agents_md` and carry
       `claude_md_deleted` / `claude_md_left` through to its result.
-- [ ] 1.5 Update `tests/unit/test_context_reference_reconcile.py`: retarget the existing
+- [x] 1.5 Update `tests/unit/test_context_reference_reconcile.py`: retarget the existing
       `_reconcile_claude_md` cases to `_reconcile_agents_md`, and cover: a thin `CLAUDE.md`
       (`@AGENTS.md`, blanks, an HTML comment) is deleted and its imports land in `AGENTS.md`; a
       `CLAUDE.md` with a heading is kept, stripped and reported as left; `.claude/CLAUDE.md` is
@@ -129,17 +129,17 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:2:end -->
 
 
-- [ ] 2.1 Replace `init_claude_md` with `init_agents_md` and rename `SetupResult.claude_created`
+- [x] 2.1 Replace `init_claude_md` with `init_agents_md` and rename `SetupResult.claude_created`
       to `agents_md_created` (D10). Update `setup_project`.
-- [ ] 2.2 Update `cli/setup.py` to print "Initialized AGENTS.md" and `cli/sync.py` to import and
+- [x] 2.2 Update `cli/setup.py` to print "Initialized AGENTS.md" and `cli/sync.py` to import and
       call `init_agents_md` (D10).
-- [ ] 2.3 In `domains/distribution/orchestrator.py`, base `has_claude` on the root `AGENTS.md`,
+- [x] 2.3 In `domains/distribution/orchestrator.py`, base `has_claude` on the root `AGENTS.md`,
       change both wiring hints to name `AGENTS.md` (D11), append a `wiring_notes` entry for each
       `claude_md_left` path and log each `claude_md_deleted` path (D7).
-- [ ] 2.4 Delete `wire_contexts_claudecode` and `unwire_context_claudecode` and their tests in
+- [x] 2.4 Delete `wire_contexts_claudecode` and `unwire_context_claudecode` and their tests in
       `tests/integration/test_sync_wiring.py` (D14). Update the `unwire_pruned_artifacts`
       docstring and the comment at `domains/adoption/apply.py` L401 to say `AGENTS.md`.
-- [ ] 2.5 Update `tests/unit/domains/setup/test_setup_opencode_init.py` and the sync/e2e
+- [x] 2.5 Update `tests/unit/domains/setup/test_setup_opencode_init.py` and the sync/e2e
       integration tests that assert on `CLAUDE.md`: `abc setup` creates `AGENTS.md` and no
       `CLAUDE.md`; `abc sync` wires imports into `AGENTS.md`; de-adopting a context removes its
       import from `AGENTS.md` and keeps non-owned lines; a left `CLAUDE.md` produces the sync note.
@@ -165,10 +165,10 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:3:end -->
 
 
-- [ ] 3.1 In `domains/setup/diagnostics.py`, rename `_check_claude_md` to `_check_atpath_file` and
+- [x] 3.1 In `domains/setup/diagnostics.py`, rename `_check_claude_md` to `_check_atpath_file` and
       make `_check_path_references` check the root `AGENTS.md` instead of the `CLAUDE.md` files
       (D9). Update the module docstring and the `repair_reference_drift` docstring.
-- [ ] 3.2 Add `_check_claude_md_shadowing(project_root, home=None)` and call it from
+- [x] 3.2 Add `_check_claude_md_shadowing(project_root, home=None)` and call it from
       `run_project_health_checks` (D8). Report each `CLAUDE.md`, `CLAUDE.local.md` and
       `.claude/CLAUDE.md` in the project root and every ancestor as an error naming the path,
       skipping candidates under `home / ".claude"`.
@@ -184,7 +184,7 @@ pytest tests/ -v --tb=short
     - TC5: tmp/home/CLAUDE.md exists (home dir itself, not .claude) → reported (D8)
     - TC6: no shadowing files in the tree → empty list
 <!-- opsx:tdd:3.2:end -->
-- [ ] 3.3 Update `tests/unit/domains/setup/test_diagnostics.py` and
+- [x] 3.3 Update `tests/unit/domains/setup/test_diagnostics.py` and
       `tests/integration/test_doctor_command.py`: move the `@` import cases from `CLAUDE.md` to
       `AGENTS.md`; cover a project `CLAUDE.md`, an ancestor `CLAUDE.local.md`, an ancestor
       `.claude/CLAUDE.md`, and a `home/.claude/CLAUDE.md` that is not reported. Keep clean-run
@@ -205,14 +205,14 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:4:end -->
 
 
-- [ ] 4.1 Replace `"CLAUDE.md"` with `"AGENTS.md"` in `TRACKED_ON_PURPOSE` in `core/gitignore.py`
+- [x] 4.1 Replace `"CLAUDE.md"` with `"AGENTS.md"` in `TRACKED_ON_PURPOSE` in `core/gitignore.py`
       (D13) and update any gitignore test that names it.
-- [ ] 4.2 Change `detect_agents` in `domains/artifact/agent.py` to detect `claudecode` from
+- [x] 4.2 Change `detect_agents` in `domains/artifact/agent.py` to detect `claudecode` from
       `.claude/` or `AGENTS.md` (D12), and update the docstring of `detect_agent_targets` and
       `tests/unit/test_detect_agent_targets.py` where they name `CLAUDE.md`.
-- [ ] 4.3 Run `git grep -n 'CLAUDE.md' -- libs/beacon/src` and confirm every remaining match is
+- [x] 4.3 Run `git grep -n 'CLAUDE.md' -- libs/beacon/src` and confirm every remaining match is
       the migration (D4), the delete test (D5) or the doctor check (D8).
-- [ ] 4.4 Update `README.md` and the `site-docs/` pages that describe beacon wiring `CLAUDE.md`
+- [x] 4.4 Update `README.md` and the `site-docs/` pages that describe beacon wiring `CLAUDE.md`
       (D15).
 
 ## 5. Verification
@@ -225,7 +225,7 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:5:end -->
 
 
-- [ ] 5.1 Run `pytest` from the repo root and `pre-commit run --all-files`; both pass.
+- [x] 5.1 Run `pytest` from the repo root and `pre-commit run --all-files`; both pass.
 <!-- opsx:tdd:5.1:begin -->
   - **Input**: pytest && pre-commit run --all-files (from repo root)
   - **Expected Output**: Exit 0 for both; no files modified by hooks
