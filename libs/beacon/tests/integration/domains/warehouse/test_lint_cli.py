@@ -72,7 +72,10 @@ def _build_defective_warehouse(root: Path) -> tuple[Path, dict]:
 
     # Defect 2: context with broken knowledge link
     ctx = wh / "contexts" / "ctx-with-broken-link.md"
-    ctx.write_text("[X](../knowledge/missing/file.md)\n")
+    ctx.write_text(
+        "---\ndescription: Context with a broken knowledge link.\n---\n"
+        "[X](../knowledge/missing/file.md)\n"
+    )
 
     # Defect 3: agent missing `name` key
     (wh / "agents" / "no-name.md").write_text(
@@ -190,4 +193,31 @@ def test_lint_clean_fixture_exits_zero(tmp_path):
     )
     assert "Lint passed" in result.stdout, (
         f"Expected 'Lint passed' in stdout.\nstdout:\n{result.stdout}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Test: described context passes, undescribed context warns and exits 0
+# ---------------------------------------------------------------------------
+
+
+def test_lint_context_without_description_warns_and_exits_zero(tmp_path):
+    """TC2.5: described context is silent; undescribed context warns; exit 0."""
+    wh = _build_clean_warehouse(tmp_path)
+    (wh / "contexts" / "described.md").write_text(
+        "---\ndescription: Load when working on CI.\n---\n# Described\n"
+    )
+    (wh / "contexts" / "undescribed.md").write_text("# Undescribed\n")
+
+    result = _run_lint(wh)
+
+    assert result.returncode == 0, (
+        f"Expected returncode 0, got {result.returncode}\nstdout:\n{result.stdout}\n"
+        f"stderr:\n{result.stderr}"
+    )
+    assert "warning:" in result.stdout, result.stdout
+    assert "contexts/undescribed.md" in result.stdout, result.stdout
+    assert "contexts/described.md" not in result.stdout, result.stdout
+    assert "Lint passed with 1 warning(s) across 1 file(s)." in result.stdout, (
+        result.stdout
     )

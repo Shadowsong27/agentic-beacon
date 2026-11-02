@@ -43,7 +43,9 @@ class TestLintFix:
     def test_fix_rewrites_cross_artifact_relative_link(self, tmp_path):
         """TC1: fix rewrites a cross-artifact relative link and preserves anchor."""
         wh = _build_clean_warehouse(tmp_path)
-        (wh / "contexts" / "bar.md").write_text("# Multi Repo\n")
+        (wh / "contexts" / "bar.md").write_text(
+            "---\ndescription: Shared context.\n---\n# Multi Repo\n"
+        )
         skill_file = _add_valid_skill(wh, "foo")
         skill_file.write_text(
             "---\nrequires:\n  contexts: []\n---\n"
@@ -92,7 +94,9 @@ class TestLintFix:
     def test_fix_leaves_canonical_link_unchanged(self, tmp_path):
         """TC4: already-canonical link stays untouched."""
         wh = _build_clean_warehouse(tmp_path)
-        (wh / "contexts" / "bar.md").write_text("# Bar\n")
+        (wh / "contexts" / "bar.md").write_text(
+            "---\ndescription: Shared context.\n---\n# Bar\n"
+        )
         ctx = wh / "contexts" / "foo.md"
         original = "[bar](.agentic-beacon/artifacts/contexts/bar.md)\n"
         ctx.write_text(original)
@@ -124,7 +128,9 @@ class TestLintFix:
     def test_fix_rewrites_multiple_links_on_one_line(self, tmp_path):
         """TC6: multiple fixable links on one line each rewrite independently."""
         wh = _build_clean_warehouse(tmp_path)
-        (wh / "contexts" / "bar.md").write_text("# Bar\n")
+        (wh / "contexts" / "bar.md").write_text(
+            "---\ndescription: Shared context.\n---\n# Bar\n"
+        )
         (wh / "knowledge" / "topic.md").write_text("# Topic\n")
         ctx = wh / "contexts" / "foo.md"
         ctx.write_text(
@@ -144,7 +150,9 @@ class TestLintFix:
     def test_fix_is_idempotent_on_second_run(self, tmp_path):
         """TC1: second --fix run is a byte-identical no-op."""
         wh = _build_clean_warehouse(tmp_path)
-        (wh / "contexts" / "bar.md").write_text("# Bar\n")
+        (wh / "contexts" / "bar.md").write_text(
+            "---\ndescription: Shared context.\n---\n# Bar\n"
+        )
         skill_file = _add_valid_skill(wh, "foo")
         skill_file.write_text(
             "---\nrequires:\n  contexts: []\n---\n[ctx](../../contexts/bar.md)\n"
@@ -162,7 +170,9 @@ class TestLintFix:
     def test_lint_without_fix_is_read_only(self, tmp_path):
         """TC3: lint without --fix reports errors and does not modify files."""
         wh = _build_clean_warehouse(tmp_path)
-        (wh / "contexts" / "bar.md").write_text("# Bar\n")
+        (wh / "contexts" / "bar.md").write_text(
+            "---\ndescription: Shared context.\n---\n# Bar\n"
+        )
         skill_file = _add_valid_skill(wh, "foo")
         original = "---\nrequires:\n  contexts: []\n---\n[ctx](../../contexts/bar.md)\n"
         skill_file.write_text(original)
@@ -178,9 +188,13 @@ class TestLintFix:
     def test_fix_on_clean_warehouse_is_no_op(self, tmp_path):
         """TC4: --fix on already-clean warehouse makes no edits and exits cleanly."""
         wh = _build_clean_warehouse(tmp_path)
-        (wh / "contexts" / "bar.md").write_text("# Bar\n")
+        (wh / "contexts" / "bar.md").write_text(
+            "---\ndescription: Shared context.\n---\n# Bar\n"
+        )
         ctx = wh / "contexts" / "foo.md"
-        ctx.write_text("[bar](.agentic-beacon/artifacts/contexts/bar.md)\n")
+        ctx.write_text(
+            "---\ndescription: Consumer context.\n---\n[bar](.agentic-beacon/artifacts/contexts/bar.md)\n"
+        )
 
         report = lint_warehouse(wh, fix=True)
 
@@ -197,7 +211,9 @@ class TestLintFix:
     def test_cli_fix_reports_counts_and_exits_zero_when_clean_after_fix(self, tmp_path):
         """Task 3.3: --fix prints rewrite counts and exits 0 when no errors remain."""
         wh = _build_clean_warehouse(tmp_path)
-        (wh / "contexts" / "bar.md").write_text("# Bar\n")
+        (wh / "contexts" / "bar.md").write_text(
+            "---\ndescription: Shared context.\n---\n# Bar\n"
+        )
         skill_file = _add_valid_skill(wh, "foo")
         skill_file.write_text(
             "---\nrequires:\n  contexts: []\n---\n[ctx](../../contexts/bar.md)\n"
@@ -235,7 +251,9 @@ class TestLintFix:
         (medium severity) — fix uses span-based slicing.
         """
         wh = _build_clean_warehouse(tmp_path)
-        (wh / "contexts" / "bar.md").write_text("# Bar\n")
+        (wh / "contexts" / "bar.md").write_text(
+            "---\ndescription: Shared context.\n---\n# Bar\n"
+        )
         skill_file = _add_valid_skill(wh, "foo")
         skill_file.write_text(
             "---\nrequires:\n  contexts: []\n---\n"
@@ -264,7 +282,9 @@ class TestLintFix:
         downstream project. PR #159 round-2 review (medium severity).
         """
         wh = _build_clean_warehouse(tmp_path)
-        (wh / "contexts" / "bar.md").write_text("# Bar\n")
+        (wh / "contexts" / "bar.md").write_text(
+            "---\ndescription: Shared context.\n---\n# Bar\n"
+        )
         partials_dir = wh / "agent-partials"
         partials_dir.mkdir()
         (partials_dir / "shared-checklist.md").write_text(
@@ -283,7 +303,9 @@ class TestLintFix:
     def test_fix_rewrites_links_inside_agent_partials(self, tmp_path):
         """``--fix`` must rewrite cross-artifact links inside agent-partials/."""
         wh = _build_clean_warehouse(tmp_path)
-        (wh / "contexts" / "bar.md").write_text("# Bar\n")
+        (wh / "contexts" / "bar.md").write_text(
+            "---\ndescription: Shared context.\n---\n# Bar\n"
+        )
         partials_dir = wh / "agent-partials"
         partials_dir.mkdir()
         partial_file = partials_dir / "shared-checklist.md"

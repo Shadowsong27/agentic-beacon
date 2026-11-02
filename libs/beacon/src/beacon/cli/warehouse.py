@@ -598,7 +598,7 @@ def _print_lint_report(report: LintReport, _console: Console | None = None) -> N
         c.print(
             f"[cyan]Rewrote {report.rewritten_links} link(s) across {report.files_touched} file(s).[/cyan]"
         )
-    if not report:
+    if not report.findings:
         c.print("[green]✓ Lint passed.[/green]")
         return
 
@@ -611,13 +611,26 @@ def _print_lint_report(report: LintReport, _console: Console | None = None) -> N
         group = list(group_iter)
         c.print(f"[bold]{escape(artifact_path)}[/bold]")
         for finding in group:
-            c.print(f"  [red]error:[/red] {escape(finding.message)}")
+            if finding.severity == "error":
+                c.print(f"  [red]error:[/red] {escape(finding.message)}")
+            else:
+                c.print(f"  [yellow]warning:[/yellow] {escape(finding.message)}")
 
     # Summary line
-    n = len(report.findings)
-    # Count unique artifact paths
-    unique_paths = len({f.artifact_path for f in report.findings})
-    c.print(f"\n[red]Found {n} error(s) across {unique_paths} file(s).[/red]")
+    n_errors = len(report.errors)
+    n_warnings = len(report.warnings)
+    if report.errors:
+        # Count unique artifact paths across all findings
+        unique_paths = len({f.artifact_path for f in report.findings})
+        warning_part = f" and {n_warnings} warning(s)" if n_warnings else ""
+        c.print(
+            f"\n[red]Found {n_errors} error(s){warning_part} across {unique_paths} file(s).[/red]"
+        )
+    else:
+        unique_paths = len({f.artifact_path for f in report.warnings})
+        c.print(
+            f"\n[green]✓ Lint passed with {n_warnings} warning(s) across {unique_paths} file(s).[/green]"
+        )
 
 
 @warehouse.command(name="lint")
@@ -643,10 +656,12 @@ def warehouse_lint(*, warehouse_path: Path | None, fix: bool) -> None:
     WAREHOUSE_PATH (defaults to the current directory when omitted).
 
     Validates: structure, skill frontmatter, skill context references,
-    agent manifest, agent frontmatter (name + description), and knowledge
-    link integrity.
+    agent manifest, agent frontmatter (name + description), knowledge
+    link integrity, and context frontmatter (optional `description`).
 
-    Exits 0 when no errors found; exits 1 when any errors are found.
+    Warnings (for example a context with no `description`) are printed with
+    a `warning:` prefix and never change the exit code. Exits 0 when no
+    errors are found; exits 1 when any errors are found.
 
     \b
     Examples:
@@ -657,4 +672,4 @@ def warehouse_lint(*, warehouse_path: Path | None, fix: bool) -> None:
     target = warehouse_path or Path.cwd()
     report = lint_warehouse(target, fix=fix)
     _print_lint_report(report)
-    sys.exit(1 if report.findings else 0)
+    sys.exit(1 if report.errors else 0)
