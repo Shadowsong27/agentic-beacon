@@ -204,8 +204,8 @@ def _reconcile_agents_md(
 
     Then AGENTS.md is reconciled. Only lines whose stripped form starts with
     ``@ARTIFACT_REF_PREFIX`` are managed. Non-artifact lines are preserved
-    verbatim. A missing AGENTS.md is created only when migration found owned
-    imports and the desired set is non-empty. Writes only when content changes.
+    verbatim. A missing AGENTS.md is created only when a project CLAUDE.md
+    existed and the desired set is non-empty. Writes only when content changes.
 
     Algorithm:
     1. Strip ALL owned artifact lines from AGENTS.md.
@@ -228,7 +228,7 @@ def _reconcile_agents_md(
         "claude_md_left": tuple(plan.rel for plan in plans if not plan.delete),
     }
 
-    if not agents_exists and not migrated_owned:
+    if not agents_exists and not plans:
         if not dry_run:
             _apply_claude_md_plans(plans)
         return ReferenceReconcileResult(added=[], removed=[], **migration)

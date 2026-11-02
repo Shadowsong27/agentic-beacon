@@ -53,8 +53,9 @@ Replace `_resolve_claude_md` with a constant path `project_root / "AGENTS.md"`.
 `reconcile_context_references` still aggregates opencode + Claude results.
 
 **D3 [planner-decided, H3] When the reconcile creates `AGENTS.md`.** A missing `AGENTS.md` is a
-no-op, as a missing `CLAUDE.md` is today, with one exception: if the migration (D4) found owned
-imports in a `CLAUDE.md`, the reconcile creates `AGENTS.md` so the imports are not lost. The
+no-op, as a missing `CLAUDE.md` is today, with one exception: if a project `CLAUDE.md` existed
+(D4 migration source) and the desired set is non-empty, the reconcile creates `AGENTS.md` so the
+Claude wiring is not lost. The
 first-time path (`agent_config_init_needed`) creates it through `init_agents_md` (D10).
 - Rejected: always create `AGENTS.md` when the desired set is non-empty. That changes behaviour for
   opencode-only projects, which today get no Claude file from sync.

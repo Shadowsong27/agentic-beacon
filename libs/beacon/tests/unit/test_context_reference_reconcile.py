@@ -553,6 +553,46 @@ class TestClaudeMdMigration:
         assert not (tmp_path / "CLAUDE.md").exists()
         assert result.claude_md_deleted == ("CLAUDE.md",)
 
+    def test_legacy_empty_claude_md_creates_agents_md_with_desired_set(self, tmp_path):
+        """AGENTS.md missing + empty CLAUDE.md: AGENTS.md gets the sorted desired set."""
+        (tmp_path / "CLAUDE.md").write_text("")
+        desired = [OWNED_A, DESIRED_PLANE[0]]
+
+        result = _reconcile_agents_md(tmp_path, desired)
+
+        assert (tmp_path / "AGENTS.md").read_text() == (
+            f"@{OWNED_A}\n@{DESIRED_PLANE[0]}\n"
+        )
+        assert not (tmp_path / "CLAUDE.md").exists()
+        assert result.added == sorted(desired)
+        assert result.claude_md_deleted == ("CLAUDE.md",)
+
+    def test_legacy_claude_md_without_owned_lines_creates_agents_md_and_is_kept(
+        self, tmp_path
+    ):
+        """AGENTS.md missing + CLAUDE.md with no owned lines: AGENTS.md created, CLAUDE.md untouched."""
+        original = "# Title\n"
+        (tmp_path / "CLAUDE.md").write_text(original)
+
+        result = _reconcile_agents_md(tmp_path, DESIRED_PLANE)
+
+        assert (tmp_path / "AGENTS.md").read_text() == f"@{DESIRED_PLANE[0]}\n"
+        assert (tmp_path / "CLAUDE.md").read_text() == original
+        assert result.added == DESIRED_PLANE
+        assert result.claude_md_left == ("CLAUDE.md",)
+        assert result.claude_md_deleted == ()
+
+    def test_legacy_empty_claude_md_with_empty_desired_creates_nothing(self, tmp_path):
+        """AGENTS.md missing + empty CLAUDE.md + empty desired set: no AGENTS.md, CLAUDE.md deleted."""
+        (tmp_path / "CLAUDE.md").write_text("")
+
+        result = _reconcile_agents_md(tmp_path, [])
+
+        assert not (tmp_path / "AGENTS.md").exists()
+        assert not (tmp_path / "CLAUDE.md").exists()
+        assert result.added == []
+        assert result.claude_md_deleted == ("CLAUDE.md",)
+
 
 # ---------------------------------------------------------------------------
 # Task 1.4: reconcile_context_references
