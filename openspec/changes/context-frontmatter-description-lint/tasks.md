@@ -78,7 +78,7 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:1:end -->
 
 
-- [ ] 1.1 Add `severity: Literal["error", "warning"] = "error"` to `LintFinding`, and
+- [x] 1.1 Add `severity: Literal["error", "warning"] = "error"` to `LintFinding`, and
       `errors` / `warnings` properties to `LintReport`; make `LintReport.__bool__` return
       `bool(self.errors)` (design D1, R4).
 <!-- opsx:tdd:1.1:begin -->
@@ -91,7 +91,7 @@ pytest tests/ -v --tb=short
     - TC3: report of one error and one warning → bool(report) is True, both properties partition findings
     - TC4: empty report → falsy, both properties empty
 <!-- opsx:tdd:1.1:end -->
-- [ ] 1.2 Update `_print_lint_report` in `cli/warehouse.py` to render `error:` / `warning:`
+- [x] 1.2 Update `_print_lint_report` in `cli/warehouse.py` to render `error:` / `warning:`
       prefixes and the three summary lines from design D2, keeping `rich.markup.escape()`.
 <!-- opsx:tdd:1.2:begin -->
   - **Input**: pytest libs/beacon/tests/unit/domains/warehouse/test_lint.py -v -k print_lint_report
@@ -104,7 +104,7 @@ pytest tests/ -v --tb=short
     - TC4: errors and warnings → 'Found N error(s) and M warning(s) across K file(s).'
     - TC5: message containing '[bold]' → printed literally (escape preserved)
 <!-- opsx:tdd:1.2:end -->
-- [ ] 1.3 Change `warehouse_lint` to exit `1 if report.errors else 0` and update its
+- [x] 1.3 Change `warehouse_lint` to exit `1 if report.errors else 0` and update its
       docstring (validated rules list, exit codes) (design D1, D8).
 <!-- opsx:tdd:1.3:begin -->
   - **Input**: CliRunner invoke `abc warehouse lint <fixture>`
@@ -126,7 +126,7 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:2:end -->
 
 
-- [ ] 2.1 Add `domains/warehouse/context_frontmatter.py` with `ContextFrontmatter`
+- [x] 2.1 Add `domains/warehouse/context_frontmatter.py` with `ContextFrontmatter`
       (`extra="forbid"`, strict optional string `description`, non-empty validator)
       (design D3, D6).
 <!-- opsx:tdd:2.1:begin -->
@@ -141,7 +141,7 @@ pytest tests/ -v --tb=short
     - TC5: {'description': 'x', 'load': 'always'} → ValidationError naming 'load'
     - TC6: {'description': None} → valid, treated as missing
 <!-- opsx:tdd:2.1:end -->
-- [ ] 2.2 Add `_lint_context_frontmatter` to `lint.py` after `_lint_agent_frontmatter`,
+- [x] 2.2 Add `_lint_context_frontmatter` to `lint.py` after `_lint_agent_frontmatter`,
       scanning `contexts/**/*.md` except `README.md`, mapping parse and validation results
       to warnings and errors per design D4 and D5; call it from `lint_warehouse`.
 <!-- opsx:tdd:2.2:begin -->
@@ -160,17 +160,17 @@ pytest tests/ -v --tb=short
     - TC9: contexts/README.md and contexts/teams/README.md → no finding
     - TC10: no contexts/ dir → no finding, no crash
 <!-- opsx:tdd:2.2:end -->
-- [ ] 2.3 Unit tests in `tests/unit/domains/warehouse/test_lint.py`: valid description
+- [x] 2.3 Unit tests in `tests/unit/domains/warehouse/test_lint.py`: valid description
       (no finding); no frontmatter (one warning); frontmatter without description (one
       warning); unterminated / bad YAML / non-mapping frontmatter (error); unknown key
       (error naming the key); empty and non-string description (error); subdirectory
       context is checked; `contexts/README.md` is skipped. Use `parametrize` for the
       input-only error variants.
-- [ ] 2.4 Report and CLI tests: a warnings-only report prints `warning:` and the
+- [x] 2.4 Report and CLI tests: a warnings-only report prints `warning:` and the
       "passed with N warning(s)" line and exits 0; a mixed report exits 1 and prints both
       counts; an error-only report keeps today's summary text. Extend the existing
       `_print_lint_report` and CLI tests rather than adding parallel classes.
-- [ ] 2.5 Confirm a fresh `abc warehouse init` warehouse still prints `✓ Lint passed.` and
+- [x] 2.5 Confirm a fresh `abc warehouse init` warehouse still prints `✓ Lint passed.` and
       exits 0 (extend the existing clean-fixture CLI test in
       `tests/integration/domains/warehouse/test_lint_cli.py` with a context that has a
       valid description, and assert a context without one yields a warning and exit 0).
@@ -190,7 +190,7 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:3:end -->
 
 
-- [ ] 3.1 Add a unit test that runs context wiring (`wire_contexts_claudecode` and
+- [x] 3.1 Add a unit test that runs context wiring (`wire_contexts_claudecode` and
       `wire_contexts_opencode`) over a contexts dir holding one context with frontmatter
       and one without, and asserts the `@` lines and `opencode.json` instruction entries
       are exactly the paths, identical to a run with no frontmatter (design D7).
@@ -214,10 +214,10 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:4:end -->
 
 
-- [ ] 4.1 In `site-docs/guides/creating-knowledge-and-contexts.md`, add a "Context
+- [x] 4.1 In `site-docs/guides/creating-knowledge-and-contexts.md`, add a "Context
       frontmatter" subsection under Contexts (field, example, guidance, lint behaviour),
       and correct the line-77 statement that lint enforces no shape in `contexts/` (design D8).
-- [ ] 4.2 In `site-docs/reference/cli.md`, add rule 7 (context frontmatter) to the
+- [x] 4.2 In `site-docs/reference/cli.md`, add rule 7 (context frontmatter) to the
       `abc warehouse lint` rule list and update the exit-code text: warnings print with
       `warning:` and never change the exit code (design D8).
 
@@ -231,13 +231,13 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:5:end -->
 
 
-- [ ] 5.1 Run `pytest` from the repo root and `pre-commit run --all-files`; both pass.
+- [x] 5.1 Run `pytest` from the repo root and `pre-commit run --all-files`; both pass.
 <!-- opsx:tdd:5.1:begin -->
   - **Input**: pytest && pre-commit run --all-files (from repo root)
   - **Expected Output**: Zero failed tests; every hook Passed, no files modified
   - **Validation**: Both commands exit 0
 <!-- opsx:tdd:5.1:end -->
-- [ ] 5.2 Happy path: create a scratch warehouse with `abc warehouse init`, add one
+- [x] 5.2 Happy path: create a scratch warehouse with `abc warehouse init`, add one
       context with a valid description, one without frontmatter, and one with an unknown
       key; run `abc warehouse lint` and confirm one warning, one error, exit 1; remove the
       bad one and confirm exit 0 with the warning summary.

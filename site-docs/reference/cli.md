@@ -172,11 +172,12 @@ abc warehouse lint [WAREHOUSE_PATH]
 4. **Agent manifest** — `agents.yaml` is valid YAML; every `agents/*.md` file has a matching entry and vice versa; no legacy `requires:` keys in agent frontmatter; every declared skill exists under `skills/`.
 5. **Agent frontmatter** — every `agents/*.md` (excluding `README.md`) has both a `name:` and `description:` YAML frontmatter key.
 6. **Artifact link integrity** — every inline Markdown link in `contexts/*.md`, `skills/*/SKILL.md`, `agents/*.md`, and `knowledge/**/*.md` must satisfy the canonical artifact-link contract. Lint emits one finding per defect across four error categories: malformed cross-artifact-relative links, missing canonical targets, unresolved anchors, and warehouse-escape links. This rule is **lint-only**: `abc sync` retains its current warning-only behaviour for broken knowledge links.
+7. **Context frontmatter** — every `contexts/**/*.md` (excluding `README.md`) may start with a YAML frontmatter block whose only key is `description`. A missing frontmatter block or missing `description` is a **warning**. Malformed frontmatter, an unknown key, or an empty or non-string `description` is an **error**. See [Context frontmatter](../guides/creating-knowledge-and-contexts.md#context-frontmatter).
 
 **Exit codes:**
 
-- `0` — No errors found; output contains `✓ Lint passed.`
-- `1` — One or more errors found; output is grouped by artifact path with `error:` prefixes.
+- `0` — No errors found. Output contains `✓ Lint passed.`, or `✓ Lint passed with N warning(s) across K file(s).` when only warnings were found.
+- `1` — One or more errors found; output is grouped by artifact path with `error:` prefixes. Warnings print with `warning:` prefixes and never change the exit code.
 
 **Example:**
 

@@ -10,11 +10,13 @@ from pathlib import Path
 
 import pytest
 import yaml
+from beacon.domains.warehouse.context_frontmatter import ContextFrontmatter
 from beacon.domains.warehouse.lint import (
     LintFinding,
     LintReport,
     lint_warehouse,
 )
+from pydantic import ValidationError
 
 # ---------------------------------------------------------------------------
 # Helpers — fixture warehouse builders
@@ -72,7 +74,9 @@ def _register_agent(wh: Path, name: str, skills: list[str] | None = None) -> Non
 def _add_valid_context(wh: Path, name: str, content: str | None = None) -> Path:
     """Add a valid context file."""
     ctx_file = wh / "contexts" / f"{name}.md"
-    ctx_file.write_text(content or f"# {name}\n")
+    ctx_file.write_text(
+        content or f"---\ndescription: Test context {name}.\n---\n# {name}\n"
+    )
     return ctx_file
 
 
@@ -137,6 +141,38 @@ class TestLintReport:
         report = LintReport(findings=())
         with pytest.raises((FrozenInstanceError, AttributeError)):
             report.findings = (LintFinding("p", "m"),)  # type: ignore[misc]
+
+    def test_finding_defaults_to_error_severity(self):
+        """TC1: LintFinding built without severity → severity == 'error'."""
+        assert LintFinding("p", "m").severity == "error"
+
+    def test_warning_only_report_is_falsy(self):
+        """TC2: two warnings → errors empty, two warnings, bool is False."""
+        report = LintReport(
+            findings=(
+                LintFinding("p", "w1", severity="warning"),
+                LintFinding("q", "w2", severity="warning"),
+            )
+        )
+        assert report.errors == ()
+        assert len(report.warnings) == 2
+        assert bool(report) is False
+
+    def test_mixed_report_partitions_findings(self):
+        """TC3: one error and one warning → truthy; the two lists partition findings."""
+        error = LintFinding("p", "e")
+        warning = LintFinding("q", "w", severity="warning")
+        report = LintReport(findings=(error, warning))
+        assert bool(report) is True
+        assert report.errors == (error,)
+        assert report.warnings == (warning,)
+
+    def test_empty_report_has_no_errors_or_warnings(self):
+        """TC4: empty report → falsy, both properties empty."""
+        report = LintReport(findings=())
+        assert bool(report) is False
+        assert report.errors == ()
+        assert report.warnings == ()
 
 
 class TestLintWarehouseOrchestrator:
@@ -891,7 +927,9 @@ class TestLintArtifactLinks:
         """Task 2.5: clean warehouse exits with no artifact-link findings."""
         wh = _build_clean_warehouse(tmp_path)
         (wh / "knowledge").mkdir(exist_ok=True)
-        _add_valid_context(wh, "bar", "# Multi Repo\n")
+        _add_valid_context(
+            wh, "bar", "---\ndescription: Shared context.\n---\n# Multi Repo\n"
+        )
         _add_valid_knowledge(wh, "notes/topic.md", "# Topic\n")
         _add_valid_skill(wh, "foo", contexts=[])
         ref_dir = wh / "skills" / "foo" / "references"
@@ -1024,6 +1062,171 @@ class TestLintWarehouseOrchestrator2:
 
 
 # ---------------------------------------------------------------------------
+# Context frontmatter (AB-109): schema and lint rule
+# ---------------------------------------------------------------------------
+
+
+class TestContextFrontmatterSchema:
+    """ContextFrontmatter accepts only a non-empty string description."""
+
+    def test_description_is_accepted(self):
+        """TC1: a non-empty description is valid."""
+        model = ContextFrontmatter.model_validate({"description": "Load when on CI."})
+        assert model.description == "Load when on CI."
+
+    def test_empty_mapping_is_valid_with_no_description(self):
+        """TC2: no keys → valid, description None."""
+        assert ContextFrontmatter.model_validate({}).description is None
+
+    def test_explicit_null_description_is_treated_as_missing(self):
+        """TC6: description: null → valid, description None."""
+        assert (
+            ContextFrontmatter.model_validate({"description": None}).description is None
+        )
+
+    @pytest.mark.parametrize(
+        "data",
+        [
+            pytest.param({"description": ""}, id="empty"),
+            pytest.param({"description": "   "}, id="whitespace-only"),
+            pytest.param({"description": 3}, id="non-string-no-coercion"),
+            pytest.param({"description": "x", "load": "always"}, id="unknown-key"),
+        ],
+    )
+    def test_invalid_frontmatter_is_rejected(self, data):
+        """TC3, TC4, TC5: empty, non-string and unknown-key inputs raise."""
+        with pytest.raises(ValidationError):
+            ContextFrontmatter.model_validate(data)
+
+    def test_unknown_key_error_names_the_key(self):
+        """TC5: the unknown-key error names 'load'."""
+        with pytest.raises(ValidationError) as exc:
+            ContextFrontmatter.model_validate({"description": "x", "load": "always"})
+        assert any("load" in str(err["loc"]) for err in exc.value.errors())
+
+
+class TestContextFrontmatterRule:
+    """TC2.2 / 2.3: _lint_context_frontmatter maps each file to a severity."""
+
+    @staticmethod
+    def _context_findings(wh: Path) -> list[LintFinding]:
+        return [
+            f
+            for f in lint_warehouse(wh).findings
+            if f.artifact_path.startswith("contexts/")
+            and "README" not in f.artifact_path
+        ]
+
+    @pytest.mark.parametrize(
+        ("content", "severity", "fragment"),
+        [
+            pytest.param(
+                "---\ndescription: Load when on CI.\n---\n# ctx\n",
+                None,
+                None,
+                id="valid-description",
+            ),
+            pytest.param(
+                "# ctx\n",
+                "warning",
+                "missing frontmatter description",
+                id="no-frontmatter",
+            ),
+            pytest.param(
+                "---\n{}\n---\n# ctx\n",
+                "warning",
+                "missing required key `description`",
+                id="empty-mapping-without-description",
+            ),
+            pytest.param(
+                "---\ndescription: null\n---\n# ctx\n",
+                "warning",
+                "missing required key `description`",
+                id="null-description",
+            ),
+            pytest.param(
+                "---\ndescription: x\n# ctx\n",
+                "error",
+                "Frontmatter opened with --- but never closed",
+                id="unterminated",
+            ),
+            pytest.param(
+                "---\ndescription: [unclosed\n---\n# ctx\n",
+                "error",
+                "YAML parse error",
+                id="bad-yaml",
+            ),
+            pytest.param(
+                "---\n- a\n- b\n---\n# ctx\n",
+                "error",
+                "did not parse to a YAML object",
+                id="yaml-list",
+            ),
+            pytest.param(
+                "---\ndescription: x\nload: always\n---\n# ctx\n",
+                "error",
+                "load: Extra inputs are not permitted",
+                id="unknown-key",
+            ),
+            pytest.param(
+                "---\ndescription: '   '\n---\n# ctx\n",
+                "error",
+                "description: Value error, description must not be empty",
+                id="blank-description",
+            ),
+            pytest.param(
+                "---\ndescription: 3\n---\n# ctx\n",
+                "error",
+                "description: Input should be a valid string",
+                id="non-string-description",
+            ),
+        ],
+    )
+    def test_single_context_severity(self, tmp_path, content, severity, fragment):
+        """TC1-TC7 and the error variants of 2.1: one context → expected finding."""
+        wh = _build_clean_warehouse(tmp_path)
+        (wh / "contexts" / "ctx.md").write_text(content)
+
+        findings = self._context_findings(wh)
+
+        if severity is None:
+            assert findings == []
+            return
+        assert len(findings) == 1
+        assert findings[0].artifact_path == "contexts/ctx.md"
+        assert findings[0].severity == severity
+        assert fragment in findings[0].message
+
+    def test_subdirectory_context_is_checked(self, tmp_path):
+        """TC8: contexts/teams/backend.md without description → warning at that path."""
+        wh = _build_clean_warehouse(tmp_path)
+        (wh / "contexts" / "teams").mkdir()
+        (wh / "contexts" / "teams" / "backend.md").write_text("# backend\n")
+
+        findings = self._context_findings(wh)
+
+        assert [(f.artifact_path, f.severity) for f in findings] == [
+            ("contexts/teams/backend.md", "warning")
+        ]
+
+    def test_readme_files_are_skipped_at_any_depth(self, tmp_path):
+        """TC9: contexts/README.md and contexts/teams/README.md → no finding."""
+        wh = _build_clean_warehouse(tmp_path)
+        (wh / "contexts" / "teams").mkdir()
+        (wh / "contexts" / "teams" / "README.md").write_text("# Teams\n")
+
+        assert self._context_findings(wh) == []
+
+    def test_missing_contexts_dir_yields_no_finding(self, tmp_path):
+        """TC10: no contexts/ directory → no finding and no crash."""
+        wh = _build_clean_warehouse(tmp_path)
+        (wh / "contexts" / "README.md").unlink()
+        (wh / "contexts").rmdir()
+
+        assert self._context_findings(wh) == []
+
+
+# ---------------------------------------------------------------------------
 # Phase 10: CLI handler tests
 # ---------------------------------------------------------------------------
 
@@ -1104,6 +1307,39 @@ class TestPrintLintReport:
         skills_pos = output.index("skills/bar/SKILL.md")
         assert agents_pos < skills_pos
 
+    def test_warnings_only_prints_warning_lines_and_passed_summary(self):
+        """TC2: warnings only → 'warning:' lines and 'passed with N warning(s)' summary."""
+        report = LintReport(
+            findings=(
+                LintFinding(
+                    "contexts/plain.md",
+                    "missing frontmatter description [bold]x[/bold]",
+                    severity="warning",
+                ),
+            )
+        )
+        c = self._make_console()
+        output = self._call(report, c)
+        assert "warning:" in output
+        assert "error:" not in output
+        assert "[bold]x[/bold]" in output
+        assert "✓ Lint passed with 1 warning(s) across 1 file(s)." in output
+        assert "Lint passed." not in output
+
+    def test_mixed_findings_print_both_counts(self):
+        """TC4: errors and warnings → 'Found N error(s) and M warning(s) across K file(s).'"""
+        report = LintReport(
+            findings=(
+                LintFinding("contexts/bad.md", "unknown key"),
+                LintFinding("contexts/plain.md", "no frontmatter", severity="warning"),
+            )
+        )
+        c = self._make_console()
+        output = self._call(report, c)
+        assert "error:" in output
+        assert "warning:" in output
+        assert "Found 1 error(s) and 1 warning(s) across 2 file(s)." in output
+
     def test_rich_markup_in_finding_is_escaped(self):
         """Regression for opencode-review PR144 round-5 #L1.
 
@@ -1172,6 +1408,26 @@ class TestWarehouseLintCommand:
         result = self._run([str(wh)])
         assert result.exit_code == 0
         assert "Lint passed" in result.output
+
+    def test_warnings_only_fixture_exits_zero(self, tmp_path):
+        """TC1 (1.3): a context without frontmatter warns and exits 0."""
+        wh = _build_clean_warehouse(tmp_path)
+        (wh / "contexts" / "plain.md").write_text("# plain\n")
+        result = self._run([str(wh)])
+        assert result.exit_code == 0
+        assert "warning:" in result.output
+        assert "Lint passed with 1 warning(s) across 1 file(s)." in result.output
+
+    def test_error_plus_warning_exits_one(self, tmp_path):
+        """TC2 (1.3): one error plus one warning → exit 1 and both counts."""
+        wh = _build_clean_warehouse(tmp_path)
+        (wh / "contexts" / "plain.md").write_text("# plain\n")
+        (wh / "contexts" / "bad.md").write_text(
+            "---\ndescription: x\nload: always\n---\n# bad\n"
+        )
+        result = self._run([str(wh)])
+        assert result.exit_code == 1
+        assert "Found 1 error(s) and 1 warning(s) across 2 file(s)." in result.output
 
     def test_defective_fixture_exits_one(self, tmp_path):
         """TC10.6: defective fixture → exit_code 1 and grouped output."""
