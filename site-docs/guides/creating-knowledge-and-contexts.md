@@ -74,7 +74,7 @@ contexts/
     └── backend.md
 ```
 
-Naming and subdirectory layout are entirely free — `abc warehouse lint` doesn't enforce a shape inside `contexts/`. Use whatever organisation suits your warehouse.
+Naming and subdirectory layout are entirely free — `abc warehouse lint` doesn't enforce naming or layout inside `contexts/`. It does check each context's frontmatter (see [Context frontmatter](#context-frontmatter)). Use whatever organisation suits your warehouse.
 
 ### What Goes in a Context
 
@@ -84,6 +84,34 @@ A context is a **scannable** boot-time document. Each entry typically:
 2. Links to deeper knowledge for the rationale or details.
 
 Don't put long explanations in a context — push that into a knowledge file and link to it.
+
+### Context frontmatter
+
+A context may start with a YAML frontmatter block. The only allowed key is `description`: one or two sentences on when an agent needs this context.
+
+```markdown
+---
+description: Load when writing or reviewing Python code in any project.
+---
+
+# Python Standards
+```
+
+Write the description as a "Load when …" statement. It is meant for a future context selector that picks contexts per run. No harness reads it yet.
+
+Frontmatter does not change what `abc sync` wires. Sync still writes only the context path (`@<path>` in `CLAUDE.md`, a path entry in `opencode.json`).
+
+`abc warehouse lint` checks frontmatter in every `contexts/**/*.md` file, except `README.md`:
+
+| Finding | Severity |
+|---|---|
+| No frontmatter block | warning |
+| Frontmatter with no `description` key | warning |
+| Frontmatter opened but not closed, invalid YAML, or not a mapping | error |
+| A key other than `description` (the error names the key) | error |
+| `description` that is empty, whitespace-only, or not a string | error |
+
+Warnings print with a `warning:` prefix and never change the exit code. Only errors make `abc warehouse lint` exit 1.
 
 ### Proactive vs. Reactive Pointers
 
