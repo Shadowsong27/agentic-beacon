@@ -44,20 +44,17 @@ jobs:
       issues: write
       actions: read
     with:
-      # Claude reviews first, on the subscription (CLAUDE_CODE_OAUTH_TOKEN from
-      # `claude setup-token`). When Claude gives no usable review (quota, error,
-      # timeout, or the secret is missing), the pi chain below reviews instead.
-      claude-first: true
-      claude-fallback-model: claude-sonnet-5-5
-      claude-fallback-effort: high
-      # The pi fallback chain, tried left to right. Different PROVIDERS on purpose: the
-      # failure absorbed is provider-side quota exhaustion. Every name must be
-      # registered in the runner's ~/.pi/agent/models.json.
+      # Ordered, tried left to right; the first model yielding a usable review wins and
+      # is named in the comment. Different PROVIDERS on purpose: the failure absorbed is
+      # provider-side quota exhaustion. Every name must be registered in the runner's
+      # ~/.pi/agent/models.json.
       pi-models: litellm-responses/gpt-5.6-terra-medium,opencode-go/go-deepseek-v4.1-flash
       # Rebuttal re-review: forwards the dispatch input; empty on every other trigger.
       pr-number: ${{ inputs.pr-number }}
 
       # Repo-specific rules are appended automatically from the default path
       # `.github/opencode-pr-review-prompt.md`.
-    secrets:
-      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+      # No Claude fallback here on purpose: this repo is public with outside
+      # collaborators, and the fallback needs the owner's personal Claude subscription
+      # token as a repo secret, which any collaborator's branch workflow could read.
