@@ -385,6 +385,58 @@ Overwrites all symlinks from the warehouse, discarding any local modifications.
 
 ---
 
+## Context Commands
+
+### `abc context index`
+
+Print the contexts of a warehouse commit as one JSON object. Built for tools that
+need each context's name, path and description, such as the conductor's context
+selector.
+
+The index reads committed content at the ref, not the warehouse working tree.
+Uncommitted edits do not change the output.
+
+```bash
+abc context index
+abc context index --warehouse ~/warehouse --ref v1.2.0
+```
+
+| Option | Description |
+|--------|-------------|
+| `--warehouse PATH` | Warehouse git repository. Defaults to the warehouse connected in `.agentic-beacon/config.toml` |
+| `--ref TEXT` | Commit-ish to index. Default `HEAD` |
+
+**Output (stdout):**
+
+```json
+{
+  "warehouse": "/abs/path/to/warehouse",
+  "ref": "HEAD",
+  "sha": "<40-hex commit sha>",
+  "contexts": [
+    {"name": "testing", "path": "contexts/testing.md", "description": "..."},
+    {"name": "teams/backend", "path": "contexts/teams/backend.md", "description": "..."}
+  ]
+}
+```
+
+- `warehouse` is the resolved git root. `ref` is the `--ref` value as given. `sha` is the full commit the ref resolved to.
+- `contexts` holds every `.md` file under `contexts/` at that commit, sorted by `path`. README files and dot-files are skipped. `name` is the path under `contexts/` without `.md`.
+- `description` is the frontmatter key `description`, stripped of surrounding whitespace. A context with no usable description is listed with `""`.
+
+**Warnings and errors (stderr):**
+
+```text
+warning: contexts/plain.md: File has no YAML frontmatter (must start with ---)
+error: ref 'nope' not found in warehouse /abs/path/to/warehouse
+```
+
+A warning is printed for each context with no usable description, in path order, before the JSON. Warnings do not change the exit code.
+
+**Exit codes:** `0` when the index is printed, `1` on any error. On exit `1` stdout is empty. Errors cover: no warehouse given and none connected, a warehouse path that is missing or not a git repository, an unknown ref, a commit with no `contexts/` directory, and a git failure.
+
+---
+
 ## Removed Commands
 
 The following commands have been removed. If you are upgrading from a pre-v3
@@ -420,6 +472,7 @@ Available on all commands:
 | `abc warehouse status` | Show warehouse working tree changes |
 | `abc warehouse contribute -m MESSAGE` | Commit warehouse changes back |
 | `abc warehouse template-upgrade` | Upgrade warehouse template docs |
+| `abc context index [--warehouse PATH] [--ref REF]` | Print warehouse contexts at a commit as JSON |
 | `abc setup` | Create `beacon.yaml` configuration |
 | `abc adopt` | Browse + select artifacts via TUI |
 | `abc sync` | Sync all declared artifacts (contexts, skills, agents) |

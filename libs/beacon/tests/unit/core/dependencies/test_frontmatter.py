@@ -8,6 +8,7 @@ from beacon.core.dependencies.frontmatter import (
     FrontmatterResult,
     SkillFrontmatter,
     parse_frontmatter,
+    parse_frontmatter_text,
 )
 from pydantic import ValidationError
 
@@ -114,3 +115,31 @@ class TestSkillFrontmatter:
         with pytest.raises(ValidationError) as exc_info:
             SkillFrontmatter.model_validate({"requires": {}})
         assert "contexts" in str(exc_info.value).lower()
+
+
+class TestParseFrontmatterText:
+    """parse_frontmatter_text(): text-level entry point used for blobs read at a SHA."""
+
+    @pytest.mark.parametrize(
+        ("content", "error"),
+        [
+            ("# No opener\n", "missing-frontmatter"),
+            ("---\nname: foo\n", "unterminated-frontmatter"),
+            ("---\nname: foo\n\tbad_indent: 1\n---\n", "yaml-parse-error"),
+            ("---\n- a\n- b\n---\n", "invalid-frontmatter"),
+        ],
+    )
+    def test_error_codes_match_file_parser(self, tmp_path, content, error):
+        """Each error code is reported identically from text and from disk."""
+        f = tmp_path / "ctx.md"
+        f.write_text(content)
+        from_text = parse_frontmatter_text(content)
+        assert from_text.success is False
+        assert from_text.error == error
+        assert from_text == parse_frontmatter(f)
+
+    def test_bom_and_blank_lines_before_opener(self):
+        """Leading BOM and blank lines are stripped before the opener is checked."""
+        result = parse_frontmatter_text("﻿\n\n---\ndescription: Hi\n---\nBody\n")
+        assert result.success is True
+        assert result.data == {"description": "Hi"}

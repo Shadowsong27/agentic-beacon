@@ -8,6 +8,7 @@ from loguru import logger
 
 from beacon.cli.adoption import adopt
 from beacon.cli.agent import list_cmd
+from beacon.cli.context import context
 from beacon.cli.diagnostics import doctor
 from beacon.cli.pending_alert import maybe_emit_pending_alert
 from beacon.cli.setup import setup
@@ -39,6 +40,7 @@ main.add_command(clean)
 main.add_command(status)
 main.add_command(adopt)
 main.add_command(doctor)
+main.add_command(context)
 
 
 if __name__ == "__main__":
