@@ -50,9 +50,7 @@ def test_frontmatter_does_not_change_claude_or_opencode_wiring(tmp_path):
     with_fm_md, with_fm_json = _wire_project(
         tmp_path / "with", DESCRIBED_WITH_FRONTMATTER
     )
-    without_fm_md, without_fm_json = _wire_project(
-        tmp_path / "without", DESCRIBED_BODY
-    )
+    without_fm_md, without_fm_json = _wire_project(tmp_path / "without", DESCRIBED_BODY)
 
     at_lines = [line for line in with_fm_md.splitlines() if line.startswith("@")]
     assert at_lines == [f"@{path}" for path in expected_paths]
