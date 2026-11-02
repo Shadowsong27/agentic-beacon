@@ -273,7 +273,7 @@ abc sync [OPTIONS]
 | Artifact | Action |
 |---|---|
 | Knowledge | Create symlinks in `.agentic-beacon/artifacts/knowledge/` |
-| Contexts | Create symlinks + wire into `CLAUDE.md` or `opencode.json` |
+| Contexts | Create symlinks + wire into `AGENTS.md` or `opencode.json` |
 | Skills | Create symlinks + install into tool-specific directories |
 | Agents | Create artifact symlinks + wire into project-local `.claude/agents/` and `.opencode/agents/` |
 

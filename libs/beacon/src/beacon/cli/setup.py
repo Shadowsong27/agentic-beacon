@@ -50,8 +50,8 @@ def setup() -> None:
     console.print(f"  [blue]Location:[/blue] {beacon_yaml}")
     if result.opencode_created:
         console.print("[green]✓[/green] Initialized opencode.json")
-    if result.claude_created:
-        console.print("[green]✓[/green] Initialized CLAUDE.md")
+    if result.agents_md_created:
+        console.print("[green]✓[/green] Initialized AGENTS.md")
     console.print("\n[bold]Next Steps:[/bold]")
     console.print("  1. Run 'abc adopt' to select artifacts from the warehouse")
     console.print("  2. Or edit .agentic-beacon/beacon.yaml directly")

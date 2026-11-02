@@ -26,7 +26,7 @@ from beacon.domains.distribution.reset import (
     reset_artifacts,
 )
 from beacon.domains.setup.wiring import (
-    init_claude_md,
+    init_agents_md,
     init_opencode_json,
     reconcile_context_references,
 )
@@ -246,7 +246,7 @@ def sync(
 
     if result.agent_config_init_needed and not result.dry_run:
         init_opencode_json(result.project_root)
-        init_claude_md(result.project_root)
+        init_agents_md(result.project_root)
         beacon_yaml = result.project_root / ".agentic-beacon" / "beacon.yaml"
         if beacon_yaml.exists():
             from beacon.core.manifest.beacon import BeaconManifest

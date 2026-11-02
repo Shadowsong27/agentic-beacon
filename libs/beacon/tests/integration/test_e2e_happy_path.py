@@ -564,7 +564,7 @@ def test_e2e_adopt_wires_bundled_skills(e2e_project, isolated_home):
     result = runner.invoke(main, ["warehouse", "connect", "--path", str(warehouse)])
     assert result.exit_code == 0, result.output
 
-    # Step 2: Setup — creates beacon.yaml, opencode.json, CLAUDE.md
+    # Step 2: Setup — creates beacon.yaml, opencode.json, AGENTS.md
     result = runner.invoke(main, ["setup"])
     assert result.exit_code == 0, result.output
     assert (project_dir / "opencode.json").exists()

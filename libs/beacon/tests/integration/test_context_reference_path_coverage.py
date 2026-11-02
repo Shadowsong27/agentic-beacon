@@ -143,8 +143,8 @@ class TestSyncReferenceReconciliation:
             )
             + "\n"
         )
-        (project / "CLAUDE.md").write_text(
-            "@AGENTS.md\n@.agentic-beacon/artifacts/contexts/global.md\n"
+        (project / "AGENTS.md").write_text(
+            "# Project\n@.agentic-beacon/artifacts/contexts/global.md\n"
         )
         apply_all_gitignores(project)
 
@@ -181,7 +181,7 @@ class TestSyncReferenceReconciliation:
             "artifacts:\n  contexts:\n    - contexts/global.md\n  skills: []\n"
         )
         (project / "opencode.json").write_text(json.dumps({"instructions": []}) + "\n")
-        (project / "CLAUDE.md").write_text("@AGENTS.md\n")
+        (project / "AGENTS.md").write_text("# Project\n")
 
         monkeypatch.chdir(project)
         runner = CliRunner()
@@ -192,8 +192,8 @@ class TestSyncReferenceReconciliation:
         oc_data = json.loads((project / "opencode.json").read_text())
         assert ".agentic-beacon/artifacts/contexts/global.md" in oc_data["instructions"]
 
-        claude_content = (project / "CLAUDE.md").read_text()
-        assert "@.agentic-beacon/artifacts/contexts/global.md" in claude_content
+        agents_content = (project / "AGENTS.md").read_text()
+        assert "@.agentic-beacon/artifacts/contexts/global.md" in agents_content
 
     def test_sync_removes_reference_after_deadopt(
         self, project_with_context, monkeypatch
@@ -218,12 +218,12 @@ class TestSyncReferenceReconciliation:
             not in oc_data["instructions"]
         )
 
-        # Reference must be gone from CLAUDE.md
-        claude_content = (project / "CLAUDE.md").read_text()
-        assert "@.agentic-beacon/artifacts/contexts/global.md" not in claude_content
+        # Reference must be gone from AGENTS.md
+        agents_content = (project / "AGENTS.md").read_text()
+        assert "@.agentic-beacon/artifacts/contexts/global.md" not in agents_content
 
         # Non-artifact lines must be preserved
-        assert "@AGENTS.md" in claude_content
+        assert "# Project" in agents_content
 
     def test_sync_dry_run_does_not_write_references(
         self, tmp_path, valid_warehouse, monkeypatch
@@ -294,7 +294,7 @@ class TestAdoptReferenceReconciliation:
         )
         (ab / "artifacts").mkdir()
         (project / "opencode.json").write_text(json.dumps({"instructions": []}) + "\n")
-        (project / "CLAUDE.md").write_text("@AGENTS.md\n")
+        (project / "AGENTS.md").write_text("# Project\n")
         return project, wh
 
     def test_adopt_accept_adds_reference(self, project_and_warehouse):
@@ -324,8 +324,8 @@ class TestAdoptReferenceReconciliation:
             ".agentic-beacon/artifacts/contexts/plane-ops.md" in oc_data["instructions"]
         )
 
-        claude_content = (project / "CLAUDE.md").read_text()
-        assert "@.agentic-beacon/artifacts/contexts/plane-ops.md" in claude_content
+        agents_content = (project / "AGENTS.md").read_text()
+        assert "@.agentic-beacon/artifacts/contexts/plane-ops.md" in agents_content
 
     def test_unadopt_removes_reference(self, project_and_warehouse):
         """Un-adopt a context (remove from beacon.yaml) → reference removed from both files (TC2 for 4.3 adopt path)."""
@@ -377,12 +377,12 @@ class TestAdoptReferenceReconciliation:
             not in oc_data["instructions"]
         )
 
-        # Reference must be gone from CLAUDE.md
-        claude_content = (project / "CLAUDE.md").read_text()
-        assert "@.agentic-beacon/artifacts/contexts/plane-ops.md" not in claude_content
+        # Reference must be gone from AGENTS.md
+        agents_content = (project / "AGENTS.md").read_text()
+        assert "@.agentic-beacon/artifacts/contexts/plane-ops.md" not in agents_content
 
         # Non-artifact lines preserved
-        assert "@AGENTS.md" in claude_content
+        assert "# Project" in agents_content
 
 
 # ---------------------------------------------------------------------------
@@ -454,7 +454,7 @@ class TestDoctorFixReferenceLoop:
             )
             + "\n"
         )
-        (project / "CLAUDE.md").write_text(
+        (project / "AGENTS.md").write_text(
             "@.agentic-beacon/artifacts/contexts/plane-ops.md\n"
             "@.agentic-beacon/artifacts/contexts/linear-ops.md\n"  # broken
         )
@@ -489,7 +489,7 @@ class TestDoctorFixReferenceLoop:
 
         # The effective set only has plane-ops.md.
         # opencode.json has: plane-ops (wired), linear-ops (broken — not in effective set, not in wh)
-        # CLAUDE.md mirrors the same situation
+        # AGENTS.md mirrors the same situation
         (project / "opencode.json").write_text(
             json.dumps(
                 {
@@ -503,8 +503,8 @@ class TestDoctorFixReferenceLoop:
             )
             + "\n"
         )
-        (project / "CLAUDE.md").write_text(
-            "@AGENTS.md\n"
+        (project / "AGENTS.md").write_text(
+            "# Project\n"
             "@.agentic-beacon/artifacts/contexts/plane-ops.md\n"
             "@.agentic-beacon/artifacts/contexts/linear-ops.md\n"  # not in effective set
         )
@@ -531,11 +531,11 @@ class TestDoctorFixReferenceLoop:
             not in oc_data["instructions"]
         )
 
-        # CLAUDE.md: linear-ops removed, plane-ops still there
-        claude_content = (project / "CLAUDE.md").read_text()
-        assert "@.agentic-beacon/artifacts/contexts/plane-ops.md" in claude_content
-        assert "@.agentic-beacon/artifacts/contexts/linear-ops.md" not in claude_content
-        assert "@AGENTS.md" in claude_content
+        # AGENTS.md: linear-ops removed, plane-ops still there
+        agents_content = (project / "AGENTS.md").read_text()
+        assert "@.agentic-beacon/artifacts/contexts/plane-ops.md" in agents_content
+        assert "@.agentic-beacon/artifacts/contexts/linear-ops.md" not in agents_content
+        assert "# Project" in agents_content
 
         # Re-run doctor (no --fix): should not flag any reference drift
         rerun_result = runner.invoke(main, ["doctor"])
@@ -573,12 +573,12 @@ class TestDoctorFixReferenceLoop:
             )
             + "\n"
         )
-        (project / "CLAUDE.md").write_text(
-            "@AGENTS.md\n@.agentic-beacon/artifacts/contexts/plane-ops.md\n"
+        (project / "AGENTS.md").write_text(
+            "# Project\n@.agentic-beacon/artifacts/contexts/plane-ops.md\n"
         )
 
         oc_before = (project / "opencode.json").read_bytes()
-        claude_before = (project / "CLAUDE.md").read_bytes()
+        agents_before = (project / "AGENTS.md").read_bytes()
 
         runner = CliRunner()
         result = runner.invoke(main, ["doctor", "--fix"])
@@ -586,7 +586,7 @@ class TestDoctorFixReferenceLoop:
         assert result.exit_code == 0, f"doctor --fix failed: {result.output}"
         # Files must not have been written
         assert (project / "opencode.json").read_bytes() == oc_before
-        assert (project / "CLAUDE.md").read_bytes() == claude_before
+        assert (project / "AGENTS.md").read_bytes() == agents_before
 
     def test_doctor_fix_fixes_applied_nonempty_on_repair(self, tmp_path, monkeypatch):
         """fixes_applied is non-empty when doctor --fix actually repairs (TC from 4.4)."""
@@ -648,8 +648,8 @@ class TestRegressionReferenceDrift:
         """Set up a project reproducing the AB-96 live-repo condition.
 
         - plane-ops.md is the only declared context in beacon.yaml
-        - linear-ops.md is in CLAUDE.md + opencode.json but NOT in beacon.yaml (broken target)
-        - cicd-flow.md is in CLAUDE.md + opencode.json but NOT in beacon.yaml (unmanaged: present locally)
+        - linear-ops.md is in AGENTS.md + opencode.json but NOT in beacon.yaml (broken target)
+        - cicd-flow.md is in AGENTS.md + opencode.json but NOT in beacon.yaml (unmanaged: present locally)
         """
         project = tmp_path / "project"
         project.mkdir()
@@ -703,8 +703,8 @@ class TestRegressionReferenceDrift:
             )
             + "\n"
         )
-        (project / "CLAUDE.md").write_text(
-            "@AGENTS.md\n"
+        (project / "AGENTS.md").write_text(
+            "# Project\n"
             "@.agentic-beacon/artifacts/contexts/plane-ops.md\n"
             "@.agentic-beacon/artifacts/contexts/linear-ops.md\n"  # broken
             "@.agentic-beacon/artifacts/contexts/cicd-flow.md\n"  # unmanaged
@@ -728,8 +728,8 @@ class TestRegressionReferenceDrift:
             not in oc_data["instructions"]
         )
 
-        claude_content = (project / "CLAUDE.md").read_text()
-        assert "@.agentic-beacon/artifacts/contexts/linear-ops.md" not in claude_content
+        agents_content = (project / "AGENTS.md").read_text()
+        assert "@.agentic-beacon/artifacts/contexts/linear-ops.md" not in agents_content
 
     def test_tc2_unmanaged_reference_removed_by_fix(self, tmp_path, monkeypatch):
         """TC2: unmanaged reference (cicd-flow.md not in beacon.yaml) removed by --fix."""
@@ -746,8 +746,8 @@ class TestRegressionReferenceDrift:
             not in oc_data["instructions"]
         )
 
-        claude_content = (project / "CLAUDE.md").read_text()
-        assert "@.agentic-beacon/artifacts/contexts/cicd-flow.md" not in claude_content
+        agents_content = (project / "AGENTS.md").read_text()
+        assert "@.agentic-beacon/artifacts/contexts/cicd-flow.md" not in agents_content
 
     def test_tc3_second_doctor_run_after_fix_is_clean(self, tmp_path, monkeypatch):
         """TC3: second doctor run after --fix reports no broken/unmanaged references for the fixed refs."""
@@ -773,10 +773,10 @@ class TestRegressionReferenceDrift:
             ".agentic-beacon/artifacts/contexts/plane-ops.md" in oc_data["instructions"]
         )
 
-        claude_content = (project / "CLAUDE.md").read_text()
-        assert "@.agentic-beacon/artifacts/contexts/linear-ops.md" not in claude_content
-        assert "@.agentic-beacon/artifacts/contexts/cicd-flow.md" not in claude_content
-        assert "@.agentic-beacon/artifacts/contexts/plane-ops.md" in claude_content
+        agents_content = (project / "AGENTS.md").read_text()
+        assert "@.agentic-beacon/artifacts/contexts/linear-ops.md" not in agents_content
+        assert "@.agentic-beacon/artifacts/contexts/cicd-flow.md" not in agents_content
+        assert "@.agentic-beacon/artifacts/contexts/plane-ops.md" in agents_content
 
         # Second run: no reference-related errors for the fixed artifacts
         rerun_result = runner.invoke(main, ["doctor"])
@@ -794,7 +794,7 @@ class TestRegressionReferenceDrift:
         assert result.exit_code == 0, f"doctor --fix failed: {result.output}"
 
         oc_data = json.loads((project / "opencode.json").read_text())
-        claude_content = (project / "CLAUDE.md").read_text()
+        agents_content = (project / "AGENTS.md").read_text()
 
         # Both bogus references gone from both files
         for bad_ref in ("linear-ops", "cicd-flow"):
@@ -803,17 +803,17 @@ class TestRegressionReferenceDrift:
             )
             assert (
                 f"@.agentic-beacon/artifacts/contexts/{bad_ref}.md"
-                not in claude_content
-            ), f"{bad_ref} still in CLAUDE.md after --fix"
+                not in agents_content
+            ), f"{bad_ref} still in AGENTS.md after --fix"
 
         # The declared reference (plane-ops) still present
         assert (
             ".agentic-beacon/artifacts/contexts/plane-ops.md" in oc_data["instructions"]
         )
-        assert "@.agentic-beacon/artifacts/contexts/plane-ops.md" in claude_content
+        assert "@.agentic-beacon/artifacts/contexts/plane-ops.md" in agents_content
 
         # Non-artifact lines intact
-        assert "@AGENTS.md" in claude_content
+        assert "# Project" in agents_content
 
 
 # ---------------------------------------------------------------------------
@@ -896,8 +896,8 @@ class TestTransitiveContextPreservedByCommitSession:
             )
             + "\n"
         )
-        (project / "CLAUDE.md").write_text(
-            f"@AGENTS.md\n@{transitive_ref}\n@{plane_ref}\n"
+        (project / "AGENTS.md").write_text(
+            f"# Project\n@{transitive_ref}\n@{plane_ref}\n"
         )
 
         return project, wh
@@ -935,11 +935,11 @@ class TestTransitiveContextPreservedByCommitSession:
             f"instructions={oc_data['instructions']}"
         )
 
-        # transitive-ctx reference must still be in CLAUDE.md
-        claude_content = (project / "CLAUDE.md").read_text()
-        assert f"@{transitive_ref}" in claude_content, (
-            f"transitive-ctx reference was stripped from CLAUDE.md after adopt; "
-            f"content={claude_content!r}"
+        # transitive-ctx reference must still be in AGENTS.md
+        agents_content = (project / "AGENTS.md").read_text()
+        assert f"@{transitive_ref}" in agents_content, (
+            f"transitive-ctx reference was stripped from AGENTS.md after adopt; "
+            f"content={agents_content!r}"
         )
 
     def test_unadopt_other_context_preserves_transitive_ref(
@@ -978,11 +978,11 @@ class TestTransitiveContextPreservedByCommitSession:
             f"instructions={oc_data['instructions']}"
         )
 
-        # transitive-ctx reference must still be in CLAUDE.md
-        claude_content = (project / "CLAUDE.md").read_text()
-        assert f"@{transitive_ref}" in claude_content, (
-            f"transitive-ctx reference was stripped from CLAUDE.md after unadopt; "
-            f"content={claude_content!r}"
+        # transitive-ctx reference must still be in AGENTS.md
+        agents_content = (project / "AGENTS.md").read_text()
+        assert f"@{transitive_ref}" in agents_content, (
+            f"transitive-ctx reference was stripped from AGENTS.md after unadopt; "
+            f"content={agents_content!r}"
         )
 
 
@@ -1050,7 +1050,7 @@ class TestDeAdoptSyncMessage:
             )
             + "\n"
         )
-        (project / "CLAUDE.md").write_text(f"@{stale_ref}\n")
+        (project / "AGENTS.md").write_text(f"@{stale_ref}\n")
 
         monkeypatch.chdir(project)
         result = run_sync(project_root=project, skip_git_check=True)
@@ -1116,7 +1116,7 @@ class TestDeAdoptSyncMessage:
             )
             + "\n"
         )
-        (project / "CLAUDE.md").write_text(f"@{stale_ref}\n")
+        (project / "AGENTS.md").write_text(f"@{stale_ref}\n")
 
         monkeypatch.chdir(project)
         runner = CliRunner()

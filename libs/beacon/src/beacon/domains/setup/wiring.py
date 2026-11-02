@@ -28,14 +28,36 @@ ARTIFACT_REF_PREFIX = ".agentic-beacon/artifacts/"
 _ATPATH_LINE_RE = re.compile(r"^@(.+)$")
 
 
+_CLAUDE_MD_CANDIDATES = ("CLAUDE.md", ".claude/CLAUDE.md")
+_HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
+_THIN_CLAUDE_MD_LINES = frozenset({"", "@AGENTS.md", "@./AGENTS.md"})
+
+
 class ReferenceReconcileResult(NamedTuple):
-    """Outcome of reconciling references in a single config file."""
+    """Outcome of reconciling references in the agent config files.
+
+    ``claude_md_deleted`` and ``claude_md_left`` list CLAUDE.md files, relative
+    to the project root, that were migrated into AGENTS.md. Deleted files held
+    nothing but imports and blanks. Left files still hold other content.
+    """
 
     added: list[str]
     removed: list[str]
+    claude_md_deleted: tuple[str, ...] = ()
+    claude_md_left: tuple[str, ...] = ()
 
     def __bool__(self) -> bool:
         return bool(self.added or self.removed)
+
+
+class _ClaudeMdPlan(NamedTuple):
+    """Planned migration of one CLAUDE.md. Nothing is written until applied."""
+
+    rel: str
+    path: Path
+    owned: set[str]
+    delete: bool
+    body: str
 
 
 def desired_context_refs(effective_contexts: set[str]) -> list[str]:
@@ -55,17 +77,6 @@ def _resolve_opencode_json(project_root: Path) -> Path | None:
     for candidate in (
         project_root / "opencode.json",
         project_root / ".opencode" / "opencode.json",
-    ):
-        if candidate.exists():
-            return candidate
-    return None
-
-
-def _resolve_claude_md(project_root: Path) -> Path | None:
-    """Resolve CLAUDE.md (.claude/CLAUDE.md preferred, then root)."""
-    for candidate in (
-        project_root / ".claude" / "CLAUDE.md",
-        project_root / "CLAUDE.md",
     ):
         if candidate.exists():
             return candidate
@@ -119,68 +130,141 @@ def _reconcile_opencode_json(
     return ReferenceReconcileResult(added=added, removed=removed)
 
 
-def _reconcile_claude_md(
-    project_root: Path,
-    desired_refs: list[str],
-    *,
-    dry_run: bool = False,
-) -> ReferenceReconcileResult:
-    """Reconcile CLAUDE.md ``@``-includes to the desired reference set.
-
-    Only lines whose stripped form starts with ``@ARTIFACT_REF_PREFIX`` are
-    managed.  Non-artifact lines (``@AGENTS.md``, etc.) are preserved
-    verbatim.  Writes only when content changes.
-
-    Algorithm:
-    1. Strip ALL owned artifact lines from the file.
-    2. Collapse any orphaned blank-line runs left behind by removals
-       (runs of 3+ consecutive newlines → 2 newlines).
-    3. Append the **full desired set** (sorted, deterministic) so that
-       refs in the intersection of owned ∩ desired are correctly re-added.
-    """
-    claude_md = _resolve_claude_md(project_root)
-    if claude_md is None:
-        return ReferenceReconcileResult(added=[], removed=[])
-
-    content = claude_md.read_text(encoding="utf-8")
-    lines = content.splitlines(keepends=True)
-
+def _strip_owned_refs(content: str) -> tuple[set[str], list[str]]:
+    """Split content into the owned artifact refs it holds and every other line."""
     owned_refs: set[str] = set()
-    stripped_lines: list[str] = []
-    for line in lines:
-        stripped = line.strip()
-        m = _ATPATH_LINE_RE.match(stripped)
+    kept_lines: list[str] = []
+    for line in content.splitlines(keepends=True):
+        m = _ATPATH_LINE_RE.match(line.strip())
         if m:
             path = m.group(1).strip()
             if path.startswith(ARTIFACT_REF_PREFIX):
                 owned_refs.add(path)
                 continue
-        stripped_lines.append(line)
+        kept_lines.append(line)
+    return owned_refs, kept_lines
+
+
+def _is_thin_claude_md(content: str) -> bool:
+    """True when CLAUDE.md holds only blanks, HTML comments and @AGENTS.md imports."""
+    text = _HTML_COMMENT_RE.sub("", content)
+    return all(line.strip() in _THIN_CLAUDE_MD_LINES for line in text.splitlines())
+
+
+def _plan_claude_md_migration(
+    project_root: Path, agents_md: Path | None
+) -> list[_ClaudeMdPlan]:
+    """Plan moving owned imports out of ./CLAUDE.md and ./.claude/CLAUDE.md.
+
+    A CLAUDE.md that resolves to ``agents_md`` (a symlink) is skipped: stripping
+    it would strip AGENTS.md itself. Reads only.
+    """
+    plans: list[_ClaudeMdPlan] = []
+    for rel in _CLAUDE_MD_CANDIDATES:
+        path = project_root / rel
+        if not path.exists():
+            continue
+        if agents_md is not None and path.resolve() == agents_md.resolve():
+            continue
+        content = path.read_text(encoding="utf-8")
+        owned, kept = _strip_owned_refs(content)
+        body = re.sub(r"\n{3,}", "\n\n", "".join(kept)) if owned else content
+        plans.append(
+            _ClaudeMdPlan(
+                rel=rel,
+                path=path,
+                owned=owned,
+                delete=_is_thin_claude_md(body),
+                body=body,
+            )
+        )
+    return plans
+
+
+def _apply_claude_md_plans(plans: list[_ClaudeMdPlan]) -> None:
+    """Delete thin CLAUDE.md files and write back stripped ones that changed."""
+    for plan in plans:
+        if plan.delete:
+            plan.path.unlink()
+        elif plan.owned:
+            plan.path.write_text(plan.body, encoding="utf-8")
+
+
+def _reconcile_agents_md(
+    project_root: Path,
+    desired_refs: list[str],
+    *,
+    dry_run: bool = False,
+) -> ReferenceReconcileResult:
+    """Reconcile the root AGENTS.md ``@``-imports to the desired reference set.
+
+    Migration first: owned imports in ./CLAUDE.md and ./.claude/CLAUDE.md are
+    removed from those files. A file left with only blanks, HTML comments and
+    ``@AGENTS.md`` is deleted; any other file is written back stripped.
+
+    Then AGENTS.md is reconciled. Only lines whose stripped form starts with
+    ``@ARTIFACT_REF_PREFIX`` are managed. Non-artifact lines are preserved
+    verbatim. A missing AGENTS.md is created only when a project CLAUDE.md
+    existed and the desired set is non-empty. Writes only when content changes.
+
+    Algorithm:
+    1. Strip ALL owned artifact lines from AGENTS.md.
+    2. Collapse any orphaned blank-line runs left behind by removals
+       (runs of 3+ consecutive newlines → 2 newlines).
+    3. Append the **full desired set** (sorted, deterministic) so that
+       refs in the intersection of owned ∩ desired are correctly re-added.
+
+    Under ``dry_run`` nothing is written or deleted; the result still reports
+    the pending change.
+    """
+    agents_md = project_root / "AGENTS.md"
+    agents_exists = agents_md.exists()
+    plans = _plan_claude_md_migration(
+        project_root, agents_md if agents_exists else None
+    )
+    migrated_owned: set[str] = set().union(*(plan.owned for plan in plans))
+    migration = {
+        "claude_md_deleted": tuple(plan.rel for plan in plans if plan.delete),
+        "claude_md_left": tuple(plan.rel for plan in plans if not plan.delete),
+    }
+
+    if not agents_exists and not plans:
+        if not dry_run:
+            _apply_claude_md_plans(plans)
+        return ReferenceReconcileResult(added=[], removed=[], **migration)
+
+    content = agents_md.read_text(encoding="utf-8") if agents_exists else ""
+    owned_refs, kept_lines = _strip_owned_refs(content)
 
     desired_set = set(desired_refs)
     added = sorted(desired_set - owned_refs)
-    removed = sorted(owned_refs - desired_set)
+    removed = sorted((owned_refs | migrated_owned) - desired_set)
 
     if not added and not removed:
-        return ReferenceReconcileResult(added=[], removed=[])
+        if not dry_run:
+            _apply_claude_md_plans(plans)
+        return ReferenceReconcileResult(added=[], removed=[], **migration)
 
     if dry_run:
-        return ReferenceReconcileResult(added=added, removed=removed)
+        return ReferenceReconcileResult(added=added, removed=removed, **migration)
 
-    # Collapse orphaned blank-line runs (3+ consecutive newlines → 2).
-    body = "".join(stripped_lines)
-    body = re.sub(r"\n{3,}", "\n\n", body)
+    if agents_exists or desired_refs:
+        # Collapse orphaned blank-line runs (3+ consecutive newlines → 2).
+        body = re.sub(r"\n{3,}", "\n\n", "".join(kept_lines))
 
-    # Append the full desired set (sorted for determinism / idempotency).
-    if desired_refs:
-        # Ensure the body ends with a newline before appending.
-        if body and not body.endswith("\n"):
-            body += "\n"
-        body += "\n".join(f"@{ref}" for ref in sorted(desired_refs)) + "\n"
+        # Append the full desired set (sorted for determinism / idempotency).
+        if desired_refs:
+            # Ensure the body ends with a newline before appending.
+            if body and not body.endswith("\n"):
+                body += "\n"
+            body += "\n".join(f"@{ref}" for ref in sorted(desired_refs)) + "\n"
 
-    claude_md.write_text(body, encoding="utf-8")
+        agents_md.write_text(body, encoding="utf-8")
 
-    return ReferenceReconcileResult(added=added, removed=removed)
+    # Write AGENTS.md before touching CLAUDE.md, so a failed write keeps the imports.
+    _apply_claude_md_plans(plans)
+
+    return ReferenceReconcileResult(added=added, removed=removed, **migration)
 
 
 def reconcile_context_references(
@@ -189,13 +273,14 @@ def reconcile_context_references(
     *,
     dry_run: bool = False,
 ) -> ReferenceReconcileResult:
-    """Reconcile context references in both ``opencode.json`` and ``CLAUDE.md``.
+    """Reconcile context references in both ``opencode.json`` and ``AGENTS.md``.
 
-    Aggregates the add/remove result across both files.  Under ``dry_run``
-    the delta is computed but no files are written.
+    Aggregates the add/remove result across both files and carries the CLAUDE.md
+    migration paths through. Under ``dry_run`` the delta is computed but no
+    files are written or deleted.
     """
     oc_result = _reconcile_opencode_json(project_root, desired_refs, dry_run=dry_run)
-    cl_result = _reconcile_claude_md(project_root, desired_refs, dry_run=dry_run)
+    cl_result = _reconcile_agents_md(project_root, desired_refs, dry_run=dry_run)
 
     total_added = list(set(oc_result.added) | set(cl_result.added))
     total_removed = list(set(oc_result.removed) | set(cl_result.removed))
@@ -203,6 +288,8 @@ def reconcile_context_references(
     return ReferenceReconcileResult(
         added=sorted(total_added),
         removed=sorted(total_removed),
+        claude_md_deleted=cl_result.claude_md_deleted,
+        claude_md_left=cl_result.claude_md_left,
     )
 
 
@@ -285,73 +372,26 @@ def wire_contexts_opencode(project_root: Path, artifacts_dir: Path) -> list[str]
     return added
 
 
-def wire_contexts_claudecode(project_root: Path, artifacts_dir: Path) -> list[str]:
-    """Append synced context @-references to CLAUDE.md.
-
-    Checks .claude/CLAUDE.md then root CLAUDE.md. Returns the list of paths
-    that were newly added (empty if nothing changed or no CLAUDE.md found).
-    """
-    claude_md = next(
-        (
-            p
-            for p in [
-                project_root / ".claude" / "CLAUDE.md",
-                project_root / "CLAUDE.md",
-            ]
-            if p.exists()
-        ),
-        None,
-    )
-    if claude_md is None:
-        return []
-
-    contexts_dir = artifacts_dir / "contexts"
-    if not contexts_dir.exists():
-        return []
-
-    ctx_files = sorted(contexts_dir.rglob("*.md"))
-    if not ctx_files:
-        return []
-
-    existing = claude_md.read_text(encoding="utf-8")
-    lines_to_append: list[str] = []
-    added: list[str] = []
-
-    for ctx_file in ctx_files:
-        rel_path = str(ctx_file.relative_to(project_root))
-        ref = f"@{rel_path}"
-        if ref not in existing:
-            lines_to_append.append(ref)
-            added.append(rel_path)
-
-    if lines_to_append:
-        separator = "\n" if existing.endswith("\n") else "\n\n"
-        claude_md.write_text(
-            existing + separator + "\n".join(lines_to_append) + "\n",
-            encoding="utf-8",
-        )
-
-    return added
-
-
 class SetupResult(NamedTuple):
     """Outcome of setup_project — which files were newly created."""
 
     opencode_created: bool
-    claude_created: bool
+    agents_md_created: bool
 
 
 def setup_project(beacon_yaml: Path, project_root: Path) -> SetupResult:
     """Bootstrap all project-level scaffolding in one call.
 
     Creates beacon.yaml from the template and conditionally initializes
-    opencode.json and CLAUDE.md (both are no-ops if the files already exist).
+    opencode.json and AGENTS.md (both are no-ops if the files already exist).
     Returns a SetupResult indicating which files were newly created.
     """
     create_beacon_template(beacon_yaml)
     opencode_created = init_opencode_json(project_root)
-    claude_created = init_claude_md(project_root)
-    return SetupResult(opencode_created=opencode_created, claude_created=claude_created)
+    agents_md_created = init_agents_md(project_root)
+    return SetupResult(
+        opencode_created=opencode_created, agents_md_created=agents_md_created
+    )
 
 
 def init_opencode_json(project_root: Path) -> bool:
@@ -367,14 +407,14 @@ def init_opencode_json(project_root: Path) -> bool:
     return False
 
 
-def init_claude_md(project_root: Path) -> bool:
-    """Create an empty CLAUDE.md at the project root if none exists.
+def init_agents_md(project_root: Path) -> bool:
+    """Create an empty AGENTS.md at the project root if none exists.
 
     Returns True when the file was newly created, False when it already existed.
     """
-    claude_md = project_root / "CLAUDE.md"
-    if not claude_md.exists():
-        claude_md.write_text("", encoding="utf-8")
+    agents_md = project_root / "AGENTS.md"
+    if not agents_md.exists():
+        agents_md.write_text("", encoding="utf-8")
         return True
     return False
 
@@ -452,8 +492,8 @@ def unwire_pruned_artifacts(
     """Remove wiring for pruned artifacts from agent config files.
 
     For each pruned path:
-    - If it's a context (contexts/**/*.md): remove from opencode.json instructions
-      and from CLAUDE.md @-references.
+    - If it's a context (contexts/**/*.md): remove from opencode.json instructions.
+      AGENTS.md @-references are reconciled by the caller, not here.
     - If it's a skill (skills/<name>/SKILL.md): remove .opencode/skills/<name>/
       and .claude/skills/<name>/ directories.
 
@@ -497,32 +537,6 @@ def unwire_context_opencode(project_root: Path, rel_path: str) -> None:
         data["instructions"] = instructions
         opencode_json.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
         logger.debug("Unwired context from opencode.json: {}", rel_path)
-
-
-def unwire_context_claudecode(project_root: Path, rel_path: str) -> None:
-    """Remove a context @-reference from CLAUDE.md."""
-    claude_md = next(
-        (
-            p
-            for p in [
-                project_root / ".claude" / "CLAUDE.md",
-                project_root / "CLAUDE.md",
-            ]
-            if p.exists()
-        ),
-        None,
-    )
-    if claude_md is None:
-        return
-    ref = f"@{rel_path}"
-    content = claude_md.read_text(encoding="utf-8")
-    if ref not in content:
-        return
-    # Remove the line containing the reference
-    lines = content.splitlines(keepends=True)
-    new_lines = [line for line in lines if line.strip() != ref]
-    claude_md.write_text("".join(new_lines), encoding="utf-8")
-    logger.debug("Unwired context from CLAUDE.md: {}", rel_path)
 
 
 def unwire_skill(project_root: Path, skill_name: str) -> None:

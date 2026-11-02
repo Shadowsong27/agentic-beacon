@@ -1,6 +1,6 @@
-"""Unit tests for auto-init of opencode.json + CLAUDE.md during abc setup (PER-151).
+"""Unit tests for auto-init of opencode.json + AGENTS.md during abc setup (PER-151).
 
-Tests 1-2 cover the setup CLI handler invoking init_opencode_json + init_claude_md.
+Tests 1-2 cover the setup CLI handler invoking init_opencode_json + init_agents_md.
 """
 
 from __future__ import annotations
@@ -31,15 +31,17 @@ def _connected_project(tmp_path: Path, monkeypatch) -> tuple[Path, CliRunner]:
     return project, runner
 
 
-def test_setup_creates_opencode_json_and_claude_md(tmp_path, monkeypatch):
-    """abc setup creates opencode.json and CLAUDE.md at project root."""
+def test_setup_creates_opencode_json_and_agents_md(tmp_path, monkeypatch):
+    """abc setup creates opencode.json and AGENTS.md, and never CLAUDE.md."""
     project, runner = _connected_project(tmp_path, monkeypatch)
 
     result = runner.invoke(main, ["setup"], catch_exceptions=False)
 
     assert result.exit_code == 0, result.output
     assert (project / "opencode.json").exists()
-    assert (project / "CLAUDE.md").exists()
+    assert (project / "AGENTS.md").exists()
+    assert not (project / "CLAUDE.md").exists()
+    assert "Initialized AGENTS.md" in result.output
 
     data = json.loads((project / "opencode.json").read_text())
     assert "$schema" in data
@@ -47,22 +49,22 @@ def test_setup_creates_opencode_json_and_claude_md(tmp_path, monkeypatch):
 
 
 def test_setup_idempotent_does_not_overwrite_existing_files(tmp_path, monkeypatch):
-    """abc setup does not overwrite existing opencode.json or CLAUDE.md."""
+    """abc setup does not overwrite existing opencode.json or AGENTS.md."""
     project, runner = _connected_project(tmp_path, monkeypatch)
 
     custom_opencode = (
         '{"$schema": "https://opencode.ai/config.json", "instructions": ["custom"]}\n'
     )
-    custom_claude = "# My Custom CLAUDE.md\nDo not overwrite me.\n"
+    custom_agents = "# My Custom AGENTS.md\nDo not overwrite me.\n"
     (project / "opencode.json").write_text(custom_opencode)
-    (project / "CLAUDE.md").write_text(custom_claude)
+    (project / "AGENTS.md").write_text(custom_agents)
 
     # Run setup (beacon.yaml doesn't exist yet, so it will create it)
     result = runner.invoke(main, ["setup"], catch_exceptions=False)
 
     assert result.exit_code == 0, result.output
     assert (project / "opencode.json").read_text() == custom_opencode
-    assert (project / "CLAUDE.md").read_text() == custom_claude
+    assert (project / "AGENTS.md").read_text() == custom_agents
 
 
 def test_setup_does_not_claim_initialization_when_files_preexisted(
@@ -72,13 +74,13 @@ def test_setup_does_not_claim_initialization_when_files_preexisted(
     project, runner = _connected_project(tmp_path, monkeypatch)
 
     (project / "opencode.json").write_text('{"custom": true}\n')
-    (project / "CLAUDE.md").write_text("# Mine\n")
+    (project / "AGENTS.md").write_text("# Mine\n")
 
     result = runner.invoke(main, ["setup"], catch_exceptions=False)
 
     assert result.exit_code == 0, result.output
     assert "Initialized opencode.json" not in result.output
-    assert "Initialized CLAUDE.md" not in result.output
+    assert "Initialized AGENTS.md" not in result.output
     # Files must remain unchanged
     assert (project / "opencode.json").read_text() == '{"custom": true}\n'
-    assert (project / "CLAUDE.md").read_text() == "# Mine\n"
+    assert (project / "AGENTS.md").read_text() == "# Mine\n"
