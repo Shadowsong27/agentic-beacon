@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 from pydantic import ValidationError
 
@@ -33,15 +34,21 @@ from beacon.core.scanner.scanner import (
     slugify_heading,
     to_canonical,
 )
+from beacon.domains.warehouse.context_frontmatter import ContextFrontmatter
 from beacon.domains.warehouse.validator import WarehouseValidator
 
 
 @dataclass(frozen=True)
 class LintFinding:
-    """A single lint finding scoped to an artifact path."""
+    """A single lint finding scoped to an artifact path.
+
+    ``warning`` findings are reported but never fail the run; only ``error``
+    findings make `abc warehouse lint` exit non-zero.
+    """
 
     artifact_path: str
     message: str
+    severity: Literal["error", "warning"] = "error"
 
 
 @dataclass(frozen=True)
@@ -53,8 +60,16 @@ class LintReport:
     files_touched: int = 0
     fix_requested: bool = False
 
+    @property
+    def errors(self) -> tuple[LintFinding, ...]:
+        return tuple(f for f in self.findings if f.severity == "error")
+
+    @property
+    def warnings(self) -> tuple[LintFinding, ...]:
+        return tuple(f for f in self.findings if f.severity == "warning")
+
     def __bool__(self) -> bool:
-        return bool(self.findings)
+        return bool(self.errors)
 
 
 def lint_warehouse(warehouse_path: Path, *, fix: bool = False) -> LintReport:
@@ -71,6 +86,7 @@ def lint_warehouse(warehouse_path: Path, *, fix: bool = False) -> LintReport:
     findings.extend(_lint_skill_requires(resolved))
     findings.extend(_lint_agent_manifest(resolved))
     findings.extend(_lint_agent_frontmatter(resolved))
+    findings.extend(_lint_context_frontmatter(resolved))
     findings.extend(_lint_artifact_links(resolved))
 
     sorted_findings = sorted(findings, key=lambda f: (f.artifact_path, f.message))
@@ -453,6 +469,68 @@ def _lint_artifact_links(warehouse_path: Path) -> list[LintFinding]:
 
 
 _INLINE_LINK_RE = re.compile(r"(?<!\\)(?<!!)\[([^\]]*)\]\(([^)]+)\)")
+
+
+# ---------------------------------------------------------------------------
+# Rule 7: Context frontmatter (optional description; warns when missing)
+# ---------------------------------------------------------------------------
+
+
+def _lint_context_frontmatter(warehouse_path: Path) -> list[LintFinding]:
+    """Check optional frontmatter on every contexts/**/*.md (excluding README.md).
+
+    A missing frontmatter block or missing `description` is a warning. Malformed
+    frontmatter, an unknown key, or a non-string / empty description is an error.
+    """
+    contexts_dir = warehouse_path / "contexts"
+    if not contexts_dir.exists() or not contexts_dir.is_dir():
+        return []
+
+    findings = []
+    for context_file in sorted(contexts_dir.rglob("*.md")):
+        if not context_file.is_file() or context_file.name == "README.md":
+            continue
+
+        relative_path = context_file.relative_to(warehouse_path).as_posix()
+        result = parse_frontmatter(context_file)
+
+        if not result.success:
+            if result.error == "missing-frontmatter":
+                findings.append(
+                    LintFinding(
+                        artifact_path=relative_path,
+                        message=(
+                            "missing frontmatter description (add a YAML frontmatter "
+                            "block with a `description` key)"
+                        ),
+                        severity="warning",
+                    )
+                )
+            else:
+                findings.append(
+                    LintFinding(artifact_path=relative_path, message=result.message)
+                )
+            continue
+
+        try:
+            parsed = ContextFrontmatter.model_validate(result.data)
+        except ValidationError as exc:
+            for error in exc.errors():
+                field_path = " -> ".join(str(loc) for loc in error["loc"])
+                msg = f"{field_path}: {error['msg']}" if field_path else error["msg"]
+                findings.append(LintFinding(artifact_path=relative_path, message=msg))
+            continue
+
+        if parsed.description is None:
+            findings.append(
+                LintFinding(
+                    artifact_path=relative_path,
+                    message="missing required key `description` in frontmatter",
+                    severity="warning",
+                )
+            )
+
+    return findings
 
 
 def _fix_artifact_links(warehouse_path: Path) -> tuple[int, int]:
