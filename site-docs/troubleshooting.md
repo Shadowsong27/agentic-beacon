@@ -278,7 +278,7 @@ ls .agentic-beacon/artifacts/contexts/
 2. Verify wiring:
 ```bash
 # Claude Code
-cat CLAUDE.md | grep agentic-beacon
+cat AGENTS.md | grep agentic-beacon
 
 # OpenCode
 cat opencode.json | grep agentic-beacon
@@ -288,6 +288,10 @@ cat opencode.json | grep agentic-beacon
 ```bash
 abc sync
 ```
+
+### Claude Code ignores AGENTS.md
+
+Claude Code reads `AGENTS.md` only while no `CLAUDE.md`, `CLAUDE.local.md` or `.claude/CLAUDE.md` exists in the project or a parent directory. `abc doctor` reports each one as an error. Move any remaining content into `AGENTS.md`, delete the file, and run `abc doctor` again. Files under `~/.claude/` are not reported.
 
 ### Agent gives outdated information despite syncing
 

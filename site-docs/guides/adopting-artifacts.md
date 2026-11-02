@@ -40,7 +40,7 @@ When you press `Enter`, `abc adopt` runs a single session-atomic commit:
 1. Selected artifacts (contexts, skills, agents) are appended to `.agentic-beacon/beacon.yaml`.
 2. Matching entries are removed from `.agentic-beacon/pending.yaml`.
 3. A full sync runs — symlinks are created under `.agentic-beacon/artifacts/`.
-4. Contexts are wired into your agent config (`CLAUDE.md` / `opencode.json`).
+4. Contexts are wired into your agent config (`AGENTS.md` / `opencode.json`).
 5. Skills are installed into each detected tool's directories.
 6. Agents are wired into project-local `.claude/agents/` and `.opencode/agents/`.
 
@@ -73,7 +73,7 @@ Output example:
 ✓ Sync complete
   Created: 5 symlinks
   Up to date: 10 symlinks
-  ✓ Wired 2 context(s) into CLAUDE.md
+  ✓ Wired 2 context(s) into AGENTS.md
   ✓ Installed 1 skill(s) (code-review)
 ```
 
@@ -85,12 +85,12 @@ Output example:
 2. **Resolve dependencies** — read `requires:` frontmatter from each skill's `SKILL.md` and agent dependencies from `agents/agents.yaml` to compute transitive dependencies.
 3. **Auto-derive knowledge** — scan all adopted contexts and skills for markdown links to `knowledge/` paths.
 4. **Create symlinks** — create per-file symlinks under `.agentic-beacon/artifacts/` pointing into the warehouse.
-5. **Wire artifacts** — add context references to `CLAUDE.md`/`opencode.json`, install skills into tool directories, wire agents into project-local `.claude/agents/` and `.opencode/agents/`.
+5. **Wire artifacts** — add context references to `AGENTS.md`/`opencode.json`, install skills into tool directories, wire agents into project-local `.claude/agents/` and `.opencode/agents/`.
 6. **Prune orphans** — remove symlinks for artifacts no longer referenced.
 
 | Artifact | Destination | Wiring |
 |---|---|---|
-| **Contexts** | `.agentic-beacon/artifacts/contexts/` (symlinks) | Added to `CLAUDE.md` or `opencode.json` |
+| **Contexts** | `.agentic-beacon/artifacts/contexts/` (symlinks) | Added to `AGENTS.md` or `opencode.json` |
 | **Skills** | `.agentic-beacon/artifacts/skills/` (symlinks) + tool dirs | Installed as slash commands |
 | **Knowledge** | `.agentic-beacon/artifacts/knowledge/` (symlinks) | Auto-derived from markdown links; no wiring needed |
 | **Agents** | `.agentic-beacon/artifacts/agents/` (symlinks) + `.claude/agents/` + `.opencode/agents/` | Wired per-project; declared in `beacon.yaml` |

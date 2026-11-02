@@ -15,7 +15,7 @@ The bottom-left cell (global + tool-agnostic) is intentionally empty: a globally
 
 ## Not an Artifact: Agent Config Files
 
-Beacon also touches one set of files that are **not artifacts**: the agent config files (`opencode.json`, `CLAUDE.md`). These hold no shared content and are not synced from the warehouse — they are per-project files that the AI tool reads at session start.
+Beacon also touches one set of files that are **not artifacts**: the agent config files (`opencode.json`, `AGENTS.md`). These hold no shared content and are not synced from the warehouse — they are per-project files that the AI tool reads at session start.
 
 Beacon manages them via **agent config wiring**: it bootstraps them on first setup and keeps the synced context references inside them current on every sync — idempotently and without touching user-authored entries. This is the "wire" step of [the sync flow](how-it-works.md#the-sync-flow); see the [Adopting Artifacts guide](../guides/adopting-artifacts.md) for per-tool detail.
 
@@ -29,7 +29,7 @@ Contexts are boot instruction files: coding standards, architectural constraints
 
 **Project-scoped** because the standards relevant to a data pipeline differ from those in a mobile app. Each project controls which contexts it loads via `beacon.yaml`.
 
-**Tool-agnostic** because the content is plain markdown. The wiring mechanism adapts to the tool (`opencode.json` vs. `CLAUDE.md`), but the file itself is identical.
+**Tool-agnostic** because the content is plain markdown. The wiring mechanism adapts to the tool (`opencode.json` vs. `AGENTS.md`), but the file itself is identical.
 
 **Declared in `beacon.yaml`:**
 ```yaml
@@ -44,7 +44,7 @@ contexts:
 ```
 
 **How they're wired:**
-- Claude Code: appended as `@.agentic-beacon/artifacts/contexts/global.md` to `CLAUDE.md`
+- Claude Code: appended as `@.agentic-beacon/artifacts/contexts/global.md` to `AGENTS.md`
 - OpenCode: added as a file reference in `opencode.json`
 
 ---
