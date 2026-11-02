@@ -100,9 +100,11 @@ Before opening a PR, verify:
 The PR reviewer is `pi-pr-review.yml` (pi.dev). The older `opencode-review.yml` is
 disabled (its terra-via-LiteLLM path produced empty reviews) but kept for easy revert.
 
-The review model is set by the `PI_MODEL` env in `pi-pr-review.yml` (default
-`litellm-responses/gpt-5.6-terra-medium`); the provider is configured in the runner's
-`~/.pi/agent/models.json`.
+`pi-pr-review.yml` calls the shared reviewer in `Shadowsong27/gh-actions-commons`. The
+models are the `pi-models` chain in that file (terra, then OpenCode Go DeepSeek), tried in
+order until one gives a usable review. Each provider is configured in the runner's
+`~/.pi/agent/models.json`. Repo-specific review rules live in
+`.github/opencode-pr-review-prompt.md`.
 
 ---
 
