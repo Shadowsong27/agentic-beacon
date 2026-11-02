@@ -2,7 +2,8 @@
 
 Implements checks that need a project root (not a warehouse root):
 - Symlink hygiene under .agentic-beacon/artifacts/
-- @path reference integrity in CLAUDE.md / opencode.json
+- @path reference integrity in AGENTS.md / opencode.json
+- CLAUDE.md files that hide AGENTS.md from Claude Code
 - Stale beacon.yaml globs
 - Sanity checks (warehouse git, platform)
 """
@@ -11,6 +12,7 @@ from __future__ import annotations
 
 import fnmatch
 import json
+import os
 import re
 import sys
 from dataclasses import dataclass
@@ -153,11 +155,12 @@ def repair_reference_drift(
     beacon_manifest: BeaconManifest | None,
     warehouse_path: Path | None,
 ) -> list[str]:
-    """Repair context-reference drift in CLAUDE.md and opencode.json.
+    """Repair context-reference drift in AGENTS.md and opencode.json.
 
     Computes the effective set (same normalization as run_sync), builds
     desired_refs, and calls reconcile_context_references.  Returns a
-    human-readable fix line for each file that changed.
+    human-readable fix line for each change, including each CLAUDE.md deleted
+    after its imports moved to AGENTS.md.
 
     Returns [] immediately when either beacon_manifest or warehouse_path is
     None, or when compute_effective_set returns a ResolutionFailure.
@@ -175,6 +178,8 @@ def repair_reference_drift(
         if result.removed:
             parts.append(f"removed {len(result.removed)}")
         fixes.append(f"Repaired context references ({', '.join(parts)})")
+    for path in result.claude_md_deleted:
+        fixes.append(f"Deleted {path} (its context imports moved to AGENTS.md)")
     return fixes
 
 
@@ -196,6 +201,7 @@ def run_project_health_checks(
         issues.extend(_check_warehouse_git(warehouse_path))
 
     issues.extend(_check_path_references(project_root, beacon_manifest))
+    issues.extend(_check_claude_md_shadowing(project_root))
     issues.extend(_check_gitignore_drift(project_root))
     issues.extend(_check_platform())
 
@@ -288,13 +294,10 @@ def _check_path_references(
 ) -> list[DoctorIssue]:
     issues: list[DoctorIssue] = []
 
-    # CLAUDE.md
-    for claude_md in (
-        project_root / ".claude" / "CLAUDE.md",
-        project_root / "CLAUDE.md",
-    ):
-        if claude_md.exists():
-            issues.extend(_check_claude_md(claude_md, project_root, beacon_manifest))
+    # AGENTS.md
+    agents_md = project_root / "AGENTS.md"
+    if agents_md.exists():
+        issues.extend(_check_atpath_file(agents_md, project_root, beacon_manifest))
 
     # opencode.json
     for opencode_json in (
@@ -316,14 +319,14 @@ def _check_path_references(
     return issues
 
 
-def _check_claude_md(
-    claude_md: Path,
+def _check_atpath_file(
+    atpath_file: Path,
     project_root: Path,
     beacon_manifest: BeaconManifest | None,
 ) -> list[DoctorIssue]:
     issues: list[DoctorIssue] = []
     try:
-        content = claude_md.read_text(encoding="utf-8")
+        content = atpath_file.read_text(encoding="utf-8")
     except OSError:
         return issues
 
@@ -338,11 +341,51 @@ def _check_claude_md(
             continue
 
         issue = _classify_reference(
-            raw_path, project_root, beacon_manifest, str(claude_md)
+            raw_path, project_root, beacon_manifest, str(atpath_file)
         )
         if issue:
             issues.append(issue)
 
+    return issues
+
+
+# ---------------------------------------------------------------------------
+# Check 2b: CLAUDE.md files that hide AGENTS.md
+# ---------------------------------------------------------------------------
+
+_SHADOWING_NAMES = ("CLAUDE.md", "CLAUDE.local.md", ".claude/CLAUDE.md")
+
+
+def _check_claude_md_shadowing(
+    project_root: Path, home: Path | None = None
+) -> list[DoctorIssue]:
+    """Report each CLAUDE.md that stops Claude Code reading AGENTS.md.
+
+    Claude Code reads AGENTS.md only when no CLAUDE.md, CLAUDE.local.md or
+    .claude/CLAUDE.md exists in the project or an ancestor directory. Walks
+    from the project root up to the filesystem root. Files under the user's
+    ``~/.claude/`` are skipped. Reads only; nothing is changed.
+    """
+    user_claude_dir = (home or Path.home()).resolve() / ".claude"
+    issues: list[DoctorIssue] = []
+    start = project_root.resolve()
+    for directory in (start, *start.parents):
+        for name in _SHADOWING_NAMES:
+            candidate = directory / name
+            if not os.path.lexists(candidate):
+                continue
+            if candidate.is_relative_to(user_claude_dir):
+                continue
+            issues.append(
+                DoctorIssue(
+                    message=f"{candidate} hides AGENTS.md",
+                    detail=(
+                        "Claude Code does not read AGENTS.md while this file exists. "
+                        "Move its content into AGENTS.md and delete it."
+                    ),
+                    severity="error",
+                )
+            )
     return issues
 
 

@@ -1,8 +1,7 @@
-"""Tests for abc sync post-sync wiring: opencode.json, CLAUDE.md, skills.
+"""Tests for abc sync post-sync wiring: opencode.json, AGENTS.md, skills.
 
 Covers the three helper functions introduced in the auto-wiring feature:
   - wire_contexts_opencode
-  - wire_contexts_claudecode
   - wire_skills_post_sync
 
 And integration tests through the full `abc sync` CLI command.
@@ -26,7 +25,7 @@ from beacon.domains.artifact.skill import (
     wire_single_skill,
     wire_skills_post_sync,
 )
-from beacon.domains.setup.wiring import wire_contexts_claudecode, wire_contexts_opencode
+from beacon.domains.setup.wiring import wire_contexts_opencode
 from click.testing import CliRunner
 
 # ---------------------------------------------------------------------------
@@ -151,60 +150,6 @@ def testwire_contexts_opencode_handles_missing_instructions_key(
     assert len(added) == 2
     data = json.loads((project / "opencode.json").read_text())
     assert "instructions" in data
-
-
-# ---------------------------------------------------------------------------
-# Unit tests: wire_contexts_claudecode
-# ---------------------------------------------------------------------------
-
-
-def testwire_contexts_claudecode_appends_refs(project_with_contexts):
-    project = project_with_contexts
-    (project / "CLAUDE.md").write_text("# Project\n")
-    artifacts_dir = project / ".agentic-beacon" / "artifacts"
-
-    added = wire_contexts_claudecode(project, artifacts_dir)
-
-    assert len(added) == 2
-    content = (project / "CLAUDE.md").read_text()
-    assert "@.agentic-beacon/artifacts/contexts/global.md" in content
-    assert "@.agentic-beacon/artifacts/contexts/python.md" in content
-
-
-def testwire_contexts_claudecode_idempotent(project_with_contexts):
-    project = project_with_contexts
-    (project / "CLAUDE.md").write_text("# Project\n")
-    artifacts_dir = project / ".agentic-beacon" / "artifacts"
-
-    wire_contexts_claudecode(project, artifacts_dir)
-    added_second = wire_contexts_claudecode(project, artifacts_dir)
-
-    assert added_second == []
-    content = (project / "CLAUDE.md").read_text()
-    assert content.count("@.agentic-beacon/artifacts/contexts/global.md") == 1
-
-
-def testwire_contexts_claudecode_skips_if_no_claude_md(project_with_contexts):
-    project = project_with_contexts
-    artifacts_dir = project / ".agentic-beacon" / "artifacts"
-
-    added = wire_contexts_claudecode(project, artifacts_dir)
-
-    assert added == []
-
-
-def testwire_contexts_claudecode_finds_dotclaude_claude_md(project_with_contexts):
-    project = project_with_contexts
-    claude_dir = project / ".claude"
-    claude_dir.mkdir()
-    (claude_dir / "CLAUDE.md").write_text("# Project\n")
-    artifacts_dir = project / ".agentic-beacon" / "artifacts"
-
-    added = wire_contexts_claudecode(project, artifacts_dir)
-
-    assert len(added) == 2
-    content = (claude_dir / "CLAUDE.md").read_text()
-    assert "@.agentic-beacon/artifacts/contexts/global.md" in content
 
 
 # ---------------------------------------------------------------------------
@@ -444,17 +389,54 @@ def test_sync_wires_contexts_to_opencode_json(full_sync_project, monkeypatch):
     assert "wired" in result.output.lower()
 
 
-def test_sync_wires_contexts_to_claude_md(full_sync_project, monkeypatch):
+def test_sync_wires_contexts_to_agents_md(full_sync_project, monkeypatch):
     project, runner = full_sync_project
     monkeypatch.chdir(project)
-    (project / "CLAUDE.md").write_text("# Project\n")
+    (project / "AGENTS.md").write_text("# Project\n")
 
     result = runner.invoke(main, ["sync"])
 
     assert result.exit_code == 0
-    content = (project / "CLAUDE.md").read_text()
+    content = (project / "AGENTS.md").read_text()
     assert "@.agentic-beacon/artifacts/contexts/global.md" in content
     assert "wired" in result.output.lower()
+
+
+def test_sync_wires_contexts_into_agents_md_and_drops_thin_claude_md(
+    full_sync_project, monkeypatch
+):
+    """A thin CLAUDE.md is migrated: its context import moves to AGENTS.md and the file is deleted."""
+    project, runner = full_sync_project
+    monkeypatch.chdir(project)
+    (project / "CLAUDE.md").write_text("@AGENTS.md\n")
+    (project / "AGENTS.md").write_text("# Project\n")
+
+    result = runner.invoke(main, ["sync"])
+
+    assert result.exit_code == 0
+    assert not (project / "CLAUDE.md").exists()
+    assert (
+        "@.agentic-beacon/artifacts/contexts/global.md"
+        in (project / "AGENTS.md").read_text()
+    )
+    assert "still exists" not in result.output
+
+
+def test_sync_notes_claude_md_with_content_left_in_place(
+    full_sync_project, monkeypatch
+):
+    """A CLAUDE.md with other content survives sync, and sync names it in the output."""
+    project, runner = full_sync_project
+    monkeypatch.chdir(project)
+    (project / "CLAUDE.md").write_text("# Project\n")
+    (project / "AGENTS.md").write_text("# Project\n")
+
+    result = runner.invoke(main, ["sync"])
+
+    assert result.exit_code == 0
+    assert (project / "CLAUDE.md").read_text() == "# Project\n"
+    assert "CLAUDE.md" in result.output
+    assert "still exists" in result.output
 
 
 def test_sync_installs_skills(full_sync_project, monkeypatch):
@@ -489,37 +471,37 @@ def test_sync_wiring_is_idempotent(full_sync_project, monkeypatch):
 
 
 def test_sync_auto_inits_agent_configs_when_missing(full_sync_project, monkeypatch):
-    """abc sync unconditionally creates opencode.json + CLAUDE.md and wires contexts."""
+    """abc sync unconditionally creates opencode.json + AGENTS.md and wires contexts."""
     project, runner = full_sync_project
     monkeypatch.chdir(project)
-    # No opencode.json, no CLAUDE.md — sync should auto-init both
+    # No opencode.json, no AGENTS.md — sync should auto-init both
 
     result = runner.invoke(main, ["sync"])
 
     assert result.exit_code == 0
     assert (project / "opencode.json").exists()
-    assert (project / "CLAUDE.md").exists()
+    assert (project / "AGENTS.md").exists()
     data = json.loads((project / "opencode.json").read_text())
     assert ".agentic-beacon/artifacts/contexts/global.md" in data["instructions"]
-    content = (project / "CLAUDE.md").read_text()
+    content = (project / "AGENTS.md").read_text()
     assert "@.agentic-beacon/artifacts/contexts/global.md" in content
 
 
 def test_sync_initializes_missing_agent_config_files(
     full_sync_project, monkeypatch, isolated_home
 ):
-    """Backward-compat: projects set up before Bug 1 fix still get opencode.json + CLAUDE.md on sync."""
+    """Backward-compat: projects set up before Bug 1 fix still get opencode.json + AGENTS.md on sync."""
     project, runner = full_sync_project
     monkeypatch.chdir(project)
-    # Simulate a project where abc setup was run BEFORE the fix (no opencode.json, no CLAUDE.md)
+    # Simulate a project where abc setup was run BEFORE the fix (no opencode.json, no AGENTS.md)
     assert not (project / "opencode.json").exists()
-    assert not (project / "CLAUDE.md").exists()
+    assert not (project / "AGENTS.md").exists()
 
     result = runner.invoke(main, ["sync"])
 
     assert result.exit_code == 0
     assert (project / "opencode.json").exists()
-    assert (project / "CLAUDE.md").exists()
+    assert (project / "AGENTS.md").exists()
 
 
 def test_sync_does_not_report_installed_skills_on_second_run(
@@ -860,7 +842,7 @@ def test_sync_no_agent_config_dry_run_does_not_wire(skills_only_project, monkeyp
 def test_sync_dry_run_does_not_create_agent_config_files(
     full_sync_project, monkeypatch
 ):
-    """abc sync --dry-run must NOT create opencode.json or CLAUDE.md.
+    """abc sync --dry-run must NOT create opencode.json or AGENTS.md.
 
     Defends against the implicit-gate breakage described in PER-151: even if the
     orchestrator's agent_config_init_needed flag is unexpectedly True during
@@ -868,9 +850,9 @@ def test_sync_dry_run_does_not_create_agent_config_files(
     """
     project, runner = full_sync_project
     monkeypatch.chdir(project)
-    # No opencode.json, no CLAUDE.md — dry-run must not create either
+    # No opencode.json, no AGENTS.md — dry-run must not create either
     assert not (project / "opencode.json").exists()
-    assert not (project / "CLAUDE.md").exists()
+    assert not (project / "AGENTS.md").exists()
 
     result = runner.invoke(main, ["sync", "--dry-run"])
 
@@ -878,16 +860,16 @@ def test_sync_dry_run_does_not_create_agent_config_files(
     assert not (project / "opencode.json").exists(), (
         "dry-run must not create opencode.json"
     )
-    assert not (project / "CLAUDE.md").exists(), "dry-run must not create CLAUDE.md"
+    assert not (project / "AGENTS.md").exists(), "dry-run must not create AGENTS.md"
 
 
 def test_sync_full_project_skills_and_agent_configs_wired_unconditionally(
     full_sync_project, monkeypatch
 ):
-    """abc sync wires skills AND auto-inits opencode.json + CLAUDE.md unconditionally."""
+    """abc sync wires skills AND auto-inits opencode.json + AGENTS.md unconditionally."""
     project, runner = full_sync_project
     monkeypatch.chdir(project)
-    # No opencode.json, no CLAUDE.md — sync should auto-init both and wire skills
+    # No opencode.json, no AGENTS.md — sync should auto-init both and wire skills
 
     result = runner.invoke(main, ["sync"])
 
@@ -898,7 +880,7 @@ def test_sync_full_project_skills_and_agent_configs_wired_unconditionally(
     assert "installed" in result.output.lower()
     # Agent configs auto-initialized and contexts wired (Bug 1 fix)
     assert (project / "opencode.json").exists()
-    assert (project / "CLAUDE.md").exists()
+    assert (project / "AGENTS.md").exists()
     # Context wired message (reconciler path produces "wired N context(s) into agent config files")
     assert "wired" in result.output.lower() or "context" in result.output.lower()
 

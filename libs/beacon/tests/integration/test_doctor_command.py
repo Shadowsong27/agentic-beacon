@@ -269,8 +269,10 @@ class TestDoctorProjectSideChecks:
         regular.parent.mkdir(parents=True)
         regular.write_text("regular file")
 
-        # 4. Broken @path reference in CLAUDE.md
-        (project / "CLAUDE.md").write_text("@nonexistent.md\n")
+        # 4. Broken @path reference in AGENTS.md
+        (project / "AGENTS.md").write_text("@nonexistent.md\n")
+        # 4b. A project CLAUDE.md hides AGENTS.md from Claude Code
+        (project / "CLAUDE.md").write_text("# Mine\n")
 
         # 5. Broken @path reference in opencode.json
         data = {"instructions": [".agentic-beacon/artifacts/contexts/ghost.md"]}
@@ -292,6 +294,8 @@ class TestDoctorProjectSideChecks:
         assert "Broken reference" in output
         assert "Stale glob" in output
         assert "not a git working tree" in output
+        # Rich folds the long path token, so match the intact trailing phrase.
+        assert "hides AGENTS.md" in " ".join(output.split())
 
 
 class TestDoctorNoProject:

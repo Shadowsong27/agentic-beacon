@@ -1,12 +1,12 @@
 """Unit tests for detect_agent_targets — verifies directory-based gating (Bug 3 fix).
 
 detect_agent_targets gates on directory existence (.claude/, .opencode/),
-NOT on config files (opencode.json, CLAUDE.md), unlike detect_agents().
+NOT on config files (opencode.json, AGENTS.md), unlike detect_agents().
 """
 
 from pathlib import Path
 
-from beacon.domains.artifact.agent import detect_agent_targets
+from beacon.domains.artifact.agent import detect_agent_targets, detect_agents
 
 
 def test_detect_agent_targets_both_dirs_present(tmp_path: Path) -> None:
@@ -30,9 +30,9 @@ def test_detect_agent_targets_neither_present(tmp_path: Path) -> None:
     assert detect_agent_targets(tmp_path) == []
 
 
-def test_detect_agent_targets_only_claude_md_does_not_count(tmp_path: Path) -> None:
-    # CLAUDE.md alone (no .claude/ dir) does NOT enable claudecode for agent wiring
-    (tmp_path / "CLAUDE.md").touch()
+def test_detect_agent_targets_only_agents_md_does_not_count(tmp_path: Path) -> None:
+    # AGENTS.md alone (no .claude/ dir) does NOT enable claudecode for agent wiring
+    (tmp_path / "AGENTS.md").touch()
     assert detect_agent_targets(tmp_path) == []
 
 
@@ -56,3 +56,14 @@ def test_detect_agent_targets_opencode_as_regular_file_does_not_count(
     """An `.opencode` regular file (not a directory) must NOT enable opencode."""
     (tmp_path / ".opencode").touch()
     assert detect_agent_targets(tmp_path) == []
+
+
+def test_detect_agents_claudecode_from_agents_md(tmp_path: Path) -> None:
+    """detect_agents marks claudecode from the root AGENTS.md (first-time sync creates it)."""
+    (tmp_path / "AGENTS.md").touch()
+    assert detect_agents(tmp_path) == ["claudecode"]
+
+
+def test_detect_agents_ignores_claude_md(tmp_path: Path) -> None:
+    (tmp_path / "CLAUDE.md").touch()
+    assert detect_agents(tmp_path) == []

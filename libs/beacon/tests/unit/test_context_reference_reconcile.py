@@ -7,9 +7,10 @@ openspec/changes/reconcile-context-references/tasks.md.
 import json
 from pathlib import Path
 
+import pytest
 from beacon.domains.setup.wiring import (
     ReferenceReconcileResult,
-    _reconcile_claude_md,
+    _reconcile_agents_md,
     _reconcile_opencode_json,
     desired_context_refs,
     reconcile_context_references,
@@ -196,57 +197,57 @@ class TestReconcileOpencodeJson:
 
 
 # ---------------------------------------------------------------------------
-# Task 1.3: _reconcile_claude_md
+# Task 1.3: _reconcile_agents_md (pure reconcile of the root AGENTS.md)
 # ---------------------------------------------------------------------------
 
 
-class TestReconcileClaudeMd:
+class TestReconcileAgentsMd:
     def test_tc1_remove_departed_owned_ref(self, tmp_path):
-        """TC1: owned @-include not in desired -> line removed; @AGENTS.md untouched."""
-        claude = tmp_path / "CLAUDE.md"
-        claude.write_text(
-            "@AGENTS.md\n"
+        """TC1: owned @-include not in desired -> line removed; other lines untouched."""
+        agents = tmp_path / "AGENTS.md"
+        agents.write_text(
+            "# Project\n"
             "@.agentic-beacon/artifacts/contexts/linear-ops.md\n"
             "@docs/house-style.md\n"
         )
         desired = [".agentic-beacon/artifacts/contexts/plane-ops.md"]
-        result = _reconcile_claude_md(tmp_path, desired)
+        result = _reconcile_agents_md(tmp_path, desired)
         assert ".agentic-beacon/artifacts/contexts/linear-ops.md" in result.removed
         assert ".agentic-beacon/artifacts/contexts/plane-ops.md" in result.added
 
-        content = claude.read_text()
+        content = agents.read_text()
         assert "@.agentic-beacon/artifacts/contexts/linear-ops.md" not in content
         assert "@.agentic-beacon/artifacts/contexts/plane-ops.md" in content
-        assert "@AGENTS.md" in content
+        assert "# Project" in content
         assert "@docs/house-style.md" in content
 
     def test_tc2_add_missing_desired_ref(self, tmp_path):
-        """TC2: desired ref absent -> appended with blank-line separator."""
-        claude = tmp_path / "CLAUDE.md"
-        claude.write_text("@AGENTS.md\n")
+        """TC2: desired ref absent -> appended."""
+        agents = tmp_path / "AGENTS.md"
+        agents.write_text("# Project\n")
         desired = [".agentic-beacon/artifacts/contexts/beacon-ops.md"]
-        result = _reconcile_claude_md(tmp_path, desired)
+        result = _reconcile_agents_md(tmp_path, desired)
         assert result.added == [".agentic-beacon/artifacts/contexts/beacon-ops.md"]
 
-        content = claude.read_text()
+        content = agents.read_text()
         assert "@.agentic-beacon/artifacts/contexts/beacon-ops.md" in content
-        assert "@AGENTS.md" in content
+        assert "# Project" in content
 
     def test_tc3_preserves_non_artifact_includes(self, tmp_path):
         """TC3: only artifact includes change, others stay in place."""
-        claude = tmp_path / "CLAUDE.md"
-        claude.write_text(
-            "@AGENTS.md\n"
+        agents = tmp_path / "AGENTS.md"
+        agents.write_text(
+            "# Project\n"
             "@.agentic-beacon/artifacts/contexts/linear-ops.md\n"
             "@docs/house-style.md\n"
             "@.agentic-beacon/artifacts/contexts/cicd-flow.md\n"
         )
         desired = [".agentic-beacon/artifacts/contexts/beacon-ops.md"]
-        result = _reconcile_claude_md(tmp_path, desired)
+        result = _reconcile_agents_md(tmp_path, desired)
         assert len(result.removed) == 2
 
-        content = claude.read_text()
-        assert "@AGENTS.md" in content
+        content = agents.read_text()
+        assert "# Project" in content
         assert "@docs/house-style.md" in content
         assert "@.agentic-beacon/artifacts/contexts/beacon-ops.md" in content
         assert "@.agentic-beacon/artifacts/contexts/linear-ops.md" not in content
@@ -254,60 +255,45 @@ class TestReconcileClaudeMd:
 
     def test_tc4_idempotent_no_write(self, tmp_path):
         """TC4: already-matching file -> bytes unchanged."""
-        claude = tmp_path / "CLAUDE.md"
-        claude.write_text("@.agentic-beacon/artifacts/contexts/beacon-ops.md\n")
-        mtime_before = claude.stat().st_mtime
+        agents = tmp_path / "AGENTS.md"
+        agents.write_text("@.agentic-beacon/artifacts/contexts/beacon-ops.md\n")
+        mtime_before = agents.stat().st_mtime
         desired = [".agentic-beacon/artifacts/contexts/beacon-ops.md"]
-        result = _reconcile_claude_md(tmp_path, desired)
+        result = _reconcile_agents_md(tmp_path, desired)
         assert result.added == []
         assert result.removed == []
-        assert claude.stat().st_mtime == mtime_before
+        assert agents.stat().st_mtime == mtime_before
 
     def test_tc5_empty_desired_clears_owned(self, tmp_path):
         """TC5: empty desired set -> all owned includes removed."""
-        claude = tmp_path / "CLAUDE.md"
-        claude.write_text(
-            "@AGENTS.md\n@.agentic-beacon/artifacts/contexts/linear-ops.md\n"
+        agents = tmp_path / "AGENTS.md"
+        agents.write_text(
+            "# Project\n@.agentic-beacon/artifacts/contexts/linear-ops.md\n"
         )
-        result = _reconcile_claude_md(tmp_path, [])
+        result = _reconcile_agents_md(tmp_path, [])
         assert len(result.removed) == 1
 
-        content = claude.read_text()
-        assert "@AGENTS.md" in content
+        content = agents.read_text()
+        assert "# Project" in content
         assert "@.agentic-beacon/artifacts/contexts/linear-ops.md" not in content
 
-    def test_tc6_prefers_dot_claude_claude_md(self, tmp_path):
-        """TC6: .claude/CLAUDE.md preferred over root CLAUDE.md when both exist."""
-        dot_claude = tmp_path / ".claude"
-        dot_claude.mkdir(parents=True)
-        (dot_claude / "CLAUDE.md").write_text(
-            "@.agentic-beacon/artifacts/contexts/linear-ops.md\n"
-        )
-        root_claude = tmp_path / "CLAUDE.md"
-        root_claude.write_text("@AGENTS.md\n")
-
-        desired = [".agentic-beacon/artifacts/contexts/plane-ops.md"]
-        result = _reconcile_claude_md(tmp_path, desired)
-        assert ".agentic-beacon/artifacts/contexts/linear-ops.md" in result.removed
-        # Root CLAUDE.md should be untouched
-        assert "@AGENTS.md" in root_claude.read_text()
-
-    def test_tc7_no_file_noop(self, tmp_path):
-        """TC7: no CLAUDE.md present -> no-op."""
-        result = _reconcile_claude_md(
+    def test_tc6_missing_agents_md_and_no_claude_md_is_noop(self, tmp_path):
+        """TC6: no AGENTS.md and no CLAUDE.md -> nothing created, empty result."""
+        result = _reconcile_agents_md(
             tmp_path, [".agentic-beacon/artifacts/contexts/x.md"]
         )
         assert result.added == []
         assert result.removed == []
+        assert not (tmp_path / "AGENTS.md").exists()
 
     def test_handles_missing_trailing_newline(self, tmp_path):
         """Handle file without trailing newline."""
-        claude = tmp_path / "CLAUDE.md"
-        claude.write_text("@AGENTS.md")
+        agents = tmp_path / "AGENTS.md"
+        agents.write_text("# Project")
         desired = [".agentic-beacon/artifacts/contexts/beacon-ops.md"]
-        result = _reconcile_claude_md(tmp_path, desired)
+        result = _reconcile_agents_md(tmp_path, desired)
         assert len(result.added) == 1
-        content = claude.read_text()
+        content = agents.read_text()
         assert "@.agentic-beacon/artifacts/contexts/beacon-ops.md" in content
 
     def test_intersection_present_and_desired_preserved(self, tmp_path):
@@ -316,11 +302,11 @@ class TestReconcileClaudeMd:
         The bug: old code stripped all owned lines then re-appended only
         ``added`` (desired − owned), so the intersection was silently wiped.
         """
-        claude = tmp_path / "CLAUDE.md"
+        agents = tmp_path / "AGENTS.md"
         # python-standards is both currently owned AND desired (intersection).
         # linear-ops is owned but NOT desired (should be removed).
-        claude.write_text(
-            "@AGENTS.md\n"
+        agents.write_text(
+            "# Project\n"
             "@.agentic-beacon/artifacts/contexts/python-standards.md\n"
             "@.agentic-beacon/artifacts/contexts/linear-ops.md\n"
         )
@@ -328,25 +314,21 @@ class TestReconcileClaudeMd:
             ".agentic-beacon/artifacts/contexts/python-standards.md",
             ".agentic-beacon/artifacts/contexts/beacon-ops.md",
         ]
-        result = _reconcile_claude_md(tmp_path, desired)
+        result = _reconcile_agents_md(tmp_path, desired)
         assert ".agentic-beacon/artifacts/contexts/linear-ops.md" in result.removed
         assert ".agentic-beacon/artifacts/contexts/beacon-ops.md" in result.added
 
-        content = claude.read_text()
-        # Intersection ref must still be present
+        content = agents.read_text()
         assert "@.agentic-beacon/artifacts/contexts/python-standards.md" in content
-        # Departed ref must be gone
         assert "@.agentic-beacon/artifacts/contexts/linear-ops.md" not in content
-        # Added ref must be present
         assert "@.agentic-beacon/artifacts/contexts/beacon-ops.md" in content
-        # Non-artifact line must be untouched
-        assert "@AGENTS.md" in content
+        assert "# Project" in content
 
     def test_idempotent_after_partial_drift(self, tmp_path):
         """After reconciling drift, a second run is a no-op (byte-identical output)."""
-        claude = tmp_path / "CLAUDE.md"
-        claude.write_text(
-            "@AGENTS.md\n"
+        agents = tmp_path / "AGENTS.md"
+        agents.write_text(
+            "# Project\n"
             "@.agentic-beacon/artifacts/contexts/python-standards.md\n"
             "@.agentic-beacon/artifacts/contexts/linear-ops.md\n"
         )
@@ -354,18 +336,18 @@ class TestReconcileClaudeMd:
             ".agentic-beacon/artifacts/contexts/python-standards.md",
             ".agentic-beacon/artifacts/contexts/beacon-ops.md",
         ]
-        _reconcile_claude_md(tmp_path, desired)
-        content_after_run1 = claude.read_bytes()
-        mtime_after_run1 = claude.stat().st_mtime
+        _reconcile_agents_md(tmp_path, desired)
+        content_after_run1 = agents.read_bytes()
+        mtime_after_run1 = agents.stat().st_mtime
 
-        result2 = _reconcile_claude_md(tmp_path, desired)
+        result2 = _reconcile_agents_md(tmp_path, desired)
         assert result2.added == []
         assert result2.removed == []
-        assert claude.read_bytes() == content_after_run1
-        assert claude.stat().st_mtime == mtime_after_run1
+        assert agents.read_bytes() == content_after_run1
+        assert agents.stat().st_mtime == mtime_after_run1
 
     def test_live_shape_regression(self, tmp_path):
-        """Live-shape regression: 7 owned refs (incl. departed linear-ops) → 6 desired remain.
+        """Live-shape regression: 7 owned refs (incl. departed linear-ops) → 5 desired remain.
 
         Mirrors the exact repo condition that motivated AB-96:
         linear-ops was renamed to plane-ops; cicd-flow was de-adopted.
@@ -386,22 +368,21 @@ class TestReconcileClaudeMd:
             "beacon-ops",
             "plane-ops",
         ]
-        claude = tmp_path / "CLAUDE.md"
-        claude.write_text(
-            "# Project\n\n@AGENTS.md\n\n"
+        agents = tmp_path / "AGENTS.md"
+        agents.write_text(
+            "# Project\n\n"
             + "\n\n".join(
                 f"@.agentic-beacon/artifacts/contexts/{n}.md" for n in owned_names
             )
             + "\n"
         )
         desired = desired_context_refs(set(desired_names))
-        result = _reconcile_claude_md(tmp_path, desired)
+        result = _reconcile_agents_md(tmp_path, desired)
 
         assert ".agentic-beacon/artifacts/contexts/linear-ops.md" in result.removed
         assert ".agentic-beacon/artifacts/contexts/cicd-flow.md" in result.removed
 
-        content = claude.read_text()
-        assert "@AGENTS.md" in content
+        content = agents.read_text()
         assert "# Project" in content
         for name in desired_names:
             assert f"@.agentic-beacon/artifacts/contexts/{name}.md" in content
@@ -409,9 +390,168 @@ class TestReconcileClaudeMd:
         assert "@.agentic-beacon/artifacts/contexts/cicd-flow.md" not in content
 
         # Second run must be idempotent
-        result2 = _reconcile_claude_md(tmp_path, desired)
+        result2 = _reconcile_agents_md(tmp_path, desired)
         assert result2.added == []
         assert result2.removed == []
+
+
+# ---------------------------------------------------------------------------
+# Task 1.3: CLAUDE.md migration into AGENTS.md
+# ---------------------------------------------------------------------------
+
+OWNED_LINOPS = "@.agentic-beacon/artifacts/contexts/linear-ops.md\n"
+OWNED_A = ".agentic-beacon/artifacts/contexts/a.md"
+DESIRED_PLANE = [".agentic-beacon/artifacts/contexts/plane-ops.md"]
+
+
+class TestClaudeMdMigration:
+    def test_thin_claude_md_deleted_even_without_agents_md(self, tmp_path):
+        """A thin CLAUDE.md is deleted, and reported as deleted, when AGENTS.md is missing."""
+        (tmp_path / "CLAUDE.md").write_text("@AGENTS.md\n")
+
+        result = _reconcile_agents_md(tmp_path, [])
+
+        assert not (tmp_path / "CLAUDE.md").exists()
+        assert not (tmp_path / "AGENTS.md").exists()
+        assert result.claude_md_deleted == ("CLAUDE.md",)
+
+    def test_tc1_thin_claude_md_deleted_imports_land_in_agents_md(self, tmp_path):
+        """TC1: thin CLAUDE.md is deleted; its owned import is appended to AGENTS.md."""
+        (tmp_path / "AGENTS.md").write_text("# Project\n")
+        (tmp_path / "CLAUDE.md").write_text(f"@AGENTS.md\n@{OWNED_A}\n")
+
+        result = _reconcile_agents_md(tmp_path, [OWNED_A])
+
+        assert not (tmp_path / "CLAUDE.md").exists()
+        assert (tmp_path / "AGENTS.md").read_text().endswith(f"@{OWNED_A}\n")
+        assert result.claude_md_deleted == ("CLAUDE.md",)
+        assert result.claude_md_left == ()
+
+    def test_tc2_html_comments_and_dot_slash_import_are_trivial(self, tmp_path):
+        """TC2: HTML comments, blanks and @./AGENTS.md do not block deletion."""
+        (tmp_path / "AGENTS.md").write_text("")
+        (tmp_path / "CLAUDE.md").write_text(
+            f"<!-- note -->\n\n@./AGENTS.md\n<!--\nmulti\n-->\n{OWNED_LINOPS}"
+        )
+
+        result = _reconcile_agents_md(tmp_path, DESIRED_PLANE)
+
+        assert not (tmp_path / "CLAUDE.md").exists()
+        assert result.claude_md_deleted == ("CLAUDE.md",)
+        assert (
+            "@.agentic-beacon/artifacts/contexts/plane-ops.md"
+            in (tmp_path / "AGENTS.md").read_text()
+        )
+
+    def test_tc3_claude_md_with_heading_is_kept_stripped_and_reported(self, tmp_path):
+        """TC3: a CLAUDE.md with other content keeps its lines; owned line stripped."""
+        (tmp_path / "AGENTS.md").write_text("")
+        (tmp_path / "CLAUDE.md").write_text(f"# Title\n@AGENTS.md\n{OWNED_LINOPS}")
+
+        result = _reconcile_agents_md(tmp_path, DESIRED_PLANE)
+
+        content = (tmp_path / "CLAUDE.md").read_text()
+        assert content == "# Title\n@AGENTS.md\n"
+        assert result.claude_md_left == ("CLAUDE.md",)
+        assert result.claude_md_deleted == ()
+
+    def test_tc4_dot_claude_claude_md_migrated(self, tmp_path):
+        """TC4: .claude/CLAUDE.md holding only owned lines and @AGENTS.md is deleted."""
+        (tmp_path / "AGENTS.md").write_text("")
+        dot_claude = tmp_path / ".claude"
+        dot_claude.mkdir()
+        (dot_claude / "CLAUDE.md").write_text(f"@AGENTS.md\n{OWNED_LINOPS}")
+
+        result = _reconcile_agents_md(tmp_path, DESIRED_PLANE)
+
+        assert not (dot_claude / "CLAUDE.md").exists()
+        assert result.claude_md_deleted == (".claude/CLAUDE.md",)
+        assert (
+            "@.agentic-beacon/artifacts/contexts/plane-ops.md"
+            in (tmp_path / "AGENTS.md").read_text()
+        )
+
+    def test_tc5_missing_agents_md_created_when_claude_md_held_owned_lines(
+        self, tmp_path
+    ):
+        """TC5: no AGENTS.md, CLAUDE.md held an owned line -> AGENTS.md created."""
+        (tmp_path / "CLAUDE.md").write_text(OWNED_LINOPS)
+
+        result = _reconcile_agents_md(tmp_path, DESIRED_PLANE)
+
+        assert (tmp_path / "AGENTS.md").read_text() == (
+            "@.agentic-beacon/artifacts/contexts/plane-ops.md\n"
+        )
+        assert result.added == DESIRED_PLANE
+        assert result.removed == [".agentic-beacon/artifacts/contexts/linear-ops.md"]
+        assert result.claude_md_deleted == ("CLAUDE.md",)
+
+    def test_tc7_claude_md_symlink_to_agents_md_untouched(self, tmp_path):
+        """TC7: CLAUDE.md symlinked to AGENTS.md is skipped; AGENTS.md reconciled once."""
+        agents = tmp_path / "AGENTS.md"
+        agents.write_text(OWNED_LINOPS)
+        (tmp_path / "CLAUDE.md").symlink_to("AGENTS.md")
+
+        result = _reconcile_agents_md(tmp_path, DESIRED_PLANE)
+
+        assert (tmp_path / "CLAUDE.md").is_symlink()
+        assert (
+            agents.read_text() == "@.agentic-beacon/artifacts/contexts/plane-ops.md\n"
+        )
+        assert result.claude_md_deleted == ()
+        assert result.claude_md_left == ()
+
+    def test_tc8_dry_run_reports_without_writing(self, tmp_path):
+        """TC8: dry_run reports the migration; no file written or deleted."""
+        (tmp_path / "AGENTS.md").write_text("# Project\n")
+        (tmp_path / "CLAUDE.md").write_text(f"@AGENTS.md\n@{OWNED_A}\n")
+        agents_before = (tmp_path / "AGENTS.md").read_bytes()
+        claude_before = (tmp_path / "CLAUDE.md").read_bytes()
+
+        result = _reconcile_agents_md(tmp_path, [OWNED_A], dry_run=True)
+
+        assert (tmp_path / "CLAUDE.md").read_bytes() == claude_before
+        assert (tmp_path / "AGENTS.md").read_bytes() == agents_before
+        assert result.added == [OWNED_A]
+        assert result.claude_md_deleted == ("CLAUDE.md",)
+
+    def test_tc9_second_run_after_migration_is_noop(self, tmp_path):
+        """TC9: after migration a second run changes nothing."""
+        (tmp_path / "AGENTS.md").write_text("# Project\n")
+        (tmp_path / "CLAUDE.md").write_text(f"@AGENTS.md\n@{OWNED_A}\n")
+        _reconcile_agents_md(tmp_path, [OWNED_A])
+        agents_after_first = (tmp_path / "AGENTS.md").read_bytes()
+
+        result = _reconcile_agents_md(tmp_path, [OWNED_A])
+
+        assert result == ReferenceReconcileResult(added=[], removed=[])
+        assert (tmp_path / "AGENTS.md").read_bytes() == agents_after_first
+
+    def test_tc10_claude_md_without_owned_lines_left_byte_identical(self, tmp_path):
+        """TC10: CLAUDE.md with other content and no owned lines is left as-is."""
+        (tmp_path / "AGENTS.md").write_text("")
+        original = "# Team rules\n\nAlways run tests.\n"
+        (tmp_path / "CLAUDE.md").write_text(original)
+
+        result = _reconcile_agents_md(tmp_path, DESIRED_PLANE)
+
+        assert (tmp_path / "CLAUDE.md").read_text() == original
+        assert result.claude_md_left == ("CLAUDE.md",)
+
+    @pytest.mark.parametrize(
+        "content",
+        ["@AGENTS.md\n", "<!-- only a comment -->\n\n", ""],
+        ids=["agents-import", "comment-only", "empty"],
+    )
+    def test_thin_claude_md_without_owned_lines_deleted(self, tmp_path, content):
+        """A thin CLAUDE.md with no owned lines is deleted (the delete test, D5)."""
+        (tmp_path / "AGENTS.md").write_text("# Project\n")
+        (tmp_path / "CLAUDE.md").write_text(content)
+
+        result = _reconcile_agents_md(tmp_path, [])
+
+        assert not (tmp_path / "CLAUDE.md").exists()
+        assert result.claude_md_deleted == ("CLAUDE.md",)
 
 
 # ---------------------------------------------------------------------------
@@ -420,8 +560,8 @@ class TestReconcileClaudeMd:
 
 
 class TestReconcileContextReferences:
-    def _setup_both(self, tmp_path, opencode_instructions, claude_lines):
-        """Helper to set up both files with given content."""
+    def _setup_both(self, tmp_path, opencode_instructions, agents_lines):
+        """Helper to set up opencode.json and AGENTS.md with given content."""
         if opencode_instructions is not None:
             p = tmp_path / "opencode.json"
             p.write_text(
@@ -434,8 +574,8 @@ class TestReconcileContextReferences:
                 )
                 + "\n"
             )
-        if claude_lines is not None:
-            (tmp_path / "CLAUDE.md").write_text(claude_lines)
+        if agents_lines is not None:
+            (tmp_path / "AGENTS.md").write_text(agents_lines)
 
     def test_tc1_both_files_drift(self, tmp_path):
         """TC1: both files drift -> aggregated added/removed spans both."""
@@ -445,7 +585,7 @@ class TestReconcileContextReferences:
                 ".agentic-beacon/artifacts/contexts/linear-ops.md",
                 "docs/house-style.md",
             ],
-            claude_lines=(
+            agents_lines=(
                 "@AGENTS.md\n@.agentic-beacon/artifacts/contexts/linear-ops.md\n"
             ),
         )
@@ -461,15 +601,15 @@ class TestReconcileContextReferences:
             opencode_instructions=[
                 ".agentic-beacon/artifacts/contexts/linear-ops.md",
             ],
-            claude_lines="@.agentic-beacon/artifacts/contexts/linear-ops.md\n",
+            agents_lines="@.agentic-beacon/artifacts/contexts/linear-ops.md\n",
         )
         oc_before = (tmp_path / "opencode.json").read_bytes()
-        cl_before = (tmp_path / "CLAUDE.md").read_bytes()
+        cl_before = (tmp_path / "AGENTS.md").read_bytes()
         desired = [".agentic-beacon/artifacts/contexts/plane-ops.md"]
         result = reconcile_context_references(tmp_path, desired, dry_run=True)
         assert len(result.added) > 0 or len(result.removed) > 0
         assert (tmp_path / "opencode.json").read_bytes() == oc_before
-        assert (tmp_path / "CLAUDE.md").read_bytes() == cl_before
+        assert (tmp_path / "AGENTS.md").read_bytes() == cl_before
 
     def test_tc3_idempotent(self, tmp_path):
         """TC3: second call returns empty added/removed; byte-identical output."""
@@ -478,7 +618,7 @@ class TestReconcileContextReferences:
             opencode_instructions=[
                 ".agentic-beacon/artifacts/contexts/beacon-ops.md",
             ],
-            claude_lines="@.agentic-beacon/artifacts/contexts/beacon-ops.md\n",
+            agents_lines="@.agentic-beacon/artifacts/contexts/beacon-ops.md\n",
         )
         desired = [".agentic-beacon/artifacts/contexts/beacon-ops.md"]
         result1 = reconcile_context_references(tmp_path, desired)
@@ -508,6 +648,17 @@ class TestReconcileContextReferences:
         assert ".agentic-beacon/artifacts/contexts/linear-ops.md" in result.removed
         assert ".agentic-beacon/artifacts/contexts/plane-ops.md" in result.added
 
+    def test_tc5_carries_claude_md_migration_paths(self, tmp_path):
+        """TC5: a thin CLAUDE.md migrated during reconcile is reported on the aggregate."""
+        self._setup_both(
+            tmp_path, opencode_instructions=None, agents_lines="# Project\n"
+        )
+        (tmp_path / "CLAUDE.md").write_text("@AGENTS.md\n")
+        result = reconcile_context_references(tmp_path, [])
+        assert result.claude_md_deleted == ("CLAUDE.md",)
+        assert result.claude_md_left == ()
+        assert not (tmp_path / "CLAUDE.md").exists()
+
     def test_live_shape_regression_both_files(self, tmp_path):
         """Live-shape regression: 7 owned refs (incl. linear-ops) across both files → 6 desired.
 
@@ -530,9 +681,9 @@ class TestReconcileContextReferences:
             "beacon-ops",
             "plane-ops",
         }
-        # Setup CLAUDE.md with 7 owned refs
-        (tmp_path / "CLAUDE.md").write_text(
-            "# Project\n\n@AGENTS.md\n\n"
+        # Setup AGENTS.md with 7 owned refs
+        (tmp_path / "AGENTS.md").write_text(
+            "# Project\n\n"
             + "\n\n".join(
                 f"@.agentic-beacon/artifacts/contexts/{n}.md" for n in owned_names
             )
@@ -559,12 +710,12 @@ class TestReconcileContextReferences:
         assert ".agentic-beacon/artifacts/contexts/linear-ops.md" in result.removed
         assert ".agentic-beacon/artifacts/contexts/cicd-flow.md" in result.removed
 
-        # All 5 desired should be present in CLAUDE.md
-        claude_content = (tmp_path / "CLAUDE.md").read_text()
+        # All 5 desired should be present in AGENTS.md
+        claude_content = (tmp_path / "AGENTS.md").read_text()
         for name in desired_names:
             assert f"@.agentic-beacon/artifacts/contexts/{name}.md" in claude_content
         assert "@.agentic-beacon/artifacts/contexts/linear-ops.md" not in claude_content
-        assert "@AGENTS.md" in claude_content
+        assert "# Project" in claude_content
 
         # All 5 desired should be present in opencode.json
         oc_data = json.loads((tmp_path / "opencode.json").read_text())
@@ -642,8 +793,8 @@ class TestUnwirePrunedArtifactsContextBranch:
             )
             + "\n"
         )
-        claude_md = tmp_path / "CLAUDE.md"
-        claude_md.write_text("@.agentic-beacon/artifacts/contexts/linear-ops.md\n")
+        agents_md = tmp_path / "AGENTS.md"
+        agents_md.write_text("@.agentic-beacon/artifacts/contexts/linear-ops.md\n")
 
         unwire_pruned_artifacts(
             tmp_path,
@@ -657,7 +808,7 @@ class TestUnwirePrunedArtifactsContextBranch:
             ".agentic-beacon/artifacts/contexts/linear-ops.md" in data["instructions"]
         )
         assert (
-            "@.agentic-beacon/artifacts/contexts/linear-ops.md" in claude_md.read_text()
+            "@.agentic-beacon/artifacts/contexts/linear-ops.md" in agents_md.read_text()
         )
 
 
@@ -683,9 +834,9 @@ class TestDanglingWarehouseRename:
             )
             + "\n"
         )
-        claude_md = tmp_path / "CLAUDE.md"
-        claude_md.write_text(
-            "@AGENTS.md\n@.agentic-beacon/artifacts/contexts/linear-ops.md\n"
+        agents_md = tmp_path / "AGENTS.md"
+        agents_md.write_text(
+            "# Project\n@.agentic-beacon/artifacts/contexts/linear-ops.md\n"
         )
 
         # linear-ops not in desired set (renamed to plane-ops)
@@ -701,10 +852,10 @@ class TestDanglingWarehouseRename:
         assert ".agentic-beacon/artifacts/contexts/plane-ops.md" in data["instructions"]
         assert (
             "@.agentic-beacon/artifacts/contexts/linear-ops.md"
-            not in claude_md.read_text()
+            not in agents_md.read_text()
         )
         assert (
-            "@.agentic-beacon/artifacts/contexts/plane-ops.md" in claude_md.read_text()
+            "@.agentic-beacon/artifacts/contexts/plane-ops.md" in agents_md.read_text()
         )
 
 
@@ -723,3 +874,9 @@ class TestReferenceReconcileResult:
     def test_non_empty_result(self):
         r = ReferenceReconcileResult(added=["a.md"], removed=["b.md"])
         assert bool(r) is True
+
+    def test_migration_fields_default_empty_and_not_truthy(self):
+        r = ReferenceReconcileResult(added=[], removed=[])
+        assert r.claude_md_deleted == ()
+        assert r.claude_md_left == ()
+        assert bool(ReferenceReconcileResult([], [], ("CLAUDE.md",), ())) is False
