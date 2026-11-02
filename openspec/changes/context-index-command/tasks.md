@@ -79,7 +79,7 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:1:end -->
 
 
-- [ ] 1.1 Add `parse_frontmatter_text(content: str) -> FrontmatterResult` to
+- [x] 1.1 Add `parse_frontmatter_text(content: str) -> FrontmatterResult` to
       `core/dependencies/frontmatter.py` and make `parse_frontmatter(path)` delegate to it
       after its file checks (design D8, R7). Existing frontmatter tests pass unchanged.
 <!-- opsx:tdd:1.1:begin -->
@@ -95,7 +95,7 @@ pytest tests/ -v --tb=short
     - TC5: frontmatter that parses to a list or scalar → error invalid-frontmatter
     - TC6: leading BOM and blank lines before --- → parsed as with parse_frontmatter today
 <!-- opsx:tdd:1.1:end -->
-- [ ] 1.2 Add `resolve_commit`, `list_tree_paths` and `read_blob` to `utils/git.py`,
+- [x] 1.2 Add `resolve_commit`, `list_tree_paths` and `read_blob` to `utils/git.py`,
       copying the subprocess pattern of `get_file_hash_at_sha` (10 s timeout, `None` on
       failure). `resolve_commit` uses `rev-parse --verify --quiet <ref>^{commit}` (design D4).
 
@@ -109,18 +109,18 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:2:end -->
 
 
-- [ ] 2.1 Create `domains/warehouse/context_index.py` with `ContextEntry`, `ContextIndex`
+- [x] 2.1 Create `domains/warehouse/context_index.py` with `ContextEntry`, `ContextIndex`
       (with `to_dict()`), `ContextIndexError`, and the pure `describe_context` that applies
       the description rules of design D3 and the naming of design D6.
-- [ ] 2.2 Add `resolve_index_warehouse(warehouse, cwd)`: use `--warehouse` when given, else
+- [x] 2.2 Add `resolve_index_warehouse(warehouse, cwd)`: use `--warehouse` when given, else
       the connected warehouse from `config.toml` via `WorkspaceConfig`, then
       `validate_warehouse_path`; raise `ContextIndexError` with the messages in design D2
       and D7.
-- [ ] 2.3 Add `build_context_index(warehouse, ref)`: resolve the ref (D4), list the file
+- [x] 2.3 Add `build_context_index(warehouse, ref)`: resolve the ref (D4), list the file
       set (D5), read each blob (D9), describe each, sort by path, and collect warnings.
       Raise `ContextIndexError` for an unknown ref, no `contexts/` at the commit, or a git
       failure (D7).
-- [ ] 2.4 Unit-test `describe_context` for each D3 case (usable string stripped; no
+- [x] 2.4 Unit-test `describe_context` for each D3 case (usable string stripped; no
       frontmatter; parse error; key absent; non-string; empty; whitespace-only; invalid
       UTF-8) and for D6 naming of a nested path, using `parametrize`.
 <!-- opsx:tdd:2.4:begin -->
@@ -149,11 +149,11 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:3:end -->
 
 
-- [ ] 3.1 Create `cli/context.py` with the `context` group and the `index` command
+- [x] 3.1 Create `cli/context.py` with the `context` group and the `index` command
       (`--warehouse PATH`, `--ref TEXT` default `HEAD`). The handler makes one domain call,
       echoes `warning: <path>: <reason>` lines and `error: <message>` to stderr, prints the
       JSON from design D1 to stdout, and exits 1 on `ContextIndexError` (design D7, D8).
-- [ ] 3.2 Register the group in `cli/main.py`. `tests/unit/test_architecture.py` passes
+- [x] 3.2 Register the group in `cli/main.py`. `tests/unit/test_architecture.py` passes
       with no new whitelist entry.
 
 ## 4. Integration test
@@ -166,7 +166,7 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:4:end -->
 
 
-- [ ] 4.1 In `tests/integration/`, build a temporary git warehouse with two commits and run
+- [x] 4.1 In `tests/integration/`, build a temporary git warehouse with two commits and run
       the real CLI through Click's `CliRunner` with separate stdout and stderr. Cover: the
       D1 shape and `sha` equal to the resolved commit; `--ref` of the first commit returns
       that commit's file set; a nested context and a `README.md` (D5, D6); a context with no
@@ -185,7 +185,7 @@ pytest tests/ -v --tb=short
     - TC5: uncommitted edit to a context description in the working tree → output shows the committed description
     - TC6: non-empty .agentic-beacon/pending.yaml in cwd → stdout still parses as JSON
 <!-- opsx:tdd:4.1:end -->
-- [ ] 4.2 Cover the exit-1 cases with empty stdout and an `error:` line on stderr: unknown
+- [x] 4.2 Cover the exit-1 cases with empty stdout and an `error:` line on stderr: unknown
       ref, missing path, path not a git repository, no `--warehouse` and no `config.toml`,
       commit with no `contexts/` (D2, D4, D5, D7). Cover the connected-warehouse default
       once with a `config.toml` pointing at the temporary warehouse.
@@ -212,15 +212,15 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:5:end -->
 
 
-- [ ] 5.1 Document `abc context index` in `site-docs/reference/cli.md` and add a Quick
+- [x] 5.1 Document `abc context index` in `site-docs/reference/cli.md` and add a Quick
       Reference row (design D10).
-- [ ] 5.2 Run `pytest` from the repo root and `pre-commit run --all-files`; both pass.
+- [x] 5.2 Run `pytest` from the repo root and `pre-commit run --all-files`; both pass.
 <!-- opsx:tdd:5.2:begin -->
   - **Input**: pytest && pre-commit run --all-files
   - **Expected Output**: Exit code 0 for both; no files modified by hooks.
   - **Validation**: Zero failed tests; pre-commit reports Passed for every hook.
 <!-- opsx:tdd:5.2:end -->
-- [ ] 5.3 Run `.venv/bin/abc context index` against a real warehouse clone and record the
+- [x] 5.3 Run `.venv/bin/abc context index` against a real warehouse clone and record the
       command, the `sha` line and the context count in the PR description.
 <!-- opsx:tdd:5.3:begin -->
   - **Input**: .venv/bin/abc context index --warehouse <warehouse clone> --ref HEAD

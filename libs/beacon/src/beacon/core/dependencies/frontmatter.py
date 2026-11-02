@@ -74,6 +74,18 @@ def parse_frontmatter(path: Path) -> FrontmatterResult:
             message=f"Could not read {path}: {exc}",
         )
 
+    return parse_frontmatter_text(content)
+
+
+def parse_frontmatter_text(content: str) -> FrontmatterResult:
+    """Parse YAML frontmatter from markdown text already in memory.
+
+    Args:
+        content: Full text of the markdown file.
+
+    Returns:
+        FrontmatterResult with parsed dict on success, or structured error on failure.
+    """
     # Strip leading whitespace / BOM
     content = content.lstrip("\ufeff").lstrip()
 
