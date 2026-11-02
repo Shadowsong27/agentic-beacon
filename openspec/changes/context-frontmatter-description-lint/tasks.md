@@ -246,7 +246,7 @@ pytest tests/ -v --tb=short
   - **Expected Output**: 1 warning, 1 error, exit 1; after removing the bad context, warning summary and exit 0
   - **Validation**: Exit codes and summary lines match design D2
 <!-- opsx:tdd:5.2:end -->
-- [ ] 5.3 End-to-end harness check: in a scratch project whose `CLAUDE.md` `@`-imports a
+- [x] 5.3 End-to-end harness check: in a scratch project whose `CLAUDE.md` `@`-imports a
       context that starts with a `description` frontmatter block and holds a unique marker
       rule in its body, run `claude -p "Quote the marker rule from your loaded context"` and
       confirm the reply contains the marker. Record the command and reply in the PR
