@@ -325,7 +325,7 @@ CONTEXT_EOF
 
 The script resolves the warehouse, refuses to write outside `<warehouse>/contexts/`,
 refuses a body that does not open with a frontmatter block carrying a non-empty
-`description`, refuses to overwrite an existing file unless `--overwrite` is passed, and prints
+`description`, or that has any other frontmatter key, refuses to overwrite an existing file unless `--overwrite` is passed, and prints
 the warehouse-relative path (e.g. `contexts/linear-ops.md`) on stdout. If it
 exits non-zero, surface stderr and stop.
 

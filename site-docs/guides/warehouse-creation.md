@@ -111,6 +111,10 @@ cd team-warehouse
 
 # 2. Write your global context
 cat > contexts/global.md << 'EOF'
+---
+description: 'Load when: working in any Acme Engineering project.'
+---
+
 # Acme Engineering — Agent Context
 
 ## Standards

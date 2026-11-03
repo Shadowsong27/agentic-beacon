@@ -657,10 +657,10 @@ def warehouse_lint(*, warehouse_path: Path | None, fix: bool) -> None:
 
     Validates: structure, skill frontmatter, skill context references,
     agent manifest, agent frontmatter (name + description), knowledge
-    link integrity, and context frontmatter (optional `description`).
+    link integrity, and context frontmatter (required `description`).
 
-    Warnings (for example a context with no `description`) are printed with
-    a `warning:` prefix and never change the exit code. Exits 0 when no
+    A context with no frontmatter `description` is an error. Warnings print
+    with a `warning:` prefix and never change the exit code. Exits 0 when no
     errors are found; exits 1 when any errors are found.
 
     \b

@@ -401,6 +401,7 @@ class TestWriteContext:
             "---\ndescription: 42\n---\n# X\n",
             "---\ndescription: [unclosed\n---\n# X\n",
             "---\n- a\n---\n# X\n",
+            "---\ndescription: 'Load when: x.'\ntitle: X\n---\n# X\n",
         ],
         ids=[
             "no-frontmatter",
@@ -411,6 +412,7 @@ class TestWriteContext:
             "non-string-description",
             "invalid-yaml",
             "non-mapping-frontmatter",
+            "unknown-key",
         ],
     )
     def test_rejects_body_without_description(

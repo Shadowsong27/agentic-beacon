@@ -38,7 +38,15 @@ Add your team's shared content — any structure you like:
 
 ```bash
 # Add a global context
-echo "# Org Standards\n## Conventions\n- Python 3.12+, type hints required" > contexts/global.md
+cat > contexts/global.md << 'EOF'
+---
+description: 'Load when: working in any project in this organisation.'
+---
+
+# Org Standards
+## Conventions
+- Python 3.12+, type hints required
+EOF
 
 # Add a knowledge file
 mkdir -p knowledge/decisions

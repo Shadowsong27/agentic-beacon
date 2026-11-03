@@ -10,8 +10,9 @@ warehouse is resolved from .agentic-beacon/config.toml in the project root, and
 the script refuses to write anywhere outside `<warehouse>/contexts/`.
 
 The body must open with a frontmatter block that carries a non-empty
-`description` (the conductor context selector reads it). The script refuses
-any other body and writes nothing.
+`description` (the conductor context selector reads it), and the frontmatter's
+only allowed key is `description`. The script refuses any other body and writes
+nothing.
 
 Use this only when authoring a *new* context file. Appending a knowledge pointer
 to an *existing* context is a normal in-place edit and does not go through here.
@@ -114,6 +115,12 @@ def validate_frontmatter_description(content: str) -> str | None:
         return _description_error(f"frontmatter is not valid YAML ({exc})")
     if not isinstance(data, dict):
         return _description_error("frontmatter is not a mapping")
+    extra = set(data) - {"description"}
+    if extra:
+        return _description_error(
+            f"frontmatter has unknown key(s): {', '.join(sorted(map(str, extra)))}; "
+            "the only allowed key is `description`"
+        )
     description = data.get("description")
     if not isinstance(description, str) or not description.strip():
         return _description_error("frontmatter has no non-empty string `description`")
