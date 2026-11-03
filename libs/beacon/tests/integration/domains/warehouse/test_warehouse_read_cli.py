@@ -290,7 +290,9 @@ def test_board_and_domain_bad_names_exit_2(warehouse, tmp_path, monkeypatch, val
 def test_decision_rules_lists_sections_sorted_by_path(warehouse, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
 
-    code, out, err = _run(["context", "decision-rules", "--warehouse", str(warehouse["path"])])
+    code, out, err = _run(
+        ["context", "decision-rules", "--warehouse", str(warehouse["path"])]
+    )
 
     assert code == 0, err
     data = json.loads(out)
@@ -378,7 +380,9 @@ def test_agent_show_bad_name_exit_2(warehouse, tmp_path, monkeypatch):
     assert out == ""
 
 
-def test_agent_show_at_commit_without_agents_dir_exit_1(warehouse, tmp_path, monkeypatch):
+def test_agent_show_at_commit_without_agents_dir_exit_1(
+    warehouse, tmp_path, monkeypatch
+):
     monkeypatch.chdir(tmp_path)
 
     code, out, err = _run(

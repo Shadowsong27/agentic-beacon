@@ -264,9 +264,7 @@ def _decode_blob(source: _Source, path: str) -> str:
     try:
         return blob.decode("utf-8")
     except UnicodeDecodeError as exc:
-        raise WarehouseReadError(
-            f"{path} at {source.sha} is not valid UTF-8"
-        ) from exc
+        raise WarehouseReadError(f"{path} at {source.sha} is not valid UTF-8") from exc
 
 
 def _read_record(source: _Source, name: str, path: str) -> FileRecord:
@@ -400,7 +398,9 @@ def decision_rules_section(text: str) -> str | None:
     return "\n".join(body)
 
 
-def read_decision_rules(warehouse: Path | None, ref: str, cwd: Path) -> DecisionRulesResult:
+def read_decision_rules(
+    warehouse: Path | None, ref: str, cwd: Path
+) -> DecisionRulesResult:
     """Return the decision-rules section of every context that has one."""
     source = _open_directory(warehouse, ref, cwd, CONTEXTS_DIR)
     rules: list[DecisionRule] = []

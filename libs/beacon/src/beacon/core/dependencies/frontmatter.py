@@ -152,7 +152,7 @@ def split_frontmatter(text: str) -> FrontmatterSplit:
     non-JSON type (dates) are converted with ``str()``.
     """
     lines = text.splitlines(keepends=True)
-    if not lines or lines[0].lstrip("﻿").strip() != _FENCE:
+    if not lines or lines[0].lstrip("\ufeff").strip() != _FENCE:
         return FrontmatterSplit(frontmatter=None, body=text, warning=None)
 
     close = next((i for i in range(1, len(lines)) if lines[i].strip() == _FENCE), None)

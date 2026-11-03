@@ -269,7 +269,7 @@ pytest tests/ -v --tb=short
   - **Validation**: Each exit code 0/1/2/3 is asserted at least once per command family; git status --porcelain unchanged after each command
   - **Note**: Mutation check: change the exit-3 mapping to 1 in a scratch copy and confirm a test fails (testing.md Test Quality).
 <!-- opsx:tdd:5.2:end -->
-- [ ] 5.3 Run `uv run pytest` from the repo root; all tests pass.
+- [x] 5.3 Run `uv run pytest` from the repo root; all tests pass.
 <!-- opsx:tdd:5.3:begin -->
   - **Input**: uv run pytest
   - **Expected Output**: Exit 0
