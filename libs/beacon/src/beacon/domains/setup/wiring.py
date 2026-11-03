@@ -437,7 +437,13 @@ def init_agents_md(project_root: Path) -> bool:
     return False
 
 
-def confirm_prune(orphans: list, *, dry_run: bool = False) -> list[str]:
+def confirm_prune(
+    orphans: list,
+    *,
+    dry_run: bool = False,
+    assume_yes: bool = False,
+    interactive: bool = True,
+) -> list[str]:
     """Prompt the user to confirm deletion of orphaned artifacts.
 
     Orphans are files that exist in artifacts/ but are no longer listed in
@@ -451,9 +457,17 @@ def confirm_prune(orphans: list, *, dry_run: bool = False) -> list[str]:
     In dry-run mode this function always returns an empty list (nothing to
     actually delete) but still prints the preview list.
 
+    Args:
+        orphans: Orphaned artifacts found under artifacts/.
+        dry_run: Preview only; never delete.
+        assume_yes: Accept the prune without prompting (``--yes``).
+        interactive: False when no terminal is attached. Prompting is then
+            skipped and the orphans are left in place with a warning.
+
     Returns:
-        List of relative paths the user confirmed for deletion.
-        Empty list if the user said no, or if dry_run=True.
+        List of relative paths confirmed for deletion.
+        Empty list if the user said no, if dry_run=True, or if no terminal
+        is attached and assume_yes is False.
     """
     if not orphans:
         return []
@@ -477,6 +491,19 @@ def confirm_prune(orphans: list, *, dry_run: bool = False) -> list[str]:
         console.print(
             "\n  [dim]Dry run — no files will be deleted. "
             "Run without --dry-run to apply.[/dim]"
+        )
+        return []
+
+    if assume_yes:
+        console.print(
+            f"  [dim]--yes: removing {len(orphans)} orphaned artifact(s).[/dim]"
+        )
+        return [o.rel_path for o in orphans]
+
+    if not interactive:
+        console.print(
+            f"  [yellow]Skipped — no terminal attached; {len(orphans)} orphaned "
+            f"artifact(s) left in place. Re-run with --yes to remove them.[/yellow]"
         )
         return []
 

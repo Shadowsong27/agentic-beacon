@@ -71,7 +71,10 @@ console = Console()
 @click.option(
     "--yes",
     is_flag=True,
-    help="Auto-accept adding missing agent-required skills to beacon.yaml",
+    help=(
+        "Auto-accept prompts: add missing agent-required skills to beacon.yaml "
+        "and remove orphaned artifacts no longer in beacon.yaml"
+    ),
 )
 def sync(
     *,
@@ -156,6 +159,8 @@ def sync(
             ),
             auto_accept_gaps=yes,
             gap_prompt_callback=_gap_prompt if is_interactive() else None,
+            auto_accept_prune=yes,
+            interactive_prune=is_interactive(),
         )
     except DependencyError as e:
         console.print(f"[red]Error:[/red] {e}")
