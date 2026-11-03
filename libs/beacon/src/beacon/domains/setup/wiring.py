@@ -134,19 +134,29 @@ def _reconcile_opencode_json(
     return ReferenceReconcileResult(added=added, removed=removed)
 
 
-def _strip_owned_refs(content: str) -> tuple[set[str], list[str]]:
-    """Split content into the owned artifact refs it holds and every other line."""
-    owned_refs: set[str] = set()
+def split_owned_imports(content: str) -> tuple[list[str], list[str]]:
+    """Split content into its beacon-owned ``@`` import refs and every other line.
+
+    Owned refs are returned in file order, duplicates kept. Kept lines retain their
+    line endings.
+    """
+    owned_refs: list[str] = []
     kept_lines: list[str] = []
     for line in content.splitlines(keepends=True):
         m = _ATPATH_LINE_RE.match(line.strip())
         if m:
             path = m.group(1).strip()
             if path.startswith(ARTIFACT_REF_PREFIX):
-                owned_refs.add(path)
+                owned_refs.append(path)
                 continue
         kept_lines.append(line)
     return owned_refs, kept_lines
+
+
+def _strip_owned_refs(content: str) -> tuple[set[str], list[str]]:
+    """Split content into the owned artifact refs it holds and every other line."""
+    refs, kept_lines = split_owned_imports(content)
+    return set(refs), kept_lines
 
 
 def _is_thin_claude_md(content: str) -> bool:
