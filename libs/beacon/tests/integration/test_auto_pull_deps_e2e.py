@@ -220,7 +220,7 @@ def test_e2e_unadopt_context_prunes_knowledge_symlinks(
     )
 
     # Sync again — should prune orphaned knowledge symlinks
-    result = runner.invoke(main, ["sync", "--skip-git-check"], input="y\n")
+    result = runner.invoke(main, ["sync", "--skip-git-check", "--yes"])
     assert result.exit_code == 0, f"second sync failed: {result.output}"
 
     # qa.md's knowledge symlink should remain
@@ -449,7 +449,7 @@ def test_e2e_full_unadoption_prunes_all_knowledge_symlinks(project_dir, monkeypa
     beacon_yaml.write_text("artifacts:\n  contexts: []\n  skills: []\n")
 
     # Sync again — should prune all orphaned symlinks
-    result = runner.invoke(main, ["sync", "--skip-git-check"], input="y\n")
+    result = runner.invoke(main, ["sync", "--skip-git-check", "--yes"])
     assert result.exit_code == 0, f"second sync failed: {result.output}"
 
     # All knowledge symlinks should be removed
