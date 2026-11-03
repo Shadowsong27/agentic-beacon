@@ -29,6 +29,7 @@ def doctor(*, fix: bool) -> None:
       • beacon.yaml parseable and structurally valid
       • Skill entries: skill directories exist in the warehouse
       • Context entries: context files exist in the warehouse
+      • Claude Code approves external context imports (~/.claude.json)
 
     Use --fix to automatically repair fixable issues.
     """

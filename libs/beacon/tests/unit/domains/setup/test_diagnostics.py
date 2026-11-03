@@ -1,11 +1,14 @@
 """Unit tests for beacon.domains.setup.diagnostics."""
 
 import json
+import shutil
 
 import pytest
 from beacon.core.manifest.beacon import BeaconManifest
 from beacon.domains.setup import diagnostics as diagnostics_module
+from beacon.domains.setup.claude_approval import APPROVAL_FLAG
 from beacon.domains.setup.diagnostics import (
+    _check_claude_external_includes,
     _check_claude_md_shadowing,
     _check_path_references,
     _check_platform,
@@ -573,3 +576,32 @@ class TestRepairReferenceDriftClaudeMd:
 
         assert not (tmp_path / "CLAUDE.md").exists()
         assert "Deleted CLAUDE.md (its context imports moved to AGENTS.md)" in fixes
+
+
+class TestClaudeExternalIncludes:
+    @pytest.fixture
+    def wired_project(self, tmp_path, monkeypatch):
+        (tmp_path / "AGENTS.md").write_text(
+            "@.agentic-beacon/artifacts/contexts/x.md\n"
+        )
+        monkeypatch.setattr(shutil, "which", lambda name: "/bin/claude")
+        return tmp_path
+
+    def test_not_approved_is_error_pointing_at_abc_sync(
+        self, wired_project, isolated_claude_config
+    ):
+        (isolated_claude_config / ".claude.json").write_text('{"projects": {}}')
+
+        issues = _check_claude_external_includes(wired_project)
+
+        assert len(issues) == 1
+        assert issues[0].severity == "error"
+        assert "abc sync" in issues[0].detail
+
+    def test_already_approved_has_no_issue(self, wired_project, isolated_claude_config):
+        key = str(wired_project.resolve())
+        (isolated_claude_config / ".claude.json").write_text(
+            json.dumps({"projects": {key: {APPROVAL_FLAG: True}}})
+        )
+
+        assert _check_claude_external_includes(wired_project) == []

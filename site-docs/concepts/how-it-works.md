@@ -156,6 +156,8 @@ Knowledge files are **not** declared — `abc sync` auto-derives them by scannin
 3. **Wire** — installs skills and agents into your detected AI tools (Claude Code, OpenCode), and appends adopted contexts to your tool's config file (`AGENTS.md`, `opencode.json`). A `CLAUDE.md` in the project or an ancestor directory stops Claude Code from reading `AGENTS.md`, so Beacon migrates the imports out of any project `CLAUDE.md` and deletes it when nothing else is left in it. Beacon is idempotent and non-destructive: re-running never duplicates entries, and only its own references are added or removed.
 4. **Prune** — removes symlinks and config references for artifacts no longer declared.
 
+Context files are symlinks into the warehouse, so Claude Code treats their `@` imports as external. When `abc sync` wires contexts into `AGENTS.md`, it also sets `hasClaudeMdExternalIncludesApproved` for the project's main checkout in your `~/.claude.json`, which lets Claude Code load them. `abc doctor` reports a project whose flag is missing.
+
 For the full pipeline, flags, and edge cases, see the [Adopting Artifacts guide](../guides/adopting-artifacts.md). For per-type details (what wiring each artifact gets), see [Artifact Types](artifact-types.md).
 
 ---

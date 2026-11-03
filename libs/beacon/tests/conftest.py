@@ -45,6 +45,22 @@ def isolated_home(tmp_path, monkeypatch):
     return home
 
 
+@pytest.fixture(autouse=True)
+def isolated_claude_config(tmp_path_factory, monkeypatch):
+    """Point CLAUDE_CONFIG_DIR at an empty temp dir for every test.
+
+    ``abc sync`` and ``abc setup`` write the Claude Code approval flag into
+    ``$CLAUDE_CONFIG_DIR/.claude.json``. Without this, tests (including
+    subprocess CLI runs) would write the developer's real ``~/.claude.json``.
+    Tests that need a config write one into the returned directory. The
+    directory is made outside ``tmp_path`` so tests that assert their project
+    dir is empty are not affected.
+    """
+    config_dir = tmp_path_factory.mktemp("claude-config")
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(config_dir))
+    return config_dir
+
+
 @pytest.fixture
 def temp_dir():
     """Create a temporary directory for tests."""
