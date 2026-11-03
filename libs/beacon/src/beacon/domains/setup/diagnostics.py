@@ -4,6 +4,7 @@ Implements checks that need a project root (not a warehouse root):
 - Symlink hygiene under .agentic-beacon/artifacts/
 - @path reference integrity in AGENTS.md / opencode.json
 - CLAUDE.md files that hide AGENTS.md from Claude Code
+- Claude Code approval of external context imports (~/.claude.json)
 - Stale beacon.yaml globs
 - Sanity checks (warehouse git, platform)
 """
@@ -25,6 +26,11 @@ from beacon.core.dependencies.resolver import (
 from beacon.core.gitignore import apply_all_gitignores, diff_gitignores
 from beacon.core.manifest.beacon import BeaconManifest
 from beacon.domains.distribution.sync_engine import SyncEngine
+from beacon.domains.setup.claude_approval import (
+    APPROVAL_FLAG,
+    ApprovalStatus,
+    inspect_claude_approval,
+)
 from beacon.domains.setup.wiring import (
     desired_context_refs,
     reconcile_context_references,
@@ -202,6 +208,7 @@ def run_project_health_checks(
 
     issues.extend(_check_path_references(project_root, beacon_manifest))
     issues.extend(_check_claude_md_shadowing(project_root))
+    issues.extend(_check_claude_external_includes(project_root))
     issues.extend(_check_gitignore_drift(project_root))
     issues.extend(_check_platform())
 
@@ -387,6 +394,36 @@ def _check_claude_md_shadowing(
                 )
             )
     return issues
+
+
+def _check_claude_external_includes(project_root: Path) -> list[DoctorIssue]:
+    """Report wired contexts that Claude Code will not load for lack of approval.
+
+    Reads only. The approval flag is set by ``abc sync`` and ``abc setup``.
+    """
+    result = inspect_claude_approval(project_root)
+    if result.status is ApprovalStatus.NOT_APPROVED:
+        return [
+            DoctorIssue(
+                message=(
+                    "Claude Code will not load the wired contexts: external "
+                    f"imports are not approved for {result.project_key}"
+                ),
+                detail=(
+                    "Run: abc sync  (or set "
+                    f'projects["{result.project_key}"].{APPROVAL_FLAG} '
+                    f"to true in {result.config_path})"
+                ),
+                severity="error",
+            )
+        ]
+    if result.status in (
+        ApprovalStatus.CONFIG_MISSING,
+        ApprovalStatus.CONFIG_UNREADABLE,
+        ApprovalStatus.CONFIG_MALFORMED,
+    ):
+        return [DoctorIssue(message=result.message, severity="warn")]
+    return []
 
 
 def _check_opencode_json(
