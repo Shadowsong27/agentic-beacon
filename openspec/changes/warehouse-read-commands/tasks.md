@@ -79,7 +79,7 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:1:end -->
 
 
-- [ ] 1.1 Add `split_frontmatter(text) -> FrontmatterSplit` to
+- [x] 1.1 Add `split_frontmatter(text) -> FrontmatterSplit` to
       `core/dependencies/frontmatter.py` with the line-based rule, null/warning cases and
       `str()` conversion of non-JSON values (design D5). Leave `parse_frontmatter_text`
       unchanged.
@@ -97,9 +97,9 @@ pytest tests/ -v --tb=short
     - TC7: value 'a --- b' inside the block → closing line is the next line equal to '---', not the inline match
     - TC8: date value → converted with str() so json.dumps succeeds
 <!-- opsx:tdd:1.1:end -->
-- [ ] 1.2 Rename `_is_context_path` to public `is_context_path` in
+- [x] 1.2 Rename `_is_context_path` to public `is_context_path` in
       `domains/warehouse/context_index.py` and update its one caller (design D7).
-- [ ] 1.3 Add public `split_owned_imports(content) -> tuple[list[str], list[str]]` to
+- [x] 1.3 Add public `split_owned_imports(content) -> tuple[list[str], list[str]]` to
       `domains/setup/wiring.py`, returning owned refs in file order with duplicates, and
       re-implement `_strip_owned_refs` as `set(refs)` over it (design D8, R7). Existing
       sync and diagnostics tests pass unchanged.
@@ -125,7 +125,7 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:2:end -->
 
 
-- [ ] 2.1 Create `domains/warehouse/warehouse_read.py` with `WarehouseReadError`,
+- [x] 2.1 Create `domains/warehouse/warehouse_read.py` with `WarehouseReadError`,
       `ItemMissingError(WarehouseReadError)` holding the missing paths, the file-record
       and result dataclasses with `to_dict()` in the shapes of design D5 and D6, and a
       per-item read that uses `list_tree_paths` exact match for missing (exit 3) versus
@@ -136,7 +136,7 @@ pytest tests/ -v --tb=short
   - **Validation**: Each branch of the per-item read is covered by a test against a real tmp git repo or the integration suite
   - **Note**: ItemMissingError subclasses WarehouseReadError, so the CLI must catch it first (design D9).
 <!-- opsx:tdd:2.1:end -->
-- [ ] 2.2 Add `read_contexts(warehouse, ref, cwd, names)` with the name check of design
+- [x] 2.2 Add `read_contexts(warehouse, ref, cwd, names)` with the name check of design
       D4, de-duplicated input order, and one `ItemMissingError` naming every missing path.
 <!-- opsx:tdd:2.2:begin -->
   - **Input**: abc context show alpha teams/beta --warehouse <fixture> --ref <sha>
@@ -150,7 +150,7 @@ pytest tests/ -v --tb=short
     - TC5: name '../x' or 'a//b' → exit 2
     - TC6: subdirectory name 'teams/beta' → path contexts/teams/beta.md
 <!-- opsx:tdd:2.2:end -->
-- [ ] 2.3 Add `read_intake_policy` and `read_operate_profile`, mapping BOARD and DOMAIN to
+- [x] 2.3 Add `read_intake_policy` and `read_operate_profile`, mapping BOARD and DOMAIN to
       `contexts/intake-policy-<BOARD>.md` and `contexts/operate-<DOMAIN>.md` (design D4, D6).
 <!-- opsx:tdd:2.3:begin -->
   - **Input**: abc context intake-policy AB --warehouse <fixture>; abc context operate-profile conductor --warehouse <fixture>
@@ -163,7 +163,7 @@ pytest tests/ -v --tb=short
     - TC4: domain 'airflow-platform' → valid
     - TC5: domain 'x.y' or '../x' → exit 2
 <!-- opsx:tdd:2.3:end -->
-- [ ] 2.4 Add `read_agents(warehouse, ref, cwd, names)` reading `agents/<NAME>.md`; exit 1
+- [x] 2.4 Add `read_agents(warehouse, ref, cwd, names)` reading `agents/<NAME>.md`; exit 1
       when the SHA has no `agents/` directory (design D3, D6).
 <!-- opsx:tdd:2.4:begin -->
   - **Input**: abc agent show context-selector --warehouse <fixture>
@@ -175,7 +175,7 @@ pytest tests/ -v --tb=short
     - TC3: commit with no agents/ directory → exit 1
     - TC4: agent with broken frontmatter → exit 0, frontmatter null, one stderr warning
 <!-- opsx:tdd:2.4:end -->
-- [ ] 2.5 Add the pure `decision_rules_section(text)` and `read_decision_rules` with the
+- [x] 2.5 Add the pure `decision_rules_section(text)` and `read_decision_rules` with the
       exact algorithm, ordering, naming and empty-result rules of design D7.
 <!-- opsx:tdd:2.5:begin -->
   - **Input**: uv run pytest libs/beacon/tests/unit -q -k decision_rules; abc context decision-rules --warehouse <fixture>
@@ -202,7 +202,7 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:3:end -->
 
 
-- [ ] 3.1 Create `domains/setup/project_instructions.py` with
+- [x] 3.1 Create `domains/setup/project_instructions.py` with
       `read_project_instructions(repo, ref)`: validate the repo path, resolve the ref, read
       root `AGENTS.md` at the SHA (missing → `ItemMissingError`), strip with
       `split_owned_imports`, collapse blank runs, trim, and return `repo`, `ref`, `sha`,
@@ -230,13 +230,13 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:4:end -->
 
 
-- [ ] 4.1 Add `show`, `intake-policy`, `operate-profile` and `decision-rules` to
+- [x] 4.1 Add `show`, `intake-policy`, `operate-profile` and `decision-rules` to
       `cli/context.py`, each with `--warehouse` and `--ref` (design D1, D2). Name checks
       raise `click.BadParameter` (exit 2).
-- [ ] 4.2 Add an `agent` group with `show` to `cli/agent.py`, and a new `cli/project.py`
+- [x] 4.2 Add an `agent` group with `show` to `cli/agent.py`, and a new `cli/project.py`
       with a `project` group and `instructions` (`--repo`, `--ref`). Register both in
       `cli/main.py`. Keep `abc list` unchanged.
-- [ ] 4.3 In every handler: one domain call, catch `ItemMissingError` → exit 3 before
+- [x] 4.3 In every handler: one domain call, catch `ItemMissingError` → exit 3 before
       `WarehouseReadError` → exit 1, `error: <message>` and `warning: ...` lines on stderr,
       JSON on stdout only on success (design D3, D6). `test_architecture.py` passes.
 <!-- opsx:tdd:4.3:begin -->
@@ -255,10 +255,10 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:5:end -->
 
 
-- [ ] 5.1 Unit tests for `split_frontmatter`, `decision_rules_section`,
+- [x] 5.1 Unit tests for `split_frontmatter`, `decision_rules_section`,
       `split_owned_imports` and the name checks, extending existing test files where they
       exist (testing.md Test Scope).
-- [ ] 5.2 Integration tests against a fixture git warehouse and a fixture project repo
+- [x] 5.2 Integration tests against a fixture git warehouse and a fixture project repo
       through `CliRunner`: success JSON and SHA per command, exit 3 for each missing item,
       exit 1 for a missing path, a non-repo and an unknown ref, exit 2 for a bad name, an
       uncommitted edit not changing the output, `git status --porcelain` unchanged, and
@@ -286,7 +286,7 @@ pytest tests/ -v --tb=short
 <!-- opsx:phase-summary:6:end -->
 
 
-- [ ] 6.1 Document the six commands, their JSON shapes and the shared exit-code table in
+- [x] 6.1 Document the six commands, their JSON shapes and the shared exit-code table in
       `site-docs/reference/cli.md`, with Quick Reference rows (design D11).
 
 <!-- opsx:metadata:begin -->

@@ -141,7 +141,7 @@ def build_context_index(warehouse: Path, ref: str) -> ContextIndex:
             f"no contexts/ directory at {sha} in warehouse {warehouse}"
         )
 
-    context_paths = sorted(p for p in paths if _is_context_path(p))
+    context_paths = sorted(p for p in paths if is_context_path(p))
 
     entries: list[ContextEntry] = []
     warnings: list[str] = []
@@ -175,7 +175,7 @@ def index_contexts(warehouse: Path | None, ref: str, cwd: Path) -> ContextIndex:
     return build_context_index(resolved, ref)
 
 
-def _is_context_path(path: str) -> bool:
+def is_context_path(path: str) -> bool:
     """True for a ``.md`` file that is neither a dot-file nor a README."""
     basename = path.rsplit("/", 1)[-1]
     return (
