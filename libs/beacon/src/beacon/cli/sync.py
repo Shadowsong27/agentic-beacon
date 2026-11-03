@@ -25,6 +25,11 @@ from beacon.domains.distribution.reset import (
     remove_artifacts_dir,
     reset_artifacts,
 )
+from beacon.domains.setup.claude_approval import (
+    ApprovalResult,
+    ApprovalStatus,
+    ensure_claude_approval,
+)
 from beacon.domains.setup.wiring import (
     init_agents_md,
     init_opencode_json,
@@ -244,6 +249,7 @@ def sync(
         for note in result.wiring_notes:
             console.print(note)
 
+    claude_approval: ApprovalResult | None = result.claude_approval
     if result.agent_config_init_needed and not result.dry_run:
         init_opencode_json(result.project_root)
         init_agents_md(result.project_root)
@@ -263,6 +269,15 @@ def sync(
                         f"[green]✓[/green] Created and wired {len(ref_result.added)} "
                         f"context reference(s) into agent config files"
                     )
+        claude_approval = ensure_claude_approval(result.project_root)
+
+    if claude_approval is not None:
+        if claude_approval.status is ApprovalStatus.APPROVED:
+            console.print(f"[green]✓[/green] {claude_approval.message}")
+        elif claude_approval.status is ApprovalStatus.CLAUDE_NOT_INSTALLED:
+            console.print(f"[dim]{claude_approval.message}[/dim]")
+        elif not claude_approval.ok:
+            console.print(f"[yellow]⚠[/yellow] {claude_approval.message}")
 
     print_bundled_install_result(result.bundled_installed, result.bundled_skipped)
 

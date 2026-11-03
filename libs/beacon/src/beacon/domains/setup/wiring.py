@@ -16,6 +16,10 @@ from beacon.core.exceptions import (
     RegularFileConflictError,
 )
 from beacon.domains.artifact.agent import snapshot_agent_path
+from beacon.domains.setup.claude_approval import (
+    ApprovalResult,
+    ensure_claude_approval,
+)
 
 console = Console()
 
@@ -377,6 +381,7 @@ class SetupResult(NamedTuple):
 
     opencode_created: bool
     agents_md_created: bool
+    claude_approval: ApprovalResult | None = None
 
 
 def setup_project(beacon_yaml: Path, project_root: Path) -> SetupResult:
@@ -389,8 +394,11 @@ def setup_project(beacon_yaml: Path, project_root: Path) -> SetupResult:
     create_beacon_template(beacon_yaml)
     opencode_created = init_opencode_json(project_root)
     agents_md_created = init_agents_md(project_root)
+    claude_approval = ensure_claude_approval(project_root)
     return SetupResult(
-        opencode_created=opencode_created, agents_md_created=agents_md_created
+        opencode_created=opencode_created,
+        agents_md_created=agents_md_created,
+        claude_approval=claude_approval,
     )
 
 
