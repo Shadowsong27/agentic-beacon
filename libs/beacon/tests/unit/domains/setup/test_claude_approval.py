@@ -54,14 +54,14 @@ def test_sets_flag_and_preserves_other_keys_mode_and_newline(
         },
     }
     config_path.write_text(json.dumps(original))
-    config_path.chmod(0o600)
+    config_path.chmod(0o640)
 
     result = ensure_claude_approval(project)
 
     assert result.status is ApprovalStatus.APPROVED
     raw = config_path.read_text()
     assert not raw.endswith("\n")
-    assert stat.S_IMODE(config_path.stat().st_mode) == 0o600
+    assert stat.S_IMODE(config_path.stat().st_mode) == 0o640
     after = json.loads(raw)
     expected = json.loads(json.dumps(original))
     expected["projects"][_key(project)][APPROVAL_FLAG] = True
