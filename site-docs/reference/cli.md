@@ -267,7 +267,9 @@ abc sync [OPTIONS]
 | `--skip-git-check` | Skip warehouse git state validation |
 | `--contribute-local` | Non-interactive: contribute all modified local files to warehouse |
 | `--discard-local` | Non-interactive: discard all modified local files and replace with symlinks |
-| `--yes` | Auto-accept adding missing agent-required skills to `beacon.yaml` |
+| `--yes` | Auto-accept prompts: add missing agent-required skills to `beacon.yaml` and remove orphaned artifacts no longer in `beacon.yaml` |
+
+Without a terminal, sync never prompts: orphan pruning is skipped with a warning unless `--yes` is passed.
 
 **What sync does per artifact type:**
 

@@ -422,20 +422,23 @@ def test_e2e_sync_auto_prune_and_upstream_pull(e2e_project):
         "artifacts:\n  contexts:\n    - contexts/python/standards.md\n  skills: []\n"
     )
 
-    # Auto-prune: confirm deletion with "y"
-    result = runner.invoke(main, ["sync"], input="y\n")
+    # --yes accepts the orphan prune (CliRunner has no TTY)
+    result = runner.invoke(main, ["sync", "--yes"])
 
     assert result.exit_code == 0
-    assert "Removed:" in result.output or "removed" in result.output.lower()
+    assert "orphan symlink(s) no longer in beacon.yaml" in " ".join(
+        result.output.split()
+    )
     dropped = (
         project_dir
         / ".agentic-beacon"
         / "artifacts"
-        / "knowledge"
+        / "contexts"
         / "decisions"
         / "use-uv.md"
     )
     assert not dropped.exists()
+    assert not dropped.is_symlink()
     kept = (
         project_dir
         / ".agentic-beacon"
