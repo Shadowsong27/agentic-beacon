@@ -125,3 +125,62 @@ def parse_frontmatter_text(content: str) -> FrontmatterResult:
         )
 
     return FrontmatterResult(success=True, data=data)
+
+
+@dataclass
+class FrontmatterSplit:
+    """A markdown file split into its frontmatter data and its body.
+
+    ``frontmatter`` is None when there is no usable block. ``warning`` holds the
+    reason a block was present but unusable; it is None otherwise.
+    """
+
+    frontmatter: dict | None
+    body: str
+    warning: str | None
+
+
+_FENCE = "---"
+
+
+def split_frontmatter(text: str) -> FrontmatterSplit:
+    """Split markdown text into frontmatter data and body, line by line.
+
+    The block opens on a first line (after an optional BOM) that is ``---``, and
+    closes on the next line that is ``---`` once stripped. Only a full line closes
+    the block, so a ``---`` inside a value does not. Values that YAML parses to a
+    non-JSON type (dates) are converted with ``str()``.
+    """
+    lines = text.splitlines(keepends=True)
+    if not lines or lines[0].lstrip("﻿").strip() != _FENCE:
+        return FrontmatterSplit(frontmatter=None, body=text, warning=None)
+
+    close = next((i for i in range(1, len(lines)) if lines[i].strip() == _FENCE), None)
+    if close is None:
+        return FrontmatterSplit(frontmatter=None, body=text, warning=None)
+
+    body = "".join(lines[close + 1 :])
+    try:
+        data = yaml.safe_load("".join(lines[1:close]))
+    except yaml.YAMLError as exc:
+        return FrontmatterSplit(
+            frontmatter=None, body=body, warning=f"YAML parse error: {exc}"
+        )
+    if not isinstance(data, dict):
+        return FrontmatterSplit(
+            frontmatter=None,
+            body=body,
+            warning="frontmatter did not parse to a YAML object (dict)",
+        )
+    return FrontmatterSplit(frontmatter=_json_native(data), body=body, warning=None)
+
+
+def _json_native(value: object) -> object:
+    """Return ``value`` with every non-JSON scalar converted to ``str``."""
+    if isinstance(value, dict):
+        return {str(key): _json_native(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_json_native(item) for item in value]
+    if value is None or isinstance(value, str | bool | int | float):
+        return value
+    return str(value)

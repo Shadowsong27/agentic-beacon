@@ -1,5 +1,6 @@
 """Agent-related commands for the abc CLI."""
 
+import json
 import sys
 from pathlib import Path
 
@@ -11,6 +12,12 @@ from beacon.core.exceptions import WorkspaceConfigError
 from beacon.core.manifest.beacon import BeaconManifest
 from beacon.domains.distribution.artifact_listing import (
     list_artifacts_with_config_check,
+)
+from beacon.domains.warehouse.warehouse_read import (
+    InvalidNameError,
+    ItemMissingError,
+    WarehouseReadError,
+    read_agents,
 )
 
 console = Console()
@@ -106,3 +113,46 @@ def list_cmd(*, artifact_type: str | None) -> None:
             f"[yellow]No {label} found in .agentic-beacon/artifacts/.[/yellow]"
         )
         console.print("Run 'abc sync' to download artifacts from the warehouse.")
+
+
+@click.group(name="agent")
+def agent() -> None:
+    """Inspect the agent definitions of a warehouse."""
+
+
+@agent.command(name="show")
+@click.argument("names", nargs=-1, required=True)
+@click.option(
+    "--warehouse",
+    type=click.Path(path_type=Path),
+    default=None,
+    help="Warehouse git repository. Defaults to the connected warehouse.",
+)
+@click.option(
+    "--ref",
+    default="HEAD",
+    show_default=True,
+    help="Commit-ish to read. The output names the full SHA it resolves to.",
+)
+def agent_show(*, names: tuple[str, ...], warehouse: Path | None, ref: str) -> None:
+    """Print one or more agent definitions as JSON, frontmatter parsed.
+
+    NAMES are agent names without the .md suffix (agents/NAME.md). Exits 3 if
+    any name is missing at the commit.
+
+    Example:
+        abc agent show context-selector
+    """
+    try:
+        result = read_agents(warehouse, ref, Path.cwd(), list(names))
+    except InvalidNameError as exc:
+        raise click.BadParameter(str(exc)) from exc
+    except ItemMissingError as exc:
+        click.echo(f"error: {exc}", err=True)
+        raise SystemExit(3) from exc
+    except WarehouseReadError as exc:
+        click.echo(f"error: {exc}", err=True)
+        raise SystemExit(1) from exc
+    for warning in result.warnings:
+        click.echo(f"warning: {warning}", err=True)
+    click.echo(json.dumps(result.to_dict(), indent=2, ensure_ascii=False))

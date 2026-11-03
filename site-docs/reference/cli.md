@@ -436,6 +436,191 @@ A warning is printed for each context with no usable description, in path order,
 
 **Exit codes:** `0` when the index is printed, `1` on any error. On exit `1` stdout is empty. Errors cover: no warehouse given and none connected, a warehouse path that is missing or not a git repository, an unknown ref, a commit with no `contexts/` directory, and a git failure.
 
+### `abc context show`
+
+Print the committed text of one or more contexts. Use it to read a context's body
+without touching the working tree.
+
+```bash
+abc context show alpha teams/backend
+abc context show alpha --warehouse ~/warehouse --ref v1.2.0
+```
+
+`NAMES` are context names as `abc context index` reports them, without `.md`. A name
+given twice is printed once, at its first position.
+
+**Output (stdout):**
+
+```json
+{
+  "warehouse": "/abs/path/to/warehouse",
+  "ref": "HEAD",
+  "sha": "<40-hex commit sha>",
+  "contexts": [
+    {
+      "name": "teams/backend",
+      "path": "contexts/teams/backend.md",
+      "text": "<the whole file>",
+      "frontmatter": {"description": "..."},
+      "body": "<text after the frontmatter>"
+    }
+  ]
+}
+```
+
+### `abc context intake-policy`
+
+Print the intake policy context of a board, `contexts/intake-policy-BOARD.md`.
+
+```bash
+abc context intake-policy AB
+```
+
+**Output (stdout):** the common keys, then `"board"` and `"policy"`, where `policy` is a
+file record with `name` (`intake-policy-BOARD`), `path`, `text`, `frontmatter` and `body`.
+
+### `abc context operate-profile`
+
+Print the operate profile context of a domain, `contexts/operate-DOMAIN.md`.
+
+```bash
+abc context operate-profile airflow-platform
+```
+
+**Output (stdout):** the common keys, then `"domain"` and `"profile"`, where `profile` is
+a file record as above.
+
+### `abc context decision-rules`
+
+Print the `## Decision rules` section of every context that has one, sorted by path.
+A context with no such section is left out. No sections at all is exit `0` with an
+empty list.
+
+```bash
+abc context decision-rules
+```
+
+**Output (stdout):**
+
+```json
+{
+  "warehouse": "/abs/path/to/warehouse",
+  "ref": "HEAD",
+  "sha": "<40-hex commit sha>",
+  "rules": [
+    {"name": "testing", "path": "contexts/testing.md", "body": "DR1 ..."}
+  ]
+}
+```
+
+The section runs from the heading to the next `## ` heading or a `---` line. Leading and
+trailing blank lines are dropped. The body is not split into rules.
+
+**Common notes for the context read commands:**
+
+- Every read command takes `--warehouse PATH` (defaults to the connected warehouse) and
+  `--ref REF` (default `HEAD`). Output names the full `sha` the ref resolved to.
+- Names are case-sensitive. Board and domain names match `[A-Za-z0-9][A-Za-z0-9_-]*`.
+  Context names match `/`-separated segments of `[A-Za-z0-9][A-Za-z0-9._-]*`, with no
+  `.md` suffix.
+- A file record holds `name`, `path`, `text` (the committed file, unchanged), `frontmatter`
+  (the parsed YAML block, or `null`) and `body` (the text after the block). A block that
+  fails to parse gives `frontmatter: null`, the body still set, and a warning on stderr.
+- Read commands never write. They read committed git objects only.
+
+---
+
+## Agent Commands
+
+### `abc agent show`
+
+Print one or more agent definitions from `agents/NAME.md`, with the frontmatter parsed.
+
+```bash
+abc agent show context-selector
+abc agent show context-selector --warehouse ~/warehouse --ref v1.2.0
+```
+
+**Output (stdout):**
+
+```json
+{
+  "warehouse": "/abs/path/to/warehouse",
+  "ref": "HEAD",
+  "sha": "<40-hex commit sha>",
+  "agents": [
+    {
+      "name": "context-selector",
+      "path": "agents/context-selector.md",
+      "text": "<the whole file>",
+      "frontmatter": {"name": "context-selector", "mode": "subagent"},
+      "body": "<text after the frontmatter>"
+    }
+  ]
+}
+```
+
+---
+
+## Project Commands
+
+### `abc project instructions`
+
+Print the root `AGENTS.md` of a repository at a commit, with the lines that import
+beacon-owned artifacts removed. Only the committed file is read.
+
+```bash
+abc project instructions
+abc project instructions --repo ~/code/app --ref v2.0.0
+```
+
+| Option | Description |
+|--------|-------------|
+| `--repo PATH` | Project git repository. Any path inside it works. Default `.` |
+| `--ref TEXT` | Commit-ish to read. Default `HEAD` |
+
+A beacon-owned import is a line whose stripped text is `@.agentic-beacon/artifacts/...`.
+Other `@` lines, including `@./.agentic-beacon/...`, are kept.
+
+**Output (stdout):**
+
+```json
+{
+  "repo": "/abs/path/to/app",
+  "ref": "HEAD",
+  "sha": "<40-hex commit sha>",
+  "path": "AGENTS.md",
+  "text": "# Project rules\n...\n",
+  "removed": [".agentic-beacon/artifacts/contexts/alpha.md"]
+}
+```
+
+- `text` has runs of three or more newlines collapsed to two, no trailing blank lines,
+  and ends with one newline. It is `""` when nothing is left.
+- `removed` lists each removed path in file order. A repeated import appears twice.
+
+---
+
+## Exit Codes for Read Commands
+
+The read commands (`abc context show`, `intake-policy`, `operate-profile`,
+`decision-rules`, `abc agent show` and `abc project instructions`) share these exit codes.
+
+| Code | Meaning |
+|------|---------|
+| `0` | The item was read and printed |
+| `1` | The source cannot be read: no warehouse or repo given or connected, a path that is missing or not a git repository, an unknown ref, a commit with no `contexts/` or `agents/` directory, a git failure, or a file that is not valid UTF-8 |
+| `2` | Usage error: a bad option or a name that fails the name rules |
+| `3` | The requested item is missing at the commit (a context, policy, profile, agent or `AGENTS.md`) |
+
+On any non-zero exit, stdout is empty. The message is one line on stderr, for example:
+
+```text
+error: missing at 3f2a9c1e0b7d4a6f8c5e2b1a0d9c8b7a6f5e4d3c: contexts/gone.md, contexts/teams/nope.md
+```
+
+`abc context index` keeps its own exit codes: `0` on success and `1` on any error.
+
 ---
 
 ## Removed Commands
@@ -474,6 +659,12 @@ Available on all commands:
 | `abc warehouse contribute -m MESSAGE` | Commit warehouse changes back |
 | `abc warehouse template-upgrade` | Upgrade warehouse template docs |
 | `abc context index [--warehouse PATH] [--ref REF]` | Print warehouse contexts at a commit as JSON |
+| `abc context show NAME... [--warehouse PATH] [--ref REF]` | Print committed text of one or more contexts as JSON |
+| `abc context intake-policy BOARD [--warehouse PATH] [--ref REF]` | Print a board's intake policy context as JSON |
+| `abc context operate-profile DOMAIN [--warehouse PATH] [--ref REF]` | Print a domain's operate profile context as JSON |
+| `abc context decision-rules [--warehouse PATH] [--ref REF]` | Print the decision-rules section of every context as JSON |
+| `abc agent show NAME... [--warehouse PATH] [--ref REF]` | Print agent definitions with parsed frontmatter as JSON |
+| `abc project instructions [--repo PATH] [--ref REF]` | Print AGENTS.md at a commit with beacon import lines removed |
 | `abc setup` | Create `beacon.yaml` configuration |
 | `abc adopt` | Browse + select artifacts via TUI |
 | `abc sync` | Sync all declared artifacts (contexts, skills, agents) |

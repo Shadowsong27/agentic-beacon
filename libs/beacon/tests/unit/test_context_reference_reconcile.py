@@ -14,6 +14,7 @@ from beacon.domains.setup.wiring import (
     _reconcile_opencode_json,
     desired_context_refs,
     reconcile_context_references,
+    split_owned_imports,
     unwire_pruned_artifacts,
 )
 
@@ -920,3 +921,56 @@ class TestReferenceReconcileResult:
         assert r.claude_md_deleted == ()
         assert r.claude_md_left == ()
         assert bool(ReferenceReconcileResult([], [], ("CLAUDE.md",), ())) is False
+
+
+# ---------------------------------------------------------------------------
+# split_owned_imports (AB-122 design D8)
+# ---------------------------------------------------------------------------
+
+
+def test_split_owned_imports_keeps_order_and_prose_line_endings():
+    content = (
+        "# Title\n"
+        "@.agentic-beacon/artifacts/contexts/a.md\n"
+        "prose\n"
+        "@.agentic-beacon/artifacts/agents/b.md\n"
+    )
+
+    refs, kept = split_owned_imports(content)
+
+    assert refs == [
+        ".agentic-beacon/artifacts/contexts/a.md",
+        ".agentic-beacon/artifacts/agents/b.md",
+    ]
+    assert kept == ["# Title\n", "prose\n"]
+
+
+def test_split_owned_imports_keeps_duplicate_refs():
+    refs, _ = split_owned_imports(
+        "@.agentic-beacon/artifacts/contexts/a.md\n"
+        "@.agentic-beacon/artifacts/contexts/a.md\n"
+    )
+
+    assert refs == [".agentic-beacon/artifacts/contexts/a.md"] * 2
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "@AGENTS.md",
+        "@docs/x.md",
+        "@./.agentic-beacon/artifacts/contexts/a.md",
+    ],
+)
+def test_split_owned_imports_leaves_other_imports_in_place(line):
+    refs, kept = split_owned_imports(line + "\n")
+
+    assert refs == []
+    assert kept == [line + "\n"]
+
+
+def test_split_owned_imports_strips_surrounding_spaces():
+    refs, kept = split_owned_imports("  @.agentic-beacon/artifacts/contexts/a.md  \n")
+
+    assert refs == [".agentic-beacon/artifacts/contexts/a.md"]
+    assert kept == []

@@ -9,6 +9,7 @@ from beacon.core.dependencies.frontmatter import (
     SkillFrontmatter,
     parse_frontmatter,
     parse_frontmatter_text,
+    split_frontmatter,
 )
 from pydantic import ValidationError
 
@@ -143,3 +144,68 @@ class TestParseFrontmatterText:
         result = parse_frontmatter_text("﻿\n\n---\ndescription: Hi\n---\nBody\n")
         assert result.success is True
         assert result.data == {"description": "Hi"}
+
+
+# ---------------------------------------------------------------------------
+# split_frontmatter (AB-122 design D5)
+# ---------------------------------------------------------------------------
+
+
+def test_split_frontmatter_returns_data_and_body():
+    result = split_frontmatter("---\nname: a\n---\n# A\n")
+
+    assert result.frontmatter == {"name": "a"}
+    assert result.body == "# A\n"
+    assert result.warning is None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "# No frontmatter\n---\nname: a\n---\n",
+        "---\nname: a\n# never closed\n",
+    ],
+    ids=["no-opener", "no-closing-line"],
+)
+def test_split_frontmatter_without_block_keeps_text_as_body(text):
+    result = split_frontmatter(text)
+
+    assert result.frontmatter is None
+    assert result.body == text
+    assert result.warning is None
+
+
+def test_split_frontmatter_invalid_yaml_keeps_body_and_warns():
+    result = split_frontmatter("---\nname: [unclosed\n---\n# Body\n")
+
+    assert result.frontmatter is None
+    assert result.body == "# Body\n"
+    assert result.warning is not None
+    assert "YAML parse error" in result.warning
+
+
+def test_split_frontmatter_list_block_warns_not_an_object():
+    result = split_frontmatter("---\n- a\n- b\n---\nbody\n")
+
+    assert result.frontmatter is None
+    assert result.body == "body\n"
+    assert result.warning == "frontmatter did not parse to a YAML object (dict)"
+
+
+def test_split_frontmatter_accepts_bom_before_opener():
+    result = split_frontmatter("\ufeff---\nname: a\n---\nbody\n")
+
+    assert result.frontmatter == {"name": "a"}
+
+
+def test_split_frontmatter_closes_only_on_a_full_line():
+    result = split_frontmatter("---\ndesc: 'a --- b'\n---\nbody\n")
+
+    assert result.frontmatter == {"desc": "a --- b"}
+    assert result.body == "body\n"
+
+
+def test_split_frontmatter_converts_non_json_values_to_str():
+    result = split_frontmatter("---\nupdated: 2026-01-02\n---\n")
+
+    assert result.frontmatter == {"updated": "2026-01-02"}
