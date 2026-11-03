@@ -26,7 +26,6 @@ agentic-beacon/
 ├── pyproject.toml            # Workspace root manifest (uv workspace definition)
 ├── mkdocs.yml                # MkDocs configuration
 ├── AGENTS.md                 # Project context for AI coding agents
-├── CLAUDE.md                 # Claude Code context pointer (references AGENTS.md)
 ├── CONTRIBUTING.md           # Contributor onboarding guide
 └── CHANGELOG.md              # Release changelog (managed by release-please)
 ```
