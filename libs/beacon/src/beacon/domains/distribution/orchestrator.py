@@ -220,6 +220,8 @@ def run_sync(
     skill_conflict_callback: Callable[[list[str]], bool] | None = None,
     auto_accept_gaps: bool = False,
     gap_prompt_callback: Callable[[SkillGap], bool] | None = None,
+    auto_accept_prune: bool = False,
+    interactive_prune: bool = False,
 ) -> SyncOrchestrationResult:
     """Run the full sync pipeline.
 
@@ -417,7 +419,12 @@ def run_sync(
 
     confirmed_prune: list[str] = []
     if orphans and not dry_run:
-        confirmed_prune = confirm_prune(orphans, dry_run=dry_run)
+        confirmed_prune = confirm_prune(
+            orphans,
+            dry_run=dry_run,
+            assume_yes=auto_accept_prune,
+            interactive=interactive_prune,
+        )
 
     try:
         summary = sync_engine.sync_all(
