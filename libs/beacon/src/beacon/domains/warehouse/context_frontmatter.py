@@ -1,6 +1,6 @@
 """Frontmatter schema for warehouse context files (AB-109).
 
-A context may open with a YAML frontmatter block. The only allowed key is
+A context must open with a YAML frontmatter block. The only allowed key is
 ``description``: one or two sentences on when an agent needs the context.
 """
 

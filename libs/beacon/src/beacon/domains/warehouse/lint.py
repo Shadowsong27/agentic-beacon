@@ -472,15 +472,15 @@ _INLINE_LINK_RE = re.compile(r"(?<!\\)(?<!!)\[([^\]]*)\]\(([^)]+)\)")
 
 
 # ---------------------------------------------------------------------------
-# Rule 7: Context frontmatter (optional description; warns when missing)
+# Rule 7: Context frontmatter (required description)
 # ---------------------------------------------------------------------------
 
 
 def _lint_context_frontmatter(warehouse_path: Path) -> list[LintFinding]:
-    """Check optional frontmatter on every contexts/**/*.md (excluding README.md).
+    """Check required frontmatter on every contexts/**/*.md (excluding README.md).
 
-    A missing frontmatter block or missing `description` is a warning. Malformed
-    frontmatter, an unknown key, or a non-string / empty description is an error.
+    A missing frontmatter block, a missing `description`, malformed frontmatter,
+    an unknown key, or a non-string / empty description is an error.
     """
     contexts_dir = warehouse_path / "contexts"
     if not contexts_dir.exists() or not contexts_dir.is_dir():
@@ -503,7 +503,6 @@ def _lint_context_frontmatter(warehouse_path: Path) -> list[LintFinding]:
                             "missing frontmatter description (add a YAML frontmatter "
                             "block with a `description` key)"
                         ),
-                        severity="warning",
                     )
                 )
             else:
@@ -526,7 +525,6 @@ def _lint_context_frontmatter(warehouse_path: Path) -> list[LintFinding]:
                 LintFinding(
                     artifact_path=relative_path,
                     message="missing required key `description` in frontmatter",
-                    severity="warning",
                 )
             )
 

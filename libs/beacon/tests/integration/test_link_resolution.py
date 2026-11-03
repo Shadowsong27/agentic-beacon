@@ -84,6 +84,7 @@ def _write_agents_manifest(warehouse: Path) -> None:
 
 def _populate_positive_warehouse(warehouse: Path) -> None:
     (warehouse / "contexts" / "team-context.md").write_text(
+        "---\ndescription: 'Load when: team work.'\n---\n"
         "# Team Context\n\n"
         "## Section A\n\n"
         "See [skill](.agentic-beacon/artifacts/skills/code-review/SKILL.md).\n"
@@ -152,6 +153,7 @@ def _write_negative_warehouse(warehouse: Path, *, include_missing_target: bool) 
 
     if include_missing_target:
         (warehouse / "contexts" / "team-context.md").write_text(
+            "---\ndescription: 'Load when: team work.'\n---\n"
             "# Team Context\n\n"
             "See [gone](.agentic-beacon/artifacts/knowledge/python/missing.md).\n"
         )

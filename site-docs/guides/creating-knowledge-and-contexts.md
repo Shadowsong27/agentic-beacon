@@ -87,17 +87,17 @@ Don't put long explanations in a context — push that into a knowledge file and
 
 ### Context frontmatter
 
-A context may start with a YAML frontmatter block. The only allowed key is `description`: one or two sentences on when an agent needs this context.
+Every context must start with a YAML frontmatter block. The only allowed key is `description`: one or two sentences on when an agent needs this context.
 
 ```markdown
 ---
-description: Load when writing or reviewing Python code in any project.
+description: 'Load when: writing or reviewing Python code in any project.'
 ---
 
 # Python Standards
 ```
 
-Write the description as a "Load when …" statement. It is meant for a future context selector that picks contexts per run. No harness reads it yet.
+Write the description as a "Load when …" statement. The conductor's context selector picks contexts for a background run by this description, so a context without one is never selected.
 
 Frontmatter does not change what `abc sync` wires. Sync still writes only the context path (`@<path>` in `CLAUDE.md`, a path entry in `opencode.json`).
 
@@ -105,13 +105,13 @@ Frontmatter does not change what `abc sync` wires. Sync still writes only the co
 
 | Finding | Severity |
 |---|---|
-| No frontmatter block | warning |
-| Frontmatter with no `description` key | warning |
+| No frontmatter block | error |
+| Frontmatter with no `description` key | error |
 | Frontmatter opened but not closed, invalid YAML, or not a mapping | error |
 | A key other than `description` (the error names the key) | error |
 | `description` that is empty, whitespace-only, or not a string | error |
 
-Warnings print with a `warning:` prefix and never change the exit code. Only errors make `abc warehouse lint` exit 1.
+Every finding in this table is an error and makes `abc warehouse lint` exit 1.
 
 ### Proactive vs. Reactive Pointers
 

@@ -253,6 +253,9 @@ def write_context():
     return _load_script("record-knowledge", "write_context.py")
 
 
+VALID_CONTEXT = "---\ndescription: 'Load when: x.'\n---\n# X\n"
+
+
 class TestWriteContext:
     def test_writes_to_warehouse_contexts(
         self, write_context, tmp_path, monkeypatch, capsys
@@ -263,13 +266,14 @@ class TestWriteContext:
             "sys.argv",
             ["write_context.py", "--name", "linear-ops"],
         )
-        monkeypatch.setattr("sys.stdin", _StringStream("# Linear Operations\nbody\n"))
+        body = "---\ndescription: 'Load when: Linear work.'\n---\n# Linear Operations\nbody\n"
+        monkeypatch.setattr("sys.stdin", _StringStream(body))
 
         write_context.main()
 
         target = warehouse / "contexts" / "linear-ops.md"
         assert target.is_file()
-        assert target.read_text() == "# Linear Operations\nbody\n"
+        assert target.read_text() == body
         out = capsys.readouterr().out.strip()
         assert out == "contexts/linear-ops.md"
 
@@ -286,7 +290,7 @@ class TestWriteContext:
             "sys.argv",
             ["write_context.py", "--name", "x"],
         )
-        monkeypatch.setattr("sys.stdin", _StringStream("# X\n"))
+        monkeypatch.setattr("sys.stdin", _StringStream(VALID_CONTEXT))
 
         write_context.main()
 
@@ -327,10 +331,10 @@ class TestWriteContext:
             "sys.argv",
             ["write_context.py", "--name", "exists", "--overwrite"],
         )
-        monkeypatch.setattr("sys.stdin", _StringStream("NEW"))
+        monkeypatch.setattr("sys.stdin", _StringStream(VALID_CONTEXT))
 
         write_context.main()
-        assert target.read_text() == "NEW"
+        assert target.read_text() == VALID_CONTEXT
 
     def test_rejects_non_kebab_name(self, write_context, tmp_path, monkeypatch, capsys):
         project, _ = _make_project_with_warehouse(tmp_path)
@@ -374,7 +378,7 @@ class TestWriteContext:
     def test_content_file_argument_works(self, write_context, tmp_path, monkeypatch):
         project, warehouse = _make_project_with_warehouse(tmp_path)
         body = tmp_path / "body.md"
-        body.write_text("# From file\n")
+        body.write_text(VALID_CONTEXT)
 
         monkeypatch.chdir(project)
         monkeypatch.setattr(
@@ -384,7 +388,88 @@ class TestWriteContext:
 
         write_context.main()
         target = warehouse / "contexts" / "y.md"
-        assert target.read_text() == "# From file\n"
+        assert target.read_text() == VALID_CONTEXT
+
+    @pytest.mark.parametrize(
+        "body",
+        [
+            "# X\n",
+            "---\ndescription: 'Load when: x.'\n# X\n",
+            "---\ntitle: X\n---\n# X\n",
+            "---\ndescription: ''\n---\n# X\n",
+            "---\ndescription: '   '\n---\n# X\n",
+            "---\ndescription: 42\n---\n# X\n",
+            "---\ndescription: [unclosed\n---\n# X\n",
+            "---\n- a\n---\n# X\n",
+        ],
+        ids=[
+            "no-frontmatter",
+            "unclosed-frontmatter",
+            "no-description-key",
+            "empty-description",
+            "whitespace-description",
+            "non-string-description",
+            "invalid-yaml",
+            "non-mapping-frontmatter",
+        ],
+    )
+    def test_rejects_body_without_description(
+        self, write_context, tmp_path, monkeypatch, capsys, body
+    ):
+        project, warehouse = _make_project_with_warehouse(tmp_path)
+        monkeypatch.chdir(project)
+        monkeypatch.setattr(
+            "sys.argv",
+            ["write_context.py", "--name", "x"],
+        )
+        monkeypatch.setattr("sys.stdin", _StringStream(body))
+        with pytest.raises(SystemExit) as exc:
+            write_context.main()
+        assert exc.value.code == 2
+        assert not (warehouse / "contexts" / "x.md").exists()
+        err = capsys.readouterr().err
+        assert "Error:" in err
+
+    def test_accepts_step_5a_template_with_quoted_description(
+        self, write_context, tmp_path, monkeypatch
+    ):
+        project, warehouse = _make_project_with_warehouse(tmp_path)
+        body = (
+            "---\n"
+            "description: 'Load when: it''s CI work.'\n"
+            "---\n\n"
+            "# CI\n\n"
+            "**Load when:** it's CI work.\n"
+            "**Last Updated:** 2026-11-03\n"
+        )
+        monkeypatch.chdir(project)
+        monkeypatch.setattr(
+            "sys.argv",
+            ["write_context.py", "--name", "ci"],
+        )
+        monkeypatch.setattr("sys.stdin", _StringStream(body))
+
+        write_context.main()
+
+        target = warehouse / "contexts" / "ci.md"
+        assert target.read_text() == body
+
+    def test_accepted_body_passes_lint_frontmatter_rule(
+        self, write_context, tmp_path, monkeypatch
+    ):
+        from beacon.domains.warehouse.lint import _lint_context_frontmatter
+
+        project, warehouse = _make_project_with_warehouse(tmp_path)
+        monkeypatch.chdir(project)
+        monkeypatch.setattr(
+            "sys.argv",
+            ["write_context.py", "--name", "roundtrip"],
+        )
+        monkeypatch.setattr("sys.stdin", _StringStream(VALID_CONTEXT))
+
+        write_context.main()
+
+        assert _lint_context_frontmatter(warehouse) == []
 
 
 # ─────────────────────────────────────────────────────────────

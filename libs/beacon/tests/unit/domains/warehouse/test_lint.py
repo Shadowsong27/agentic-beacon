@@ -1128,19 +1128,19 @@ class TestContextFrontmatterRule:
             ),
             pytest.param(
                 "# ctx\n",
-                "warning",
+                "error",
                 "missing frontmatter description",
                 id="no-frontmatter",
             ),
             pytest.param(
                 "---\n{}\n---\n# ctx\n",
-                "warning",
+                "error",
                 "missing required key `description`",
                 id="empty-mapping-without-description",
             ),
             pytest.param(
                 "---\ndescription: null\n---\n# ctx\n",
-                "warning",
+                "error",
                 "missing required key `description`",
                 id="null-description",
             ),
@@ -1198,7 +1198,7 @@ class TestContextFrontmatterRule:
         assert fragment in findings[0].message
 
     def test_subdirectory_context_is_checked(self, tmp_path):
-        """TC8: contexts/teams/backend.md without description → warning at that path."""
+        """TC8: contexts/teams/backend.md without description → error at that path."""
         wh = _build_clean_warehouse(tmp_path)
         (wh / "contexts" / "teams").mkdir()
         (wh / "contexts" / "teams" / "backend.md").write_text("# backend\n")
@@ -1206,7 +1206,7 @@ class TestContextFrontmatterRule:
         findings = self._context_findings(wh)
 
         assert [(f.artifact_path, f.severity) for f in findings] == [
-            ("contexts/teams/backend.md", "warning")
+            ("contexts/teams/backend.md", "error")
         ]
 
     def test_readme_files_are_skipped_at_any_depth(self, tmp_path):
@@ -1408,26 +1408,6 @@ class TestWarehouseLintCommand:
         result = self._run([str(wh)])
         assert result.exit_code == 0
         assert "Lint passed" in result.output
-
-    def test_warnings_only_fixture_exits_zero(self, tmp_path):
-        """TC1 (1.3): a context without frontmatter warns and exits 0."""
-        wh = _build_clean_warehouse(tmp_path)
-        (wh / "contexts" / "plain.md").write_text("# plain\n")
-        result = self._run([str(wh)])
-        assert result.exit_code == 0
-        assert "warning:" in result.output
-        assert "Lint passed with 1 warning(s) across 1 file(s)." in result.output
-
-    def test_error_plus_warning_exits_one(self, tmp_path):
-        """TC2 (1.3): one error plus one warning → exit 1 and both counts."""
-        wh = _build_clean_warehouse(tmp_path)
-        (wh / "contexts" / "plain.md").write_text("# plain\n")
-        (wh / "contexts" / "bad.md").write_text(
-            "---\ndescription: x\nload: always\n---\n# bad\n"
-        )
-        result = self._run([str(wh)])
-        assert result.exit_code == 1
-        assert "Found 1 error(s) and 1 warning(s) across 2 file(s)." in result.output
 
     def test_defective_fixture_exits_one(self, tmp_path):
         """TC10.6: defective fixture → exit_code 1 and grouped output."""
