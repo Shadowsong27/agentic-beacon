@@ -274,7 +274,7 @@ abc sync [OPTIONS]
 | Artifact | Action |
 |---|---|
 | Knowledge | Create symlinks in `.agentic-beacon/artifacts/knowledge/` |
-| Contexts | Create symlinks + wire into `AGENTS.md` or `opencode.json` |
+| Contexts | Create symlinks + wire into `AGENTS.md` or `opencode.json`; approve external imports for Claude Code in `~/.claude.json` |
 | Skills | Create symlinks + install into tool-specific directories |
 | Agents | Create artifact symlinks + wire into project-local `.claude/agents/` and `.opencode/agents/` |
 
@@ -323,6 +323,7 @@ abc doctor [OPTIONS]
 3. **Manifest validity** — `beacon.yaml` parses as YAML and matches the `BeaconManifest` schema.
 4. **Skill resolution** — every entry in `artifacts.skills` maps to an existing `<warehouse>/skills/<name>/` directory.
 5. **Context resolution** — every entry in `artifacts.contexts` maps to an existing `<warehouse>/contexts/<name>.md`.
+6. **Claude Code approval** — when `AGENTS.md` imports beacon contexts, `~/.claude.json` approves external imports for the main checkout (`projects["<root>"].hasClaudeMdExternalIncludesApproved`). Fix: run `abc sync`.
 
 **When to run:**
 

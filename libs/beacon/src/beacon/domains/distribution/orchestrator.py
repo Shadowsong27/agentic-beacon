@@ -47,6 +47,10 @@ from beacon.domains.distribution.sync_engine import (
     SyncEngine,
     SyncSummary,
 )
+from beacon.domains.setup.claude_approval import (
+    ApprovalResult,
+    ensure_claude_approval,
+)
 from beacon.domains.setup.wiring import (
     confirm_prune,
     desired_context_refs,
@@ -99,6 +103,7 @@ class SyncOrchestrationResult:
     migration_resolved: dict[str, str] = field(default_factory=dict)
     unresolved_files: list[str] = field(default_factory=list)
     legacy_agents_cleaned: int = 0
+    claude_approval: ApprovalResult | None = None
 
 
 def _normalize_beacon_for_resolver(
@@ -561,6 +566,8 @@ def run_sync(
     if not dry_run:
         apply_all_gitignores(project_root)
 
+    claude_approval = None if dry_run else ensure_claude_approval(project_root)
+
     return SyncOrchestrationResult(
         dry_run=dry_run,
         summary=summary,
@@ -584,4 +591,5 @@ def run_sync(
         migration_resolved=migration_resolved,
         unresolved_files=unresolved_files,
         legacy_agents_cleaned=legacy_agents_cleaned,
+        claude_approval=claude_approval,
     )

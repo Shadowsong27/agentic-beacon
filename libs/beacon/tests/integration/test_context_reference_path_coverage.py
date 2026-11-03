@@ -327,6 +327,37 @@ class TestAdoptReferenceReconciliation:
         agents_content = (project / "AGENTS.md").read_text()
         assert "@.agentic-beacon/artifacts/contexts/plane-ops.md" in agents_content
 
+    def test_adopt_accept_approves_claude_external_imports(
+        self, project_and_warehouse, isolated_claude_config
+    ):
+        """Adopting a context that AGENTS.md imports also approves it in ~/.claude.json (AB-120)."""
+        from beacon.domains.adoption.apply import commit_session
+        from beacon.domains.adoption.models import AdoptCandidate
+        from beacon.domains.setup.claude_approval import resolve_claude_project_root
+
+        project, wh = project_and_warehouse
+        claude_json = isolated_claude_config / ".claude.json"
+        claude_json.write_text(json.dumps({"projects": {}}))
+
+        commit_session(
+            to_adopt=["contexts/plane-ops.md"],
+            to_unadopt=[],
+            pending_accept=[],
+            pending_reject=[],
+            candidates=[
+                AdoptCandidate(artifact_type="contexts", path="contexts/plane-ops.md")
+            ],
+            pending_entries=[],
+            project_root=project,
+            warehouse_path=wh,
+            artifacts_path=project / ".agentic-beacon" / "artifacts",
+            beacon_yaml_path=project / ".agentic-beacon" / "beacon.yaml",
+        )
+
+        key = str(resolve_claude_project_root(project))
+        approved = json.loads(claude_json.read_text())["projects"][key]
+        assert approved["hasClaudeMdExternalIncludesApproved"] is True
+
     def test_unadopt_removes_reference(self, project_and_warehouse):
         """Un-adopt a context (remove from beacon.yaml) → reference removed from both files (TC2 for 4.3 adopt path)."""
         from beacon.domains.adoption.apply import commit_session

@@ -244,6 +244,7 @@ def commit_session(
 
         if has_contexts:
             from beacon.core.manifest.beacon import BeaconManifest
+            from beacon.domains.setup.claude_approval import ensure_claude_approval
             from beacon.domains.setup.diagnostics import effective_desired_refs
             from beacon.domains.setup.wiring import reconcile_context_references
 
@@ -253,6 +254,7 @@ def commit_session(
                 eff_desired_refs = effective_desired_refs(settings, warehouse_path)
                 if eff_desired_refs is not None:
                     reconcile_context_references(project_root, eff_desired_refs)
+                    ensure_claude_approval(project_root)
 
         if has_skills:
             from beacon.domains.artifact.skill import wire_skills_post_sync
