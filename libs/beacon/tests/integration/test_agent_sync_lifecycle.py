@@ -544,8 +544,8 @@ def test_sync_unwires_removed_agent(project_dir: Path, warehouse: Path, monkeypa
 
     # Second sync: remove the agent
     beacon_yaml.write_text("artifacts:\n  contexts: []\n  skills: []\n  agents: []\n")
-    # Pass "y\n" to confirm artifact symlink removal
-    r = runner.invoke(main, ["sync", "--skip-git-check"], input="y\n")
+    # --yes accepts the orphan prune (no TTY, so the prompt is not shown)
+    r = runner.invoke(main, ["sync", "--skip-git-check", "--yes"])
     assert r.exit_code == 0, f"second sync failed: {r.output}"
 
     # All three paths must be absent

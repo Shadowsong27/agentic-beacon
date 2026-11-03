@@ -86,7 +86,7 @@ Output example:
 3. **Auto-derive knowledge** — scan all adopted contexts and skills for markdown links to `knowledge/` paths.
 4. **Create symlinks** — create per-file symlinks under `.agentic-beacon/artifacts/` pointing into the warehouse.
 5. **Wire artifacts** — add context references to `AGENTS.md`/`opencode.json`, install skills into tool directories, wire agents into project-local `.claude/agents/` and `.opencode/agents/`.
-6. **Prune orphans** — remove symlinks for artifacts no longer referenced.
+6. **Prune orphans** — remove symlinks for artifacts no longer referenced. Interactive runs ask first; non-interactive runs skip the prune with a warning unless `--yes` is passed.
 
 | Artifact | Destination | Wiring |
 |---|---|---|
@@ -105,6 +105,7 @@ Output example:
 | `--skip-git-check` | Bypass warehouse git state checks (uncommitted changes, behind remote, non-main branch) — useful in CI |
 | `--contribute-local` | Non-interactive: contribute all locally modified files back to the warehouse during sync |
 | `--discard-local` | Non-interactive: discard all locally modified files and replace them with fresh symlinks |
+| `--yes` | Auto-accept prompts: add missing agent-required skills and remove orphaned artifacts |
 
 Flags compose: `abc sync --force --dry-run` previews a full reset.
 

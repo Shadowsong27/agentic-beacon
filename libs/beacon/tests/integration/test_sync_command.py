@@ -183,6 +183,90 @@ def test_sync_dry_run_reports_would_remove(valid_warehouse, temp_dir, monkeypatc
     assert (artifacts_dir / "stale.md").exists()
 
 
+def _setup_orphan_symlink_project(valid_warehouse, temp_dir, monkeypatch):
+    """Project tracking keep.md, with stale.md left behind as an orphan symlink."""
+    runner = CliRunner()
+
+    project_dir = temp_dir / "project"
+    project_dir.mkdir()
+    monkeypatch.chdir(project_dir)
+
+    (valid_warehouse / "contexts" / "keep.md").write_text("keep")
+    (valid_warehouse / "knowledge" / "stale.md").write_text("stale")
+
+    runner.invoke(main, ["warehouse", "connect", "--path", str(valid_warehouse)])
+    runner.invoke(main, ["setup"])
+
+    beacon_yaml = project_dir / ".agentic-beacon" / "beacon.yaml"
+    beacon_yaml.write_text(
+        "artifacts:\n  contexts:\n    - contexts/keep.md\n  skills: []\n"
+    )
+
+    artifacts_root = project_dir / ".agentic-beacon" / "artifacts"
+    orphan_dir = artifacts_root / "knowledge"
+    orphan_dir.mkdir(parents=True)
+    (orphan_dir / "stale.md").symlink_to(valid_warehouse / "knowledge" / "stale.md")
+
+    return runner, artifacts_root
+
+
+def test_sync_yes_removes_orphan_prune_without_prompt(
+    valid_warehouse, temp_dir, monkeypatch
+):
+    """--yes accepts the orphan prune; non-TTY stdin at EOF must not abort."""
+    runner, artifacts_root = _setup_orphan_symlink_project(
+        valid_warehouse, temp_dir, monkeypatch
+    )
+
+    result = runner.invoke(
+        main,
+        ["sync", "--force", "--yes", "--skip-git-check"],
+        input="",
+    )
+
+    assert result.exit_code == 0, result.output
+    assert not (artifacts_root / "knowledge" / "stale.md").is_symlink()
+    assert not (artifacts_root / "knowledge" / "stale.md").exists()
+    assert (artifacts_root / "contexts" / "keep.md").is_symlink()
+
+
+def test_sync_without_yes_no_tty_skips_prune_with_warning(
+    valid_warehouse, temp_dir, monkeypatch
+):
+    """Without --yes and without a TTY, the prune is skipped and the orphan kept."""
+    runner, artifacts_root = _setup_orphan_symlink_project(
+        valid_warehouse, temp_dir, monkeypatch
+    )
+
+    result = runner.invoke(
+        main,
+        ["sync", "--force", "--skip-git-check"],
+        input="",
+    )
+
+    assert result.exit_code == 0, result.output
+    assert (artifacts_root / "knowledge" / "stale.md").is_symlink()
+    # Rich wraps long lines; compare on whitespace-normalised text.
+    assert "re-run with --yes" in " ".join(result.output.lower().split())
+
+
+def test_sync_interactive_prompt_confirms_prune(valid_warehouse, temp_dir, monkeypatch):
+    """With a TTY and no --yes, the existing confirm prompt still removes the orphan."""
+    monkeypatch.setattr("beacon.cli.sync.is_interactive", lambda: True)
+    runner, artifacts_root = _setup_orphan_symlink_project(
+        valid_warehouse, temp_dir, monkeypatch
+    )
+
+    result = runner.invoke(
+        main,
+        ["sync", "--skip-git-check"],
+        input="y\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    assert not (artifacts_root / "knowledge" / "stale.md").is_symlink()
+
+
 # ---------------------------------------------------------------------------
 # Skill entry validation — boundary: skills must be directory entries
 # ---------------------------------------------------------------------------
