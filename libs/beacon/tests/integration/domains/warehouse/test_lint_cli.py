@@ -197,12 +197,13 @@ def test_lint_clean_fixture_exits_zero(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# Test: described context passes, undescribed context warns and exits 0
+# Test: described context passes, undescribed context errors and exits 1
+# (contribute-warehouse lint gate: Step 2 stops on any non-zero exit)
 # ---------------------------------------------------------------------------
 
 
-def test_lint_context_without_description_warns_and_exits_zero(tmp_path):
-    """TC2.5: described context is silent; undescribed context warns; exit 0."""
+def test_lint_context_without_description_errors_and_exits_one(tmp_path):
+    """A new context without a description is blocked by the contribute-warehouse lint gate."""
     wh = _build_clean_warehouse(tmp_path)
     (wh / "contexts" / "described.md").write_text(
         "---\ndescription: Load when working on CI.\n---\n# Described\n"
@@ -211,13 +212,10 @@ def test_lint_context_without_description_warns_and_exits_zero(tmp_path):
 
     result = _run_lint(wh)
 
-    assert result.returncode == 0, (
-        f"Expected returncode 0, got {result.returncode}\nstdout:\n{result.stdout}\n"
+    assert result.returncode == 1, (
+        f"Expected returncode 1, got {result.returncode}\nstdout:\n{result.stdout}\n"
         f"stderr:\n{result.stderr}"
     )
-    assert "warning:" in result.stdout, result.stdout
+    assert "error:" in result.stdout, result.stdout
     assert "contexts/undescribed.md" in result.stdout, result.stdout
     assert "contexts/described.md" not in result.stdout, result.stdout
-    assert "Lint passed with 1 warning(s) across 1 file(s)." in result.stdout, (
-        result.stdout
-    )

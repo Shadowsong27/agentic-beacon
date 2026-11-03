@@ -292,6 +292,10 @@ knowledge subject and confirm):
 Render the new context body using this template:
 
 ```markdown
+---
+description: 'Load when: [one-line trigger]'
+---
+
 # [Title]
 
 **Load when:** [one-line trigger]
@@ -303,6 +307,9 @@ Render the new context body using this template:
 
 [Optional prose introducing the topic.]
 ```
+
+The frontmatter `description` is the same trigger text as the `**Load when:**` line,
+written as a single-quoted YAML string. Double any `'` inside it (`''`). It must not be empty.
 
 Show the rendered body and the target path (`contexts/<name>.md`) to the user and
 get explicit confirmation. Then write it via `write_context.py` — **this is the
@@ -317,7 +324,8 @@ CONTEXT_EOF
 ```
 
 The script resolves the warehouse, refuses to write outside `<warehouse>/contexts/`,
-refuses to overwrite an existing file unless `--overwrite` is passed, and prints
+refuses a body that does not open with a frontmatter block carrying a non-empty
+`description`, or that has any other frontmatter key, refuses to overwrite an existing file unless `--overwrite` is passed, and prints
 the warehouse-relative path (e.g. `contexts/linear-ops.md`) on stdout. If it
 exits non-zero, surface stderr and stop.
 
@@ -434,7 +442,7 @@ Run 'abc adopt' to wire the context if one was queued.
 2. Resolves warehouse; picks `--topic linear` (or omits if none fits).
 3. Renders the fact body; writes via `write_knowledge.py` → `knowledge/linear/facts/linear-graphql-auth.md`.
 4. Lists warehouse contexts → none fit. User picks "Create a new context file".
-5. **Step 5a:** confirms name `linear-ops`, title `Linear Operations`, Load-when line; renders the context template and writes it via `write_context.py` → `contexts/linear-ops.md`. Adds an index row to `contexts/README.md` if one exists.
+5. **Step 5a:** confirms name `linear-ops`, title `Linear Operations`, Load-when line; renders the context template (frontmatter `description` rendered from the Load-when line) and writes it via `write_context.py` → `contexts/linear-ops.md`. Adds an index row to `contexts/README.md` if one exists.
 6. Adds the knowledge pointer into the new `contexts/linear-ops.md` under its section; user confirms the diff.
 7. Runs `append_pending.py --path contexts/linear-ops.md --type context --action created --source record-knowledge`.
 8. Reports completion with an `abc adopt` reminder to wire the new context.
@@ -450,7 +458,7 @@ Run 'abc adopt' to wire the context if one was queued.
 - [ ] Render the markdown body using the type-specific template
 - [ ] Write the file by piping the body into `write_knowledge.py` — do NOT write the file with your editor's write tool
 - [ ] Ask user which warehouse `contexts/` file for the pointer — an existing one, a new one, or skip
-- [ ] If creating a new context: confirm name/title/Load-when, write via `write_context.py` (NOT your editor's write tool), and add a `contexts/README.md` index row if a README exists
+- [ ] If creating a new context: confirm name/title/Load-when, write with a frontmatter `description` via `write_context.py` (NOT your editor's write tool), and add a `contexts/README.md` index row if a README exists
 - [ ] Show diff before writing the pointer; wait for explicit confirmation
 - [ ] Do NOT run `append_pending.py` for the knowledge file
 - [ ] Run `append_pending.py` for the context file if a pointer was written — `--action created` for a new context, `--action modified` for an existing one

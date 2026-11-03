@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.11"
-# dependencies = []
+# dependencies = ["pyyaml>=6.0"]
 # ///
 """Write a new context file to the connected warehouse.
 
@@ -8,6 +8,11 @@ This script exists so the record-knowledge skill cannot accidentally write into
 the project's symlink-mirror at .agentic-beacon/artifacts/contexts/. The
 warehouse is resolved from .agentic-beacon/config.toml in the project root, and
 the script refuses to write anywhere outside `<warehouse>/contexts/`.
+
+The body must open with a frontmatter block that carries a non-empty
+`description` (the conductor context selector reads it), and the frontmatter's
+only allowed key is `description`. The script refuses any other body and writes
+nothing.
 
 Use this only when authoring a *new* context file. Appending a knowledge pointer
 to an *existing* context is a normal in-place edit and does not go through here.
@@ -32,6 +37,8 @@ import re
 import sys
 import tomllib
 from pathlib import Path
+
+import yaml
 
 NAME_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 
@@ -85,6 +92,46 @@ def assert_under_warehouse(target: Path, warehouse: Path) -> None:
             file=sys.stderr,
         )
         sys.exit(2)
+
+
+def validate_frontmatter_description(content: str) -> str | None:
+    """Return an error message if content lacks a non-empty frontmatter description."""
+    lines = content.splitlines(keepends=True)
+    if not content.startswith(("---\n", "---\r\n")):
+        return _description_error("body does not open with a frontmatter block")
+    closing = next(
+        (
+            i
+            for i, line in enumerate(lines[1:], start=1)
+            if line.rstrip("\r\n") == "---"
+        ),
+        None,
+    )
+    if closing is None:
+        return _description_error("frontmatter block is not closed with '---'")
+    try:
+        data = yaml.safe_load("".join(lines[1:closing]))
+    except yaml.YAMLError as exc:
+        return _description_error(f"frontmatter is not valid YAML ({exc})")
+    if not isinstance(data, dict):
+        return _description_error("frontmatter is not a mapping")
+    extra = set(data) - {"description"}
+    if extra:
+        return _description_error(
+            f"frontmatter has unknown key(s): {', '.join(sorted(map(str, extra)))}; "
+            "the only allowed key is `description`"
+        )
+    description = data.get("description")
+    if not isinstance(description, str) or not description.strip():
+        return _description_error("frontmatter has no non-empty string `description`")
+    return None
+
+
+def _description_error(reason: str) -> str:
+    return (
+        "Error: refusing to write a context without a non-empty frontmatter description "
+        f"({reason}; start the body with a --- block containing description: '...')."
+    )
 
 
 def main() -> None:
@@ -141,6 +188,11 @@ def main() -> None:
 
     if not content.strip():
         print("Error: refusing to write an empty context file.", file=sys.stderr)
+        sys.exit(2)
+
+    error = validate_frontmatter_description(content)
+    if error is not None:
+        print(error, file=sys.stderr)
         sys.exit(2)
 
     target.parent.mkdir(parents=True, exist_ok=True)
