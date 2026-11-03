@@ -208,7 +208,7 @@ contribution workflow.
 
 ---
 
-**Last Updated:** 2026-05-13
+**Last Updated:** 2026-11-03
 
 @.agentic-beacon/artifacts/contexts/agent-practices.md
 @.agentic-beacon/artifacts/contexts/cdc-workflow.md
