@@ -1,5 +1,51 @@
 # Changelog
 
+## [4.0.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v3.8.0...agentic-beacon@v4.0.0) (2026-11-03)
+
+
+### ⚠ BREAKING CHANGES
+
+* **lint:** require a context description; record-knowledge writes it (AB-121)
+* **beacon:** Claude Code sessions that read CLAUDE.md only lose beacon context wiring.
+
+### Features
+
+* **beacon:** add abc context index command (AB-116) ([6c72447](https://github.com/Shadowsong27/agentic-beacon/commit/6c7244768be6b43d9ce1f9a3e6bf628110c54edb))
+* **beacon:** add abc context index command (AB-116) ([ca4c160](https://github.com/Shadowsong27/agentic-beacon/commit/ca4c16062fc19fc07496f36ccef379bf7192841e))
+* **beacon:** add text-level frontmatter parser and git read helpers (AB-116) ([5e7c423](https://github.com/Shadowsong27/agentic-beacon/commit/5e7c4237e0598aaffdd2865c1b3d22a8709cd153))
+* **beacon:** wire context imports into AGENTS.md instead of CLAUDE.md (AB-106) ([#180](https://github.com/Shadowsong27/agentic-beacon/issues/180)) ([e029ee6](https://github.com/Shadowsong27/agentic-beacon/commit/e029ee6eedd2ed43f67404ce3e2666a556c2dbf2))
+* **context:** abc read commands for headless launchers (AB-122) ([c3bbefb](https://github.com/Shadowsong27/agentic-beacon/commit/c3bbefbc938296c9808e6ebe9703dec6d3ccfaea))
+* **context:** abc read commands for headless launchers (AB-122) ([61be78c](https://github.com/Shadowsong27/agentic-beacon/commit/61be78cea5c7b5b2275e6b53797796f04bfbf32a))
+* **lint:** context description frontmatter and a warning severity for abc warehouse lint (AB-109) ([#181](https://github.com/Shadowsong27/agentic-beacon/issues/181)) ([3bf855a](https://github.com/Shadowsong27/agentic-beacon/commit/3bf855a2859da51ac448740956b94d567046ac73))
+* **lint:** require a context description; record-knowledge writes it (AB-121) ([540d5d8](https://github.com/Shadowsong27/agentic-beacon/commit/540d5d8b3673be6ec22bfecb9ecaebb726da7ab4))
+* **sync:** approve external context imports for Claude Code (AB-120) ([975d990](https://github.com/Shadowsong27/agentic-beacon/commit/975d9908f45972209bbd6b52aec2d5b5de5e399c))
+* **sync:** approve external context imports for Claude Code (AB-120) ([1191215](https://github.com/Shadowsong27/agentic-beacon/commit/11912151a67e0b097250d830d9d9cd20ec1908d6))
+
+
+### Bug Fixes
+
+* **adopt:** approve external context imports after adopt wires contexts (AB-120) ([5332ab5](https://github.com/Shadowsong27/agentic-beacon/commit/5332ab5187bda212f6f5bd5f4ce21e495e2b254a))
+* **lint:** align write_context and docs with the required context description (AB-121) ([22df670](https://github.com/Shadowsong27/agentic-beacon/commit/22df6704193c94830b0235472ae02f7b13db1370))
+* **sync:** --yes accepts orphan prune; skip prune with warning when no TTY (AB-115) ([b4eb95b](https://github.com/Shadowsong27/agentic-beacon/commit/b4eb95bf27a845c4ebdab7ec920ab149370c1fe5))
+* **sync:** --yes accepts the orphan prune; never prompt without a TTY (AB-115) ([78b9de0](https://github.com/Shadowsong27/agentic-beacon/commit/78b9de0434b77cd629f579391f2e1fcffd261790))
+
+
+### Style
+
+* **context:** ruff-format the read commands and spell the BOM as an escape (AB-122) ([4f40bd0](https://github.com/Shadowsong27/agentic-beacon/commit/4f40bd03a81cb1b1b291799fcff8f7275b7946d0))
+
+
+### Tests
+
+* fix frontmatter wiring test after AB-106 and tighten mode check (AB-120) ([7917d9f](https://github.com/Shadowsong27/agentic-beacon/commit/7917d9fc83880373fa2f6ef8c71e394ea502e948))
+* **sync:** make the e2e prune test assert the prune; document --yes (AB-115) ([b3cf37e](https://github.com/Shadowsong27/agentic-beacon/commit/b3cf37ef86580472067a90d7e213ca7698e886b4))
+* **sync:** pass --yes where tests accept the orphan prune (AB-115) ([fcce1d9](https://github.com/Shadowsong27/agentic-beacon/commit/fcce1d92620de22a7ebd44334d172c04aa6da808))
+
+
+### Miscellaneous Chores
+
+* **openspec:** move OpenSpec specs to legacy-specs, flatten archive (HARN-377) ([#174](https://github.com/Shadowsong27/agentic-beacon/issues/174)) ([8c5798c](https://github.com/Shadowsong27/agentic-beacon/commit/8c5798cb4561cc625ca78b9cbd8732b6dfd4b65d))
+
 ## [3.8.0](https://github.com/Shadowsong27/agentic-beacon/compare/agentic-beacon@v3.7.0...agentic-beacon@v3.8.0) (2026-10-16)
 
 
