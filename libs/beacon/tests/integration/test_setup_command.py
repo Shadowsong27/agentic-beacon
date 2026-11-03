@@ -1,5 +1,6 @@
 """Tests for abc setup command."""
 
+import json
 import re
 
 import yaml
@@ -169,3 +170,21 @@ def test_setup_agent_assisted_flag_is_removed(valid_warehouse, temp_dir, monkeyp
     assert result.exit_code != 0
     assert "--agent-assisted" in result.output
     assert "no such option" in result.output.lower()
+
+
+def test_setup_approves_external_context_imports_in_claude_config(
+    valid_warehouse, temp_dir, monkeypatch, isolated_claude_config
+):
+    project_dir, runner = _connected_project(valid_warehouse, temp_dir, monkeypatch)
+    (project_dir / "AGENTS.md").write_text(
+        "@.agentic-beacon/artifacts/contexts/global.md\n"
+    )
+    claude_json = isolated_claude_config / ".claude.json"
+    claude_json.write_text('{"projects": {}}')
+
+    result = runner.invoke(main, ["setup"])
+
+    assert result.exit_code == 0, result.output
+    key = str(project_dir.resolve())
+    data = json.loads(claude_json.read_text())
+    assert data["projects"][key]["hasClaudeMdExternalIncludesApproved"] is True

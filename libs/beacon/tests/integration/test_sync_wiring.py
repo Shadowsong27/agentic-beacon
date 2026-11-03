@@ -402,6 +402,23 @@ def test_sync_wires_contexts_to_agents_md(full_sync_project, monkeypatch):
     assert "wired" in result.output.lower()
 
 
+def test_sync_approves_external_context_imports_in_claude_config(
+    full_sync_project, monkeypatch, isolated_claude_config
+):
+    project, runner = full_sync_project
+    monkeypatch.chdir(project)
+    (project / "AGENTS.md").write_text("# Project\n")
+    claude_json = isolated_claude_config / ".claude.json"
+    claude_json.write_text('{"projects": {}}')
+
+    result = runner.invoke(main, ["sync"])
+
+    assert result.exit_code == 0, result.output
+    key = str(project.resolve())
+    data = json.loads(claude_json.read_text())
+    assert data["projects"][key]["hasClaudeMdExternalIncludesApproved"] is True
+
+
 def test_sync_wires_contexts_into_agents_md_and_drops_thin_claude_md(
     full_sync_project, monkeypatch
 ):

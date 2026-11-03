@@ -6,6 +6,7 @@ from pathlib import Path
 import click
 from rich.console import Console
 
+from beacon.domains.setup.claude_approval import ApprovalStatus
 from beacon.domains.setup.wiring import setup_project
 
 console = Console()
@@ -52,6 +53,14 @@ def setup() -> None:
         console.print("[green]✓[/green] Initialized opencode.json")
     if result.agents_md_created:
         console.print("[green]✓[/green] Initialized AGENTS.md")
+    approval = result.claude_approval
+    if approval is not None:
+        if approval.status is ApprovalStatus.APPROVED:
+            console.print(f"[green]✓[/green] {approval.message}")
+        elif approval.status is ApprovalStatus.CLAUDE_NOT_INSTALLED:
+            console.print(f"[dim]{approval.message}[/dim]")
+        elif not approval.ok:
+            console.print(f"[yellow]⚠[/yellow] {approval.message}")
     console.print("\n[bold]Next Steps:[/bold]")
     console.print("  1. Run 'abc adopt' to select artifacts from the warehouse")
     console.print("  2. Or edit .agentic-beacon/beacon.yaml directly")

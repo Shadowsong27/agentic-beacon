@@ -1,7 +1,7 @@
 """Context frontmatter must not change what `abc sync` wires (AB-109 D7).
 
 Wiring writes only context paths. A context with a `description` frontmatter
-block and one without must produce the same CLAUDE.md @-lines and the same
+block and one without must produce the same AGENTS.md @-lines and the same
 opencode.json instructions as a run without frontmatter.
 """
 
@@ -10,7 +10,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from beacon.domains.setup.wiring import wire_contexts_claudecode, wire_contexts_opencode
+from beacon.domains.setup.wiring import (
+    desired_context_refs,
+    reconcile_context_references,
+    wire_contexts_opencode,
+)
 
 DESCRIBED_BODY = "# Described\n"
 DESCRIBED_WITH_FRONTMATTER = (
@@ -21,7 +25,7 @@ DESCRIBED_WITH_FRONTMATTER = (
 def _wire_project(root: Path, described_content: str) -> tuple[str, dict]:
     """Build a project under `root` with two contexts and wire it.
 
-    Returns the CLAUDE.md text and the opencode.json instructions list.
+    Returns the AGENTS.md text and the opencode.json instructions list.
     """
     project = root / "project"
     artifacts_dir = project / ".agentic-beacon" / "artifacts"
@@ -29,13 +33,15 @@ def _wire_project(root: Path, described_content: str) -> tuple[str, dict]:
     contexts.mkdir(parents=True)
     (contexts / "described.md").write_text(described_content)
     (contexts / "plain.md").write_text("# Plain\n")
-    (project / "CLAUDE.md").write_text("# Project\n")
+    (project / "AGENTS.md").write_text("# Project\n")
     (project / "opencode.json").write_text(json.dumps({"instructions": []}))
 
-    wire_contexts_claudecode(project, artifacts_dir)
+    reconcile_context_references(
+        project, desired_context_refs({path.stem for path in contexts.glob("*.md")})
+    )
     wire_contexts_opencode(project, artifacts_dir)
 
-    claude_md = (project / "CLAUDE.md").read_text()
+    claude_md = (project / "AGENTS.md").read_text()
     opencode = json.loads((project / "opencode.json").read_text())
     return claude_md, opencode
 
