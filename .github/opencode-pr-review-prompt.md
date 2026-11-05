@@ -28,35 +28,8 @@ Review only the attached diff.
 5. Security/safety issues
 6. Documentation drift when behavior changes
 
-## Output
+## Severity
 
-- Use this exact structure:
-
-```markdown
-## Findings
-
-- [High] <short title> - `<file>:<line>`
-  <1-3 sentences explaining the impact and the concrete fix.>
-
-- [Medium] <short title> - `<file>:<line>`
-  <1-3 sentences explaining the impact and the concrete fix.>
-
-- [Low] <short title> - `<file>:<line>`
-  <1-3 sentences explaining the impact and the concrete fix.>
-
-## Open Questions
-
-- <Only include if needed; otherwise write "None.">
-
-## Notes
-
-- <Optional brief residual risks, testing gaps, or "No findings." when clean.>
-```
-
-- Order findings by severity: High, then Medium, then Low.
-- Use High for blockers that break core behavior, data safety, security, or CI.
-- Use Medium for likely bugs, behavioral regressions, architecture violations, missing tests for changed behavior, or CLI UX regressions.
-- Use Low for documentation drift, maintainability issues, or low-risk polish worth fixing before merge.
-- Every finding must include a file:line reference when possible.
-- If there are no findings, write `## Findings` followed by `No findings.`.
-- Be concise and actionable; skip praise.
+Use the base prompt's **Severity rubric** and **Output** format. Do not use any other
+severity definition. A CLI UX regression (a changed flag, output or exit code that a
+user or script relies on) is Medium 2.
