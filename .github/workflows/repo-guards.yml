@@ -1,0 +1,23 @@
+name: Repo guards
+
+# Checks from shadowsongs-hub/gh-actions-commons. Each one fails on a mistake that
+# otherwise passes silently:
+# - release-please-lint: a manifest version with no tag is never released, and a
+#   workflow whose tag triggers match no release-please tag never deploys.
+# Read-only, no secrets, so they run on a GitHub-hosted runner.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  release-please-lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shadowsongs-hub/gh-actions-commons/release-please-lint@main
