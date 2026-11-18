@@ -1,4 +1,4 @@
-name: Repo guards
+name: repo-guards
 
 # Checks from shadowsongs-hub/gh-actions-commons. Each one fails on a mistake that
 # otherwise passes silently:
