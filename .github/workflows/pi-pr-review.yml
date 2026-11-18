@@ -1,7 +1,7 @@
 name: pi PR Review
 
 # The automated PR reviewer (HARN-79), consumed as a REUSABLE WORKFLOW from
-# Shadowsong27/gh-actions-commons. This file is the whole install.
+# shadowsongs-hub/gh-actions-commons. This file is the whole install.
 #
 # The reviewer's internals — the read-only review jobs and the write-scoped post job,
 # the checkout-credential scrub, the fork guard, the shared prompt and the review
@@ -32,7 +32,7 @@ on:
 
 jobs:
   pi-review:
-    uses: Shadowsong27/gh-actions-commons/.github/workflows/pi-pr-review.yml@main
+    uses: shadowsongs-hub/gh-actions-commons/.github/workflows/pi-pr-review.yml@main
     # Ceiling for the reusable workflow. An explicit block sets every UNLISTED
     # scope to `none`, so it must cover the union of the callee's per-job
     # permissions. Missing `actions: read` (the `gate` job) makes GitHub reject
