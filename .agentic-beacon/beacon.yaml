@@ -4,6 +4,7 @@ artifacts:
   - contexts/python-standards.md
   - contexts/testing.md
   - contexts/agent-practices.md
+  - contexts/conductor-ops.md
   - contexts/plane-ops.md
   skills:
   - skills/release-py-lib/
