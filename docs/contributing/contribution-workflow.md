@@ -97,13 +97,15 @@ Before opening a PR, verify:
 
 ## Review Bot
 
-The PR reviewer is `pi-pr-review.yml` (pi.dev). The older `opencode-review.yml` is
-disabled (its terra-via-LiteLLM path produced empty reviews) but kept for easy revert.
+The PR reviewer is Claude Code on the owner's Claude subscription, run by
+`pi-pr-review.yml` with `claude-first: true`. The older `opencode-review.yml` is disabled
+(its terra-via-LiteLLM path produced empty reviews) but kept for easy revert.
 
-`pi-pr-review.yml` calls the shared reviewer in `shadowsongs-hub/gh-actions-commons`. The
-models are the `pi-models` chain in that file (OpenCode Go DeepSeek, then terra), tried in
-order until one gives a usable review. Each attempt may take up to 25 minutes, because
-DeepSeek is slow on large PRs. Each provider is configured in the runner's
+`pi-pr-review.yml` calls the shared reviewer in `shadowsongs-hub/gh-actions-commons`.
+Claude reviews first. When Claude gives no usable review (quota, error or timeout), the
+`pi-models` chain in that file (OpenCode Go DeepSeek, then terra) reviews instead, tried in
+order until one gives a usable review. Each pi attempt may take up to 25 minutes, because
+DeepSeek is slow on large PRs. Each pi provider is configured in the runner's
 `~/.pi/agent/models.json`. Repo-specific review rules live in
 `.github/opencode-pr-review-prompt.md`.
 
