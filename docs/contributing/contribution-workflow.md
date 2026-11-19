@@ -89,8 +89,9 @@ Before opening a PR, verify:
 
 - Use a descriptive title following the Conventional Commits format.
 - Link the related issue in the PR description.
-- The CI bot (`pi-pr-review.yml`) will post an automated code review (comment marked
-  `🧪 pi.dev Review`). Address its findings before requesting human review.
+- The CI bot (`pi-pr-review.yml`) will post an automated code review (an issue comment
+  marked `<!-- pi-pr-review -->`, titled `🧪 Claude Review` when Claude answered). Address
+  its findings before requesting human review.
 - Integration tests run automatically on PRs targeting `main`.
 
 ---
